@@ -78,6 +78,15 @@ targets:
         NSCalendarsWriteOnlyAccessUsageDescription: >-
           DaGym adds your scheduled workouts to a "DaGym" calendar so they show up alongside
           the rest of your day.
+        # Progress photos (plan.md §6.4): in-app capture with a ghost overlay of the previous
+        # shot, or picking an existing photo. Photos stay in a local-only store by default (see
+        # `Preferences.syncPhotos`, `ModelContainer.dagym`) and can be gated behind Face ID.
+        NSCameraUsageDescription: >-
+          DaGym uses the camera to take progress photos, lined up with your previous shot.
+        NSPhotoLibraryUsageDescription: >-
+          DaGym can use an existing photo from your library as a progress photo.
+        NSFaceIDUsageDescription: >-
+          DaGym can lock your progress photos behind Face ID.
         # iCloud sync (plan.md §6.3): SwiftData + CloudKit private database, App Group so the
         # widgets extension can read the on-device snapshot without opening the store.
         UIBackgroundModes:

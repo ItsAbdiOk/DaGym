@@ -1,10 +1,10 @@
 import Charts
 import SwiftData
 import SwiftUI
+import UIKit
 
 /// Body — bodyweight trend against an optional goal line, a manual log entry point, an Apple
-/// Health pull, and the recent-readings list (plan.md §6.4, §6.8). Progress photos are P3 and
-/// stay a footnote until then.
+/// Health pull, the recent-readings list, and progress photos (plan.md §6.4, §6.8).
 struct BodyView: View {
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
@@ -14,6 +14,7 @@ struct BodyView: View {
     @State private var recent: [BodyMeasurementInfo] = []
     @State private var isLoggingWeight = false
     @State private var isSyncing = false
+    @State private var isShowingPhotos = false
 
     var body: some View {
         ZStack {
@@ -24,7 +25,7 @@ struct BodyView: View {
                     chartCard
                     actionsRow
                     recentList
-                    ProgressPhotosFootnote()
+                    ProgressPhotosCard(onOpen: { isShowingPhotos = true })
                 }
                 .padding(.horizontal, DGSpace.s4)
                 .padding(.top, DGSpace.s3)
@@ -33,6 +34,9 @@ struct BodyView: View {
         }
         .task { refresh() }
         .sheet(isPresented: $isLoggingWeight, onDismiss: refresh) { BodyweightSheet() }
+        .sheet(isPresented: $isShowingPhotos) {
+            PhotoLockGate { ProgressPhotosView() }
+        }
     }
 
     private var header: some View {
@@ -216,22 +220,56 @@ private struct MeasurementRow: View {
     }
 }
 
-/// Neutral placeholder card — progress photos are P3, out of scope for this slice.
-private struct ProgressPhotosFootnote: View {
+/// "PROGRESS PHOTOS" card — latest thumbnail per pose plus "Add Photo" (plan.md §6.4). Tapping
+/// anywhere opens the full `ProgressPhotosView` (behind `PhotoLockGate`, see `BodyView.body`).
+private struct ProgressPhotosCard: View {
+    var onOpen: () -> Void
+
+    @Environment(WorkoutStore.self) private var store
+    @State private var latest: [ProgressPhotoInfo] = []
+
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s2) {
-            Text("Progress Photos").dgLabel()
-            Text("Progress photos arrive in a later build.")
-                .font(DGFont.body)
-                .foregroundStyle(DGColor.ink3)
+        Button(action: onOpen) {
+            VStack(alignment: .leading, spacing: DGSpace.s3) {
+                HStack {
+                    Text("Progress Photos").dgLabel()
+                    Spacer()
+                    Text("Add Photo").dgLabel(DGColor.coralText)
+                }
+                if latest.isEmpty {
+                    Text("Add a photo to start tracking your progress.")
+                        .font(DGFont.body)
+                        .foregroundStyle(DGColor.ink3)
+                } else {
+                    HStack(spacing: DGSpace.s2) { ForEach(latest) { thumbnail($0) } }
+                }
+            }
+            .padding(DGSpace.s4)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(DGSpace.s4)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .buttonStyle(DGPressStyle())
         .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
                 .strokeBorder(DGColor.hairline, lineWidth: 1)
         }
+        .task { refresh() }
+    }
+
+    private func thumbnail(_ photo: ProgressPhotoInfo) -> some View {
+        Group {
+            if let data = photo.thumbnailData, let image = UIImage(data: data) {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else {
+                Rectangle().fill(DGColor.surface3)
+            }
+        }
+        .frame(width: 64, height: 84)
+        .clipShape(RoundedRectangle(cornerRadius: DGRadius.chip, style: .continuous))
+    }
+
+    private func refresh() {
+        latest = ProgressPhotoPose.allCases.compactMap { store.latestPhoto(pose: $0) }
     }
 }
 

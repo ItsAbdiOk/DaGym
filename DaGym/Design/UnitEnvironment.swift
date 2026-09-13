@@ -28,6 +28,8 @@ final class Preferences {
         static let weeklyRecapEnabled = "weeklyRecapEnabled"
         static let reminderHour = "reminderHour"
         static let bodyweightGoalKg = "bodyweightGoalKg"
+        static let syncPhotos = "syncPhotos"
+        static let lockPhotos = "lockPhotos"
     }
 
     private let defaults: UserDefaults
@@ -111,6 +113,19 @@ final class Preferences {
         }
     }
 
+    /// Whether progress photos should sync through iCloud (plan.md §6.4 "don't sync photos").
+    /// Off by default — photos are the most sensitive thing in the app, so they stay local unless
+    /// the user opts in. Read by `ModelContainer.dagym(...)`'s caller when choosing whether to
+    /// point the photo store's CloudKit database at anything (currently always `.none`; wiring
+    /// this preference through to the container is future work — see `WorkoutStore+Photos.swift`).
+    var syncPhotos: Bool {
+        didSet { defaults.set(syncPhotos, forKey: Key.syncPhotos) }
+    }
+    /// Face ID gate in front of the progress-photos grid (`PhotoLockGate`). Off by default.
+    var lockPhotos: Bool {
+        didSet { defaults.set(lockPhotos, forKey: Key.lockPhotos) }
+    }
+
     init(suite: UserDefaults = .standard) {
         defaults = suite
         weightUnit = WeightUnit(rawValue: suite.string(forKey: Key.weightUnit) ?? "") ?? .kg
@@ -132,6 +147,8 @@ final class Preferences {
         weeklyRecapEnabled = Self.boolValue(suite, Key.weeklyRecapEnabled, default: true)
         reminderHour = Self.intValue(suite, Key.reminderHour, default: 18)
         bodyweightGoalKg = suite.object(forKey: Key.bodyweightGoalKg) as? Double
+        syncPhotos = Self.boolValue(suite, Key.syncPhotos, default: false)
+        lockPhotos = Self.boolValue(suite, Key.lockPhotos, default: false)
     }
 
     /// A canonical kg value, formatted and rounded for the user's unit.

@@ -16,8 +16,19 @@ enum DaGymSchema {
         PersonalRecordModel.self,
         EquipmentProfileModel.self,
         ScheduleModel.self,
-        AchievementModel.self
+        AchievementModel.self,
+        ProgressPhotoModel.self
     ]
+
+    /// Models that live in the separate, always-local photo store (see
+    /// `ModelContainer.dagym(...)`), not the main CloudKit-syncable one.
+    static let photoModels: [any PersistentModel.Type] = [ProgressPhotoModel.self]
+
+    /// Every other model — the ones the main configuration owns.
+    static var mainModels: [any PersistentModel.Type] {
+        let photoIDs = Set(photoModels.map(ObjectIdentifier.init))
+        return models.filter { !photoIDs.contains(ObjectIdentifier($0)) }
+    }
 }
 
 extension ModelContainer {
@@ -33,17 +44,34 @@ extension ModelContainer {
     /// see `AppRootContainer.resolveContainer()`.
     static func dagym(inMemory: Bool = false, cloudKitEnabled: Bool = true) throws -> ModelContainer {
         let schema = Schema(DaGymSchema.models)
+        let mainSchema = Schema(DaGymSchema.mainModels)
+        let photoSchema = Schema(DaGymSchema.photoModels)
         guard !inMemory else {
-            let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-            return try ModelContainer(for: schema, configurations: [configuration])
+            // `.none` is explicit: the default (`.automatic`) starts CloudKit mirroring whenever
+            // the entitlement is present, which is what tests and previews must never do.
+            // Distinct names matter: two unnamed in-memory stores collapse into one and inserts
+            // then fail with "store does not contain the object's entity".
+            let mainConfiguration = ModelConfiguration(
+                "DaGymMain", schema: mainSchema, isStoredInMemoryOnly: true, cloudKitDatabase: .none
+            )
+            let photoConfiguration = ModelConfiguration(
+                "DaGymPhotos", schema: photoSchema, isStoredInMemoryOnly: true, cloudKitDatabase: .none
+            )
+            return try ModelContainer(for: schema, configurations: [mainConfiguration, photoConfiguration])
         }
         StoreMigration.moveLegacyStoreIfNeeded(schema: schema)
         let database: ModelConfiguration.CloudKitDatabase = cloudKitEnabled
             ? .private("iCloud.dev.abdirahmanmohamed.dagym") : .none
-        let configuration = ModelConfiguration(
-            schema: schema, url: StoreMigration.storeURL(schema: schema), cloudKitDatabase: database
+        let mainConfiguration = ModelConfiguration(
+            schema: mainSchema, url: StoreMigration.storeURL(schema: schema), cloudKitDatabase: database
         )
-        return try ModelContainer(for: schema, configurations: [configuration])
+        // Progress photos (plan.md §6.4 "don't sync photos"): a separate, always-local store —
+        // `cloudKitDatabase: .none` is a per-configuration setting, so this is the only way to
+        // keep photos off iCloud while the rest of the app still syncs.
+        let photoConfiguration = ModelConfiguration(
+            schema: photoSchema, url: StoreMigration.photoStoreURL(), cloudKitDatabase: .none
+        )
+        return try ModelContainer(for: schema, configurations: [mainConfiguration, photoConfiguration])
     }
 }
 
@@ -59,6 +87,13 @@ enum StoreMigration {
     static func storeURL(schema: Schema) -> URL {
         let fileName = defaultConfiguration(schema: schema).url.lastPathComponent
         return containerDirectory().appendingPathComponent(fileName)
+    }
+
+    /// Where the always-local progress-photo store lives — its own file, in the same App Group
+    /// directory as the main store, so it never touches CloudKit no matter what
+    /// `iCloudSyncEnabled` is set to.
+    static func photoStoreURL() -> URL {
+        containerDirectory().appendingPathComponent("DaGymPhotos.sqlite")
     }
 
     /// Copies `<name>.store` plus its `-wal`/`-shm` sidecar files from the legacy location to the

@@ -35,10 +35,16 @@
 	<false/>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
 	<string>DaGym adds your scheduled workouts to a "DaGym" calendar so they show up alongside the rest of your day.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>DaGym uses the camera to take progress photos, lined up with your previous shot.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>DaGym can lock your progress photos behind Face ID.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>DaGym reads your bodyweight, heart-rate variability, resting heart rate and sleep to personalise training suggestions. Nothing is uploaded anywhere.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>DaGym saves your strength workouts and bodyweight to Apple Health.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>DaGym can use an existing photo from your library as a progress photo.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NSSupportsLiveActivitiesFrequentUpdates</key>

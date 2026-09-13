@@ -1,0 +1,150 @@
+import SwiftUI
+import UIKit
+
+/// Compares two photos of the same pose — side-by-side, or a slider wipe between them using a
+/// mask + `DragGesture` (plan.md §6.4). Defaults to the oldest and newest photo in `photos`
+/// (`WorkoutStore.photos(pose:)` returns newest-first, so that's the last and first index).
+struct PhotoCompareView: View {
+    var pose: ProgressPhotoPose
+    var photos: [ProgressPhotoInfo]
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var beforeIndex: Int
+    @State private var afterIndex: Int
+    @State private var isSideBySide = true
+    @State private var sliderFraction: CGFloat = 0.5
+
+    init(pose: ProgressPhotoPose, photos: [ProgressPhotoInfo]) {
+        self.pose = pose
+        self.photos = photos
+        _beforeIndex = State(initialValue: max(photos.count - 1, 0))
+        _afterIndex = State(initialValue: 0)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AmbientWash()
+                VStack(spacing: DGSpace.s5) {
+                    modePicker
+                    if !photos.isEmpty {
+                        pickers
+                        if isSideBySide { sideBySide } else { slider }
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, DGSpace.s4)
+                .padding(.top, DGSpace.s3)
+            }
+            .navigationTitle("Compare \(pose.label)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private var modePicker: some View {
+        HStack(spacing: DGSpace.s2) {
+            DGChip(title: "Side By Side", selected: isSideBySide) { isSideBySide = true }
+            DGChip(title: "Slider", selected: !isSideBySide) { isSideBySide = false }
+        }
+    }
+
+    private var pickers: some View {
+        HStack(spacing: DGSpace.s3) {
+            photoPicker(title: "Before", index: $beforeIndex)
+            photoPicker(title: "After", index: $afterIndex)
+        }
+    }
+
+    private func photoPicker(title: String, index: Binding<Int>) -> some View {
+        VStack(alignment: .leading, spacing: DGSpace.s1) {
+            Text(title).dgLabel()
+            Menu {
+                ForEach(photos.indices, id: \.self) { candidate in
+                    Button(Self.dateLabel(photos[candidate].date)) { index.wrappedValue = candidate }
+                }
+            } label: {
+                Text(Self.dateLabel(photos[index.wrappedValue].date))
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.ink1)
+                    .padding(.horizontal, DGSpace.s3)
+                    .frame(height: 36)
+                    .dgGlass(.thin, radius: DGRadius.sm)
+            }
+        }
+    }
+
+    private var sideBySide: some View {
+        HStack(spacing: DGSpace.s2) {
+            photoCard(index: beforeIndex)
+            photoCard(index: afterIndex)
+        }
+    }
+
+    private func photoCard(index: Int) -> some View {
+        VStack(spacing: DGSpace.s1) {
+            image(for: index)
+                .aspectRatio(3 / 4, contentMode: .fill)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
+            Text(Self.dateLabel(photos[index].date)).dgLabel()
+        }
+    }
+
+    private var slider: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            ZStack(alignment: .leading) {
+                image(for: beforeIndex).aspectRatio(3 / 4, contentMode: .fill).frame(width: width)
+                image(for: afterIndex)
+                    .aspectRatio(3 / 4, contentMode: .fill)
+                    .frame(width: width)
+                    .mask(alignment: .leading) { Rectangle().frame(width: width * sliderFraction) }
+                Rectangle().fill(DGColor.coral).frame(width: 2).offset(x: width * sliderFraction - 1)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
+            .gesture(dragGesture(width: width))
+        }
+        .aspectRatio(3 / 4, contentMode: .fit)
+    }
+
+    private func dragGesture(width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                sliderFraction = min(max(value.location.x / width, 0), 1)
+            }
+    }
+
+    private func image(for index: Int) -> some View {
+        Group {
+            if let data = photos[safe: index]?.imageData ?? photos[safe: index]?.thumbnailData,
+               let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage).resizable()
+            } else {
+                Rectangle().fill(DGColor.surface2)
+            }
+        }
+    }
+
+    private static func dateLabel(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d MMM"
+        return formatter.string(from: date)
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
+}
+
+#Preview {
+    PhotoCompareView(pose: .front, photos: [])
+        .environment(Preferences())
+}
