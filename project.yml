@@ -44,6 +44,8 @@ targets:
     dependencies:
       - package: GymCore
         product: GymCore
+      - target: DaGymWidgets
+        embed: true
     info:
       path: DaGym/Info.plist
       properties:
@@ -56,6 +58,10 @@ targets:
         # asks an encryption question on every build.
         ITSAppUsesNonExemptEncryption: false
         UIUserInterfaceStyle: Automatic
+        # Rest-timer Live Activity (Lock Screen + Dynamic Island). No entitlement needed for a
+        # foreground-started Live Activity; push-to-start is out of scope for now (see plan §6.2).
+        NSSupportsLiveActivities: true
+        NSSupportsLiveActivitiesFrequentUpdates: false
         UIAppFonts:
           - Barlow-Regular.ttf
           - Barlow-Medium.ttf
@@ -101,6 +107,40 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.dagym.uitests
         GENERATE_INFOPLIST_FILE: YES
+
+  # Widget extension: the rest-timer Live Activity (Lock Screen + Dynamic Island). Embedded into
+  # DaGym via that target's `dependencies`. `RestActivityAttributes.swift` and `RestIntents.swift`
+  # are shared source files, also compiled into DaGym itself — see those targets' `sources`.
+  DaGymWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: DaGymWidgets
+      - path: DaGym/Features/LiveActivity/RestActivityAttributes.swift
+      - path: DaGym/App/Intents/RestIntents.swift
+    dependencies:
+      - package: GymCore
+        product: GymCore
+    info:
+      path: DaGymWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: DaGym Widgets
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        UIAppFonts:
+          - BarlowCondensed-Bold.ttf
+          - BarlowCondensed-ExtraBold.ttf
+    resources:
+      - path: DaGym/Resources/Fonts/BarlowCondensed-Bold.ttf
+      - path: DaGym/Resources/Fonts/BarlowCondensed-ExtraBold.ttf
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.dagym.widgets
+        PRODUCT_NAME: DaGymWidgets
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: NO
+        SKIP_INSTALL: NO
 
   # Standalone Apple Watch app. Not yet embedded in the iOS app: that wiring
   # lands with Phase 5 (watch), so the iOS build never waits on a watchOS

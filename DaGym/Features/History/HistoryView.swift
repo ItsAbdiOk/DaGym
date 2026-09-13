@@ -7,6 +7,10 @@ struct HistoryView: View {
     var records: [WorkoutRecord]
     var workoutsCount: Int
     var volumeKg: Double
+    /// Total number of cached record lines, for the "RECORDS" tile's subtitle.
+    var recordsCount: Int
+    /// `Recovery.headline(map:).title`, for the "RECOVERY" tile's subtitle.
+    var recoveryHeadline: String
     var onBackfill: () -> Void
     var onDelete: (UUID) -> Void
 
@@ -27,19 +31,33 @@ struct HistoryView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s1) {
-            Text("History")
-                .font(DGFont.title1)
-                .textCase(.uppercase)
-                .foregroundStyle(DGColor.ink1)
-            Text(
-                "\(Self.pluralized(workoutsCount, "workout")) · "
-                    + "\(preferences.formatVolume(kg: volumeKg)) \(preferences.unitSymbol) lifted"
-            )
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink3)
+        VStack(alignment: .leading, spacing: DGSpace.s4) {
+            tiles
+            VStack(alignment: .leading, spacing: DGSpace.s1) {
+                Text("History").dgLabel()
+                Text(
+                    "\(Self.pluralized(workoutsCount, "workout")) · "
+                        + "\(preferences.formatVolume(kg: volumeKg)) \(preferences.unitSymbol) lifted"
+                )
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.ink3)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// "RECORDS" and "RECOVERY" glass tiles, navigating into their full screens.
+    private var tiles: some View {
+        HStack(spacing: DGSpace.s3) {
+            ProgressTile(
+                title: "Records", subtitle: Self.pluralized(recordsCount, "record"),
+                symbol: "star.fill", tint: DGColor.prGoldText
+            ) { PersonalRecordsView() }
+            ProgressTile(
+                title: "Recovery", subtitle: recoveryHeadline,
+                symbol: "figure.stand", tint: DGColor.coralText
+            ) { RecoveryMapView() }
+        }
     }
 
     private var list: some View {
@@ -175,11 +193,51 @@ private struct RecordCard: View {
     }
 }
 
+/// One glass tile in the Progress header row: icon, uppercase label, subtitle.
+/// Navigates to `destination` inside the parent's `NavigationStack`.
+private struct ProgressTile<Destination: View>: View {
+    var title: String
+    var subtitle: String
+    var symbol: String
+    var tint: Color
+    @ViewBuilder var destination: () -> Destination
+
+    var body: some View {
+        NavigationLink {
+            destination()
+        } label: {
+            HStack(spacing: DGSpace.s3) {
+                Image(systemName: symbol)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(tint)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        tint.opacity(0.14),
+                        in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
+                    )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).dgLabel(tint)
+                    Text(subtitle)
+                        .font(DGFont.footnote)
+                        .foregroundStyle(DGColor.ink3)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(DGSpace.s3)
+            .frame(maxWidth: .infinity, minHeight: DGTap.min)
+            .dgGlass(.regular, radius: DGRadius.md)
+        }
+        .buttonStyle(DGPressStyle())
+    }
+}
+
 #Preview {
     NavigationStack {
         HistoryView(
             records: SampleData.history, workoutsCount: SampleData.history.count,
-            volumeKg: 412_000, onBackfill: {}, onDelete: { _ in }
+            volumeKg: 412_000, recordsCount: 12, recoveryHeadline: "Chest still spent",
+            onBackfill: {}, onDelete: { _ in }
         )
         .navigationDestination(for: UUID.self) { _ in EmptyView() }
     }

@@ -13,7 +13,8 @@ enum DaGymSchema {
         WorkoutExerciseModel.self,
         SetLogModel.self,
         BodyMeasurementModel.self,
-        PersonalRecordModel.self
+        PersonalRecordModel.self,
+        EquipmentProfileModel.self
     ]
 }
 

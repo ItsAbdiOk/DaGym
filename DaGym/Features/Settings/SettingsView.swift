@@ -20,6 +20,8 @@ struct SettingsView: View {
                     restTimerCard
                     trainingCard
                     displayCard
+                    DataSettingsSection()
+                    EquipmentSettingsSection()
                     aboutCard
                 }
                 .padding(.horizontal, DGSpace.s4)
@@ -199,6 +201,12 @@ private struct SettingsDivider: View {
 }
 
 #Preview {
-    SettingsView()
-        .environment(Preferences())
+    if let store = PreviewStore.make() {
+        return AnyView(
+            SettingsView()
+                .environment(Preferences())
+                .environment(store)
+        )
+    }
+    return AnyView(EmptyView())
 }

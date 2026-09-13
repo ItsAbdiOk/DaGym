@@ -1,0 +1,41 @@
+import Foundation
+import SwiftData
+
+/// A named equipment set the user trains with ("Gym", "Home"): bar weight,
+/// plate inventory and what equipment kinds are available. CloudKit-legal:
+/// no unique constraints, every stored property defaults. `plateStockKg` and
+/// `plateCounts` are parallel arrays (index `i` is one plate size/count
+/// pair) rather than a nested model, since SwiftData relationships add
+/// CloudKit sync overhead this doesn't need.
+@Model
+final class EquipmentProfileModel {
+    var id: UUID = UUID()
+    var name: String = "Gym"
+    var isActive: Bool = false
+    var barKg: Double = 20
+    /// Equipment kind strings: barbell, dumbbell, bodyweight, cable, machine,
+    /// kettlebell, bands, ezBar, other.
+    var availableEquipment: [String] = []
+    /// Plate weight (kg) at index `i`, paired with `plateCounts[i]` — total
+    /// plates in stock, not pairs (matches `GymCore.PlateStock.count`).
+    var plateStockKg: [Double] = []
+    var plateCounts: [Int] = []
+    var collarsKg: Double = 0
+    var createdAt: Date = Date()
+
+    init(
+        id: UUID = UUID(), name: String = "Gym", isActive: Bool = false, barKg: Double = 20,
+        availableEquipment: [String] = [], plateStockKg: [Double] = [], plateCounts: [Int] = [],
+        collarsKg: Double = 0, createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.name = name
+        self.isActive = isActive
+        self.barKg = barKg
+        self.availableEquipment = availableEquipment
+        self.plateStockKg = plateStockKg
+        self.plateCounts = plateCounts
+        self.collarsKg = collarsKg
+        self.createdAt = createdAt
+    }
+}

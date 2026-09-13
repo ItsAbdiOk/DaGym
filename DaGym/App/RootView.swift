@@ -8,6 +8,7 @@ struct RootView: View {
     @Environment(Preferences.self) private var preferences
     @State private var tab = DGTab.today
     @State private var routine: RoutineInfo?
+    @State private var routines: [RoutineInfo] = []
     @State private var session: WorkoutSession?
     @State private var summaryItem: SummaryPresentation?
     @State private var showingBackfill = false
@@ -22,7 +23,9 @@ struct RootView: View {
         .task { refreshRoutine() }
         .onChange(of: tab) { _, _ in refreshRoutine() }
         .sheet(isPresented: $showingBackfill) {
-            BackfillSheet(onFreestyle: startBackfillFreestyle, onRoutine: startBackfillRoutine)
+            BackfillSheet(
+                routines: routines, onFreestyle: startBackfillFreestyle, onRoutine: startBackfillRoutine
+            )
         }
         .sheet(isPresented: $showRecovery) {
             RecoveryMapView()
@@ -42,8 +45,9 @@ struct RootView: View {
         switch tab {
         case .today:
             HomeView(
-                routine: routine, onStart: startFromScheduledRoutine, onFreestyle: startFreestyle,
-                onBackfill: { showingBackfill = true }, onSeeRecovery: { showRecovery = true }
+                routine: routine, routines: routines, onStart: startFromScheduledRoutine,
+                onFreestyle: startFreestyle, onBackfill: { showingBackfill = true },
+                onSeeRecovery: { showRecovery = true }
             )
         case .routines:
             RoutinesTabView(onStart: startWorkout)
@@ -61,7 +65,8 @@ struct RootView: View {
     }
 
     private func refreshRoutine() {
-        routine = store.routines().first
+        routines = store.routines()
+        routine = routines.first
     }
 
     private func startFromScheduledRoutine() {
@@ -85,9 +90,8 @@ struct RootView: View {
         seedEffortScale()
     }
 
-    private func startBackfillRoutine(date: Date, durationMinutes: Int) {
+    private func startBackfillRoutine(date: Date, durationMinutes: Int, routineID: UUID) {
         showingBackfill = false
-        let routineID = store.routines().first?.id
         session = store.startBackfill(date: date, durationMinutes: durationMinutes, routineID: routineID)
         seedEffortScale()
     }

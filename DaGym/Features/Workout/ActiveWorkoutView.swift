@@ -18,11 +18,16 @@ struct ActiveWorkoutView: View {
     @State var showFinishConfirm = false
     @State var restAlertPlayer = RestAlertPlayer()
     @State var flashOpacity: Double = 0
+    @State var chromeCollapse = ChromeCollapseState()
 
     var body: some View {
         VStack(spacing: 0) {
-            navHeader
-            statStrip
+            if chromeCollapse.isCollapsed {
+                condensedNavHeader
+            } else {
+                navHeader
+                statStrip
+            }
             ScrollView {
                 VStack(spacing: DGSpace.s4) {
                     musclesCard
@@ -34,11 +39,17 @@ struct ActiveWorkoutView: View {
                 .padding(.top, DGSpace.s4)
                 .padding(.bottom, 140)
             }
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentOffset.y
+            } action: { _, newOffset in
+                updateChrome(offset: newOffset)
+            }
             .background(AmbientWash())
         }
         .background(DGColor.bgBase)
-        .overlay(alignment: .bottom) { bottomGroup }
+        .overlay(alignment: .bottom) { bottomChrome }
         .overlay { Color.white.opacity(flashOpacity).ignoresSafeArea().allowsHitTesting(false) }
+        .restLiveActivity(session: session)
         .task {
             session.onRestTick = handleRestTick
             await runTimers()
@@ -232,7 +243,7 @@ struct ActiveWorkoutView: View {
 
     // MARK: Bottom sticky group
 
-    private var bottomGroup: some View {
+    var bottomGroup: some View {
         VStack(spacing: DGSpace.s2) {
             if session.isResting {
                 RestPill(

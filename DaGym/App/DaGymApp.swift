@@ -73,6 +73,7 @@ struct AppRootContainer: View {
         ExerciseSeeder.seedIfNeeded(context: context)
         let store = WorkoutStore(context: context)
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        EquipmentSeeder.seedIfNeeded(store: store)
         phase = .ready(store)
     }
 

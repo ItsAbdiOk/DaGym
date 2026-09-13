@@ -315,6 +315,13 @@ final class WorkoutSession {
     /// Notified on every tick with the new `restRemaining`, so UI-only concerns (rest sound,
     /// screen flash) can live outside this UI-free model. Set by `ActiveWorkoutView`.
     var onRestTick: ((Int) -> Void)?
+    /// Notified on every rest-state change (start/adjust/skip/natural end), so the Live
+    /// Activity + lock screen notification (`Features/LiveActivity`) can mirror it without this
+    /// UI-free model knowing about ActivityKit. Set by `ActiveWorkoutView+LiveActivity.swift`.
+    var onRestStateChange: ((RestState) -> Void)?
+    private var restExerciseName = ""
+    private var restSetNumber = 0
+    private var restSetCount = 0
 
     // PR banner
     var prBanner: PersonalRecordInfo?
@@ -397,14 +404,30 @@ final class WorkoutSession {
         } else {
             restNextLabel = "Last set done"
         }
+        restExerciseName = ex.exercise.name
+        restSetNumber = setIndex + 1
+        restSetCount = ex.sets.count
+        onRestStateChange?(restState(isEnded: false, isSkipped: false))
     }
 
     func tickRest() {
         guard restRemaining > 0 else { return }
         restRemaining -= 1
         if restRemaining <= 3, restRemaining > 0 { Haptics.restTick() }
-        if restRemaining == 0 { Haptics.restEnd() }
+        if restRemaining == 0 {
+            Haptics.restEnd()
+            onRestStateChange?(restState(isEnded: true, isSkipped: false))
+        }
         onRestTick?(restRemaining)
+    }
+
+    /// Snapshot for the Live Activity / notification hook — see `RestState`.
+    private func restState(isEnded: Bool, isSkipped: Bool) -> RestState {
+        RestState(
+            remaining: restRemaining, total: restTotal, workoutTitle: title, exerciseName: restExerciseName,
+            setNumber: restSetNumber, setCount: restSetCount, nextWeightKg: restNextWeightKg,
+            nextReps: restNextReps, fallbackNextLabel: restNextLabel, isEnded: isEnded, isSkipped: isSkipped
+        )
     }
 
     /// Removes a set, keeping at least one set per exercise (the delete swipe action).
@@ -445,11 +468,13 @@ final class WorkoutSession {
         restRemaining = max(0, restRemaining + delta)
         restTotal = max(restTotal, restRemaining)
         Haptics.step()
+        onRestStateChange?(restState(isEnded: restRemaining == 0, isSkipped: false))
     }
 
     func skipRest() {
         restRemaining = 0
         Haptics.confirm()
+        onRestStateChange?(restState(isEnded: true, isSkipped: true))
     }
 
     static func format(_ kg: Double) -> String {

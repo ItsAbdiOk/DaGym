@@ -1,3 +1,4 @@
+import GymCore
 import SwiftData
 import SwiftUI
 
@@ -11,6 +12,8 @@ struct HistoryTabView: View {
     @State private var routines: [RoutineInfo] = []
     @State private var workoutsCount = 0
     @State private var volumeKg: Double = 0
+    @State private var recordsCount = 0
+    @State private var recoveryHeadline = ""
     @State private var showingBackfill = false
     @State private var backfillSession: WorkoutSession?
     @State private var finishedWorkout: FinishedWorkout?
@@ -19,6 +22,7 @@ struct HistoryTabView: View {
         NavigationStack {
             HistoryView(
                 records: records, workoutsCount: workoutsCount, volumeKg: volumeKg,
+                recordsCount: recordsCount, recoveryHeadline: recoveryHeadline,
                 onBackfill: { showingBackfill = true }, onDelete: deleteWorkout
             )
             .navigationDestination(for: UUID.self) { id in
@@ -52,6 +56,8 @@ struct HistoryTabView: View {
         workoutsCount = stats.workouts
         volumeKg = stats.volumeKg
         routines = store.routines()
+        recordsCount = store.personalRecords().reduce(0) { $0 + $1.records.count }
+        recoveryHeadline = Recovery.headline(map: store.recoverySnapshot().map).title
     }
 
     private func deleteWorkout(_ id: UUID) {
