@@ -1,0 +1,253 @@
+import GymCore
+import SwiftUI
+
+/// One exercise in the active workout list. Renders one of three layouts:
+/// on-deck (full card with sets), collapsed incomplete row, or a completed
+/// one-liner. See mockups 02_00 / 02_01 and design sheet 01_04.
+struct ExerciseCard: View {
+    var entry: WorkoutExerciseEntry
+    var isOnDeck: Bool
+    var effortScale: Effort.Scale
+    var onTapWeight: (UUID) -> Void
+    var onTapReps: (UUID) -> Void
+    var onTapEffort: (UUID) -> Void
+    var onToggleDone: (SetEntry) -> Void
+    var onMore: () -> Void
+    var onStartTimed: () -> Void
+
+    var body: some View {
+        if entry.isComplete {
+            CompletedExerciseRow(entry: entry)
+        } else if isOnDeck {
+            OnDeckExerciseCard(
+                entry: entry, effortScale: effortScale,
+                onTapWeight: onTapWeight, onTapReps: onTapReps, onTapEffort: onTapEffort,
+                onToggleDone: onToggleDone, onMore: onMore
+            )
+        } else {
+            CollapsedExerciseRow(entry: entry, onStartTimed: onStartTimed)
+        }
+    }
+}
+
+/// The detailed, fully expanded card for the exercise currently being worked.
+private struct OnDeckExerciseCard: View {
+    var entry: WorkoutExerciseEntry
+    var effortScale: Effort.Scale
+    var onTapWeight: (UUID) -> Void
+    var onTapReps: (UUID) -> Void
+    var onTapEffort: (UUID) -> Void
+    var onToggleDone: (SetEntry) -> Void
+    var onMore: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("On deck").dgLabel(DGColor.coralText)
+                .padding(.horizontal, DGSpace.s2)
+                .padding(.vertical, 4)
+                .background(DGColor.coralWash, in: Capsule())
+                .padding(.bottom, DGSpace.s2)
+            header
+            if !entry.lastSessions.isEmpty {
+                lastSessionsStrip.padding(.top, DGSpace.s4)
+            }
+            if let whyTitle = entry.whyTitle, let whyBody = entry.whyBody {
+                WhyCard(title: whyTitle, message: whyBody).padding(.top, DGSpace.s3)
+            }
+            columnHeader.padding(.top, DGSpace.s4)
+            setRows.padding(.top, DGSpace.s2)
+        }
+        .dgCard()
+    }
+
+    private var header: some View {
+        HStack(spacing: DGSpace.s3) {
+            ExerciseThumbnail(exercise: entry.exercise)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.exercise.name)
+                    .font(DGFont.title2)
+                    .textCase(.uppercase)
+                    .foregroundStyle(DGColor.ink1)
+                Text(footnote)
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.ink3)
+            }
+            Spacer(minLength: 0)
+            DGIconButton(symbol: "ellipsis", action: onMore)
+        }
+    }
+
+    private var footnote: String {
+        let step = entry.doneCount + 1 <= entry.sets.count ? entry.doneCount + 1 : entry.sets.count
+        let rest = WorkoutSession.clock(entry.exercise.restSeconds)
+        let increment = WorkoutSession.format(entry.exercise.incrementKg)
+        return "Set \(step) of \(entry.sets.count) · rest \(rest) · increment \(increment) kg"
+    }
+
+    private var lastSessionsStrip: some View {
+        VStack(alignment: .leading, spacing: DGSpace.s1) {
+            Text("Last 3 sessions").dgLabel()
+            HStack(spacing: DGSpace.s3) {
+                Text(entry.lastSessions.joined(separator: " · "))
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.ink2)
+                Spacer(minLength: DGSpace.s2)
+                Sparkline(values: entry.sparkline)
+                    .frame(width: 60, height: 22)
+            }
+        }
+    }
+
+    private var columnHeader: some View {
+        HStack(spacing: DGSpace.s3) {
+            Text("Set").frame(width: 28, alignment: .leading)
+            Text("Prev").frame(minWidth: 44, alignment: .leading)
+            Text("Kg").frame(minWidth: 44, alignment: .leading)
+            Text("Reps").frame(minWidth: 30, alignment: .leading)
+            Text(effortScale == .rpe ? "Rpe" : "Rir").frame(width: 28, alignment: .leading)
+        }
+        .dgLabel()
+    }
+
+    private var setRows: some View {
+        let firstOpenID = entry.sets.first { !$0.isDone }?.id
+        return VStack(spacing: DGSpace.s2) {
+            ForEach(Array(entry.sets.enumerated()), id: \.element.id) { index, set in
+                SetRow(
+                    set: set, badgeIndex: workingIndex(upTo: index), isCurrent: set.id == firstOpenID,
+                    effortScale: effortScale,
+                    onTapWeight: { onTapWeight(set.id) }, onTapReps: { onTapReps(set.id) },
+                    onTapEffort: { onTapEffort(set.id) }, onToggleDone: { onToggleDone(set) }
+                )
+            }
+        }
+    }
+
+    private func workingIndex(upTo index: Int) -> Int {
+        entry.sets.prefix(index + 1).filter { $0.kind == .working }.count
+    }
+}
+
+/// Collapsed one-line row for an incomplete exercise that isn't on deck yet.
+private struct CollapsedExerciseRow: View {
+    var entry: WorkoutExerciseEntry
+    var onStartTimed: () -> Void
+
+    var body: some View {
+        HStack(spacing: DGSpace.s3) {
+            ExerciseThumbnail(exercise: entry.exercise, size: 36)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.exercise.name)
+                    .font(DGFont.title3)
+                    .foregroundStyle(DGColor.ink1)
+                Text(summaryLine)
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.ink3)
+            }
+            Spacer(minLength: DGSpace.s2)
+            if entry.isTimed {
+                Button("Start", action: onStartTimed)
+                    .buttonStyle(.plain)
+                    .font(DGFont.condensedLabel(12))
+                    .textCase(.uppercase)
+                    .foregroundStyle(DGColor.ink1)
+                    .padding(.horizontal, DGSpace.s3)
+                    .frame(height: 36)
+                    .dgGlass(.regular, in: Capsule())
+            } else {
+                Text("\(entry.doneCount)/\(entry.sets.count)")
+                    .dgMetric(DGFont.subhead)
+                    .foregroundStyle(DGColor.ink3)
+            }
+        }
+        .dgCard(padding: DGSpace.s4)
+    }
+
+    private var summaryLine: String {
+        guard let first = entry.sets.first else { return entry.exercise.equipment }
+        if entry.isTimed {
+            let target = first.targetSeconds ?? 0
+            return "\(entry.sets.count) holds · target \(WorkoutSession.clock(target))"
+        }
+        let weight = WorkoutSession.format(first.weightKg)
+        let suffix = entry.exercise.equipment == "Dumbbell" ? "kg per side" : "kg"
+        return "\(entry.sets.count) × \(first.reps) · \(weight) \(suffix)"
+    }
+}
+
+/// One-liner for a finished exercise.
+private struct CompletedExerciseRow: View {
+    var entry: WorkoutExerciseEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Completed").dgLabel(DGColor.success)
+            Text(summary)
+                .font(DGFont.subhead)
+                .foregroundStyle(DGColor.ink2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dgCard(padding: DGSpace.s4)
+    }
+
+    private var summary: String {
+        let name = entry.exercise.name.uppercased()
+        guard let first = entry.sets.first else { return name }
+        let weight = WorkoutSession.format(first.weightKg)
+        return "\(name) · \(entry.sets.count) × \(first.reps) · \(weight) kg"
+    }
+}
+
+private struct ExerciseThumbnail: View {
+    var exercise: ExerciseInfo
+    var size: CGFloat = 44
+
+    var body: some View {
+        BodyMapView(side: .front, mode: .hit, intensity: exercise.hitMap)
+            .padding(6)
+            .frame(width: size, height: size)
+            .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous))
+    }
+}
+
+/// Tiny trend line drawn from raw values, coral stroke.
+private struct Sparkline: View {
+    var values: [Double]
+
+    var body: some View {
+        GeometryReader { geo in
+            let low = values.min() ?? 0
+            let high = values.max() ?? 1
+            let span = max(high - low, 0.001)
+            Path { path in
+                for (index, value) in values.enumerated() {
+                    let x = values.count > 1
+                        ? geo.size.width * CGFloat(index) / CGFloat(values.count - 1) : 0
+                    let y = geo.size.height * (1 - CGFloat((value - low) / span))
+                    if index == 0 {
+                        path.move(to: CGPoint(x: x, y: y))
+                    } else {
+                        path.addLine(to: CGPoint(x: x, y: y))
+                    }
+                }
+            }
+            .stroke(DGColor.coral, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+        }
+    }
+}
+
+#Preview {
+    ScrollView {
+        VStack(spacing: DGSpace.s4) {
+            ForEach(SampleData.makeSession().exercises) { entry in
+                ExerciseCard(
+                    entry: entry, isOnDeck: entry.exercise.id == SampleData.bench.id, effortScale: .rpe,
+                    onTapWeight: { _ in }, onTapReps: { _ in }, onTapEffort: { _ in },
+                    onToggleDone: { _ in }, onMore: {}, onStartTimed: {}
+                )
+            }
+        }
+        .padding()
+    }
+    .background(AmbientWash())
+}
