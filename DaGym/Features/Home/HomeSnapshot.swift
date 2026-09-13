@@ -16,6 +16,14 @@ struct HomeSnapshot {
     var thisWeekCount: Int
     var recoveryMap: [Muscle: Double]
     var deloadSuggestion: DeloadSuggestionInfo?
+    /// False when the store has no routines at all (deleted, or a corrupted seed) — Home shows
+    /// the starter-plan empty state instead of a scheduled/rest-day card (OpenGym parity 52).
+    var hasAnyRoutines: Bool = true
+    /// Latest bodyweight reading, for Home's bodyweight tile (OpenGym parity 50).
+    var bodyweightKg: Double?
+    /// `bodyweightKg` minus the latest reading from 30 days before `now`; nil when there isn't
+    /// one that far back to compare against.
+    var bodyweightDeltaKg: Double?
 
     static let restDayHeadline = "Rest Day"
 
@@ -30,6 +38,13 @@ struct HomeSnapshot {
             workoutDates: store.workoutDates(), weeklyGoal: weeklyGoal, calendar: calendar, now: now
         )
         let since = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+        let latest = store.latestBodyMeasurement()
+        let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: now) ?? now
+        let past = latest.flatMap { _ in store.latestBodyMeasurement(asOf: thirtyDaysAgo) }
+        let bodyweightDelta: Double? = {
+            guard let latestKg = latest?.bodyweightKg, let pastKg = past?.bodyweightKg else { return nil }
+            return latestKg - pastKg
+        }()
         return HomeSnapshot(
             routine: store.todaysRoutine(calendar: calendar, now: now),
             hasSchedule: !store.schedule().days.isEmpty || !store.schedule().overrides.isEmpty,
@@ -42,7 +57,10 @@ struct HomeSnapshot {
                 snoozedUntil: preferences.deloadSnoozedUntil,
                 dismissedFingerprint: preferences.deloadDismissedFingerprint, weeklyGoal: weeklyGoal,
                 calendar: calendar
-            )
+            ),
+            hasAnyRoutines: !store.routines().isEmpty,
+            bodyweightKg: latest?.bodyweightKg,
+            bodyweightDeltaKg: bodyweightDelta
         )
     }
 

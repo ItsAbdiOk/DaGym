@@ -12,6 +12,8 @@ struct SetRow: View {
     var isCurrent: Bool
     var effortScale: Effort.Scale
     var isPerSide: Bool = false
+    /// The exercise's loading step — what the optional ± steppers move weight by.
+    var incrementKg: Double = 2.5
     var onTapWeight: () -> Void
     var onTapReps: () -> Void
     var onTapEffort: () -> Void
@@ -19,13 +21,18 @@ struct SetRow: View {
     /// Swipe-left actions — see design: "swipe left on a row for delete / change type".
     var onDelete: () -> Void = {}
     var onChangeKind: (SetKind) -> Void = { _ in }
+    /// Drop-set / rest-pause shortcuts: insert a seeded row directly below this one.
+    var onInsertBelow: (SetKind) -> Void = { _ in }
+    /// ± steppers (`Preferences.showSetSteppers`), deltas in kg / reps.
+    var onAdjustWeight: (Double) -> Void = { _ in }
+    var onAdjustReps: (Int) -> Void = { _ in }
 
     @State private var isSwipeOpen = false
     @State private var showKindPicker = false
     @Environment(Preferences.self) private var preferences
 
     var body: some View {
-        SwipeToRevealRow(actionsWidth: 112, isOpen: $isSwipeOpen) {
+        SwipeToRevealRow(actionsWidth: Self.actionsWidth, isOpen: $isSwipeOpen) {
             rowContent
         } actions: {
             swipeActions
@@ -40,10 +47,17 @@ struct SetRow: View {
         }
     }
 
+    private static let swipeButtonWidth: CGFloat = 52
+    private static let actionsWidth = swipeButtonWidth * 4
+    private var showsSteppers: Bool { preferences.showSetSteppers }
+
     private var rowContent: some View {
-        HStack(spacing: DGSpace.s3) {
+        HStack(spacing: showsSteppers ? DGSpace.s2 : DGSpace.s3) {
             SetKindBadge(kind: set.kind, index: badgeIndex)
-            previousGhost
+            if !showsSteppers { previousGhost }
+            if showsSteppers {
+                stepper(symbol: "minus", label: "Decrease weight") { onAdjustWeight(-incrementKg) }
+            }
             Button(action: onTapWeight) {
                 Text(preferences.formatWeight(kg: set.weightKg))
                     .dgMetric(DGFont.metricM)
@@ -55,6 +69,10 @@ struct SetRow: View {
             .accessibilityValue(
                 "\(preferences.formatWeight(kg: set.weightKg)) \(preferences.weightUnit.symbol)"
             )
+            if showsSteppers {
+                stepper(symbol: "plus", label: "Increase weight") { onAdjustWeight(incrementKg) }
+                stepper(symbol: "minus", label: "Decrease reps") { onAdjustReps(-1) }
+            }
             Button(action: onTapReps) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(repsText)
@@ -71,7 +89,8 @@ struct SetRow: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Reps")
             .accessibilityValue(isPerSide ? "\(repsText) per side" : repsText)
-            effortChip
+            if showsSteppers { stepper(symbol: "plus", label: "Increase reps") { onAdjustReps(1) } }
+            if preferences.effortTrackingEnabled { effortChip }
             Spacer(minLength: 0)
             doneButton
         }
@@ -87,6 +106,20 @@ struct SetRow: View {
     private var swipeActions: some View {
         HStack(spacing: 0) {
             swipeButton(
+                symbol: "arrow.down.right", tint: DGColor.setDrop, fill: DGColor.surface3,
+                label: "Add drop set"
+            ) {
+                onInsertBelow(.drop)
+                isSwipeOpen = false
+            }
+            swipeButton(
+                symbol: "pause.circle", tint: DGColor.setRestPause, fill: DGColor.surface3,
+                label: "Add rest-pause set"
+            ) {
+                onInsertBelow(.restPause)
+                isSwipeOpen = false
+            }
+            swipeButton(
                 symbol: "arrow.triangle.2.circlepath", tint: DGColor.setSuperset, fill: DGColor.surface3,
                 label: "Change set type"
             ) {
@@ -98,6 +131,18 @@ struct SetRow: View {
         }
     }
 
+    private func stepper(symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(DGColor.ink2)
+                .frame(width: 28, height: 28)
+                .background(DGColor.surface3, in: Circle())
+        }
+        .buttonStyle(DGPressStyle())
+        .accessibilityLabel(label)
+    }
+
     private func swipeButton(
         symbol: String, tint: Color, fill: Color, label: String, action: @escaping () -> Void
     ) -> some View {
@@ -105,7 +150,7 @@ struct SetRow: View {
             Image(systemName: symbol)
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(tint)
-                .frame(width: 56)
+                .frame(width: Self.swipeButtonWidth)
                 .frame(minHeight: DGTap.rowHeight)
                 .background(fill)
         }

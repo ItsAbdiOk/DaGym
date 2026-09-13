@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 /// large file never hitches the UI.
 struct DataSettingsSection: View {
     @Environment(WorkoutStore.self) private var store
+    @Environment(Preferences.self) private var preferences
 
     @State private var isBusy = false
     @State private var exportDocument: BackupFileDocument?
@@ -18,6 +19,7 @@ struct DataSettingsSection: View {
     @State private var pendingReport: ImportReport?
     @State private var errorMessage: String?
     @State private var confirmationMessage: String?
+    @State private var showingResetConfirm = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
@@ -26,6 +28,8 @@ struct DataSettingsSection: View {
                 exportRow
                 Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
                 importRow
+                Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
+                resetRow
             }
             .dgCard(padding: 0)
             footnote
@@ -51,6 +55,25 @@ struct DataSettingsSection: View {
             "Couldn't Complete That", isPresented: errorBinding,
             actions: {}, message: { Text(errorMessage ?? "") }
         )
+        .sheet(isPresented: $showingResetConfirm) {
+            ResetAllDataSheet(onConfirm: performReset)
+        }
+    }
+
+    private var resetRow: some View {
+        Button { showingResetConfirm = true } label: {
+            DataRow(
+                title: "Reset everything…", subtitle: "Erase all data and settings on this device",
+                symbol: "trash", isBusy: isBusy, tint: DGColor.danger, titleTint: DGColor.danger
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(isBusy)
+    }
+
+    private func performReset() {
+        store.wipeAllData(preferences: preferences)
+        confirmationMessage = "Everything was reset"
     }
 
     private var exportRow: some View {
@@ -168,15 +191,17 @@ private struct DataRow: View {
     var subtitle: String
     var symbol: String
     var isBusy: Bool
+    var tint: Color = DGColor.coral
+    var titleTint: Color = DGColor.ink1
 
     var body: some View {
         HStack(spacing: DGSpace.s3) {
             Image(systemName: symbol)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(DGColor.coral)
+                .foregroundStyle(tint)
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(DGFont.body).foregroundStyle(DGColor.ink1)
+                Text(title).font(DGFont.body).foregroundStyle(titleTint)
                 Text(subtitle).font(DGFont.footnote).foregroundStyle(DGColor.ink4)
             }
             Spacer()
@@ -218,6 +243,55 @@ extension BackupDocument: @retroactive Identifiable {
     public var id: Date { exportedAt }
 }
 
+/// Typed-confirm gate in front of `WorkoutStore.wipeAllData(preferences:)` — the delete button
+/// stays disabled until the user types "DELETE" exactly, so a destructive row can't fire from a
+/// stray tap or a misread confirmation alert.
+private struct ResetAllDataSheet: View {
+    var onConfirm: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var typed = ""
+
+    private static let confirmationWord = "DELETE"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DGSpace.s5) {
+            HStack {
+                Text("Reset Everything").font(DGFont.title2).foregroundStyle(DGColor.ink1)
+                Spacer()
+                DGIconButton(symbol: "xmark", accessibilityLabel: "Close") { dismiss() }
+            }
+            Text(
+                "This permanently deletes every routine, workout, exercise, progress photo and "
+                    + "setting on this device. It can't be undone."
+            )
+            .font(DGFont.body)
+            .foregroundStyle(DGColor.ink3)
+            VStack(alignment: .leading, spacing: DGSpace.s2) {
+                Text("Type DELETE to confirm").font(DGFont.footnote).foregroundStyle(DGColor.ink4)
+                TextField(Self.confirmationWord, text: $typed)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .font(DGFont.body)
+                    .padding(DGSpace.s3)
+                    .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            DGPrimaryButton(title: "Delete Everything", symbol: "trash", fill: DGColor.danger, height: 52) {
+                onConfirm()
+                dismiss()
+            }
+            .disabled(typed != Self.confirmationWord)
+            .opacity(typed == Self.confirmationWord ? 1 : 0.4)
+        }
+        .padding(.horizontal, DGSpace.s5)
+        .padding(.top, DGSpace.s6)
+        .padding(.bottom, DGSpace.s8)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(DGColor.surface1)
+    }
+}
+
 #Preview {
     if let store = PreviewStore.make() {
         ScrollView {
@@ -225,6 +299,7 @@ extension BackupDocument: @retroactive Identifiable {
                 .padding(DGSpace.s4)
         }
         .environment(store)
+        .environment(Preferences())
         .background(AmbientWash())
     }
 }

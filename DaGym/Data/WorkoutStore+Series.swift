@@ -18,6 +18,20 @@ extension WorkoutStore {
         var distinctWeights: [Double]
         /// Last minus first e1RM point in the window; zero with fewer than two points.
         var e1rmTrendDeltaKg: Double
+        /// Rating on each session's top set, by session date — tints the top-set line's dots.
+        var topSetRPE: [Date: Double] = [:]
+        /// No counting set in the window carried a load: the weight charts would be flat zeros,
+        /// so the chart plots `bestReps`/`totalReps` instead.
+        var neverLoaded = false
+        var bestReps: [(date: Date, value: Int)] = []
+        var totalReps: [(date: Date, value: Int)] = []
+    }
+
+    /// Body-wide effort data for `EffortCard` (features.md adopt 9).
+    struct EffortSeriesBundle {
+        var weeks: [EffortWeek]
+        var histogram: [(effort: Effort, count: Int)]
+        var ratedSets: Int
     }
 
     /// One calendar week's headline numbers, for the "THIS WEEK" strip and its week-over-week
@@ -55,7 +69,23 @@ extension WorkoutStore {
             volume: ExerciseSeries.volume(sessions: sessions),
             mostCommonWeight: ExerciseSeries.mostCommonWeight(sessions: sessions),
             distinctWeights: weights.sorted(by: >),
-            e1rmTrendDeltaKg: delta
+            e1rmTrendDeltaKg: delta,
+            topSetRPE: ExerciseSeries.topSetRPE(sessions: sessions),
+            neverLoaded: ExerciseSeries.isNeverLoaded(sessions: sessions),
+            bestReps: ExerciseSeries.bestReps(sessions: sessions),
+            totalReps: ExerciseSeries.totalReps(sessions: sessions)
+        )
+    }
+
+    /// `weeks` of mean effort per week plus the all-window histogram; `ratedSets` is 0 when the
+    /// lifter has never rated a set, which is the card's cue to stay hidden.
+    func effortSeries(weeks: Int, calendar: Calendar = .current, now: Date = Date()) -> EffortSeriesBundle {
+        let since = calendar.date(byAdding: .weekOfYear, value: -weeks, to: now)
+        let workouts = bodyWorkouts(since: since, calendar: calendar)
+        return EffortSeriesBundle(
+            weeks: EffortSeries.weeklyEffort(workouts: workouts, calendar: calendar),
+            histogram: EffortSeries.histogram(workouts: workouts),
+            ratedSets: EffortSeries.ratedSetCount(workouts: workouts)
         )
     }
 

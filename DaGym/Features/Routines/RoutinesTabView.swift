@@ -9,6 +9,7 @@ struct RoutinesTabView: View {
 
     @Environment(WorkoutStore.self) private var store
     @State private var routines: [RoutineInfo] = []
+    @State private var activeProfile: EquipmentProfileInfo?
     @State private var path = NavigationPath()
 
     private enum Destination: Hashable {
@@ -98,11 +99,15 @@ struct RoutinesTabView: View {
             ForEach(routines) { routine in
                 ZStack(alignment: .topTrailing) {
                     Button { path.append(Destination.edit(routine.id)) } label: {
-                        RoutineCard(routine: routine, onStart: { onStart(routine) })
+                        RoutineCard(
+                            routine: routine, missingEquipment: missingEquipment(for: routine),
+                            profileName: activeProfile?.name ?? "", onStart: { onStart(routine) }
+                        )
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
-                        Button("Delete", role: .destructive) { delete(routine) }
+                        Button("Copy", systemImage: "doc.on.doc") { duplicate(routine) }
+                        Button("Delete", systemImage: "trash", role: .destructive) { delete(routine) }
                     }
                     ShareRoutineButton(title: routine.name) {
                         PlanShareService.exportRoutine(id: routine.id, context: store.context)
@@ -115,6 +120,19 @@ struct RoutinesTabView: View {
 
     private func refresh() {
         routines = store.routines()
+        activeProfile = store.activeProfile()
+    }
+
+    /// Equipment the routine needs that the active profile lacks; empty when there's no profile
+    /// or it lists everything, so a fresh install never shows a badge.
+    private func missingEquipment(for routine: RoutineInfo) -> [String] {
+        guard let activeProfile, activeProfile.restrictsLibrary else { return [] }
+        return routine.equipmentOutside(Set(activeProfile.availableEquipment))
+    }
+
+    private func duplicate(_ routine: RoutineInfo) {
+        store.duplicateRoutine(id: routine.id)
+        refresh()
     }
 
     private func pop() {
@@ -128,15 +146,18 @@ struct RoutinesTabView: View {
     }
 }
 
-/// One routine card: name, estimate, exercise line, top muscle tags and a
-/// coral "start" pill.
+/// One routine card: glyph, name, estimate, exercise line, top muscle tags, an equipment
+/// badge when the active profile can't cover it, and a coral "start" pill.
 private struct RoutineCard: View {
     var routine: RoutineInfo
+    var missingEquipment: [String] = []
+    var profileName = ""
     var onStart: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .center, spacing: DGSpace.s3) {
+                RoutineGlyph(symbolName: routine.symbolName, tint: routine.tint, size: 32)
                 Text(routine.name)
                     .font(DGFont.title2)
                     .textCase(.uppercase)
@@ -151,6 +172,9 @@ private struct RoutineCard: View {
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
                 .lineLimit(2)
+            if !missingEquipment.isEmpty {
+                equipmentBadge
+            }
             HStack(spacing: DGSpace.s2) {
                 ForEach(topMuscles) { muscle in
                     DGTag(text: muscle.displayName)
@@ -173,6 +197,25 @@ private struct RoutineCard: View {
             .padding(.horizontal, DGSpace.s4)
             .frame(height: 36)
             .background(DGColor.coral, in: Capsule())
+    }
+
+    private var equipmentBadge: some View {
+        HStack(spacing: DGSpace.s2) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .accessibilityHidden(true)
+            Text("Needs \(missingNames) — not in \(profileName)")
+                .font(DGFont.footnote)
+                .lineLimit(1)
+        }
+        .foregroundStyle(DGColor.warning)
+        .accessibilityLabel("Needs \(missingNames), not in the \(profileName) profile")
+    }
+
+    private var missingNames: String {
+        missingEquipment
+            .map { EquipmentOption(rawValue: $0)?.title.lowercased() ?? $0 }
+            .joined(separator: ", ")
     }
 
     private var exerciseNames: String { routine.exercises.map(\.name).joined(separator: " · ") }

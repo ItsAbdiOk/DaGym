@@ -15,6 +15,11 @@ struct ExerciseDetailView: View {
     @State private var incrementKg: Double
     @State private var barTypeKey: String?
     @State private var showingCalculator = false
+    @State private var notes: [ExerciseNoteInfo] = []
+    @State private var showingAddToRoutine = false
+    @State private var showingEdit = false
+    @State private var confirmingDelete = false
+    @State private var routinesUsing: [RoutineInfo] = []
 
     private static let restOptions = [60, 90, 120, 150, 180, 210, 240, 300]
 
@@ -45,9 +50,20 @@ struct ExerciseDetailView: View {
                     ExerciseChartView(exerciseID: exercise.id)
                         .dgCard()
                     oneRepMaxRow
-                    lastSessionsCard
-                    instructionsCard
+                    ExerciseTextCard(
+                        title: "Last 3 Sessions", lines: lastSessions, emptyText: "No sessions logged yet.",
+                        tint: DGColor.ink1
+                    )
+                    ExerciseNotesCard(notes: notes, onDelete: deleteNote)
+                    ExerciseTextCard(
+                        title: "How To Do It", lines: instructionLines, emptyText: "Instructions coming soon",
+                        tint: DGColor.ink2
+                    )
                     settingsCard
+                    ExerciseActionsCard(
+                        isCustom: exercise.isCustom, onAddToRoutine: { showingAddToRoutine = true },
+                        onEdit: { showingEdit = true }, onDelete: confirmDelete
+                    )
                 }
                 .padding(.horizontal, DGSpace.s4)
                 .padding(.top, DGSpace.s3)
@@ -61,6 +77,24 @@ struct ExerciseDetailView: View {
                 weightKg: exercise.bestE1RM ?? incrementKg * 20, reps: 5, bar: exercise.bar ?? .olympic
             )
         }
+        .sheet(isPresented: $showingAddToRoutine) {
+            AddToRoutineSheet(exercise: exercise) { _ in refresh() }
+        }
+        .sheet(isPresented: $showingEdit) {
+            EditExerciseSheet(exercise: exercise, onSaved: refresh)
+        }
+        .confirmationDialog(
+            "Delete \(exercise.name)?", isPresented: $confirmingDelete, titleVisibility: .visible
+        ) {
+            Button("Delete Exercise", role: .destructive, action: deleteExercise)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(ExerciseActionsCard.deleteWarning(routines: routinesUsing))
+        }
+    }
+
+    private var instructionLines: [String] {
+        exercise.instructions.isEmpty ? [] : [exercise.instructions]
     }
 
     private var oneRepMaxRow: some View {
@@ -160,42 +194,6 @@ struct ExerciseDetailView: View {
         )
     }
 
-    private var lastSessionsCard: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s2) {
-            Text("Last 3 Sessions").dgLabel()
-            if lastSessions.isEmpty {
-                Text("No sessions logged yet.")
-                    .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.ink4)
-            } else {
-                ForEach(lastSessions, id: \.self) { line in
-                    Text(line)
-                        .font(DGFont.body)
-                        .foregroundStyle(DGColor.ink1)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .dgCard()
-    }
-
-    private var instructionsCard: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s2) {
-            Text("How To Do It").dgLabel()
-            if exercise.instructions.isEmpty {
-                Text("Instructions coming soon")
-                    .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.ink4)
-            } else {
-                Text(exercise.instructions)
-                    .font(DGFont.body)
-                    .foregroundStyle(DGColor.ink2)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .dgCard()
-    }
-
     private var settingsCard: some View {
         VStack(spacing: 0) {
             MenuSettingsRow(label: "Rest timer", value: WorkoutSession.clock(restSeconds)) {
@@ -232,6 +230,22 @@ struct ExerciseDetailView: View {
             barTypeKey = model.barType
         }
         lastSessions = store.lastSessions(exerciseID: exercise.id)
+        notes = store.exerciseNotes(exerciseID: exercise.id)
+    }
+
+    private func deleteNote(_ note: ExerciseNoteInfo) {
+        store.deleteExerciseNote(id: note.id)
+        refresh()
+    }
+
+    private func confirmDelete() {
+        routinesUsing = store.routinesUsing(exerciseID: exercise.id)
+        confirmingDelete = true
+    }
+
+    private func deleteExercise() {
+        guard store.deleteCustomExercise(id: exercise.id) else { return }
+        dismiss()
     }
 
     private func toggleFavorite() {
@@ -262,6 +276,87 @@ struct ExerciseDetailView: View {
     }
 }
 
+/// "Add to routine…" for every exercise; Edit/Delete only for the lifter's own custom ones.
+struct ExerciseActionsCard: View {
+    var isCustom: Bool
+    var onAddToRoutine: () -> Void
+    var onEdit: () -> Void
+    var onDelete: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            row(
+                title: "Add to routine…", symbol: "plus.circle", tint: DGColor.coralText,
+                action: onAddToRoutine
+            )
+            if isCustom {
+                Divider().overlay(DGColor.hairline)
+                row(title: "Edit exercise", symbol: "pencil", tint: DGColor.ink1, action: onEdit)
+                Divider().overlay(DGColor.hairline)
+                row(title: "Delete exercise", symbol: "trash", tint: DGColor.danger, action: onDelete)
+            }
+        }
+        .dgCard(padding: 0)
+    }
+
+    private func row(title: String, symbol: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Image(systemName: symbol)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(tint)
+                Text(title)
+                    .font(DGFont.body)
+                    .foregroundStyle(tint)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(DGColor.ink4)
+            }
+            .padding(.horizontal, DGSpace.s5)
+            .frame(minHeight: DGTap.min)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// The delete confirmation's message: how many routines lose the exercise.
+    static func deleteWarning(routines: [RoutineInfo]) -> String {
+        let base = "Past workouts keep their sets."
+        switch routines.count {
+        case 0: return base
+        case 1: return "Used in 1 routine — it'll be removed from \(routines[0].name). \(base)"
+        default: return "Used in \(routines.count) routines — it'll be removed from all of them. \(base)"
+        }
+    }
+}
+
+/// A labelled card of text lines ("Last 3 Sessions", "How To Do It") with an empty-state line.
+private struct ExerciseTextCard: View {
+    var title: String
+    var lines: [String]
+    var emptyText: String
+    var tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DGSpace.s2) {
+            Text(title).dgLabel()
+            if lines.isEmpty {
+                Text(emptyText)
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.ink4)
+            } else {
+                ForEach(lines, id: \.self) { line in
+                    Text(line)
+                        .font(DGFont.body)
+                        .foregroundStyle(tint)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dgCard()
+    }
+}
+
 /// Bar-type options for the settings menu, mapped to `ExerciseModel.barType`.
 private enum BarOption: String, CaseIterable, Identifiable {
     case none, olympic, womens, ezBar
@@ -284,8 +379,8 @@ private enum BarOption: String, CaseIterable, Identifiable {
     }
 }
 
-/// One editable "Label … Value ⌄" row inside the settings card.
-private struct MenuSettingsRow<Items: View>: View {
+/// One editable "Label … Value ⌄" row inside the settings card (shared with `EditExerciseSheet`).
+struct MenuSettingsRow<Items: View>: View {
     var label: String
     var value: String
     @ViewBuilder var items: Items

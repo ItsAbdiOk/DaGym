@@ -121,7 +121,8 @@ enum BackupService {
                 progressionRule: model.progressionRule, repRangeLow: model.repRangeLow,
                 repRangeHigh: model.repRangeHigh, progressionRuleJSON: model.progressionRuleJSON,
                 createdAt: model.createdAt, updatedAt: model.updatedAt, sortOrder: model.sortOrder,
-                isArchived: model.isArchived, importedFromID: model.importedFromID, exercises: exercises
+                isArchived: model.isArchived, importedFromID: model.importedFromID,
+                symbolName: model.symbolName, tint: model.tint, exercises: exercises
             )
         }
     }

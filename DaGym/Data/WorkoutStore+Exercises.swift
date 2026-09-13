@@ -2,6 +2,16 @@ import Foundation
 import GymCore
 import SwiftData
 
+/// The editable identity of a custom exercise, as `updateCustomExercise` writes it.
+struct CustomExerciseFields {
+    var name: String
+    var primary: [Muscle]
+    var equipment: String
+    var style: ExerciseInfo.LoggingStyle
+    var isPerSide = false
+    var barType: String?
+}
+
 extension WorkoutStore {
     /// Filtered, sorted (favorites first, then name) exercise list for the library screen. Best
     /// e1RM comes from one fetch of the PR cache shared by every row; `sessions` is left at 0 —
@@ -93,6 +103,61 @@ extension WorkoutStore {
         context.insert(model)
         save()
         return exerciseInfo(for: model)
+    }
+
+    /// Edits a custom exercise's identity fields (features.md adopt 16). Seeded exercises are
+    /// left alone — their instructions/muscles come from the seed.
+    func updateCustomExercise(id: UUID, fields: CustomExerciseFields) {
+        guard let model = fetchExerciseModel(id: id), model.isCustom else { return }
+        model.name = fields.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        model.primaryMuscles = fields.primary.map(\.rawValue)
+        model.equipment = fields.equipment
+        model.loggingStyle = fields.style.rawKey
+        model.isPerSide = fields.isPerSide
+        model.barType = fields.barType
+        save()
+    }
+
+    /// Removes a custom exercise and its slots in every routine; finished workouts keep their
+    /// rows (the exercise link nulls out) so history totals don't change. Seeded exercises can't
+    /// be deleted. Returns whether anything was removed.
+    @discardableResult
+    func deleteCustomExercise(id: UUID) -> Bool {
+        guard let model = fetchExerciseModel(id: id), model.isCustom else { return false }
+        for slot in model.routineExercises ?? [] {
+            context.delete(slot)
+        }
+        context.delete(model)
+        save()
+        WidgetSnapshotWriter.refresh(store: self)
+        return true
+    }
+
+    /// The (unarchived) routines that include this exercise — the "used in N routines" warning
+    /// before a delete.
+    func routinesUsing(exerciseID: UUID) -> [RoutineInfo] {
+        routines().filter { routine in routine.exercises.contains { $0.id == exerciseID } }
+    }
+
+    /// Appends the exercise to the end of a routine with `sets` planned working sets in the
+    /// routine's rep range. A no-op when either id is unknown.
+    func addExercise(id exerciseID: UUID, toRoutine routineID: UUID, sets: Int = 3) {
+        guard let routine = fetchRoutineModel(id: routineID),
+              let exercise = fetchExerciseModel(id: exerciseID) else { return }
+        let order = ((routine.exercises ?? []).map(\.order).max() ?? -1) + 1
+        let slot = RoutineExerciseModel(order: order, exercise: exercise, routine: routine)
+        context.insert(slot)
+        slot.plannedSets = (0..<max(1, sets)).map { index in
+            let planned = PlannedSetModel(
+                order: index, kind: SetKind.working.rawValue, targetReps: routine.repRangeLow,
+                targetRepsHigh: routine.repRangeHigh, routineExercise: slot
+            )
+            context.insert(planned)
+            return planned
+        }
+        routine.updatedAt = Date()
+        save()
+        WidgetSnapshotWriter.refresh(store: self)
     }
 
     func toggleFavorite(id: UUID) {

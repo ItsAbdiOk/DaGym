@@ -17,6 +17,7 @@ struct ExerciseChartView: View {
     @State private var weightOptions: [Double] = []
     @State private var repsWeight: Double = 0
     @State private var scrubbedIndex: Int?
+    @State private var neverLoaded = false
 
     enum Metric: String, CaseIterable, Identifiable {
         case e1rm, topSet, volume, reps
@@ -39,6 +40,11 @@ struct ExerciseChartView: View {
                 chart
                 if metric == .reps, weightOptions.count > 1 {
                     WeightPickerRow(options: weightOptions, selected: $repsWeight)
+                }
+                if neverLoaded {
+                    Text("Never loaded — showing reps per session instead of weight.")
+                        .font(DGFont.footnote)
+                        .foregroundStyle(DGColor.ink3)
                 }
                 Text("Drag anywhere on the chart to scrub — the value above updates.")
                     .font(DGFont.footnote)
@@ -83,6 +89,7 @@ struct ExerciseChartView: View {
     private func headlineValue(_ point: ChartPoint) -> String {
         switch metric {
         case .e1rm, .topSet, .volume:
+            if neverLoaded { return "\(Int(point.value)) reps" }
             return "\(preferences.formatWeight(kg: point.value)) \(preferences.unitSymbol)"
         case .reps:
             return "\(Int(point.value)) reps"
@@ -95,6 +102,7 @@ struct ExerciseChartView: View {
                 .foregroundStyle(DGColor.coral)
                 .lineStyle(StrokeStyle(lineWidth: 2.5))
                 .interpolationMethod(.monotone)
+            effortDot(point)
             markedPoint(point)
         }
         .chartYAxis(.hidden)
@@ -120,6 +128,17 @@ struct ExerciseChartView: View {
             PointMark(x: .value("Session", point.date), y: .value(metric.title, point.value))
                 .foregroundStyle(DGColor.prGold)
                 .symbolSize(90)
+        }
+    }
+
+    /// Top-set line only: a dot per session tinted by the top set's rating, so a flat line of
+    /// RPE 10s reads differently from a flat line of RPE 7s. Unrated sessions get no dot.
+    @ChartContentBuilder
+    private func effortDot(_ point: ChartPoint) -> some ChartContent {
+        if metric == .topSet, let rpe = point.rpe, !isDisplayed(point) {
+            PointMark(x: .value("Session", point.date), y: .value(metric.title, point.value))
+                .foregroundStyle(Effort(rpe: rpe).color)
+                .symbolSize(50)
         }
     }
 
@@ -155,6 +174,7 @@ struct ExerciseChartView: View {
         scrubbedIndex = nil
         let bundle = store.exerciseSeries(exerciseID: exerciseID, months: range.months)
         weightOptions = bundle.distinctWeights
+        neverLoaded = bundle.neverLoaded
         if repsWeight == 0 || !weightOptions.contains(repsWeight) {
             repsWeight = bundle.mostCommonWeight ?? weightOptions.first ?? 0
         }
@@ -176,10 +196,16 @@ struct ExerciseChartView: View {
 
     private func points(for metric: Metric, bundle: WorkoutStore.ExerciseSeriesBundle) -> [ChartPoint] {
         switch metric {
+        case .e1rm where bundle.neverLoaded, .topSet where bundle.neverLoaded:
+            return bundle.bestReps.map { ChartPoint(date: $0.date, value: Double($0.value)) }
+        case .volume where bundle.neverLoaded:
+            return bundle.totalReps.map { ChartPoint(date: $0.date, value: Double($0.value)) }
         case .e1rm:
             return bundle.e1rm.map { ChartPoint(date: $0.date, value: $0.value) }
         case .topSet:
-            return bundle.topSet.map { ChartPoint(date: $0.date, value: $0.value) }
+            return bundle.topSet.map {
+                ChartPoint(date: $0.date, value: $0.value, rpe: bundle.topSetRPE[$0.date])
+            }
         case .volume:
             return bundle.volume.map { ChartPoint(date: $0.date, value: $0.value) }
         case .reps:
@@ -198,6 +224,8 @@ struct ExerciseChartView: View {
 private struct ChartPoint: Identifiable {
     var date: Date
     var value: Double
+    /// The top set's rating, on the top-set metric only.
+    var rpe: Double?
     var id: Date { date }
 }
 

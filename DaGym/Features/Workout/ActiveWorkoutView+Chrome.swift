@@ -16,6 +16,26 @@ extension ActiveWorkoutView {
         withAnimation(DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion)) { chromeCollapse = next }
     }
 
+    /// The "…" next to FINISH: layout and session-level additions that don't belong on any one
+    /// exercise. `compactWorkoutLayout` is remembered in `Preferences`.
+    var headerMenu: some View {
+        @Bindable var prefs = preferences
+        return Menu {
+            Toggle(
+                "Compact layout", systemImage: "rectangle.compress.vertical",
+                isOn: $prefs.compactWorkoutLayout
+            )
+            Button("Add routine…", systemImage: "list.bullet.rectangle") { activeSheet = .addRoutine }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(DGColor.ink1)
+                .frame(width: 44, height: 44)
+                .dgGlass(.regular, in: Circle())
+        }
+        .accessibilityLabel("Workout options")
+    }
+
     /// Single 40pt row: title + elapsed on one line, FINISH shrunk to a 36pt pill.
     var condensedNavHeader: some View {
         HStack(spacing: DGSpace.s3) {

@@ -23,6 +23,7 @@ struct BodyMapView: View {
     var onTap: ((Muscle) -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(Preferences.self) private var preferences
 
     private struct Segment {
         let muscle: Muscle
@@ -87,7 +88,35 @@ struct BodyMapView: View {
         .accessibilityLabel(accessibilityDescription)
     }
 
-    private var segments: [Segment] { side == .front ? Self.front : Self.back }
+    private var segments: [Segment] {
+        Self.adjusted(side == .front ? Self.front : Self.back, for: preferences.bodyFigure)
+    }
+
+    /// Nudges the shoulder (delts) and hip (quads/hams/glutes) segments a few units wider or
+    /// narrower per `figure` — a subtle proportion difference, not a different drawing. Every
+    /// other segment, and every `Muscle` region, is untouched.
+    private static func adjusted(_ base: [Segment], for figure: Preferences.BodyFigure) -> [Segment] {
+        guard figure != .neutral else { return base }
+        let shoulderShift: CGFloat = figure == .male ? 2 : -2
+        let hipShift: CGFloat = figure == .male ? -2 : 2
+        return base.map { segment in
+            switch segment.muscle {
+            case .delts:
+                let isLeftSide = segment.rect.minX < 50
+                let dx = isLeftSide ? -shoulderShift : shoulderShift
+                return Segment(
+                    muscle: segment.muscle, rect: segment.rect.offsetBy(dx: dx, dy: 0), radius: segment.radius
+                )
+            case .quads, .hams, .glutes:
+                return Segment(
+                    muscle: segment.muscle, rect: segment.rect.insetBy(dx: -hipShift / 2, dy: 0),
+                    radius: segment.radius
+                )
+            default:
+                return segment
+            }
+        }
+    }
 
     private func color(for muscle: Muscle) -> Color {
         guard let value = intensity[muscle], value > 0 else { return DGColor.bodyMapInert }
@@ -136,4 +165,5 @@ struct BodyMapPair: View {
     BodyMapPair(intensity: [.chest: 1, .delts: 0.6, .triceps: 0.4], height: 140)
         .padding()
         .background(DGColor.bgBase)
+        .environment(Preferences())
 }

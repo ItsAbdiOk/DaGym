@@ -93,6 +93,12 @@ extension WorkoutStore {
     /// The plate inventory for a profile, ready for `PlateCalculator`.
     func plateStock(for profile: EquipmentProfileInfo) -> [PlateStock] { profile.plateStock }
 
+    /// Equipment kinds (`EquipmentOption` raw values) in the active profile — what the library
+    /// and picker show by default. Nil when no profile exists yet, which means "no filter".
+    func activeEquipmentKinds() -> Set<String>? {
+        activeProfile().map { Set($0.availableEquipment) }
+    }
+
     func fetchEquipmentProfileModel(id: UUID) -> EquipmentProfileModel? {
         var descriptor = FetchDescriptor<EquipmentProfileModel>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
@@ -110,6 +116,25 @@ extension WorkoutStore {
             id: model.id, name: model.name, isActive: model.isActive, barKg: model.barKg,
             availableEquipment: model.availableEquipment, plateStock: stock, collarsKg: model.collarsKg
         )
+    }
+}
+
+extension EquipmentProfileInfo {
+    /// False for a profile that lists every equipment kind (the seeded "Gym"): filtering by it
+    /// would change nothing, so the library skips the "Showing what's in …" banner for it.
+    var restrictsLibrary: Bool {
+        !EquipmentOption.allCases.allSatisfy { availableEquipment.contains($0.rawValue) }
+    }
+}
+
+extension RoutineInfo {
+    /// Equipment kinds this routine's exercises need that `available` doesn't list, in
+    /// first-use order and without repeats. Empty means the routine can be done as-is.
+    func equipmentOutside(_ available: Set<String>) -> [String] {
+        var seen: Set<String> = []
+        return exercises.map(\.equipment).filter { kind in
+            !available.contains(kind) && seen.insert(kind).inserted
+        }
     }
 }
 

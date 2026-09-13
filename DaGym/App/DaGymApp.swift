@@ -112,6 +112,7 @@ struct AppRootContainer: View {
             .environment(preferences)
             .environment(healthSync)
             .modelContainer(container)
+            .preferredColorScheme(preferences.appearance.colorScheme)
             .task { healthSync.bind(to: store) }
         }
     }

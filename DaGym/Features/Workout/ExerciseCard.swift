@@ -18,6 +18,10 @@ struct ExerciseCard: View {
     var onNote: () -> Void = {}
     var onDeleteSet: (UUID) -> Void = { _ in }
     var onChangeSetKind: (UUID, SetKind) -> Void = { _, _ in }
+    /// Drop-set / rest-pause swipe shortcuts and the optional ± steppers.
+    var onInsertSet: (UUID, SetKind) -> Void = { _, _ in }
+    var onAdjustWeight: (UUID, Double) -> Void = { _, _ in }
+    var onAdjustReps: (UUID, Int) -> Void = { _, _ in }
 
     var body: some View {
         if entry.isComplete {
@@ -27,7 +31,8 @@ struct ExerciseCard: View {
                 entry: entry, effortScale: effortScale,
                 onTapWeight: onTapWeight, onTapReps: onTapReps, onTapEffort: onTapEffort,
                 onToggleDone: onToggleDone, onMore: onMore, onStartTimed: onStartTimed, onNote: onNote,
-                onDeleteSet: onDeleteSet, onChangeSetKind: onChangeSetKind
+                onDeleteSet: onDeleteSet, onChangeSetKind: onChangeSetKind, onInsertSet: onInsertSet,
+                onAdjustWeight: onAdjustWeight, onAdjustReps: onAdjustReps
             )
         } else {
             CollapsedExerciseRow(entry: entry, onStartTimed: onStartTimed)
@@ -63,21 +68,34 @@ private struct OnDeckExerciseCard: View {
     var onNote: () -> Void
     var onDeleteSet: (UUID) -> Void
     var onChangeSetKind: (UUID, SetKind) -> Void
+    var onInsertSet: (UUID, SetKind) -> Void
+    var onAdjustWeight: (UUID, Double) -> Void
+    var onAdjustReps: (UUID, Int) -> Void
 
     @Environment(Preferences.self) private var preferences
 
+    /// `Preferences.compactWorkoutLayout`: just the header and the rows — no on-deck pill,
+    /// last-3 strip, why-card or plate chip.
+    private var isCompact: Bool { preferences.compactWorkoutLayout }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("On deck").dgLabel(DGColor.coralText)
-                .padding(.horizontal, DGSpace.s2)
-                .padding(.vertical, 4)
-                .background(DGColor.coralWash, in: Capsule())
-                .padding(.bottom, DGSpace.s2)
+            if !isCompact {
+                Text("On deck").dgLabel(DGColor.coralText)
+                    .padding(.horizontal, DGSpace.s2)
+                    .padding(.vertical, 4)
+                    .background(DGColor.coralWash, in: Capsule())
+                    .padding(.bottom, DGSpace.s2)
+            }
             header
-            if !entry.lastSessions.isEmpty {
+            if let plateSet, let bar = entry.exercise.bar, !isCompact {
+                PlateChip(weightKg: plateSet.weightKg, bar: bar) { onTapWeight(plateSet.id) }
+                    .padding(.top, DGSpace.s3)
+            }
+            if !entry.lastSessions.isEmpty, !isCompact {
                 lastSessionsStrip.padding(.top, DGSpace.s4)
             }
-            if let whyTitle = entry.whyTitle, let whyBody = entry.whyBody {
+            if let whyTitle = entry.whyTitle, let whyBody = entry.whyBody, !isCompact {
                 WhyCard(title: whyTitle, message: whyBody, labelColor: whyLabelColor)
                     .padding(.top, DGSpace.s3)
             }
@@ -114,6 +132,14 @@ private struct OnDeckExerciseCard: View {
         }
     }
 
+    /// The set the plate chip describes: the next open loaded set, once it has a weight.
+    private var plateSet: SetEntry? {
+        guard !entry.isTimed, let set = entry.sets.first(where: { !$0.isDone }), set.weightKg > 0 else {
+            return nil
+        }
+        return set
+    }
+
     private var whyLabelColor: Color {
         entry.whyKind == .deload ? DGColor.warning : DGColor.aiVioletText
     }
@@ -146,7 +172,9 @@ private struct OnDeckExerciseCard: View {
             Text("Prev").frame(minWidth: 44, alignment: .leading)
             Text(preferences.unitSymbol.uppercased()).frame(minWidth: 44, alignment: .leading)
             Text("Reps").frame(minWidth: 30, alignment: .leading)
-            Text(effortScale == .rpe ? "Rpe" : "Rir").frame(width: 28, alignment: .leading)
+            if preferences.effortTrackingEnabled {
+                Text(effortScale == .rpe ? "Rpe" : "Rir").frame(width: 28, alignment: .leading)
+            }
         }
         .dgLabel()
     }
@@ -179,10 +207,14 @@ private struct OnDeckExerciseCard: View {
                     set: set, badgeIndex: workingIndex(upTo: index), rowIndex: index,
                     isCurrent: set.id == firstOpenID,
                     effortScale: effortScale, isPerSide: entry.exercise.isPerSide,
+                    incrementKg: entry.exercise.incrementKg,
                     onTapWeight: { onTapWeight(set.id) }, onTapReps: { onTapReps(set.id) },
                     onTapEffort: { onTapEffort(set.id) }, onToggleDone: { onToggleDone(set) },
                     onDelete: { onDeleteSet(set.id) },
-                    onChangeKind: { kind in onChangeSetKind(set.id, kind) }
+                    onChangeKind: { kind in onChangeSetKind(set.id, kind) },
+                    onInsertBelow: { kind in onInsertSet(set.id, kind) },
+                    onAdjustWeight: { delta in onAdjustWeight(set.id, delta) },
+                    onAdjustReps: { delta in onAdjustReps(set.id, delta) }
                 )
             }
         }

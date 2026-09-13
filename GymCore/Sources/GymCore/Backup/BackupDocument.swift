@@ -190,13 +190,18 @@ public struct BackupRoutine: Codable, Sendable, Identifiable {
     public var isArchived: Bool?
     /// Stable identity for starter/shared routines so a re-import merges instead of duplicating.
     public var importedFromID: UUID?
+    /// Card glyph: an SF Symbol name and a tint key. Nil in files written before the glyph
+    /// existed; the importer falls back to the app's defaults.
+    public var symbolName: String?
+    public var tint: String?
     public var exercises: [BackupRoutineExercise]
 
     public init(
         id: UUID, name: String, notes: String = "", progressionRule: String = "doubleProgression",
         repRangeLow: Int = 6, repRangeHigh: Int = 8, progressionRuleJSON: String? = nil,
         createdAt: Date? = nil, updatedAt: Date? = nil, sortOrder: Int = 0, isArchived: Bool? = nil,
-        importedFromID: UUID? = nil, exercises: [BackupRoutineExercise] = []
+        importedFromID: UUID? = nil, symbolName: String? = nil, tint: String? = nil,
+        exercises: [BackupRoutineExercise] = []
     ) {
         self.id = id
         self.name = name
@@ -210,6 +215,8 @@ public struct BackupRoutine: Codable, Sendable, Identifiable {
         self.sortOrder = sortOrder
         self.isArchived = isArchived
         self.importedFromID = importedFromID
+        self.symbolName = symbolName
+        self.tint = tint
         self.exercises = exercises
     }
 }

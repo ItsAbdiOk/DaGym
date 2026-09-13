@@ -4,11 +4,13 @@ import SwiftUI
 
 /// One exercise slot as edited on screen; `id` is independent of the
 /// exercise's own id so the same exercise could in principle appear twice.
-private struct EditableExercise: Identifiable {
+struct EditableExercise: Identifiable {
     let id = UUID()
     var exercise: ExerciseInfo
     var sets: [PlannedSetDraft]
     var supersetGroup: Int?
+    /// Free-text loading cue ("start at 60 kg, +2.5 when 3×8") shown on the card in a workout.
+    var note = ""
     /// Per-exercise progression override (plan.md §6.5): `overrideEnabled` gates whether
     /// `overrideState.rule` is saved, so turning it off cleanly falls back to the routine's rule.
     var overrideEnabled = false
@@ -28,6 +30,9 @@ struct RoutineBuilderView: View {
     @State private var name = "New Routine"
     @State private var items: [EditableExercise] = []
     @State private var showingPicker = false
+    @State private var showingReorder = false
+    @State private var symbolName = "dumbbell"
+    @State private var tint = RoutineTint.coral.rawValue
     @State private var ruleState = RuleState()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -41,6 +46,7 @@ struct RoutineBuilderView: View {
                         .animation(
                             DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion), value: hitMap
                         )
+                    GlyphCard(symbolName: $symbolName, tint: $tint)
                     ProgressionRulePickerView(
                         title: "Progression", state: $ruleState, unit: preferences.weightUnit
                     )
@@ -55,6 +61,9 @@ struct RoutineBuilderView: View {
                         )
                     }
                     AddExerciseButton { showingPicker = true }
+                    if items.count > 1 {
+                        reorderButton
+                    }
                 }
                 .padding(.horizontal, DGSpace.s4)
                 .padding(.top, DGSpace.s3)
@@ -65,6 +74,26 @@ struct RoutineBuilderView: View {
         .sheet(isPresented: $showingPicker) {
             ExercisePickerSheet(onPick: addExercise)
         }
+        .sheet(isPresented: $showingReorder) {
+            ReorderDraftSheet(items: $items, onDone: { showingReorder = false })
+        }
+    }
+
+    private var reorderButton: some View {
+        Button { showingReorder = true } label: {
+            HStack(spacing: DGSpace.s2) {
+                Image(systemName: "arrow.up.arrow.down").font(.system(size: 13, weight: .semibold))
+                Text("Reorder")
+                    .font(DGFont.condensedLabel(14))
+                    .tracking(1.2)
+                    .textCase(.uppercase)
+            }
+            .foregroundStyle(DGColor.ink2)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .dgGlass(.thin, radius: DGRadius.lg)
+        }
+        .buttonStyle(DGPressStyle())
     }
 
     private var navRow: some View {
@@ -105,11 +134,13 @@ struct RoutineBuilderView: View {
     private func load() {
         guard let routineID, let result = store.routineDrafts(id: routineID) else { return }
         name = result.info.name
+        symbolName = result.info.symbolName
+        tint = result.info.tint
         let rule = store.fetchRoutineModel(id: routineID)?.progressionRuleValue
         ruleState = RuleState.from(rule ?? .doubleProgression(low: 6, high: 8, incrementKg: 2.5))
         items = zip(result.info.exercises, result.drafts).map { info, draft in
             EditableExercise(
-                exercise: info, sets: draft.sets, supersetGroup: draft.supersetGroup,
+                exercise: info, sets: draft.sets, supersetGroup: draft.supersetGroup, note: draft.note,
                 overrideEnabled: draft.overrideRule != nil,
                 overrideState: draft.overrideRule.map(RuleState.from) ?? RuleState.exerciseOverride(
                     of: ruleState.rule, for: info, unit: preferences.weightUnit
@@ -165,12 +196,16 @@ struct RoutineBuilderView: View {
     private func save() {
         let drafts = items.map { item in
             RoutineExerciseDraft(
-                exerciseID: item.exercise.id, supersetGroup: item.supersetGroup, sets: item.sets,
+                exerciseID: item.exercise.id, supersetGroup: item.supersetGroup,
+                note: item.note.trimmingCharacters(in: .whitespacesAndNewlines), sets: item.sets,
                 overrideRule: item.overrideEnabled ? item.overrideState.rule : nil,
                 excludeFromProgression: item.excludeFromProgression
             )
         }
-        store.saveRoutine(id: routineID, name: name, rule: ruleState.rule, exercises: drafts)
+        store.saveRoutine(
+            id: routineID, name: name, rule: ruleState.rule, symbolName: symbolName, tint: tint,
+            exercises: drafts
+        )
         onDone()
     }
 }
@@ -228,6 +263,8 @@ private struct BuilderExerciseCard: View {
                 }
             }
             setsCountStepper
+            setStyleToggles
+            noteField
             progressionOverride
         }
         .padding(DGSpace.s4)
@@ -272,6 +309,42 @@ private struct BuilderExerciseCard: View {
     private var setsCountStepper: some View {
         Stepper(value: setsCountBinding, in: 1...8) {
             Text("\(item.sets.count) sets").font(DGFont.footnote).foregroundStyle(DGColor.ink3)
+        }
+    }
+
+    /// "Every set is a drop set / rest-pause": stamps the kind on every planned set (adding
+    /// sets later copies the last one, so the choice sticks). Turning one off returns the sets
+    /// to working sets. Mixed kinds picked row-by-row leave both toggles off.
+    private var setStyleToggles: some View {
+        VStack(alignment: .leading, spacing: DGSpace.s2) {
+            Toggle("Every set is a drop set", isOn: allSetsBinding(.drop))
+                .font(DGFont.footnote)
+                .tint(DGColor.setDrop)
+            Toggle("Every set is rest-pause", isOn: allSetsBinding(.restPause))
+                .font(DGFont.footnote)
+                .tint(DGColor.setRestPause)
+        }
+    }
+
+    private func allSetsBinding(_ kind: SetKind) -> Binding<Bool> {
+        Binding(
+            get: { item.sets.uniformKind == kind },
+            set: { on in item.sets.setAllKinds(on ? kind : .working) }
+        )
+    }
+
+    private var noteField: some View {
+        VStack(alignment: .leading, spacing: DGSpace.s1) {
+            Text("Loading note").dgLabel()
+            TextField("e.g. Start at 60 kg, add 2.5 once 3×8 feels easy", text: $item.note, axis: .vertical)
+                .font(DGFont.body)
+                .foregroundStyle(DGColor.ink1)
+                .lineLimit(1...3)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, DGSpace.s3)
+                .padding(.vertical, DGSpace.s2)
+                .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .accessibilityLabel("Loading note for \(item.exercise.name)")
         }
     }
 
@@ -349,32 +422,6 @@ private struct BuilderSetRow: View {
                 if let high = set.targetRepsHigh, high < reps { set.targetRepsHigh = reps }
             }
         )
-    }
-}
-
-/// Dashed-outline "add exercise" affordance.
-private struct AddExerciseButton: View {
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: DGSpace.s2) {
-                Image(systemName: "plus").font(.system(size: 14, weight: .bold))
-                Text("Add Exercise")
-                    .font(DGFont.condensedLabel(14))
-                    .tracking(1.2)
-                    .textCase(.uppercase)
-            }
-            .foregroundStyle(DGColor.ink2)
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .dgGlass(.thin, radius: DGRadius.lg)
-            .overlay {
-                RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
-                    .strokeBorder(DGColor.hairline, style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-            }
-        }
-        .buttonStyle(DGPressStyle())
     }
 }
 

@@ -2,7 +2,8 @@ import GymCore
 import SwiftData
 import SwiftUI
 
-/// "Schedule" — a routine per weekday, plus a look-ahead strip for moving an
+/// "Schedule" — an ordered list of routines per weekday (a "Push A + Arms" day
+/// merges them in order when started), plus a look-ahead strip for moving an
 /// individual session to another date. Reachable from the calendar icon in
 /// `RoutinesTabView`'s header (plan.md §6.1). Saves after every change and,
 /// when `Preferences.calendarSyncEnabled` is on, mirrors the plan onto the
@@ -60,8 +61,9 @@ struct ScheduleView: View {
             VStack(spacing: 0) {
                 ForEach(Array(orderedWeekdays.enumerated()), id: \.element) { index, weekday in
                     WeekdayRow(
-                        weekday: weekday, routines: routines, selectedRoutineID: schedule.days[weekday],
-                        onSelect: { setDay(weekday, to: $0) }
+                        weekday: weekday, routines: routines,
+                        selectedRoutineIDs: schedule.dayRoutines[weekday] ?? [],
+                        onToggle: { toggle($0, on: weekday) }, onRest: { rest(weekday) }
                     )
                     if index != orderedWeekdays.count - 1 {
                         Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
@@ -77,7 +79,7 @@ struct ScheduleView: View {
             Text("This Week").dgLabel()
             VStack(spacing: 0) {
                 ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                    ThisWeekRow(date: date, routine: routine(on: date), onMove: { beginMove(date: date) })
+                    ThisWeekRow(date: date, routines: routines(on: date), onMove: { beginMove(date: date) })
                     if index != weekDates.count - 1 {
                         Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
                     }
@@ -105,9 +107,8 @@ struct ScheduleView: View {
         return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
     }
 
-    private func routine(on date: Date) -> RoutineInfo? {
-        guard let routineID = schedule.routineID(on: date, calendar: .current) else { return nil }
-        return routines.first { $0.id == routineID }
+    private func routines(on date: Date) -> [RoutineInfo] {
+        schedule.routineIDs(on: date, calendar: .current).compactMap { id in routines.first { $0.id == id } }
     }
 
     private func refresh() {
@@ -115,19 +116,31 @@ struct ScheduleView: View {
         schedule = store.schedule()
     }
 
-    private func setDay(_ weekday: Weekday, to routineID: UUID?) {
-        schedule.days[weekday] = routineID
+    private func toggle(_ routineID: UUID, on weekday: Weekday) {
+        if (schedule.dayRoutines[weekday] ?? []).contains(routineID) {
+            schedule.removeRoutine(routineID, from: weekday)
+        } else {
+            schedule.addRoutine(routineID, to: weekday)
+        }
+        persist()
+    }
+
+    private func rest(_ weekday: Weekday) {
+        schedule.setRoutines([], on: weekday)
         persist()
     }
 
     private func beginMove(date: Date) {
-        guard let routine = routine(on: date) else { return }
-        moveRequest = MoveRequest(sourceDate: date, routineID: routine.id, routineName: routine.name)
+        let planned = routines(on: date)
+        guard !planned.isEmpty else { return }
+        moveRequest = MoveRequest(
+            sourceDate: date, routineIDs: planned.map(\.id), routineName: RoutineInfo.joinedNames(planned)
+        )
     }
 
     private func performMove(_ request: MoveRequest, to newDate: Date) {
-        schedule.moved(date: request.sourceDate, to: nil)
-        schedule.moved(date: newDate, to: request.routineID)
+        schedule.moved(date: request.sourceDate, toRoutines: [])
+        schedule.moved(date: newDate, toRoutines: request.routineIDs)
         persist()
     }
 
@@ -158,16 +171,18 @@ struct ScheduleView: View {
 private struct MoveRequest: Identifiable {
     let id = UUID()
     var sourceDate: Date
-    var routineID: UUID
+    var routineIDs: [UUID]
     var routineName: String
 }
 
-/// One weekday row: label plus a menu picking a routine or "Rest".
+/// One weekday row: label plus a menu that ticks routines on and off (in tap order — the
+/// order they merge when the day starts) or clears the day to "Rest".
 private struct WeekdayRow: View {
     var weekday: Weekday
     var routines: [RoutineInfo]
-    var selectedRoutineID: UUID?
-    var onSelect: (UUID?) -> Void
+    var selectedRoutineIDs: [UUID]
+    var onToggle: (UUID) -> Void
+    var onRest: () -> Void
 
     var body: some View {
         HStack {
@@ -176,15 +191,19 @@ private struct WeekdayRow: View {
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             Menu {
-                Button("Rest") { onSelect(nil) }
+                Button("Rest") { onRest() }
                 ForEach(routines) { routine in
-                    Button(routine.name) { onSelect(routine.id) }
+                    Toggle(routine.name, isOn: Binding(
+                        get: { selectedRoutineIDs.contains(routine.id) }, set: { _ in onToggle(routine.id) }
+                    ))
                 }
             } label: {
                 HStack(spacing: 4) {
                     Text(selectedName)
                         .font(DGFont.subhead)
-                        .foregroundStyle(selectedRoutineID == nil ? DGColor.ink3 : DGColor.ink1)
+                        .foregroundStyle(selectedRoutineIDs.isEmpty ? DGColor.ink3 : DGColor.ink1)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(DGColor.ink4)
@@ -196,27 +215,27 @@ private struct WeekdayRow: View {
     }
 
     private var selectedName: String {
-        guard let selectedRoutineID else { return "Rest" }
-        return routines.first { $0.id == selectedRoutineID }?.name ?? "Rest"
+        let names = selectedRoutineIDs.compactMap { id in routines.first { $0.id == id } }
+        return names.isEmpty ? "Rest" : RoutineInfo.joinedNames(names)
     }
 }
 
-/// One "this week" row: date, planned routine (or rest), and a "Move…" action.
+/// One "this week" row: date, planned routines (or rest), and a "Move…" action.
 private struct ThisWeekRow: View {
     var date: Date
-    var routine: RoutineInfo?
+    var routines: [RoutineInfo]
     var onMove: () -> Void
 
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(Self.dayLabel(date)).dgLabel()
-                Text(routine?.name ?? "Rest")
+                Text(routines.isEmpty ? "Rest" : RoutineInfo.joinedNames(routines))
                     .font(DGFont.subhead)
-                    .foregroundStyle(routine == nil ? DGColor.ink3 : DGColor.ink1)
+                    .foregroundStyle(routines.isEmpty ? DGColor.ink3 : DGColor.ink1)
             }
             Spacer()
-            if routine != nil {
+            if !routines.isEmpty {
                 Button("Move…", action: onMove)
                     .buttonStyle(.plain)
                     .font(DGFont.condensedLabel(12))
@@ -282,6 +301,13 @@ private struct MoveSessionSheet: View {
         .clipShape(RoundedRectangle(cornerRadius: DGRadius.sheet, style: .continuous))
         .presentationDetents([.height(560)])
         .presentationDragIndicator(.hidden)
+    }
+}
+
+extension RoutineInfo {
+    /// "Push A + Arms" — how a multi-routine day reads everywhere it's named.
+    static func joinedNames(_ routines: [RoutineInfo]) -> String {
+        routines.map(\.name).joined(separator: " + ")
     }
 }
 

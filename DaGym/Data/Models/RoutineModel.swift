@@ -22,6 +22,10 @@ final class RoutineModel {
     /// `.gymplan` file (plan.md §6.8). Nil for routines built in-app. Lets `PlanShareService`
     /// recognise a re-import of the same file and skip creating a duplicate.
     var importedFromID: UUID?
+    /// SF Symbol drawn on the routine's card, widget and Live Activity; `tint` is a
+    /// `RoutineTint` raw value. Both default to the brand look so older rows need no migration.
+    var symbolName: String = "dumbbell"
+    var tint: String = "coral"
 
     @Relationship(deleteRule: .cascade, inverse: \RoutineExerciseModel.routine)
     var exercises: [RoutineExerciseModel]?
@@ -31,7 +35,7 @@ final class RoutineModel {
         progressionRule: String = "doubleProgression", repRangeLow: Int = 6, repRangeHigh: Int = 8,
         progressionRuleJSON: String = "",
         createdAt: Date = Date(), updatedAt: Date = Date(), sortOrder: Int = 0, isArchived: Bool = false,
-        importedFromID: UUID? = nil
+        importedFromID: UUID? = nil, symbolName: String = "dumbbell", tint: String = "coral"
     ) {
         self.id = id
         self.name = name
@@ -45,5 +49,7 @@ final class RoutineModel {
         self.sortOrder = sortOrder
         self.isArchived = isArchived
         self.importedFromID = importedFromID
+        self.symbolName = symbolName
+        self.tint = tint
     }
 }

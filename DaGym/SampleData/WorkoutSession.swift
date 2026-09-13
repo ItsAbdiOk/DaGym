@@ -47,6 +47,9 @@ final class WorkoutSession {
     /// Mirrors `Preferences.restHaptics`; set by `ActiveWorkoutView` so the 3-2-1 and end taps
     /// honour the Settings toggle. Defaults on, like the preference.
     var restHaptics = true
+    /// Mirrors `Preferences.restPauseSeconds`: the short pause a rest-pause set starts instead
+    /// of the exercise's full rest. Set by `ActiveWorkoutView`.
+    var restPauseSeconds = 20
     private var restExerciseName = ""
     private var restSetNumber = 0
     private var restSetCount = 0

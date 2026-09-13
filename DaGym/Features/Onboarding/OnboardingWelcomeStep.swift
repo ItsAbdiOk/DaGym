@@ -6,6 +6,7 @@ import SwiftUI
 struct OnboardingWelcomeStep: View {
     var onStart: () -> Void
     var onSkip: () -> Void
+    var onExploreSampleData: () -> Void
 
     private let valueLines = [
         "Unlimited routines and history",
@@ -54,6 +55,11 @@ struct OnboardingWelcomeStep: View {
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink3)
                     .accessibilityIdentifier(A11yID.onboardingSkipAll)
+                Button("Explore with sample data", action: onExploreSampleData)
+                    .buttonStyle(.plain)
+                    .font(DGFont.condensedLabel(13))
+                    .textCase(.uppercase)
+                    .foregroundStyle(DGColor.ink4)
             }
         }
     }
@@ -62,7 +68,7 @@ struct OnboardingWelcomeStep: View {
 #Preview {
     ZStack {
         AmbientWash()
-        OnboardingWelcomeStep(onStart: {}, onSkip: {})
+        OnboardingWelcomeStep(onStart: {}, onSkip: {}, onExploreSampleData: {})
             .padding(DGSpace.s5)
     }
 }

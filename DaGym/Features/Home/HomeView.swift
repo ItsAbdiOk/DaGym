@@ -13,6 +13,7 @@ struct HomeView: View {
     var onFreestyle: () -> Void
     var onBackfill: () -> Void
     var onSeeRecovery: () -> Void
+    var onOpenBody: () -> Void
 
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
@@ -23,6 +24,9 @@ struct HomeView: View {
     @State private var showingSettings = false
     @State private var deloadSuggestion: DeloadSuggestionInfo?
     @State private var hasSchedule = true
+    @State private var hasAnyRoutines = true
+    @State private var bodyweightKg: Double?
+    @State private var bodyweightDeltaKg: Double?
 
     var body: some View {
         ZStack {
@@ -30,7 +34,12 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: DGSpace.s6) {
                     header
-                    if let routine {
+                    if preferences.sampleDataMode {
+                        SampleDataBanner(onClear: clearSampleData)
+                    }
+                    if !hasAnyRoutines {
+                        StarterPlanCard(onPick: pickStarterPlan)
+                    } else if let routine {
                         ScheduledCard(
                             routine: routine, isScheduled: hasSchedule, onStart: onStart,
                             onFreestyle: onFreestyle, onBackfill: onBackfill
@@ -45,6 +54,7 @@ struct HomeView: View {
                         StreakCard(current: streakCurrent, longest: streakLongest)
                     }
                     RecoveryCard(map: recoveryMap, onSeeRecovery: onSeeRecovery)
+                    BodyweightTile(kg: bodyweightKg, deltaKg: bodyweightDeltaKg, onTap: onOpenBody)
                     if let deloadSuggestion {
                         WhyCard(
                             title: "Why a deload?", message: deloadSuggestion.reason,
@@ -76,6 +86,20 @@ struct HomeView: View {
         recoveryMap = snapshot.recoveryMap
         deloadSuggestion = snapshot.deloadSuggestion
         hasSchedule = snapshot.hasSchedule
+        hasAnyRoutines = snapshot.hasAnyRoutines
+        bodyweightKg = snapshot.bodyweightKg
+        bodyweightDeltaKg = snapshot.bodyweightDeltaKg
+    }
+
+    /// Builds and starts `kind`'s starter program in one tap (Home's empty-state card) —
+    /// `store.changeToken` refreshes this view, `RootView` and the widget once it lands.
+    private func pickStarterPlan(_ kind: StarterProgramKind) {
+        guard let program = store.createProgram(from: kind) else { return }
+        store.startProgram(id: program.id)
+    }
+
+    private func clearSampleData() {
+        SampleDataSeeder.clear(store: store, preferences: preferences)
     }
 
     private func planDeload() {
@@ -198,7 +222,8 @@ private struct RestDayCard: View {
     }
 }
 
-/// Half-width "3 / 4" weekly goal card with a segmented progress bar.
+/// Coral-outlined empty state offering the starter programs, shown instead of the
+/// scheduled/rest-day card when the store has no routines at all (OpenGym parity 52).
 private struct WeeklyGoalCard: View {
     var done: Int
     var total: Int
@@ -304,7 +329,7 @@ private struct RecoveryCard: View {
     if let container = try? ModelContainer.dagym(inMemory: true) {
         HomeView(
             routine: SampleData.pushA,
-            onStart: {}, onFreestyle: {}, onBackfill: {}, onSeeRecovery: {}
+            onStart: {}, onFreestyle: {}, onBackfill: {}, onSeeRecovery: {}, onOpenBody: {}
         )
         .environment(WorkoutStore(context: container.mainContext))
         .environment(Preferences())
@@ -317,7 +342,7 @@ private struct RecoveryCard: View {
     if let container = try? ModelContainer.dagym(inMemory: true) {
         HomeView(
             routine: nil, nextSessionText: "Next: Pull B · Thursday",
-            onStart: {}, onFreestyle: {}, onBackfill: {}, onSeeRecovery: {}
+            onStart: {}, onFreestyle: {}, onBackfill: {}, onSeeRecovery: {}, onOpenBody: {}
         )
         .environment(WorkoutStore(context: container.mainContext))
         .environment(Preferences())

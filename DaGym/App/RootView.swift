@@ -17,6 +17,10 @@ struct RootView: View {
     @State private var summaryItem: SummaryPresentation?
     @State private var showingBackfill = false
     @State private var showRecovery = false
+    @State private var showingGymCard = false
+    @State private var showingBody = false
+    @State private var showingWeighIn = false
+    @State private var pendingWorkoutStart: (() -> Void)?
     @State private var pendingPlanImport: PlanDocument?
     @State private var pendingPlanReport: PlanImportReport?
     @State private var planImportError: String?
@@ -57,8 +61,17 @@ struct RootView: View {
                 routines: routines, onFreestyle: startBackfillFreestyle, onRoutine: startBackfillRoutine
             )
         }
+        .sheet(isPresented: $showingGymCard) {
+            GymCardSheet()
+        }
         .sheet(isPresented: $showRecovery) {
             RecoveryMapView()
+        }
+        .sheet(isPresented: $showingBody) {
+            BodyView()
+        }
+        .sheet(isPresented: $showingWeighIn, onDismiss: runPendingWorkoutStart) {
+            BodyweightSheet()
         }
         .sheet(item: $pendingPlanImport) { document in
             PlanImportPreviewSheet(
@@ -87,7 +100,7 @@ struct RootView: View {
             HomeView(
                 routine: routine, nextSessionText: nextSessionText, onStart: startFromScheduledRoutine,
                 onFreestyle: startFreestyle, onBackfill: { showingBackfill = true },
-                onSeeRecovery: { showRecovery = true }
+                onSeeRecovery: { showRecovery = true }, onOpenBody: { showingBody = true }
             )
         case .routines:
             RoutinesTabView(onStart: startWorkout)
@@ -107,6 +120,7 @@ struct RootView: View {
     private func refresh() {
         refreshRoutine()
         WidgetSnapshotWriter.refresh(store: store, preferences: preferences)
+        if PendingGymCardIntentAction.consumeShowGymCard() { showingGymCard = true }
         for action in PendingIntentHandoff.consume(routineLoaded: true) {
             switch action {
             case .startWorkout: startPendingWorkout()
@@ -151,13 +165,34 @@ struct RootView: View {
     }
 
     private func startWorkout(_ routine: RoutineInfo) {
-        session = store.startWorkout(routineID: routine.id)
-        seedEffortScale()
+        beginWorkout {
+            session = store.startWorkout(routineID: routine.id)
+            seedEffortScale()
+        }
     }
 
     private func startFreestyle() {
-        session = store.startFreestyle()
-        seedEffortScale()
+        beginWorkout {
+            session = store.startFreestyle()
+            seedEffortScale()
+        }
+    }
+
+    /// When `preferences.weighInBeforeWorkout` is on, shows the (skippable — swipe to dismiss)
+    /// `BodyweightSheet` before `start` runs; otherwise starts immediately (OpenGym parity 18).
+    private func beginWorkout(_ start: @escaping () -> Void) {
+        guard preferences.weighInBeforeWorkout else {
+            start()
+            return
+        }
+        pendingWorkoutStart = start
+        showingWeighIn = true
+    }
+
+    private func runPendingWorkoutStart() {
+        let start = pendingWorkoutStart
+        pendingWorkoutStart = nil
+        start?()
     }
 
     private func startBackfillFreestyle(date: Date, durationMinutes: Int) {

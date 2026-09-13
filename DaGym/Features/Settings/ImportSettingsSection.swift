@@ -13,11 +13,18 @@ struct ImportSettingsSection: View {
     @State private var pendingImport: PendingCSVImport?
     @State private var errorMessage: String?
     @State private var confirmationMessage: String?
+    @State private var showingHevyKeySheet = false
+    @State private var hevyAPIKey = KeychainStore.string(account: HevyAPIClient.keychainAccount) ?? ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
             Text("Import History").dgLabel()
-            importRow.dgCard(padding: 0)
+            VStack(spacing: 0) {
+                importRow
+                Divider().padding(.leading, 52)
+                hevyRow
+            }
+            .dgCard(padding: 0)
             footnote
         }
         .fileImporter(
@@ -30,6 +37,9 @@ struct ImportSettingsSection: View {
                 preview: pending.preview, onConfirm: { confirmImport(pending.preview) },
                 onCancel: { pendingImport = nil }
             )
+        }
+        .sheet(isPresented: $showingHevyKeySheet) {
+            HevyAPIKeySheet(apiKey: hevyAPIKey, onSave: saveHevyKey, onRemove: removeHevyKey)
         }
         .alert(
             "Couldn't Complete That", isPresented: errorBinding,
@@ -51,6 +61,41 @@ struct ImportSettingsSection: View {
                     Text("Bring in workout history from a CSV export")
                         .font(DGFont.footnote)
                         .foregroundStyle(DGColor.ink4)
+                }
+                Spacer()
+                if isBusy {
+                    ProgressView().tint(DGColor.ink3)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(DGColor.ink4)
+                }
+            }
+            .padding(.horizontal, DGSpace.s5)
+            .frame(minHeight: 56)
+        }
+        .buttonStyle(.plain)
+        .disabled(isBusy)
+    }
+
+    private var hevyRow: some View {
+        Button(action: hevyRowTapped) {
+            HStack(spacing: DGSpace.s3) {
+                Image(systemName: "arrow.down.circle")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(DGColor.coral)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(hevyAPIKey.isEmpty ? "Import from Hevy (API)" : "Import from Hevy")
+                        .font(DGFont.body)
+                        .foregroundStyle(DGColor.ink1)
+                    Text(
+                        hevyAPIKey.isEmpty
+                            ? "Connect with your Hevy Pro API key"
+                            : "Fetch your full workout history"
+                    )
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.ink4)
                 }
                 Spacer()
                 if isBusy {
@@ -119,6 +164,99 @@ struct ImportSettingsSection: View {
         let report = WorkoutImportService.apply(preview: preview, store: store)
         pendingImport = nil
         confirmationMessage = report.summary
+    }
+
+    // MARK: - Hevy API import
+
+    private func hevyRowTapped() {
+        if hevyAPIKey.isEmpty {
+            showingHevyKeySheet = true
+        } else {
+            Task { await loadHevyImport() }
+        }
+    }
+
+    private func saveHevyKey(_ key: String) {
+        hevyAPIKey = key
+        KeychainStore.set(key, account: HevyAPIClient.keychainAccount)
+        showingHevyKeySheet = false
+        Task { await loadHevyImport() }
+    }
+
+    private func removeHevyKey() {
+        hevyAPIKey = ""
+        KeychainStore.remove(account: HevyAPIClient.keychainAccount)
+        showingHevyKeySheet = false
+    }
+
+    private func loadHevyImport() async {
+        guard !hevyAPIKey.isEmpty else { return }
+        isBusy = true
+        defer { isBusy = false }
+        let (workouts, problems) = await HevyAPIClient.fetchAllWorkouts(apiKey: hevyAPIKey)
+        guard !workouts.isEmpty || !problems.isEmpty else {
+            errorMessage = "No workouts found for that Hevy account."
+            return
+        }
+        let result = ImportResult(source: .hevy, workouts: workouts, problems: problems)
+        pendingImport = PendingCSVImport(preview: WorkoutImportService.preview(result: result, store: store))
+    }
+}
+
+/// A single API-key text field, presented the first time "Import from Hevy" is tapped and
+/// reachable again from the same row afterward to remove the key.
+private struct HevyAPIKeySheet: View {
+    var apiKey: String
+    var onSave: (String) -> Void
+    var onRemove: () -> Void
+
+    @State private var draft = ""
+
+    var body: some View {
+        VStack(spacing: DGSpace.s5) {
+            Capsule()
+                .fill(DGColor.ink4)
+                .frame(width: 36, height: 5)
+                .padding(.top, DGSpace.s2)
+            VStack(alignment: .leading, spacing: DGSpace.s2) {
+                Text("Hevy API Key")
+                    .font(DGFont.title2)
+                    .textCase(.uppercase)
+                    .foregroundStyle(DGColor.ink1)
+                Text(
+                    "From hevy.app → Settings → API (Hevy Pro). Stored in the Keychain — it's only "
+                        + "ever sent to Hevy's own API."
+                )
+                .font(DGFont.footnote)
+                .foregroundStyle(DGColor.ink3)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            TextField("API key", text: $draft)
+                .textFieldStyle(.plain)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .padding(DGSpace.s4)
+                .dgCard(padding: 0)
+            DGPrimaryButton(title: "Connect", action: save)
+                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            if !apiKey.isEmpty {
+                Button("Remove Key", role: .destructive, action: onRemove)
+                    .buttonStyle(.plain)
+                    .dgLabel(DGColor.danger)
+            }
+        }
+        .padding(.horizontal, DGSpace.s4)
+        .padding(.bottom, DGSpace.s5)
+        .frame(maxWidth: .infinity, alignment: .top)
+        .background(DGColor.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: DGRadius.sheet, style: .continuous))
+        .presentationDetents([.height(340)])
+        .presentationDragIndicator(.hidden)
+        .task { draft = apiKey }
+    }
+
+    private func save() {
+        onSave(draft.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 }
 

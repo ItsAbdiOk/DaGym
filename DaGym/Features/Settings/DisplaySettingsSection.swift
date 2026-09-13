@@ -15,6 +15,10 @@ struct DisplaySettingsSection: View {
                 row(label: "Lock progress photos", isOn: lockPhotosBinding)
                 SettingsSectionDivider()
                 accentRow
+                SettingsSectionDivider()
+                appearanceRow
+                SettingsSectionDivider()
+                bodyFigureRow
             }
             .dgCard(padding: 0)
         }
@@ -48,6 +52,52 @@ struct DisplaySettingsSection: View {
         }
         .padding(.horizontal, DGSpace.s5)
         .padding(.vertical, DGSpace.s3)
+    }
+
+    /// System/Light/Dark, applied by whatever reads `preferences.appearance.colorScheme` further
+    /// up the view hierarchy (`preferredColorScheme`) — this row only writes the preference.
+    private var appearanceRow: some View {
+        HStack {
+            Text("Appearance").font(DGFont.body).foregroundStyle(DGColor.ink1)
+            Spacer()
+            Picker("Appearance", selection: appearanceBinding) {
+                Text("System").tag(Preferences.Appearance.system)
+                Text("Light").tag(Preferences.Appearance.light)
+                Text("Dark").tag(Preferences.Appearance.dark)
+            }
+            .pickerStyle(.segmented)
+            .tint(DGColor.coral)
+            .frame(width: 200)
+        }
+        .padding(.horizontal, DGSpace.s5)
+        .frame(minHeight: 52)
+    }
+
+    /// Read by `BodyMapView` for a subtly different shoulder/hip silhouette; the muscle regions
+    /// it draws never change.
+    private var bodyFigureRow: some View {
+        HStack {
+            Text("Body figure").font(DGFont.body).foregroundStyle(DGColor.ink1)
+            Spacer()
+            Picker("Body figure", selection: bodyFigureBinding) {
+                Text("Neutral").tag(Preferences.BodyFigure.neutral)
+                Text("Male").tag(Preferences.BodyFigure.male)
+                Text("Female").tag(Preferences.BodyFigure.female)
+            }
+            .pickerStyle(.segmented)
+            .tint(DGColor.coral)
+            .frame(width: 200)
+        }
+        .padding(.horizontal, DGSpace.s5)
+        .frame(minHeight: 52)
+    }
+
+    private var appearanceBinding: Binding<Preferences.Appearance> {
+        Binding(get: { preferences.appearance }, set: { preferences.appearance = $0 })
+    }
+
+    private var bodyFigureBinding: Binding<Preferences.BodyFigure> {
+        Binding(get: { preferences.bodyFigure }, set: { preferences.bodyFigure = $0 })
     }
 
     private var keepScreenAwakeBinding: Binding<Bool> {

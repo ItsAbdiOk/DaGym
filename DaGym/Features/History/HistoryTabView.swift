@@ -2,8 +2,9 @@ import GymCore
 import SwiftData
 import SwiftUI
 
-/// The Progress tab content: history list + backfill entry point + workout
-/// detail navigation, all driven by the store.
+/// The Progress tab content: history list, month calendar, backfill entry point (with a
+/// same-day conflict choice), undo-able delete and workout detail navigation, all driven by
+/// the store.
 struct HistoryTabView: View {
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
@@ -15,27 +16,42 @@ struct HistoryTabView: View {
     @State private var recordsCount = 0
     @State private var recoveryHeadline = ""
     @State private var currentStreakWeeks = 0
+    @State private var schedule = WeeklySchedule()
     @State private var showingBackfill = false
+    @State private var backfillDate = Date()
+    @State private var showingCalendar = false
+    @State private var path: [UUID] = []
+    @State private var undo: UndoAction?
     @State private var backfillSession: WorkoutSession?
     @State private var finishedWorkout: FinishedWorkout?
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             HistoryView(
                 records: records, workoutsCount: workoutsCount, volumeKg: volumeKg,
                 recordsCount: recordsCount, recoveryHeadline: recoveryHeadline,
                 currentStreakWeeks: currentStreakWeeks,
-                onBackfill: { showingBackfill = true }, onDelete: deleteWorkout,
+                onBackfill: { beginBackfill(date: Date()) }, onDelete: deleteWorkout,
+                onCalendar: { showingCalendar = true },
                 charts: AnyView(ProgressChartsSection())
             )
             .navigationDestination(for: UUID.self) { id in
                 WorkoutDetailView(workoutID: id)
             }
         }
+        .dgUndoToast($undo)
         .task { refresh() }
         .sheet(isPresented: $showingBackfill) {
             BackfillSheet(
-                routines: routines, onFreestyle: startFreestyleBackfill, onRoutine: startRoutineBackfill
+                routines: routines, initialDate: backfillDate, records: records,
+                onFreestyle: startFreestyleBackfill, onRoutine: startRoutineBackfill,
+                onReplace: replaceWorkouts
+            )
+        }
+        .sheet(isPresented: $showingCalendar) {
+            MonthCalendarSheet(
+                records: records, schedule: schedule, routines: routines,
+                onOpenWorkout: { path = [$0] }, onBackfill: beginBackfill, onMove: moveSession
             )
         }
         .fullScreenCover(item: $backfillSession) { session in
@@ -59,6 +75,7 @@ struct HistoryTabView: View {
         workoutsCount = stats.workouts
         volumeKg = stats.volumeKg
         routines = store.routines()
+        schedule = store.schedule()
         recordsCount = store.personalRecords().reduce(0) { $0 + $1.records.count }
         recoveryHeadline = Recovery.headline(map: store.recoverySnapshot().map).title
         currentStreakWeeks = Streaks.weekly(
@@ -68,7 +85,35 @@ struct HistoryTabView: View {
     }
 
     private func deleteWorkout(_ id: UUID) {
-        store.deleteWorkout(id: id)
+        guard let snapshot = store.deleteWorkout(id: id) else { return }
+        refresh()
+        undo = UndoAction(message: "Deleted workout") {
+            store.restoreWorkout(snapshot)
+            refresh()
+        }
+    }
+
+    /// "Replace" from the backfill conflict dialog: the day's existing workouts go before the
+    /// new one is logged.
+    private func replaceWorkouts(_ ids: [UUID]) {
+        for id in ids {
+            store.deleteWorkout(id: id)
+        }
+        refresh()
+    }
+
+    private func beginBackfill(date: Date) {
+        backfillDate = date
+        showingBackfill = true
+    }
+
+    /// From the calendar sheet: the source day becomes rest and `routineIDs` land on `newDate`.
+    private func moveSession(from sourceDate: Date, to newDate: Date, routineIDs: [UUID]) {
+        var updated = schedule
+        updated.moved(date: sourceDate, toRoutines: [])
+        updated.moved(date: newDate, toRoutines: routineIDs)
+        store.saveSchedule(updated)
+        WidgetSnapshotWriter.refresh(store: store, preferences: preferences)
         refresh()
     }
 

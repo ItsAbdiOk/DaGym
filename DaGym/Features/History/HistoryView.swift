@@ -15,6 +15,8 @@ struct HistoryView: View {
     var currentStreakWeeks: Int
     var onBackfill: () -> Void
     var onDelete: (UUID) -> Void
+    /// Opens the month calendar sheet (`MonthCalendarSheet`).
+    var onCalendar: () -> Void = {}
     /// Body-wide charts rendered above the tiles, scrolling with the list as one page.
     var charts: AnyView = AnyView(EmptyView())
 
@@ -32,14 +34,21 @@ struct HistoryView: View {
         VStack(alignment: .leading, spacing: DGSpace.s4) {
             charts
             tiles
-            VStack(alignment: .leading, spacing: DGSpace.s1) {
-                Text("History").dgLabel()
-                Text(
-                    "\(Self.pluralized(workoutsCount, "workout")) · "
-                        + "\(preferences.formatVolume(kg: volumeKg)) \(preferences.unitSymbol) lifted"
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: DGSpace.s1) {
+                    Text("History").dgLabel()
+                    Text(
+                        "\(Self.pluralized(workoutsCount, "workout")) · "
+                            + "\(preferences.formatVolume(kg: volumeKg)) \(preferences.unitSymbol) lifted"
+                    )
+                        .font(DGFont.footnote)
+                        .foregroundStyle(DGColor.ink3)
+                }
+                Spacer()
+                DGIconButton(
+                    symbol: "calendar", size: 36, tint: DGColor.coralText,
+                    accessibilityLabel: "Month calendar", action: onCalendar
                 )
-                    .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.ink3)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

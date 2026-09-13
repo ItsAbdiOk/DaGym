@@ -166,13 +166,56 @@ extension WorkoutStore {
     }
 
     /// Deletes a workout and its sets, then rebuilds the PR cache and event log from what
-    /// remains — so a mis-typed record dies with the workout that set it.
-    func deleteWorkout(id: UUID) {
-        guard let model = fetchWorkoutModel(id: id) else { return }
+    /// remains — so a mis-typed record dies with the workout that set it. Returns a snapshot
+    /// that `restoreWorkout(_:)` re-inserts with the same ids, for an undo toast.
+    @discardableResult
+    func deleteWorkout(id: UUID) -> DeletedWorkout? {
+        guard let model = fetchWorkoutModel(id: id) else { return nil }
+        let snapshot = DeletedWorkout(model: model)
         let wasFinished = model.endedAt != nil
         context.delete(model)
         save()
         if wasFinished { rebuildPersonalRecords() }
+        return snapshot
+    }
+
+    /// Puts a deleted workout back exactly as it was (same ids, sets and flags) and rebuilds
+    /// the PR cache. A no-op if a workout with that id already exists again.
+    func restoreWorkout(_ snapshot: DeletedWorkout) {
+        guard fetchWorkoutModel(id: snapshot.id) == nil else { return }
+        let workout = WorkoutModel(
+            id: snapshot.id, title: snapshot.title, startedAt: snapshot.startedAt,
+            endedAt: snapshot.endedAt, notes: snapshot.notes, isBackfilled: snapshot.isBackfilled,
+            routineID: snapshot.routineID, routineName: snapshot.routineName,
+            bodyweightKg: snapshot.bodyweightKg, sourceDevice: snapshot.sourceDevice,
+            healthKitID: snapshot.healthKitID
+        )
+        context.insert(workout)
+        // Children are linked through the `workout:`/`workoutExercise:` inverses only — assigning
+        // the parent's array at the same time makes SwiftData rebuild a relationship it is already
+        // mid-way through updating, which traps.
+        for exercise in snapshot.exercises {
+            let exerciseModel = WorkoutExerciseModel(
+                id: exercise.id, order: exercise.order, supersetGroup: exercise.supersetGroup,
+                note: exercise.note, wasSubstitution: exercise.wasSubstitution,
+                wasPlannedDeload: exercise.wasPlannedDeload,
+                excludedFromProgression: exercise.excludedFromProgression,
+                exercise: exercise.exerciseID.flatMap(fetchExerciseModel), workout: workout
+            )
+            context.insert(exerciseModel)
+            for set in exercise.sets {
+                let setModel = SetLogModel(
+                    id: set.id, order: set.order, kind: set.kind, weightKg: set.weightKg, reps: set.reps,
+                    durationSeconds: set.durationSeconds, distanceMeters: set.distanceMeters,
+                    assistanceKg: set.assistanceKg, rpe: set.rpe, isCompleted: set.isCompleted,
+                    completedAt: set.completedAt, prescriptionReason: set.prescriptionReason,
+                    workoutExercise: exerciseModel
+                )
+                context.insert(setModel)
+            }
+        }
+        save()
+        if snapshot.endedAt != nil { rebuildPersonalRecords() }
     }
 
     /// Total finished-workout count and lifetime volume, for the History header.
@@ -341,5 +384,82 @@ extension WorkoutStore {
 
     private func matchingExercise(exerciseID: UUID, in workout: WorkoutModel) -> WorkoutExerciseModel? {
         (workout.exercises ?? []).first { $0.exercise?.id == exerciseID }
+    }
+}
+
+/// A value copy of a deleted workout's whole graph, enough to re-insert it unchanged.
+/// Handed back by `WorkoutStore.deleteWorkout(id:)` so an undo toast can call
+/// `restoreWorkout(_:)`; nothing is kept in the store, so it's CloudKit-neutral.
+struct DeletedWorkout: Sendable {
+    struct Exercise: Sendable {
+        var id: UUID
+        var order: Int
+        var supersetGroup: Int?
+        var note: String
+        var wasSubstitution: Bool
+        var wasPlannedDeload: Bool
+        var excludedFromProgression: Bool
+        var exerciseID: UUID?
+        var sets: [SetLog]
+    }
+
+    struct SetLog: Sendable {
+        var id: UUID
+        var order: Int
+        var kind: String
+        var weightKg: Double
+        var reps: Int
+        var durationSeconds: Int?
+        var distanceMeters: Double?
+        var assistanceKg: Double?
+        var rpe: Double?
+        var isCompleted: Bool
+        var completedAt: Date?
+        var prescriptionReason: String
+    }
+
+    var id: UUID
+    var title: String
+    var startedAt: Date
+    var endedAt: Date?
+    var notes: String
+    var isBackfilled: Bool
+    var routineID: UUID?
+    var routineName: String
+    var bodyweightKg: Double?
+    var sourceDevice: String
+    var healthKitID: String?
+    var exercises: [Exercise]
+
+    init(model: WorkoutModel) {
+        id = model.id
+        title = model.title
+        startedAt = model.startedAt
+        endedAt = model.endedAt
+        notes = model.notes
+        isBackfilled = model.isBackfilled
+        routineID = model.routineID
+        routineName = model.routineName
+        bodyweightKg = model.bodyweightKg
+        sourceDevice = model.sourceDevice
+        healthKitID = model.healthKitID
+        exercises = (model.exercises ?? []).sorted { $0.order < $1.order }.map { exercise in
+            Exercise(
+                id: exercise.id, order: exercise.order, supersetGroup: exercise.supersetGroup,
+                note: exercise.note, wasSubstitution: exercise.wasSubstitution,
+                wasPlannedDeload: exercise.wasPlannedDeload,
+                excludedFromProgression: exercise.excludedFromProgression,
+                exerciseID: exercise.exercise?.id,
+                sets: (exercise.sets ?? []).sorted { $0.order < $1.order }.map { set in
+                    SetLog(
+                        id: set.id, order: set.order, kind: set.kind, weightKg: set.weightKg,
+                        reps: set.reps, durationSeconds: set.durationSeconds,
+                        distanceMeters: set.distanceMeters, assistanceKg: set.assistanceKg, rpe: set.rpe,
+                        isCompleted: set.isCompleted, completedAt: set.completedAt,
+                        prescriptionReason: set.prescriptionReason
+                    )
+                }
+            )
+        }
     }
 }

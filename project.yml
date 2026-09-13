@@ -96,7 +96,8 @@ targets:
         # shot, or picking an existing photo. Photos stay in a local-only store by default (see
         # `Preferences.syncPhotos`, `ModelContainer.dagym`) and can be gated behind Face ID.
         NSCameraUsageDescription: >-
-          DaGym uses the camera to take progress photos, lined up with your previous shot.
+          DaGym uses the camera to take progress photos, lined up with your previous shot, and to
+          scan your gym membership card.
         NSPhotoLibraryUsageDescription: >-
           DaGym can use an existing photo from your library as a progress photo.
         NSFaceIDUsageDescription: >-

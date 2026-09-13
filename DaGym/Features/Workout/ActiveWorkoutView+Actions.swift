@@ -66,8 +66,31 @@ extension ActiveWorkoutView {
         store.sync(session: session)
     }
 
+    /// Removes the entry and offers a 5 s undo that puts it back in the same slot.
     func removeExercise(id: UUID) {
-        session.exercises.removeAll { $0.id == id }
+        guard let index = session.exercises.firstIndex(where: { $0.id == id }) else { return }
+        let removed = session.exercises.remove(at: index)
+        store.sync(session: session)
+        undoAction = UndoAction(message: "Removed \(removed.exercise.name)") {
+            session.exercises.insert(removed, at: min(index, session.exercises.count))
+            store.sync(session: session)
+        }
+    }
+
+    /// "Superset with previous / next" and "Unpair" from the exercise menu.
+    func pairSuperset(entryID: UUID, with direction: WorkoutSession.PairDirection) {
+        session.pairSuperset(entryID: entryID, with: direction)
+        store.sync(session: session)
+    }
+
+    func unpairSuperset(entryID: UUID) {
+        session.unpairSuperset(entryID: entryID)
+        store.sync(session: session)
+    }
+
+    /// Appends a saved routine's exercises to the session (header menu → "Add routine…").
+    func appendRoutine(id: UUID) {
+        store.appendRoutine(id: id, to: session)
         store.sync(session: session)
     }
 
@@ -89,9 +112,32 @@ extension ActiveWorkoutView {
         store.sync(session: session)
     }
 
-    /// Delete / change-type swipe actions on `SetRow`.
+    /// Delete / change-type swipe actions on `SetRow`. A deleted set gets a 5 s undo.
     func deleteSet(exerciseID: UUID, setID: UUID) {
+        guard let ei = session.exercises.firstIndex(where: { $0.id == exerciseID }),
+              let si = session.exercises[ei].sets.firstIndex(where: { $0.id == setID }) else { return }
+        let removed = session.exercises[ei].sets[si]
+        let countBefore = session.exercises[ei].sets.count
         session.removeSet(exerciseID: exerciseID, setID: setID)
+        guard session.exercises[ei].sets.count < countBefore else { return }
+        store.sync(session: session)
+        undoAction = UndoAction(message: "Deleted set") {
+            session.insertSet(removed, at: si, exerciseID: exerciseID)
+            store.sync(session: session)
+        }
+    }
+
+    /// Drop-set / rest-pause swipe shortcuts: a seeded row straight under this one.
+    func insertSet(exerciseID: UUID, after setID: UUID, kind: SetKind) {
+        session.insertSet(exerciseID: exerciseID, after: setID, kind: kind)
+        store.sync(session: session)
+    }
+
+    /// The ± steppers on `SetRow`.
+    func adjustSet(exerciseID: UUID, setID: UUID, weightDelta: Double = 0, repsDelta: Int = 0) {
+        session.adjustSet(
+            exerciseID: exerciseID, setID: setID, weightDelta: weightDelta, repsDelta: repsDelta
+        )
         store.sync(session: session)
     }
 
@@ -142,12 +188,22 @@ extension ActiveWorkoutView {
 
     @ViewBuilder
     var exerciseMenuButtons: some View {
-        if let id = menuExerciseID, let entry = session.exercises.first(where: { $0.id == id }) {
+        if let id = menuExerciseID, let index = session.exercises.firstIndex(where: { $0.id == id }) {
+            let entry = session.exercises[index]
             Button("Swap exercise") { activeSheet = .swap(entryID: id, exercise: entry.exercise) }
             Button("Remove exercise", role: .destructive) { removeExercise(id: id) }
             Button("Add set") { addSet(exerciseID: id, kind: .working) }
             Button("Add warm-up set") { addSet(exerciseID: id, kind: .warmup) }
             Button("Generate warm-ups") { generateWarmups(exerciseID: id) }
+            if index > 0 {
+                Button("Superset with previous") { pairSuperset(entryID: id, with: .previous) }
+            }
+            if index + 1 < session.exercises.count {
+                Button("Superset with next") { pairSuperset(entryID: id, with: .next) }
+            }
+            if entry.supersetGroup != nil {
+                Button("Unpair superset") { unpairSuperset(entryID: id) }
+            }
         }
     }
 
@@ -178,6 +234,8 @@ extension ActiveWorkoutView {
             }
         case .notes(let exerciseID):
             notesSheet(exerciseID: exerciseID)
+        case .addRoutine:
+            AddRoutineSheet(routines: store.routines()) { routine in appendRoutine(id: routine.id) }
         }
     }
 

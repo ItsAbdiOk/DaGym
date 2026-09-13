@@ -11,6 +11,7 @@ struct ProgressChartsSection: View {
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
     @State private var bundle: WorkoutStore.BodySeriesBundle?
+    @State private var effort: WorkoutStore.EffortSeriesBundle?
     @State private var showingProgress = false
     @State private var showingCalculator = false
 
@@ -20,6 +21,9 @@ struct ProgressChartsSection: View {
             if let bundle, !bundle.weeklyVolume.isEmpty {
                 ThisWeekStrip(thisWeek: bundle.thisWeek, lastWeek: bundle.lastWeek)
                 WeeklyVolumeCard(weeks: bundle.weeklyVolume)
+                if let effort, effort.ratedSets > 0 {
+                    EffortCard(bundle: effort)
+                }
                 SetsPerMuscleCard(setsPerMuscle: bundle.setsPerMuscle)
             } else {
                 EmptyState(
@@ -58,6 +62,7 @@ struct ProgressChartsSection: View {
 
     private func refresh() {
         bundle = store.bodySeries(weeks: 8, calendar: preferences.trainingCalendar)
+        effort = store.effortSeries(weeks: 8, calendar: preferences.trainingCalendar)
     }
 }
 

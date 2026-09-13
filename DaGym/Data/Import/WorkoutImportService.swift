@@ -54,6 +54,13 @@ enum WorkoutImportService {
 
     static func preview(csv: String, store: WorkoutStore) -> ImportPreview? {
         guard let result = WorkoutImport.parse(csv: csv) else { return nil }
+        return preview(result: result, store: store)
+    }
+
+    /// Shared by the CSV path above and `HevyAPIClient`'s network path — either way, once the
+    /// import is in `ImportResult` shape, building the preview (unmatched names, set counts) is
+    /// identical.
+    static func preview(result: ImportResult, store: WorkoutStore) -> ImportPreview {
         let context = matchContext(store: store)
         let names = Set(result.workouts.flatMap { $0.exercises.map(\.name) })
         let unmatched = names.filter { matchedExerciseID($0, context: context) == nil }.sorted()

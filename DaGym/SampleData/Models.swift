@@ -204,11 +204,15 @@ struct RoutineInfo: Identifiable, Hashable {
     /// shorter than `exercises` (e.g. sample data), each missing exercise
     /// falls back to a weight of 1 set in `hitMap`.
     var exerciseSetCounts: [Int] = []
+    /// Glyph shown on the routine's card and Home's scheduled card: an SF Symbol name and a
+    /// `RoutineTint` raw value (see `RoutineGlyph`).
+    var symbolName: String = "dumbbell"
+    var tint: String = "coral"
 
     init(
         id: UUID = UUID(), name: String, exercises: [ExerciseInfo], setCount: Int,
         estimatedMinutes: Int, progressionRule: String, progressionDetail: String, weekLabel: String? = nil,
-        exerciseSetCounts: [Int] = []
+        exerciseSetCounts: [Int] = [], symbolName: String = "dumbbell", tint: String = "coral"
     ) {
         self.id = id
         self.name = name
@@ -219,6 +223,8 @@ struct RoutineInfo: Identifiable, Hashable {
         self.progressionDetail = progressionDetail
         self.weekLabel = weekLabel
         self.exerciseSetCounts = exerciseSetCounts
+        self.symbolName = symbolName
+        self.tint = tint
     }
 
     /// Weighted, normalised "muscles hit" map — see `GymCore.RoutineMuscles.hitMap`.

@@ -122,7 +122,8 @@ extension BackupService {
                 progressionRuleJSON: item.progressionRuleJSON ?? "", createdAt: item.createdAt ?? Date(),
                 updatedAt: item.updatedAt ?? Date(), sortOrder: item.sortOrder,
                 isArchived: item.isArchived ?? false,
-                importedFromID: item.importedFromID
+                importedFromID: item.importedFromID,
+                symbolName: item.symbolName ?? "dumbbell", tint: item.tint ?? "coral"
             )
             context.insert(routine)
             routine.exercises = item.exercises.compactMap { draft in

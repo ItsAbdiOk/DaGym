@@ -38,5 +38,13 @@ struct DaGymShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Last Session", systemImageName: "clock.arrow.circlepath"
         )
+        AppShortcut(
+            intent: ShowGymCardIntent(),
+            phrases: [
+                "Show my gym card in \(.applicationName)",
+                "Gym card in \(.applicationName)"
+            ],
+            shortTitle: "Gym Card", systemImageName: "qrcode"
+        )
     }
 }

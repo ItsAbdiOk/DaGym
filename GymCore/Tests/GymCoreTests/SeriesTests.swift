@@ -292,3 +292,123 @@ struct BalanceWindowTests {
         #expect((trailing[.chest] ?? 0) + (trailing[.lats] ?? 0) < Double(expectedChest + expectedLats))
     }
 }
+
+@Suite("Effort series")
+struct EffortSeriesTests {
+    private func calendar() -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+        calendar.firstWeekday = 2
+        return calendar
+    }
+
+    private func date(_ iso: String) -> Date {
+        ISO8601DateFormatter().date(from: iso) ?? Date(timeIntervalSince1970: 0)
+    }
+
+    private func workout(at date: Date, sets: [PerformedSet]) -> BodyWorkout {
+        BodyWorkout(
+            date: date, durationSeconds: 3600,
+            entries: [BodyWorkout.MuscleEntry(primary: [.chest], secondary: [], sets: sets)]
+        )
+    }
+
+    private func set(rpe: Double? = nil, kind: SetKind = .working, date: Date) -> PerformedSet {
+        PerformedSet(kind: kind, weightKg: 60, reps: 8, date: date, rpe: rpe)
+    }
+
+    @Test("weekly mean is per week, in RIR when asked, with coverage over all counting sets")
+    func weeklyMeanAndCoverage() {
+        let week1 = date("2024-01-08T10:00:00Z")
+        let week2 = date("2024-01-17T10:00:00Z")
+        let workouts = [
+            workout(
+                at: week1, sets: [set(rpe: 8, date: week1), set(rpe: 10, date: week1), set(date: week1)]
+            ),
+            workout(at: week2, sets: [set(rpe: 7, date: week2), set(rpe: 10, kind: .warmup, date: week2)])
+        ]
+        let weeks = EffortSeries.weeklyEffort(workouts: workouts, calendar: calendar())
+        #expect(weeks.count == 2)
+        #expect(weeks[0].meanRPE == 9)
+        #expect(weeks[0].meanValue(scale: .rir) == 1)
+        #expect(weeks[0].ratedSets == 2)
+        #expect(weeks[0].totalSets == 3)
+        #expect(abs(weeks[0].coverage - 2.0 / 3.0) < 0.0001)
+        #expect(weeks[1].meanRPE == 7)
+        #expect(weeks[1].totalSets == 1)
+        #expect(weeks[1].coverage == 1)
+    }
+
+    @Test("a week with counting sets but no ratings still appears with zero coverage")
+    func unratedWeekKeepsCoverageHonest() {
+        let day = date("2024-01-08T10:00:00Z")
+        let workouts = [workout(at: day, sets: [set(date: day)])]
+        let weeks = EffortSeries.weeklyEffort(workouts: workouts, calendar: calendar())
+        #expect(weeks.count == 1)
+        #expect(weeks[0].coverage == 0)
+        #expect(weeks[0].ratedSets == 0)
+    }
+
+    @Test("histogram is hardest first, every bin present, half steps rounded, warm-ups ignored")
+    func histogramHardestFirst() {
+        let day = date("2024-01-08T10:00:00Z")
+        let sets = [
+            set(rpe: 10, date: day), set(rpe: 10, date: day), set(rpe: 8.5, date: day),
+            set(rpe: 7, date: day), set(rpe: 6, kind: .warmup, date: day), set(date: day)
+        ]
+        let bins = EffortSeries.histogram(workouts: [workout(at: day, sets: sets)])
+        #expect(bins.map(\.effort.rpe) == [10, 9, 8, 7, 6, 5])
+        #expect(bins.map(\.count) == [2, 1, 0, 1, 0, 0])
+        #expect(EffortSeries.ratedSetCount(workouts: [workout(at: day, sets: sets)]) == 4)
+    }
+
+    @Test("ratedSetCount is zero with no ratings, so the card can stay hidden")
+    func noRatingsMeansZero() {
+        let day = date("2024-01-08T10:00:00Z")
+        let rated = EffortSeries.ratedSetCount(workouts: [workout(at: day, sets: [set(date: day)])])
+        #expect(rated == 0)
+        #expect(EffortSeries.histogram(workouts: []).map(\.count) == Array(repeating: 0, count: 6))
+    }
+}
+
+@Suite("Exercise series effort + reps fallback")
+struct ExerciseSeriesEffortTests {
+    private let day1 = Date(timeIntervalSince1970: 0)
+    private let day2 = Date(timeIntervalSince1970: 86400)
+
+    private func set(
+        weight: Double, reps: Int, rpe: Double? = nil, kind: SetKind = .working
+    ) -> PerformedSet {
+        PerformedSet(kind: kind, weightKg: weight, reps: reps, date: day1, rpe: rpe)
+    }
+
+    @Test("topSetRPE reports the rating of the same set topSet picks, omitting unrated sessions")
+    func topSetRatingFollowsTopSet() {
+        let sessions = [
+            ExerciseSession(
+                date: day1, sets: [set(weight: 80, reps: 8, rpe: 7), set(weight: 100, reps: 3, rpe: 9)]
+            ),
+            ExerciseSession(date: day2, sets: [set(weight: 100, reps: 5)])
+        ]
+        let ratings = ExerciseSeries.topSetRPE(sessions: sessions)
+        #expect(ratings[day1] == 9)
+        #expect(ratings[day2] == nil)
+    }
+
+    @Test("never-loaded history plots best and total reps; a single loaded set flips it off")
+    func repsFallback() {
+        let unloaded = [
+            ExerciseSession(date: day1, sets: [set(weight: 0, reps: 8), set(weight: 0, reps: 12)]),
+            ExerciseSession(
+                date: day2, sets: [set(weight: 0, reps: 10, kind: .warmup), set(weight: 0, reps: 9)]
+            )
+        ]
+        #expect(ExerciseSeries.isNeverLoaded(sessions: unloaded))
+        #expect(ExerciseSeries.bestReps(sessions: unloaded).map(\.value) == [12, 9])
+        #expect(ExerciseSeries.totalReps(sessions: unloaded).map(\.value) == [20, 9])
+
+        let loaded = unloaded + [ExerciseSession(date: day2, sets: [set(weight: 10, reps: 6)])]
+        #expect(!ExerciseSeries.isNeverLoaded(sessions: loaded))
+        #expect(!ExerciseSeries.isNeverLoaded(sessions: []))
+    }
+}

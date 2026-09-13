@@ -30,10 +30,11 @@ extension WorkoutSession {
 
     /// Seconds to rest after finishing `set` of `exercises[exerciseIndex]`: nothing while a
     /// superset partner still owes a set this round, the group's longest rest once the round is
-    /// over, the exercise's own rest for a singleton, and nothing at all after the session's
-    /// last set.
+    /// over, the exercise's own rest for a singleton, the short `restPauseSeconds` after a
+    /// rest-pause set, and nothing at all after the session's last set.
     func restSeconds(after exerciseIndex: Int, set setIndex: Int) -> Int {
         guard hasUndoneSets else { return 0 }
+        if exercises[exerciseIndex].sets[setIndex].kind == .restPause { return restPauseSeconds }
         let members = supersetMembers(containing: exerciseIndex)
         guard members.count > 1 else { return exercises[exerciseIndex].exercise.restSeconds }
         if roundPartner(members: members, round: setIndex, excluding: exerciseIndex) != nil { return 0 }
@@ -59,6 +60,55 @@ extension WorkoutSession {
             return exercises[index].sets[round]
         }
         return nil
+    }
+
+    // MARK: Pair / unpair
+
+    enum PairDirection { case previous, next }
+
+    /// Joins an exercise to the neighbour on `direction`'s side: into that neighbour's group
+    /// when it has one, otherwise a fresh group for the two of them. An exercise already in a
+    /// group leaves it first, so pairing never fuses two groups by accident.
+    func pairSuperset(entryID: UUID, with direction: PairDirection) {
+        guard let index = exercises.firstIndex(where: { $0.id == entryID }) else { return }
+        let neighbour = direction == .previous ? index - 1 : index + 1
+        guard exercises.indices.contains(neighbour) else { return }
+        if exercises[index].supersetGroup != nil { unpairSuperset(entryID: entryID) }
+        let group = exercises[neighbour].supersetGroup ?? nextSupersetGroup
+        exercises[neighbour].supersetGroup = group
+        exercises[index].supersetGroup = group
+        normalizeSupersets()
+        Haptics.confirm()
+    }
+
+    /// Takes an exercise out of its group. A group left with one member dissolves; one split in
+    /// the middle becomes two groups.
+    func unpairSuperset(entryID: UUID) {
+        guard let index = exercises.firstIndex(where: { $0.id == entryID }),
+              exercises[index].supersetGroup != nil else { return }
+        exercises[index].supersetGroup = nil
+        normalizeSupersets()
+        Haptics.confirm()
+    }
+
+    private var nextSupersetGroup: Int {
+        (exercises.compactMap(\.supersetGroup).max() ?? 0) + 1
+    }
+
+    /// Re-numbers groups so every group is one consecutive run of at least two exercises —
+    /// the shape `groupedIndices` and the reorder sheet assume.
+    private func normalizeSupersets() {
+        var seen: Set<Int> = []
+        for chunk in groupedIndices {
+            guard let first = chunk.first, let group = exercises[first].supersetGroup else { continue }
+            if chunk.count < 2 {
+                exercises[first].supersetGroup = nil
+            } else if !seen.insert(group).inserted {
+                let fresh = nextSupersetGroup
+                for index in chunk { exercises[index].supersetGroup = fresh }
+                seen.insert(fresh)
+            }
+        }
     }
 
     // MARK: Reorder
@@ -125,6 +175,35 @@ extension WorkoutSession {
             weightKg = Self.dropWeightKg(from: template.weightKg, increment: entry.exercise.incrementKg)
         }
         exercises[index].sets.append(SetEntry(kind: kind, weightKg: weightKg, reps: template?.reps ?? 0))
+    }
+
+    /// Inserts a set directly below `setID`, seeded from that row: a drop set at 80 % of its
+    /// weight (snapped to the increment), anything else a straight copy.
+    func insertSet(exerciseID: UUID, after setID: UUID, kind: SetKind) {
+        guard let ei = exercises.firstIndex(where: { $0.id == exerciseID }),
+              let si = exercises[ei].sets.firstIndex(where: { $0.id == setID }) else { return }
+        let template = exercises[ei].sets[si]
+        var weightKg = template.weightKg
+        if kind == .drop {
+            weightKg = Self.dropWeightKg(from: weightKg, increment: exercises[ei].exercise.incrementKg)
+        }
+        exercises[ei].sets.insert(SetEntry(kind: kind, weightKg: weightKg, reps: template.reps), at: si + 1)
+        Haptics.step()
+    }
+
+    /// Puts a set back where it was — the undo half of `removeSet`.
+    func insertSet(_ set: SetEntry, at index: Int, exerciseID: UUID) {
+        guard let ei = exercises.firstIndex(where: { $0.id == exerciseID }) else { return }
+        exercises[ei].sets.insert(set, at: min(index, exercises[ei].sets.count))
+    }
+
+    /// The ± steppers: nudges weight by `weightDelta` and reps by `repsDelta`, never below zero.
+    func adjustSet(exerciseID: UUID, setID: UUID, weightDelta: Double = 0, repsDelta: Int = 0) {
+        guard let ei = exercises.firstIndex(where: { $0.id == exerciseID }),
+              let si = exercises[ei].sets.firstIndex(where: { $0.id == setID }) else { return }
+        exercises[ei].sets[si].weightKg = max(0, exercises[ei].sets[si].weightKg + weightDelta)
+        exercises[ei].sets[si].reps = max(0, exercises[ei].sets[si].reps + repsDelta)
+        Haptics.step()
     }
 
     static func dropWeightKg(from weightKg: Double, increment: Double) -> Double {

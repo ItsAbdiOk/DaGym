@@ -51,7 +51,7 @@
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
 	<string>DaGym adds your scheduled workouts to a "DaGym" calendar so they show up alongside the rest of your day.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>DaGym uses the camera to take progress photos, lined up with your previous shot.</string>
+	<string>DaGym uses the camera to take progress photos, lined up with your previous shot, and to scan your gym membership card.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>DaGym can lock your progress photos behind Face ID.</string>
 	<key>NSHealthShareUsageDescription</key>

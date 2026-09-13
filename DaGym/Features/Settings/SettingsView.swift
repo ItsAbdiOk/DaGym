@@ -27,7 +27,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: DGSpace.s6) {
                     header
                     unitsCard
-                    effortCard
+                    EffortSettingsSection()
                     restTimerCard
                     trainingCard
                     RemindersSettingsSection()
@@ -98,32 +98,20 @@ struct SettingsView: View {
         }
     }
 
-    private var effortCard: some View {
-        SettingsSection(title: "Effort") {
-            SettingsRow(label: "Scale") {
-                Picker("Effort scale", selection: binding(\.effortScale)) {
-                    Text("RPE").tag(Effort.Scale.rpe)
-                    Text("RIR").tag(Effort.Scale.rir)
-                }
-                .pickerStyle(.segmented)
-                .tint(DGColor.coral)
-                .frame(width: 120)
-            }
-        }
-    }
-
     private var restTimerCard: some View {
         SettingsSection(title: "Rest Timer") {
             SettingsRow(label: "Default rest") {
-                Stepper(value: binding(\.defaultRestSeconds), in: 30...300, step: 15) {
-                    Text(WorkoutSession.clock(preferences.defaultRestSeconds))
-                        .font(DGFont.subhead)
-                        .foregroundStyle(DGColor.ink3)
+                Stepper(value: binding(\.defaultRestSeconds), in: 0...300, step: 15) {
+                    Text(restTimerLabel).font(DGFont.subhead).foregroundStyle(DGColor.ink3)
                 }
             }
             SettingsDivider()
             SettingsRow(label: "Sound") {
                 Toggle("", isOn: binding(\.restSound)).tint(DGColor.coral).labelsHidden()
+            }
+            SettingsDivider()
+            SettingsRow(label: "Play on silent") {
+                Toggle("", isOn: binding(\.playRestSoundOnSilent)).tint(DGColor.coral).labelsHidden()
             }
             SettingsDivider()
             SettingsRow(label: "Haptics") {
@@ -134,6 +122,11 @@ struct SettingsView: View {
                 Toggle("", isOn: binding(\.restScreenFlash)).tint(DGColor.coral).labelsHidden()
             }
         }
+    }
+
+    /// "Off" at 0 seconds (features #20); otherwise the usual `m:ss` clock.
+    private var restTimerLabel: String {
+        preferences.defaultRestSeconds == 0 ? "Off" : WorkoutSession.clock(preferences.defaultRestSeconds)
     }
 
     private var trainingCard: some View {
@@ -153,6 +146,12 @@ struct SettingsView: View {
                 .tint(DGColor.coral)
                 .frame(width: 120)
             }
+            SettingsDivider()
+            SettingsRow(label: "Weigh in before workouts") {
+                Toggle("", isOn: binding(\.weighInBeforeWorkout)).tint(DGColor.coral).labelsHidden()
+            }
+            SettingsDivider()
+            CheckInCardButton()
         }
     }
 

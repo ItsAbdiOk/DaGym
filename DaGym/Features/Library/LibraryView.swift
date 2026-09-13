@@ -36,6 +36,8 @@ struct LibraryView: View {
     @State private var favoritesOnly = false
     @State private var customOnly = false
     @State private var showingNewExercise = false
+    @State private var profile: EquipmentProfileInfo?
+    @State private var showAllEquipment = false
 
     var body: some View {
         NavigationStack {
@@ -45,6 +47,9 @@ struct LibraryView: View {
                     VStack(alignment: .leading, spacing: DGSpace.s5) {
                         header
                         searchField
+                        if let profile, profile.restrictsLibrary {
+                            EquipmentFilterBanner(profileName: profile.name, showingAll: $showAllEquipment)
+                        }
                         muscleChipRow
                         equipmentChipRow
                         sectionLabel
@@ -61,12 +66,15 @@ struct LibraryView: View {
             }
             .task {
                 totalCount = store.exercises().count
+                profile = store.activeProfile()
                 refresh()
             }
             .onChange(of: store.changeToken) { _, _ in
                 totalCount = store.exercises().count
+                profile = store.activeProfile()
                 refresh()
             }
+            .onChange(of: showAllEquipment) { _, _ in refresh() }
             .onChange(of: searchText) { _, _ in refresh() }
             .onChange(of: selectedMuscle) { _, _ in refresh() }
             .onChange(of: selectedEquipment) { _, _ in refresh() }
@@ -153,15 +161,53 @@ struct LibraryView: View {
     }
 
     private func refresh() {
-        exercises = store.exercises(
+        let all = store.exercises(
             matching: searchText, muscle: selectedMuscle, equipment: selectedEquipment?.rawValue,
             favoritesOnly: favoritesOnly, customOnly: customOnly
         )
+        exercises = all.filter { exercise in
+            showAllEquipment || activeEquipment?.contains(exercise.equipment) ?? true
+        }
+    }
+
+    /// Nil (no filter) unless the active profile leaves some equipment out.
+    private var activeEquipment: Set<String>? {
+        guard let profile, profile.restrictsLibrary else { return nil }
+        return Set(profile.availableEquipment)
     }
 
     private func toggleFavorite(_ id: UUID) {
         store.toggleFavorite(id: id)
         refresh()
+    }
+}
+
+/// "Showing what's in Home · Show all" — the equipment-profile filter's one-line banner,
+/// shared by the library and the exercise picker. Tapping the trailing word flips the filter.
+struct EquipmentFilterBanner: View {
+    var profileName: String
+    @Binding var showingAll: Bool
+
+    var body: some View {
+        HStack(spacing: DGSpace.s2) {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(DGColor.ink3)
+                .accessibilityHidden(true)
+            Text(showingAll ? "Showing all equipment" : "Showing what's in \(profileName)")
+                .font(DGFont.footnote)
+                .foregroundStyle(DGColor.ink2)
+                .lineLimit(1)
+            Text("·").font(DGFont.footnote).foregroundStyle(DGColor.ink4).accessibilityHidden(true)
+            Button(showingAll ? "Only \(profileName)" : "Show all") { showingAll.toggle() }
+                .buttonStyle(.plain)
+                .font(DGFont.footnote.weight(.semibold))
+                .foregroundStyle(DGColor.coralText)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, DGSpace.s3)
+        .frame(height: 36)
+        .dgGlass(.thin, radius: 12)
     }
 }
 

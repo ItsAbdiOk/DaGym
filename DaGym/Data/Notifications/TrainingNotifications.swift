@@ -17,10 +17,19 @@ final class TrainingNotificationScheduler {
     /// agree with whatever week the user's `weekStartsMonday` preference currently defines, not
     /// whatever the device locale said the moment this scheduler was constructed.
     private let calendarOverride: Calendar?
+    /// The "workout day" reminder (features #3) lives in its own type/identifier space but is
+    /// rescheduled from the same hooks as the streak/recap notifications below. Defaults to its
+    /// own real notification center, independent of `center`, so tests that fake `center` for the
+    /// streak/recap assertions aren't also asked to account for workout-day-reminder calls.
+    private let workoutDayReminderScheduler: WorkoutDayReminderScheduler
 
-    init(center: RestNotificationCenter = UNUserNotificationCenter.current(), calendar: Calendar? = nil) {
+    init(
+        center: RestNotificationCenter = UNUserNotificationCenter.current(), calendar: Calendar? = nil,
+        workoutDayReminderScheduler: WorkoutDayReminderScheduler? = nil
+    ) {
         self.center = center
         self.calendarOverride = calendar
+        self.workoutDayReminderScheduler = workoutDayReminderScheduler ?? WorkoutDayReminderScheduler()
     }
 
     private func calendar(for preferences: Preferences) -> Calendar {
@@ -40,6 +49,9 @@ final class TrainingNotificationScheduler {
         if preferences.weeklyRecapEnabled {
             scheduleWeeklyRecap(store: store, preferences: preferences, now: now)
         }
+        workoutDayReminderScheduler.rescheduleAll(
+            store: store, preferences: preferences, calendar: calendar(for: preferences)
+        )
     }
 
     /// Registers this scheduler on `store` so a reschedule happens after every finished workout,

@@ -12,6 +12,8 @@ struct OnboardingFlow: View {
 
     @State private var step = OnboardingStep.welcome
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(WorkoutStore.self) private var store
+    @Environment(Preferences.self) private var preferences
 
     static let savedStepKey = "onboardingStep"
 
@@ -43,11 +45,18 @@ struct OnboardingFlow: View {
         onComplete()
     }
 
+    /// Welcome's "Explore with sample data" — seeds eight weeks of history on the starter
+    /// routines and skips straight to the tab bar, same as "Skip and start lifting".
+    private func exploreSampleData() {
+        SampleDataSeeder.seed(store: store, preferences: preferences)
+        complete()
+    }
+
     @ViewBuilder
     private var stepContent: some View {
         switch step {
         case .welcome:
-            OnboardingWelcomeStep(onStart: advance, onSkip: complete)
+            OnboardingWelcomeStep(onStart: advance, onSkip: complete, onExploreSampleData: exploreSampleData)
         case .units:
             OnboardingUnitsStep(onNext: advance)
         case .goal:

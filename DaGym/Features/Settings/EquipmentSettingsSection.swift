@@ -24,7 +24,7 @@ struct EquipmentSettingsSection: View {
                 }
             }
             .dgCard(padding: 0)
-            Text("Library filtering by profile and routine equipment warnings are coming soon.")
+            Text("The library shows the active profile’s equipment; routines that need more get a badge.")
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink4)
         }

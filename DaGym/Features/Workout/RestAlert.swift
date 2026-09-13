@@ -10,24 +10,29 @@ import Synchronization
 /// system alert sounds do.
 @MainActor
 final class RestAlertPlayer {
+    /// Same `UserDefaults` key as `Preferences.playRestSoundOnSilent` (`DaGym/Design/
+    /// UnitEnvironment.swift`). This class isn't a view and has no `@Environment` access, so it
+    /// reads the flag directly rather than threading a `Preferences` reference through
+    /// `ActiveWorkoutView`'s `@State var restAlertPlayer = RestAlertPlayer()`.
+    private static let playOnSilentKey = "playRestSoundOnSilent"
+
     private let engine = AVAudioEngine()
     private let sampleRate = 44_100.0
     private let tone = ToneGenerator(sampleRate: 44_100, frequency: 1_000)
-    private var isConfigured = false
+    private var isEngineConfigured = false
+    private var isPlaybackCategoryActive = false
 
     /// Plays a bleep. `longer` selects the final, longer tone played at 0.
     func bleep(longer: Bool = false) {
-        configureIfNeeded()
+        configureEngineIfNeeded()
+        updateSessionCategoryIfNeeded()
         let duration = longer ? 0.28 : 0.12
         tone.play(samples: Int(duration * sampleRate))
     }
 
-    private func configureIfNeeded() {
-        guard !isConfigured else { return }
-        isConfigured = true
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.ambient)
-        try? session.setActive(true)
+    private func configureEngineIfNeeded() {
+        guard !isEngineConfigured else { return }
+        isEngineConfigured = true
         let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)
         let tone = tone
         let node = AVAudioSourceNode { _, _, frameCount, audioBufferList in
@@ -39,6 +44,20 @@ final class RestAlertPlayer {
         }
         engine.prepare()
         try? engine.start()
+    }
+
+    /// `.ambient` mixes with whatever is playing and stays silent when the ringer switch is
+    /// muted, the same way system alert sounds do. Opting into "Play on silent" switches to
+    /// `.playback`, which pauses other audio but ignores the ringer switch — the Settings toggle
+    /// that flips this key says so. Re-checked (cheaply) on every bleep rather than once, so
+    /// toggling the setting mid-workout takes effect on the very next rest timer.
+    private func updateSessionCategoryIfNeeded() {
+        let playOnSilent = UserDefaults.standard.bool(forKey: Self.playOnSilentKey)
+        guard playOnSilent != isPlaybackCategoryActive else { return }
+        isPlaybackCategoryActive = playOnSilent
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(playOnSilent ? .playback : .ambient)
+        try? session.setActive(true)
     }
 }
 

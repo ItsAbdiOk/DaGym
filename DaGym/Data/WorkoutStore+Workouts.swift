@@ -27,6 +27,36 @@ extension WorkoutStore {
         return session
     }
 
+    /// Appends a routine's exercises to a running session, built the same way `startWorkout`
+    /// builds them (progression prescriptions, auto-fill, history strip). The session and its
+    /// `WorkoutModel` take a combined title ("Push A + Arms") so history shows every routine
+    /// that fed the workout. Used by a multi-routine schedule day and the header's
+    /// "Add routine to this session".
+    func appendRoutine(id: UUID, to session: WorkoutSession) {
+        guard let routine = fetchRoutineModel(id: id) else { return }
+        session.exercises.append(contentsOf: buildEntries(from: routine))
+        session.fillPlaceholderWarmups()
+        let title = Self.combinedTitle(session.title, adding: routine.name)
+        session.title = title
+        session.subtitle = title
+        if let workoutID = session.workoutID, let model = fetchWorkoutModel(id: workoutID) {
+            model.title = title
+            model.routineName = Self.combinedTitle(model.routineName, adding: routine.name)
+            if model.routineID == nil { model.routineID = routine.id }
+        }
+        sync(session: session)
+    }
+
+    /// "Push A + Arms": the existing title with `name` joined on, unless it's already there
+    /// or the session hasn't been named by a routine yet.
+    static func combinedTitle(_ current: String, adding name: String) -> String {
+        let placeholders: Set<String> = ["", "Freestyle", "Backfilled workout", "Backfilled"]
+        guard !placeholders.contains(current) else { return name }
+        let parts = current.components(separatedBy: " + ")
+        guard !parts.contains(name) else { return current }
+        return current + " + " + name
+    }
+
     func startFreestyle() -> WorkoutSession {
         let model = WorkoutModel(title: "Freestyle", startedAt: Date())
         context.insert(model)

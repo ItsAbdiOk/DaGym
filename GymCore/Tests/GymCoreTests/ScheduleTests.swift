@@ -116,4 +116,76 @@ struct ScheduleTests {
             Issue.record("expected DateKey.date(from:) to parse its own output")
         }
     }
+    @Test("a day holds an ordered routine list; the single-routine views read its first entry")
+    func multipleRoutinesPerDay() {
+        let calendar = Self.makeCalendar(mondayFirst: true)
+        let pushA = UUID()
+        let arms = UUID()
+        let monday = Self.referenceMonday()
+        var schedule = WeeklySchedule()
+
+        schedule.addRoutine(pushA, to: .monday)
+        schedule.addRoutine(arms, to: .monday)
+        schedule.addRoutine(arms, to: .monday)
+        #expect(schedule.routineIDs(on: monday, calendar: calendar) == [pushA, arms])
+        #expect(schedule.routineID(on: monday, calendar: calendar) == pushA)
+        #expect(schedule.days[.monday] == pushA)
+
+        // A legacy-style write that doesn't change the first routine keeps the whole list …
+        schedule.days[.wednesday] = arms
+        #expect(schedule.routineIDs(on: monday, calendar: calendar) == [pushA, arms])
+        // … while changing the first routine replaces the day.
+        schedule.days[.monday] = arms
+        #expect(schedule.routineIDs(on: monday, calendar: calendar) == [arms])
+
+        schedule.removeRoutine(arms, from: .monday)
+        #expect(schedule.routineIDs(on: monday, calendar: calendar).isEmpty)
+        #expect(schedule.dayRoutines[.monday] == nil)
+        #expect(schedule.days[.monday] == nil)
+    }
+
+    @Test("a date can be moved onto several routines, and rescheduled dates are flagged")
+    func multiRoutineOverride() {
+        let calendar = Self.makeCalendar(mondayFirst: true)
+        let pushA = UUID()
+        let arms = UUID()
+        let monday = Self.referenceMonday()
+        let tuesday = calendar.date(byAdding: .day, value: 1, to: monday) ?? monday
+        var schedule = WeeklySchedule(dayRoutines: [.monday: [pushA, arms]])
+
+        schedule.moved(date: monday, toRoutines: [], calendar: calendar)
+        schedule.moved(date: tuesday, toRoutines: [pushA, arms], calendar: calendar)
+        #expect(schedule.routineIDs(on: monday, calendar: calendar).isEmpty)
+        #expect(schedule.routineIDs(on: tuesday, calendar: calendar) == [pushA, arms])
+        #expect(schedule.isRescheduled(monday, calendar: calendar))
+        #expect(schedule.isRescheduled(tuesday, calendar: calendar))
+        #expect(schedule.overrides["2026-01-05"] == .some(nil))
+        #expect(schedule.overrides["2026-01-06"] == pushA)
+    }
+
+    @Test("single-routine JSON saved before lists existed still decodes, and lists round-trip")
+    func legacyDecodingAndRoundTrip() throws {
+        let calendar = Self.makeCalendar(mondayFirst: true)
+        let pushA = UUID()
+        let arms = UUID()
+        let monday = Self.referenceMonday()
+        let legacy = """
+        {"days":[2,"\(pushA.uuidString)"],"overrides":{"2026-01-06":null,"2026-01-07":"\(arms.uuidString)"}}
+        """
+        let decoded = try JSONDecoder().decode(WeeklySchedule.self, from: Data(legacy.utf8))
+        #expect(decoded.routineIDs(on: monday, calendar: calendar) == [pushA])
+        #expect(decoded.dateOverrides["2026-01-06"]?.isEmpty == true)
+        #expect(decoded.dateOverrides["2026-01-07"] == [arms])
+        let expected = WeeklySchedule(
+            days: [.monday: pushA], overrides: ["2026-01-06": nil, "2026-01-07": arms]
+        )
+        #expect(decoded == expected)
+
+        var lists = decoded
+        lists.addRoutine(arms, to: .monday)
+        let data = try JSONEncoder().encode(lists)
+        let again = try JSONDecoder().decode(WeeklySchedule.self, from: data)
+        #expect(again == lists)
+        #expect(again.routineIDs(on: monday, calendar: calendar) == [pushA, arms])
+    }
 }

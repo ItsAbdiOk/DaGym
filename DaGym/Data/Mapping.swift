@@ -80,7 +80,7 @@ extension RoutineInfo {
             estimatedMinutes: max(20, setCount * 3),
             progressionRule: RoutineInfo.progressionLabel(model),
             progressionDetail: RoutineInfo.progressionDetailText(model),
-            exerciseSetCounts: exerciseSetCounts
+            exerciseSetCounts: exerciseSetCounts, symbolName: model.symbolName, tint: model.tint
         )
     }
 

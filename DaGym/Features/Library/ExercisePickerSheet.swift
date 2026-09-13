@@ -13,6 +13,8 @@ struct ExercisePickerSheet: View {
     @State private var exercises: [ExerciseInfo] = []
     @State private var searchText = ""
     @State private var selectedMuscle: Muscle?
+    @State private var profile: EquipmentProfileInfo?
+    @State private var showAllEquipment = false
 
     var body: some View {
         ZStack {
@@ -20,6 +22,9 @@ struct ExercisePickerSheet: View {
             VStack(alignment: .leading, spacing: DGSpace.s4) {
                 header
                 searchField
+                if let profile, profile.restrictsLibrary {
+                    EquipmentFilterBanner(profileName: profile.name, showingAll: $showAllEquipment)
+                }
                 chipRow
                 rows
             }
@@ -30,9 +35,13 @@ struct ExercisePickerSheet: View {
         .presentationDragIndicator(.visible)
         .presentationBackground(DGColor.surface1)
         .presentationCornerRadius(DGRadius.sheet)
-        .task { refresh() }
+        .task {
+            profile = store.activeProfile()
+            refresh()
+        }
         .onChange(of: searchText) { _, _ in refresh() }
         .onChange(of: selectedMuscle) { _, _ in refresh() }
+        .onChange(of: showAllEquipment) { _, _ in refresh() }
     }
 
     private var header: some View {
@@ -94,7 +103,13 @@ struct ExercisePickerSheet: View {
     }
 
     private func refresh() {
-        exercises = store.exercises(matching: searchText, muscle: selectedMuscle)
+        let all = store.exercises(matching: searchText, muscle: selectedMuscle)
+        guard let profile, profile.restrictsLibrary, !showAllEquipment else {
+            exercises = all
+            return
+        }
+        let available = Set(profile.availableEquipment)
+        exercises = all.filter { available.contains($0.equipment) }
     }
 }
 

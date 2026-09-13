@@ -24,6 +24,20 @@ struct PlannedSetDraft {
     }
 }
 
+extension [PlannedSetDraft] {
+    /// The kind every set shares, or nil when the sets are mixed (or there are none). Drives
+    /// the builder's "every set is a drop set / rest-pause" toggles.
+    var uniformKind: SetKind? {
+        guard let first = first?.kind, allSatisfy({ $0.kind == first }) else { return nil }
+        return first
+    }
+
+    /// Stamps `kind` onto every set — targets are kept, only the kind changes.
+    mutating func setAllKinds(_ kind: SetKind) {
+        for index in indices { self[index].kind = kind }
+    }
+}
+
 /// One exercise slot as drafted by the routine builder.
 struct RoutineExerciseDraft {
     var exerciseID: UUID
@@ -64,10 +78,13 @@ extension WorkoutStore {
     /// Upserts a routine and replaces its exercises/planned sets. Pass `id: nil` to create.
     /// `rule`, when passed, is the source of truth (JSON-encoded onto `progressionRuleJSON`);
     /// `progressionRule`/`repRangeLow`/`repRangeHigh` stay as the legacy display fallback.
+    /// `symbolName`/`tint` are left as they are when nil, so callers that don't know about the
+    /// glyph (seeder, plan import) never reset a routine the user has already decorated.
     @discardableResult
     func saveRoutine(
         id: UUID?, name: String, notes: String = "", progressionRule: String = "doubleProgression",
         repRangeLow: Int = 6, repRangeHigh: Int = 8, rule: ProgressionRule? = nil,
+        symbolName: String? = nil, tint: String? = nil,
         exercises: [RoutineExerciseDraft]
     ) -> RoutineInfo {
         let model = id.flatMap(fetchRoutineModel) ?? insertedRoutine()
@@ -77,6 +94,8 @@ extension WorkoutStore {
         model.repRangeLow = repRangeLow
         model.repRangeHigh = repRangeHigh
         model.progressionRuleValue = rule?.incrementRejectingNonPositive
+        if let symbolName { model.symbolName = symbolName }
+        if let tint { model.tint = tint }
         model.updatedAt = Date()
         replaceExercises(exercises, on: model)
         save()
@@ -97,7 +116,7 @@ extension WorkoutStore {
             name: copyName(for: source.name), notes: source.notes,
             progressionRule: source.progressionRule, repRangeLow: source.repRangeLow,
             repRangeHigh: source.repRangeHigh, progressionRuleJSON: source.progressionRuleJSON,
-            sortOrder: nextRoutineSortOrder()
+            sortOrder: nextRoutineSortOrder(), symbolName: source.symbolName, tint: source.tint
         )
         context.insert(copy)
         copy.exercises = drafts.enumerated().map { index, draft in

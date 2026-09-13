@@ -21,6 +21,9 @@ struct ActiveWorkoutView: View {
     @State var restAlertPlayer = RestAlertPlayer()
     @State var flashOpacity: Double = 0
     @State var chromeCollapse = ChromeCollapseState()
+    @State var undoAction: UndoAction?
+    /// "Keep going" hides the all-done banner until another set is added and left open.
+    @State var allDoneDismissed = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,6 +37,12 @@ struct ActiveWorkoutView: View {
                 VStack(spacing: DGSpace.s4) {
                     musclesCard
                     if let pr = session.prBanner { PRBanner(info: pr) }
+                    if showsAllDone {
+                        AllDoneBanner(
+                            setsDone: session.setsDone, onFinish: finishSession,
+                            onKeepGoing: { allDoneDismissed = true }
+                        )
+                    }
                     exerciseList
                     workoutNoteField
                 }
@@ -50,17 +59,23 @@ struct ActiveWorkoutView: View {
         }
         .background(DGColor.bgBase)
         .overlay(alignment: .bottom) { bottomChrome }
+        .dgUndoToast($undoAction)
         .overlay { Color.white.opacity(flashOpacity).ignoresSafeArea().allowsHitTesting(false) }
         .restLiveActivity(session: session, onSessionMutation: { store.sync(session: session) })
         .task {
             session.onRestTick = handleRestTick
             session.restHaptics = preferences.restHaptics
+            session.restPauseSeconds = preferences.restPauseSeconds
             await runTimers()
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { tickTimers() }
         }
         .onChange(of: preferences.restHaptics) { _, enabled in session.restHaptics = enabled }
+        .onChange(of: preferences.restPauseSeconds) { _, seconds in session.restPauseSeconds = seconds }
+        .onChange(of: session.hasUndoneSets) { _, hasUndone in
+            if hasUndone { allDoneDismissed = false }
+        }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = preferences.keepScreenAwake }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         .sheet(item: $activeSheet, onDismiss: { store.sync(session: session) }, content: sheetContent)
@@ -98,25 +113,12 @@ struct ActiveWorkoutView: View {
             DGPrimaryButton(title: "Finish", height: 44) { showFinishConfirm = true }
                 .frame(width: 96)
                 .accessibilityIdentifier(A11yID.workoutFinish)
+            headerMenu
         }
         .padding(.horizontal, DGSpace.s4)
         .padding(.top, DGSpace.s2)
         .padding(.bottom, DGSpace.s3)
         .dgGlass(.regular, radius: 0)
-    }
-
-    /// "SUNDAY · 13 SEP", or "BACKFILL · 11 SEP" for a session logged after the fact.
-    private var startedAtLabel: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "d MMM"
-        let dateText = formatter.string(from: session.startedAt).uppercased()
-        guard session.isBackfilled else {
-            let dayFormatter = DateFormatter()
-            dayFormatter.dateFormat = "EEEE"
-            let dayText = dayFormatter.string(from: session.startedAt).uppercased()
-            return "\(dayText) · \(dateText)"
-        }
-        return "Backfill · \(dateText)".uppercased()
     }
 
     private var statStrip: some View {
@@ -154,11 +156,6 @@ struct ActiveWorkoutView: View {
             Spacer(minLength: 0)
         }
         .dgCard(padding: DGSpace.s4)
-    }
-
-    private var muscleNames: String {
-        let names = session.musclesHit.sorted { $0.value > $1.value }.map(\.key.displayName)
-        return names.isEmpty ? "Not started yet" : names.joined(separator: ", ")
     }
 
     /// Free-text note for the whole session, synced on every edit.
@@ -224,6 +221,13 @@ struct ActiveWorkoutView: View {
                 onDeleteSet: { setID in deleteSet(exerciseID: entry.id, setID: setID) },
                 onChangeSetKind: { setID, kind in
                     changeSetKind(exerciseID: entry.id, setID: setID, to: kind)
+                },
+                onInsertSet: { setID, kind in insertSet(exerciseID: entry.id, after: setID, kind: kind) },
+                onAdjustWeight: { setID, delta in
+                    adjustSet(exerciseID: entry.id, setID: setID, weightDelta: delta)
+                },
+                onAdjustReps: { setID, delta in
+                    adjustSet(exerciseID: entry.id, setID: setID, repsDelta: delta)
                 }
             )
         }
@@ -327,35 +331,6 @@ private struct PRBanner: View {
     }
 }
 
-/// Identifies the one sheet presented over the workout at a time.
-enum ActiveSheet: Identifiable {
-    case keypad(exerciseID: UUID, setID: UUID, field: KeypadField)
-    case effort(exerciseID: UUID, setID: UUID)
-    case swap(entryID: UUID, exercise: ExerciseInfo)
-    case addExercise
-    case reorder
-    case notes(exerciseID: UUID)
-
-    enum KeypadField: String { case weight, reps }
-
-    var id: String {
-        switch self {
-        case .keypad(let exerciseID, let setID, let field):
-            "keypad-\(exerciseID)-\(setID)-\(field.rawValue)"
-        case .effort(let exerciseID, let setID):
-            "effort-\(exerciseID)-\(setID)"
-        case .swap(let entryID, _):
-            "swap-\(entryID)"
-        case .addExercise:
-            "add-exercise"
-        case .reorder:
-            "reorder"
-        case .notes(let exerciseID):
-            "notes-\(exerciseID)"
-        }
-    }
-}
-
 #Preview {
     if let container = try? ModelContainer.dagym(inMemory: true) {
         ActiveWorkoutView(session: SampleData.makeSession(), onFinish: { _ in })
@@ -365,11 +340,36 @@ enum ActiveSheet: Identifiable {
 }
 
 private extension ActiveWorkoutView {
+    /// "SUNDAY · 13 SEP", or "BACKFILL · 11 SEP" for a session logged after the fact.
+    var startedAtLabel: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d MMM"
+        let dateText = formatter.string(from: session.startedAt).uppercased()
+        guard session.isBackfilled else {
+            let dayFormatter = DateFormatter()
+            dayFormatter.dateFormat = "EEEE"
+            let dayText = dayFormatter.string(from: session.startedAt).uppercased()
+            return "\(dayText) · \(dateText)"
+        }
+        return "Backfill · \(dateText)".uppercased()
+    }
+
+    var muscleNames: String {
+        let names = session.musclesHit.sorted { $0.value > $1.value }.map(\.key.displayName)
+        return names.isEmpty ? "Not started yet" : names.joined(separator: ", ")
+    }
+
+    /// The all-done banner: every planned set ticked, and "Keep going" not yet tapped.
+    var showsAllDone: Bool {
+        session.setsTotal > 0 && !session.hasUndoneSets && !allDoneDismissed
+    }
+
     /// What finishing now would save — the title of the finish/discard dialog, so it never just
     /// repeats the button label.
     var finishPrompt: String {
         let done = session.setsDone
         guard done > 0 else { return "Nothing logged yet" }
-        return "\(done) of \(session.setsTotal) sets done · \(WorkoutSession.clock(session.elapsedSeconds()))"
+        let elapsed = WorkoutSession.clock(session.elapsedSeconds())
+        return "\(done) of \(session.setsTotal) sets done · \(elapsed)"
     }
 }

@@ -24,17 +24,34 @@ extension WorkoutStore {
         save()
     }
 
-    /// Today's planned routine. Falls back to the first saved routine (the
-    /// original Home behaviour) only when no schedule has ever been saved,
-    /// so existing users see no change until they visit the schedule screen.
-    func todaysRoutine(calendar: Calendar = .current, now: Date = Date()) -> RoutineInfo? {
+    /// Today's planned routines, in the order they merge when the day is started. Falls back
+    /// to the first saved routine (the original Home behaviour) only when no schedule has ever
+    /// been saved, so existing users see no change until they visit the schedule screen.
+    func todaysRoutines(calendar: Calendar = .current, now: Date = Date()) -> [RoutineInfo] {
         let currentSchedule = schedule()
         let all = routines()
-        guard !currentSchedule.days.isEmpty || !currentSchedule.overrides.isEmpty else {
-            return all.first
+        guard !currentSchedule.dayRoutines.isEmpty || !currentSchedule.dateOverrides.isEmpty else {
+            return all.first.map { [$0] } ?? []
         }
-        guard let routineID = currentSchedule.routineID(on: now, calendar: calendar) else { return nil }
-        return all.first { $0.id == routineID }
+        return currentSchedule.routineIDs(on: now, calendar: calendar).compactMap { id in
+            all.first { $0.id == id }
+        }
+    }
+
+    /// The first of `todaysRoutines()` — what Home's headline and the widget show.
+    func todaysRoutine(calendar: Calendar = .current, now: Date = Date()) -> RoutineInfo? {
+        todaysRoutines(calendar: calendar, now: now).first
+    }
+
+    /// Starts a session from an ordered list of routines: the first one the usual way, the rest
+    /// appended via `appendRoutine(id:to:)`. An empty list starts a freestyle session.
+    func startWorkout(routineIDs: [UUID]) -> WorkoutSession {
+        guard let first = routineIDs.first else { return startFreestyle() }
+        let session = startWorkout(routineID: first)
+        for id in routineIDs.dropFirst() {
+            appendRoutine(id: id, to: session)
+        }
+        return session
     }
 
     /// The next planned session after today, for the rest-day card
