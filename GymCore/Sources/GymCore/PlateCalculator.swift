@@ -1,7 +1,7 @@
 import Foundation
 
 /// A bar the user loads plates onto.
-public struct Bar: Equatable, Sendable {
+public struct Bar: Hashable, Sendable {
     public var name: String
     public var weightKg: Double
 
@@ -15,7 +15,7 @@ public struct Bar: Equatable, Sendable {
 }
 
 /// One plate size and how many the gym has (total, not pairs).
-public struct PlateStock: Equatable, Sendable {
+public struct PlateStock: Hashable, Sendable {
     public var weightKg: Double
     public var count: Int
 
@@ -34,7 +34,7 @@ public struct PlateStock: Equatable, Sendable {
 }
 
 /// Plates for one side of the bar.
-public struct PlateLoad: Equatable, Sendable {
+public struct PlateLoad: Hashable, Sendable {
     public var target: Double
     public var bar: Bar
     /// Plates per side, heaviest first.

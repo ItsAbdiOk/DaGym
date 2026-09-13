@@ -8,14 +8,32 @@
 
 /* Begin PBXBuildFile section */
 		099D98FB808E38DA7F0FFD64 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CAF685AA57AB8FDB563F9AD5 /* Assets.xcassets */; };
+		0DAB9E031AB49B0302294E3A /* DGTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A65323AA2A8D0AAF962C267 /* DGTabBar.swift */; };
+		167D91BD7D4748AC426A7631 /* BodyMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECA0C63E34DD9511EA871B10 /* BodyMapView.swift */; };
 		2499EEF927F88D9ADA85F700 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C002D0D22CF406F28CC32E8 /* ContentView.swift */; };
+		295C59DD62EC46BD1E848294 /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = F08C900454CF8A87465BFA4C /* Haptics.swift */; };
+		2D1BD71AA79CEDAD5F868BAE /* SampleData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 166B7D3BC36AE195104A378E /* SampleData.swift */; };
+		38B14308B51A4066F2383ADA /* BarlowCondensed-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 6E798BFEA7AF9CEA9AD1F920 /* BarlowCondensed-ExtraBold.ttf */; };
 		39CC28E4F6C046B4071489BE /* WatchContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8352ACA24E037B67CD756DA /* WatchContentView.swift */; };
+		4D0D6CDD48CDFF24FEB4DFAF /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 82BCDE3C6CF02D9AA5857791 /* OFL.txt */; };
 		50DC855A808D96A7AD0FE0A5 /* GymCore in Frameworks */ = {isa = PBXBuildFile; productRef = B5415C7A871FCDE9EF5B9F89 /* GymCore */; };
+		5DA484FE569EF325424E387E /* BarlowCondensed-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 60467206A6445CF9C90A6AD0 /* BarlowCondensed-Bold.ttf */; };
 		70F5C53B2758041C1298E58D /* DaGymApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8717531770A29F8325F2EB0B /* DaGymApp.swift */; };
 		84666E469085E7E75C9971E8 /* DaGymWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FC8CDB0B5EE660BED778EE9 /* DaGymWatchApp.swift */; };
 		8E1ED2BE6E4A6E0B7F1525E1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 67DC1845FA4F32B5823BD72A /* Assets.xcassets */; };
 		8F182B68EC2671F761D5FFF7 /* GymCore in Frameworks */ = {isa = PBXBuildFile; productRef = C60FDF5056E3A84A5E1E1D8A /* GymCore */; };
+		8FFDB83146CA8B260429B7A3 /* BarlowCondensed-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 40B690236ABB129251ED597D /* BarlowCondensed-SemiBold.ttf */; };
+		909D0E38BB34805981050B5F /* DGColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F94746A4C81740E6F1A24A /* DGColor.swift */; };
+		91CD51D59489EE0FC6CA1BE7 /* Barlow-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 55A8D8B20A6C8F10E1803F77 /* Barlow-Regular.ttf */; };
+		94C887C6A8E11FE1820EC7A1 /* Barlow-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 67A0E9AB4CEB161542104FBD /* Barlow-SemiBold.ttf */; };
+		B3A264761D9882D9FAC43297 /* Glass.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5F5264082EE33C78A1AECC2 /* Glass.swift */; };
+		BA280D6FFBF8584761C8A6BE /* Controls.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7CF01AF948943427CD1718 /* Controls.swift */; };
+		C7EF9BF1031AB6055157FDDB /* DGLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 641F6C219560B1EE79055A92 /* DGLayout.swift */; };
+		CABE4C283B7A7DCC85A55884 /* DGFont.swift in Sources */ = {isa = PBXBuildFile; fileRef = A66BAEB912393A2A3B2744C0 /* DGFont.swift */; };
+		DA93FBEB402CE93D92E413C9 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64E9F3AD2258DD495A1B01FE /* Models.swift */; };
+		DAB404015B25B006B20F0619 /* Barlow-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E1913909E9F20F14DFB2B72E /* Barlow-Medium.ttf */; };
 		EE318D2CDA56A53D5E29ED06 /* DaGymTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA759CCC6F79FAA7D158DD99 /* DaGymTests.swift */; };
+		F21D4206F1BD3E031E4DF6D5 /* Barlow-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9C8CC141FAAE481D83886ADA /* Barlow-Bold.ttf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -31,17 +49,35 @@
 /* Begin PBXFileReference section */
 		0FC8CDB0B5EE660BED778EE9 /* DaGymWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaGymWatchApp.swift; sourceTree = "<group>"; };
 		11029A7078E7CC7D8CE87277 /* GymCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = GymCore; path = GymCore; sourceTree = SOURCE_ROOT; };
+		166B7D3BC36AE195104A378E /* SampleData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleData.swift; sourceTree = "<group>"; };
 		322B0B989D0342102B96A59D /* DaGym.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = DaGym.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		40B690236ABB129251ED597D /* BarlowCondensed-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "BarlowCondensed-SemiBold.ttf"; sourceTree = "<group>"; };
+		55A8D8B20A6C8F10E1803F77 /* Barlow-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Barlow-Regular.ttf"; sourceTree = "<group>"; };
+		5A65323AA2A8D0AAF962C267 /* DGTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DGTabBar.swift; sourceTree = "<group>"; };
 		5C002D0D22CF406F28CC32E8 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		60467206A6445CF9C90A6AD0 /* BarlowCondensed-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "BarlowCondensed-Bold.ttf"; sourceTree = "<group>"; };
 		63E53D41E32894768B328F1C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		641F6C219560B1EE79055A92 /* DGLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DGLayout.swift; sourceTree = "<group>"; };
+		64E9F3AD2258DD495A1B01FE /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		67A0E9AB4CEB161542104FBD /* Barlow-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Barlow-SemiBold.ttf"; sourceTree = "<group>"; };
 		67DC1845FA4F32B5823BD72A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		6E798BFEA7AF9CEA9AD1F920 /* BarlowCondensed-ExtraBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "BarlowCondensed-ExtraBold.ttf"; sourceTree = "<group>"; };
+		82BCDE3C6CF02D9AA5857791 /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
 		8717531770A29F8325F2EB0B /* DaGymApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaGymApp.swift; sourceTree = "<group>"; };
 		98BF80AF0A9C7BEDF8FC2C99 /* DaGymWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DaGymWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9C8CC141FAAE481D83886ADA /* Barlow-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Barlow-Bold.ttf"; sourceTree = "<group>"; };
+		A5F5264082EE33C78A1AECC2 /* Glass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Glass.swift; sourceTree = "<group>"; };
+		A66BAEB912393A2A3B2744C0 /* DGFont.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DGFont.swift; sourceTree = "<group>"; };
+		AD7CF01AF948943427CD1718 /* Controls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Controls.swift; sourceTree = "<group>"; };
 		B0057D72DD6F62004DFBE02A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B8352ACA24E037B67CD756DA /* WatchContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchContentView.swift; sourceTree = "<group>"; };
+		B9F94746A4C81740E6F1A24A /* DGColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DGColor.swift; sourceTree = "<group>"; };
 		BD8384C78B1EC97C53FFD465 /* DaGymTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = DaGymTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CAF685AA57AB8FDB563F9AD5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E1913909E9F20F14DFB2B72E /* Barlow-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Barlow-Medium.ttf"; sourceTree = "<group>"; };
 		EA759CCC6F79FAA7D158DD99 /* DaGymTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaGymTests.swift; sourceTree = "<group>"; };
+		ECA0C63E34DD9511EA871B10 /* BodyMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyMapView.swift; sourceTree = "<group>"; };
+		F08C900454CF8A87465BFA4C /* Haptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Haptics.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -67,9 +103,17 @@
 		090235F3C7F51656632D8732 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				E3340F755B84F1E97BB141A7 /* Fonts */,
 				67DC1845FA4F32B5823BD72A /* Assets.xcassets */,
 			);
 			path = Resources;
+			sourceTree = "<group>";
+		};
+		1AE5A08240428F9599E32661 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Features;
 			sourceTree = "<group>";
 		};
 		2DF3B180F082084095D33C66 /* Resources */ = {
@@ -90,11 +134,23 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		5BA6836BFDB1455B74BE635C /* SampleData */ = {
+			isa = PBXGroup;
+			children = (
+				64E9F3AD2258DD495A1B01FE /* Models.swift */,
+				166B7D3BC36AE195104A378E /* SampleData.swift */,
+			);
+			path = SampleData;
+			sourceTree = "<group>";
+		};
 		7B0805A6AC6A9E9FEF72E733 /* DaGym */ = {
 			isa = PBXGroup;
 			children = (
 				F17F5097FE0164EE293D0B9F /* App */,
+				C81205D6B4267B34725C7A57 /* Design */,
+				1AE5A08240428F9599E32661 /* Features */,
 				090235F3C7F51656632D8732 /* Resources */,
+				5BA6836BFDB1455B74BE635C /* SampleData */,
 				B0057D72DD6F62004DFBE02A /* Info.plist */,
 			);
 			path = DaGym;
@@ -144,6 +200,44 @@
 				11029A7078E7CC7D8CE87277 /* GymCore */,
 			);
 			name = Packages;
+			sourceTree = "<group>";
+		};
+		C81205D6B4267B34725C7A57 /* Design */ = {
+			isa = PBXGroup;
+			children = (
+				E7658B1272CBA1830D645E5D /* Components */,
+				B9F94746A4C81740E6F1A24A /* DGColor.swift */,
+				A66BAEB912393A2A3B2744C0 /* DGFont.swift */,
+				641F6C219560B1EE79055A92 /* DGLayout.swift */,
+				A5F5264082EE33C78A1AECC2 /* Glass.swift */,
+				F08C900454CF8A87465BFA4C /* Haptics.swift */,
+			);
+			path = Design;
+			sourceTree = "<group>";
+		};
+		E3340F755B84F1E97BB141A7 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				9C8CC141FAAE481D83886ADA /* Barlow-Bold.ttf */,
+				E1913909E9F20F14DFB2B72E /* Barlow-Medium.ttf */,
+				55A8D8B20A6C8F10E1803F77 /* Barlow-Regular.ttf */,
+				67A0E9AB4CEB161542104FBD /* Barlow-SemiBold.ttf */,
+				60467206A6445CF9C90A6AD0 /* BarlowCondensed-Bold.ttf */,
+				6E798BFEA7AF9CEA9AD1F920 /* BarlowCondensed-ExtraBold.ttf */,
+				40B690236ABB129251ED597D /* BarlowCondensed-SemiBold.ttf */,
+				82BCDE3C6CF02D9AA5857791 /* OFL.txt */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+		E7658B1272CBA1830D645E5D /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				ECA0C63E34DD9511EA871B10 /* BodyMapView.swift */,
+				AD7CF01AF948943427CD1718 /* Controls.swift */,
+				5A65323AA2A8D0AAF962C267 /* DGTabBar.swift */,
+			);
+			path = Components;
 			sourceTree = "<group>";
 		};
 		F17F5097FE0164EE293D0B9F /* App */ = {
@@ -269,6 +363,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				8E1ED2BE6E4A6E0B7F1525E1 /* Assets.xcassets in Resources */,
+				F21D4206F1BD3E031E4DF6D5 /* Barlow-Bold.ttf in Resources */,
+				DAB404015B25B006B20F0619 /* Barlow-Medium.ttf in Resources */,
+				91CD51D59489EE0FC6CA1BE7 /* Barlow-Regular.ttf in Resources */,
+				94C887C6A8E11FE1820EC7A1 /* Barlow-SemiBold.ttf in Resources */,
+				5DA484FE569EF325424E387E /* BarlowCondensed-Bold.ttf in Resources */,
+				38B14308B51A4066F2383ADA /* BarlowCondensed-ExtraBold.ttf in Resources */,
+				8FFDB83146CA8B260429B7A3 /* BarlowCondensed-SemiBold.ttf in Resources */,
+				4D0D6CDD48CDFF24FEB4DFAF /* OFL.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -304,8 +406,18 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				167D91BD7D4748AC426A7631 /* BodyMapView.swift in Sources */,
 				2499EEF927F88D9ADA85F700 /* ContentView.swift in Sources */,
+				BA280D6FFBF8584761C8A6BE /* Controls.swift in Sources */,
+				909D0E38BB34805981050B5F /* DGColor.swift in Sources */,
+				CABE4C283B7A7DCC85A55884 /* DGFont.swift in Sources */,
+				C7EF9BF1031AB6055157FDDB /* DGLayout.swift in Sources */,
+				0DAB9E031AB49B0302294E3A /* DGTabBar.swift in Sources */,
 				70F5C53B2758041C1298E58D /* DaGymApp.swift in Sources */,
+				B3A264761D9882D9FAC43297 /* Glass.swift in Sources */,
+				295C59DD62EC46BD1E848294 /* Haptics.swift in Sources */,
+				DA93FBEB402CE93D92E413C9 /* Models.swift in Sources */,
+				2D1BD71AA79CEDAD5F868BAE /* SampleData.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

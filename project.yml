@@ -55,6 +55,15 @@ targets:
         # Standard HTTPS only, which is exempt. Without this, App Store Connect
         # asks an encryption question on every build.
         ITSAppUsesNonExemptEncryption: false
+        UIUserInterfaceStyle: Automatic
+        UIAppFonts:
+          - Barlow-Regular.ttf
+          - Barlow-Medium.ttf
+          - Barlow-SemiBold.ttf
+          - Barlow-Bold.ttf
+          - BarlowCondensed-SemiBold.ttf
+          - BarlowCondensed-Bold.ttf
+          - BarlowCondensed-ExtraBold.ttf
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.dagym
