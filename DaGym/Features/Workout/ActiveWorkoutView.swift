@@ -1,4 +1,5 @@
 import GymCore
+import SwiftData
 import SwiftUI
 
 /// The Active Workout screen: glass nav header, stat strip, muscle map, PR
@@ -6,9 +7,13 @@ import SwiftUI
 /// bottom. Tab bar visibility is the parent's job. See mockups 02_00 / 02_01.
 struct ActiveWorkoutView: View {
     @Bindable var session: WorkoutSession
-    var onFinish: () -> Void
+    var onFinish: (WorkoutSummary) -> Void
 
-    @State private var activeSheet: ActiveSheet?
+    @Environment(WorkoutStore.self) var store
+    @Environment(\.dismiss) var dismiss
+    @State var activeSheet: ActiveSheet?
+    @State var menuExerciseID: UUID?
+    @State var showFinishConfirm = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,8 +33,15 @@ struct ActiveWorkoutView: View {
         }
         .background(DGColor.bgBase)
         .overlay(alignment: .bottom) { bottomGroup }
-        .task { await runRestTimer() }
+        .task { await runTimers() }
         .sheet(item: $activeSheet) { sheet in sheetContent(sheet) }
+        .confirmationDialog("Finish workout", isPresented: $showFinishConfirm, titleVisibility: .visible) {
+            Button("Finish workout", action: finishSession)
+            Button("Discard workout", role: .destructive, action: discardSession)
+        }
+        .confirmationDialog("Exercise", isPresented: menuIsPresented, titleVisibility: .visible) {
+            exerciseMenuButtons
+        }
     }
 
     // MARK: Header
@@ -47,22 +59,18 @@ struct ActiveWorkoutView: View {
             VStack(alignment: .trailing, spacing: 2) {
                 Text("Elapsed").dgLabel()
                 TimelineView(.periodic(from: session.startedAt, by: 1)) { context in
-                    Text(WorkoutSession.clock(elapsedSeconds(at: context.date)))
+                    Text(WorkoutSession.clock(session.elapsedSeconds(at: context.date)))
                         .dgMetric(DGFont.metricL)
                         .foregroundStyle(DGColor.ink1)
                 }
             }
-            DGPrimaryButton(title: "Finish", height: 44, action: onFinish)
+            DGPrimaryButton(title: "Finish", height: 44) { showFinishConfirm = true }
                 .frame(width: 96)
         }
         .padding(.horizontal, DGSpace.s4)
         .padding(.top, DGSpace.s2)
         .padding(.bottom, DGSpace.s3)
         .dgGlass(.regular, radius: 0)
-    }
-
-    private func elapsedSeconds(at date: Date) -> Int {
-        max(0, Int(date.timeIntervalSince(session.startedAt)))
     }
 
     private var statStrip: some View {
@@ -150,28 +158,28 @@ struct ActiveWorkoutView: View {
         }
     }
 
+    @ViewBuilder
     private func exerciseCard(at index: Int) -> some View {
         let entry = session.exercises[index]
-        return ExerciseCard(
-            entry: entry, isOnDeck: session.onDeckIndex == index, effortScale: session.effortScale,
-            onTapWeight: { setID in
-                activeSheet = .keypad(exerciseID: entry.id, setID: setID, field: .weight)
-            },
-            onTapReps: { setID in
-                activeSheet = .keypad(exerciseID: entry.id, setID: setID, field: .reps)
-            },
-            onTapEffort: { setID in activeSheet = .effort(exerciseID: entry.id, setID: setID) },
-            onToggleDone: { set in toggleDone(exerciseID: entry.id, set: set) },
-            onMore: { activeSheet = .swap(exercise: entry.exercise) },
-            onStartTimed: {}
-        )
-    }
-
-    private func toggleDone(exerciseID: UUID, set: SetEntry) {
-        if set.isDone {
-            session.uncompleteSet(exerciseID: exerciseID, setID: set.id)
+        if entry.isTimed, let hold = session.timedHold, hold.exerciseID == entry.id {
+            TimedHoldCard(
+                exerciseName: entry.exercise.name, hold: hold,
+                onPauseResume: { session.pauseResumeTimedHold() }, onStop: stopTimedHold
+            )
         } else {
-            session.completeSet(exerciseID: exerciseID, setID: set.id)
+            ExerciseCard(
+                entry: entry, isOnDeck: session.onDeckIndex == index, effortScale: session.effortScale,
+                onTapWeight: { setID in
+                    activeSheet = .keypad(exerciseID: entry.id, setID: setID, field: .weight)
+                },
+                onTapReps: { setID in
+                    activeSheet = .keypad(exerciseID: entry.id, setID: setID, field: .reps)
+                },
+                onTapEffort: { setID in activeSheet = .effort(exerciseID: entry.id, setID: setID) },
+                onToggleDone: { set in toggleDone(exerciseID: entry.id, set: set) },
+                onMore: { menuExerciseID = entry.id },
+                onStartTimed: { setID in startTimedHold(exerciseID: entry.id, setID: setID) }
+            )
         }
     }
 
@@ -194,9 +202,14 @@ struct ActiveWorkoutView: View {
 
     private var actionBar: some View {
         HStack(spacing: 0) {
-            actionItem(title: "Exercise", symbol: "plus", tint: DGColor.coralText) {}
-            actionItem(title: "Reorder", symbol: "list.bullet", tint: DGColor.ink2) {}
-            actionItem(title: "Coach", symbol: "sparkles", tint: DGColor.ink2) {}
+            actionItem(title: "Exercise", symbol: "plus", tint: DGColor.coralText) {
+                activeSheet = .addExercise
+            }
+            actionItem(title: "Reorder", symbol: "list.bullet", tint: DGColor.ink2) {
+                activeSheet = .reorder
+            }
+            actionItem(title: "Coach", symbol: "sparkles", tint: DGColor.ink4, action: {})
+                .opacity(0.5)
         }
         .frame(height: 56)
         .dgGlass(.thick, in: Capsule())
@@ -216,75 +229,15 @@ struct ActiveWorkoutView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: Rest timer
+    // MARK: Timers
 
-    private func runRestTimer() async {
+    func runTimers() async {
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled else { return }
             session.tickRest()
+            session.tickTimedHold()
         }
-    }
-
-    // MARK: Sheets
-
-    @ViewBuilder
-    private func sheetContent(_ sheet: ActiveSheet) -> some View {
-        switch sheet {
-        case .keypad(let exerciseID, let setID, let field):
-            keypadSheet(exerciseID: exerciseID, setID: setID, field: field)
-        case .effort(let exerciseID, let setID):
-            EffortPickerSheet(scale: $session.effortScale) { effort in
-                session.completeSet(exerciseID: exerciseID, setID: setID, effort: effort)
-            }
-        case .swap(let exercise):
-            SwapExerciseSheet(exercise: exercise) { candidate in
-                replaceExercise(originalID: exercise.id, with: candidate)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func keypadSheet(exerciseID: UUID, setID: UUID, field: ActiveSheet.KeypadField) -> some View {
-        if let ei = session.exercises.firstIndex(where: { $0.id == exerciseID }),
-           let si = session.exercises[ei].sets.firstIndex(where: { $0.id == setID }) {
-            let exercise = session.exercises[ei].exercise
-            let previous = session.exercises[ei].sets[si].previous
-            switch field {
-            case .weight:
-                WeightKeypadSheet(
-                    title: "Weight", value: weightBinding(ei: ei, si: si), step: exercise.incrementKg,
-                    bar: exercise.bar, last: previous, unit: "kg", onDone: {}
-                )
-            case .reps:
-                WeightKeypadSheet(
-                    title: "Reps", value: repsBinding(ei: ei, si: si), step: 1, bar: nil,
-                    last: previous, unit: "reps", onDone: {}
-                )
-            }
-        }
-    }
-
-    private func weightBinding(ei: Int, si: Int) -> Binding<Double> {
-        Binding(
-            get: { session.exercises[ei].sets[si].weightKg },
-            set: { session.exercises[ei].sets[si].weightKg = $0 }
-        )
-    }
-
-    private func repsBinding(ei: Int, si: Int) -> Binding<Double> {
-        Binding(
-            get: { Double(session.exercises[ei].sets[si].reps) },
-            set: { session.exercises[ei].sets[si].reps = Int($0) }
-        )
-    }
-
-    private func replaceExercise(originalID: UUID, with candidate: ExerciseInfo) {
-        guard let index = session.exercises.firstIndex(where: { $0.exercise.id == originalID }) else {
-            return
-        }
-        session.exercises[index].exercise = candidate
-        Haptics.confirm()
     }
 }
 
@@ -317,12 +270,14 @@ private struct PRBanner: View {
 }
 
 /// Identifies the one sheet presented over the workout at a time.
-private enum ActiveSheet: Identifiable {
+enum ActiveSheet: Identifiable {
     case keypad(exerciseID: UUID, setID: UUID, field: KeypadField)
     case effort(exerciseID: UUID, setID: UUID)
     case swap(exercise: ExerciseInfo)
+    case addExercise
+    case reorder
 
-    fileprivate enum KeypadField: String { case weight, reps }
+    enum KeypadField: String { case weight, reps }
 
     var id: String {
         switch self {
@@ -332,10 +287,17 @@ private enum ActiveSheet: Identifiable {
             "effort-\(exerciseID)-\(setID)"
         case .swap(let exercise):
             "swap-\(exercise.id)"
+        case .addExercise:
+            "add-exercise"
+        case .reorder:
+            "reorder"
         }
     }
 }
 
 #Preview {
-    ActiveWorkoutView(session: SampleData.makeSession(), onFinish: {})
+    if let container = try? ModelContainer.dagym(inMemory: true) {
+        ActiveWorkoutView(session: SampleData.makeSession(), onFinish: { _ in })
+            .environment(WorkoutStore(context: container.mainContext))
+    }
 }

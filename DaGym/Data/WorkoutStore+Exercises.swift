@@ -44,11 +44,12 @@ extension WorkoutStore {
 
     @discardableResult
     func createCustomExercise(
-        name: String, primary: [Muscle], equipment: String, style: ExerciseInfo.LoggingStyle
+        name: String, primary: [Muscle], equipment: String, style: ExerciseInfo.LoggingStyle,
+        isPerSide: Bool = false, barType: String? = nil
     ) -> ExerciseInfo {
         let model = ExerciseModel(
             name: name, primaryMuscles: primary.map(\.rawValue), equipment: equipment,
-            loggingStyle: style.rawKey, isCustom: true
+            loggingStyle: style.rawKey, isPerSide: isPerSide, isCustom: true, barType: barType
         )
         context.insert(model)
         save()
@@ -58,6 +59,15 @@ extension WorkoutStore {
     func toggleFavorite(id: UUID) {
         guard let model = fetchExerciseModel(id: id) else { return }
         model.isFavorite.toggle()
+        save()
+    }
+
+    /// Updates the per-exercise reference settings shown on the detail screen.
+    func updateExerciseSettings(id: UUID, restSeconds: Int, barType: String?, incrementKg: Double) {
+        guard let model = fetchExerciseModel(id: id) else { return }
+        model.restSeconds = restSeconds
+        model.barType = barType
+        model.incrementKg = incrementKg
         save()
     }
 

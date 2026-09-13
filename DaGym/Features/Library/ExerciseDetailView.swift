@@ -1,21 +1,30 @@
 import Charts
 import GymCore
+import SwiftData
 import SwiftUI
 
-/// Exercise Detail — stats, a 6-month e1RM trend and reference settings
-/// for a single exercise.
+/// Exercise Detail — stats, an e1RM trend built from real history and
+/// editable reference settings for a single exercise.
 struct ExerciseDetailView: View {
-    var exercise: ExerciseInfo
-
-    @State private var isFavorite: Bool
-    @State private var selectedMetric = "1RM"
+    @Environment(WorkoutStore.self) private var store
     @Environment(\.dismiss) private var dismiss
 
+    @State private var exercise: ExerciseInfo
+    @State private var lastSessions: [String] = []
+    @State private var series: [(date: Date, value: Double)] = []
+    @State private var restSeconds: Int
+    @State private var incrementKg: Double
+    @State private var barTypeKey: String?
+    @State private var selectedMetric = "1RM"
+
     private static let metrics = ["1RM", "Top Set", "Volume", "Reps"]
+    private static let restOptions = [60, 90, 120, 150, 180, 210, 240, 300]
+    private static let incrementOptions = [0.5, 1, 1.25, 2, 2.5, 5, 10]
 
     init(exercise: ExerciseInfo) {
-        self.exercise = exercise
-        _isFavorite = State(initialValue: exercise.isFavorite)
+        _exercise = State(initialValue: exercise)
+        _restSeconds = State(initialValue: exercise.restSeconds)
+        _incrementKg = State(initialValue: exercise.incrementKg)
     }
 
     var body: some View {
@@ -26,7 +35,8 @@ struct ExerciseDetailView: View {
                     topRow
                     titleBlock
                     statTiles
-                    ChartCard(selectedMetric: $selectedMetric, metrics: Self.metrics)
+                    ChartCard(series: series, selectedMetric: $selectedMetric, metrics: Self.metrics)
+                    lastSessionsCard
                     instructionsCard
                     settingsCard
                 }
@@ -36,6 +46,7 @@ struct ExerciseDetailView: View {
             }
         }
         .navigationBarHidden(true)
+        .task { refresh() }
     }
 
     private var topRow: some View {
@@ -52,10 +63,8 @@ struct ExerciseDetailView: View {
             }
             .buttonStyle(.plain)
             Spacer()
-            Button {
-                isFavorite.toggle()
-            } label: {
-                Image(systemName: isFavorite ? "star.fill" : "star")
+            Button(action: toggleFavorite) {
+                Image(systemName: exercise.isFavorite ? "star.fill" : "star")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(DGColor.prGoldText)
                     .frame(width: 36, height: 36)
@@ -108,12 +117,37 @@ struct ExerciseDetailView: View {
         )
     }
 
+    private var lastSessionsCard: some View {
+        VStack(alignment: .leading, spacing: DGSpace.s2) {
+            Text("Last 3 Sessions").dgLabel()
+            if lastSessions.isEmpty {
+                Text("No sessions logged yet.")
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.ink4)
+            } else {
+                ForEach(lastSessions, id: \.self) { line in
+                    Text(line)
+                        .font(DGFont.body)
+                        .foregroundStyle(DGColor.ink1)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dgCard()
+    }
+
     private var instructionsCard: some View {
         VStack(alignment: .leading, spacing: DGSpace.s2) {
             Text("How To Do It").dgLabel()
-            Text(exercise.instructions.isEmpty ? "No instructions yet." : exercise.instructions)
-                .font(DGFont.body)
-                .foregroundStyle(DGColor.ink2)
+            if exercise.instructions.isEmpty {
+                Text("Instructions coming soon")
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.ink4)
+            } else {
+                Text(exercise.instructions)
+                    .font(DGFont.body)
+                    .foregroundStyle(DGColor.ink2)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .dgCard()
@@ -121,30 +155,111 @@ struct ExerciseDetailView: View {
 
     private var settingsCard: some View {
         VStack(spacing: 0) {
-            SettingsRow(label: "Rest timer", value: WorkoutSession.clock(exercise.restSeconds))
+            MenuSettingsRow(label: "Rest timer", value: WorkoutSession.clock(restSeconds)) {
+                ForEach(Self.restOptions, id: \.self) { seconds in
+                    Button(WorkoutSession.clock(seconds)) { updateRest(seconds) }
+                }
+            }
             Divider().overlay(DGColor.hairline)
-            SettingsRow(label: "Bar type", value: barTypeValue)
+            MenuSettingsRow(label: "Bar type", value: BarOption.from(barTypeKey).title) {
+                ForEach(BarOption.allCases) { option in
+                    Button(option.title) { updateBar(option) }
+                }
+            }
             Divider().overlay(DGColor.hairline)
-            SettingsRow(label: "Weight increment", value: "\(WorkoutSession.format(exercise.incrementKg)) kg")
+            MenuSettingsRow(label: "Weight increment", value: "\(WorkoutSession.format(incrementKg)) kg") {
+                ForEach(Self.incrementOptions, id: \.self) { increment in
+                    Button("\(WorkoutSession.format(increment)) kg") { updateIncrement(increment) }
+                }
+            }
         }
         .dgCard(padding: 0)
     }
 
-    private var barTypeValue: String {
-        guard let bar = exercise.bar else { return "None" }
-        return "\(bar.name) \(WorkoutSession.format(bar.weightKg)) kg"
+    private func refresh() {
+        if let model = store.fetchExerciseModel(id: exercise.id) {
+            exercise = store.exerciseInfo(for: model)
+            restSeconds = model.restSeconds
+            incrementKg = model.incrementKg
+            barTypeKey = model.barType
+        }
+        lastSessions = store.lastSessions(exerciseID: exercise.id)
+        series = store.e1rmSeries(exerciseID: exercise.id)
+    }
+
+    private func toggleFavorite() {
+        store.toggleFavorite(id: exercise.id)
+        refresh()
+    }
+
+    private func updateRest(_ seconds: Int) {
+        restSeconds = seconds
+        persistSettings()
+    }
+
+    private func updateBar(_ option: BarOption) {
+        barTypeKey = option.storeValue
+        persistSettings()
+    }
+
+    private func updateIncrement(_ increment: Double) {
+        incrementKg = increment
+        persistSettings()
+    }
+
+    private func persistSettings() {
+        store.updateExerciseSettings(
+            id: exercise.id, restSeconds: restSeconds, barType: barTypeKey, incrementKg: incrementKg
+        )
+        refresh()
     }
 }
 
-/// Estimated-1RM trend chart with the metric segment toggle.
+/// Bar-type options for the settings menu, mapped to `ExerciseModel.barType`.
+private enum BarOption: String, CaseIterable, Identifiable {
+    case none, olympic, womens, ezBar
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .none: "None"
+        case .olympic: "Olympic"
+        case .womens: "Women's"
+        case .ezBar: "EZ Bar"
+        }
+    }
+
+    var storeValue: String? { self == .none ? nil : rawValue }
+
+    static func from(_ value: String?) -> BarOption {
+        BarOption(rawValue: value ?? "none") ?? .none
+    }
+}
+
+/// Estimated-1RM trend chart with the metric segment toggle, built from
+/// real per-session e1RM points. Falls back to an empty state under three.
 private struct ChartCard: View {
+    var series: [(date: Date, value: Double)]
     @Binding var selectedMetric: String
     var metrics: [String]
 
     var body: some View {
+        if series.count >= 3 {
+            content
+        } else {
+            EmptyState(
+                symbol: "chart.line.uptrend.xyaxis",
+                title: "Not Enough History",
+                message: "Charts need three sessions of an exercise. You have \(series.count)."
+            )
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: DGSpace.s4) {
             HStack {
-                Text("Estimated 1RM · 6 Months").dgLabel()
+                Text("Estimated 1RM").dgLabel()
                 Spacer()
                 Text("+\(delta) kg")
                     .font(DGFont.footnote)
@@ -157,18 +272,17 @@ private struct ChartCard: View {
     }
 
     private var delta: String {
-        guard let first = SampleData.e1rmSeries.first?.value,
-              let last = SampleData.e1rmSeries.last?.value else { return "0" }
+        guard let first = series.first?.value, let last = series.last?.value else { return "0" }
         return WorkoutSession.format(last - first)
     }
 
     private var chart: some View {
-        Chart(Array(SampleData.e1rmSeries.enumerated()), id: \.offset) { index, point in
-            LineMark(x: .value("Month", point.month), y: .value("E1RM", point.value))
+        Chart(Array(series.enumerated()), id: \.offset) { index, point in
+            LineMark(x: .value("Session", point.date), y: .value("E1RM", point.value))
                 .foregroundStyle(DGColor.coral)
                 .lineStyle(StrokeStyle(lineWidth: 2.5))
-            if index == SampleData.e1rmSeries.count - 1 {
-                PointMark(x: .value("Month", point.month), y: .value("E1RM", point.value))
+            if index == series.count - 1 {
+                PointMark(x: .value("Session", point.date), y: .value("E1RM", point.value))
                     .foregroundStyle(DGColor.coral)
                     .symbolSize(64)
             }
@@ -176,7 +290,7 @@ private struct ChartCard: View {
         .chartYAxis(.hidden)
         .chartXAxis {
             AxisMarks { _ in
-                AxisValueLabel()
+                AxisValueLabel(format: .dateTime.month(.abbreviated))
                     .font(DGFont.label)
                     .foregroundStyle(DGColor.ink3)
             }
@@ -212,28 +326,40 @@ private struct ChartCard: View {
     }
 }
 
-/// One "Label … Value" row in the settings card.
-private struct SettingsRow: View {
+/// One editable "Label … Value ⌄" row inside the settings card.
+private struct MenuSettingsRow<Items: View>: View {
     var label: String
     var value: String
+    @ViewBuilder var items: Items
 
     var body: some View {
-        HStack {
-            Text(label)
-                .font(DGFont.body)
-                .foregroundStyle(DGColor.ink1)
-            Spacer()
-            Text(value)
-                .font(DGFont.subhead)
-                .foregroundStyle(DGColor.ink3)
+        Menu {
+            items
+        } label: {
+            HStack {
+                Text(label)
+                    .font(DGFont.body)
+                    .foregroundStyle(DGColor.ink1)
+                Spacer()
+                Text(value)
+                    .font(DGFont.subhead)
+                    .foregroundStyle(DGColor.ink3)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(DGColor.ink4)
+            }
+            .padding(.vertical, DGSpace.s3)
+            .padding(.horizontal, DGSpace.s5)
         }
-        .padding(.vertical, DGSpace.s3)
-        .padding(.horizontal, DGSpace.s5)
+        .buttonStyle(.plain)
     }
 }
 
 #Preview {
-    NavigationStack {
-        ExerciseDetailView(exercise: SampleData.bench)
+    if let store = PreviewStore.make() {
+        NavigationStack {
+            ExerciseDetailView(exercise: SampleData.bench)
+        }
+            .environment(store)
     }
 }

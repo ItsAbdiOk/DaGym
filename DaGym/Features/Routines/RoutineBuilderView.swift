@@ -1,21 +1,27 @@
 import GymCore
+import SwiftData
 import SwiftUI
 
-/// Routine Builder — "Edit Routine". Name, muscles hit, progression rule,
-/// a superset pair with a violet rail, and a standalone exercise below.
+/// One exercise slot as edited on screen; `id` is independent of the
+/// exercise's own id so the same exercise could in principle appear twice.
+private struct EditableExercise: Identifiable {
+    let id = UUID()
+    var exercise: ExerciseInfo
+    var sets: [PlannedSetDraft]
+    var supersetGroup: Int?
+}
+
+/// Routine Builder — editable name, a reorderable list of exercises with
+/// inline set editing, and superset linking. Glass cards, violet superset
+/// tag, coral "add exercise" affordance — see mockup 03_02 (right).
 struct RoutineBuilderView: View {
-    var routine: RoutineInfo
-    var onCancel: () -> Void
-    var onSave: () -> Void
+    var routineID: UUID?
+    var onDone: () -> Void
 
-    @State private var name: String
-
-    init(routine: RoutineInfo, onCancel: @escaping () -> Void, onSave: @escaping () -> Void) {
-        self.routine = routine
-        self.onCancel = onCancel
-        self.onSave = onSave
-        _name = State(initialValue: routine.name)
-    }
+    @Environment(WorkoutStore.self) private var store
+    @State private var name = "New Routine"
+    @State private var items: [EditableExercise] = []
+    @State private var showingPicker = false
 
     var body: some View {
         ZStack {
@@ -23,170 +29,246 @@ struct RoutineBuilderView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: DGSpace.s6) {
                     navRow
-                    NameCard(name: $name, routine: routine)
-                    ProgressionCard(routine: routine)
-                    SupersetGroup(exercises: pushALayout.superset)
-                    if let solo = pushALayout.solo {
-                        BuilderExerciseCard(data: solo)
+                    NameCard(name: $name)
+                    ForEach($items) { $item in
+                        BuilderExerciseCard(
+                            item: $item, isSuperset: item.supersetGroup != nil,
+                            onToggleSuperset: { toggleSuperset(id: item.id) },
+                            onRemove: { remove(id: item.id) },
+                            onMoveUp: { move(id: item.id, up: true) },
+                            onMoveDown: { move(id: item.id, up: false) }
+                        )
                     }
-                    AddExerciseButton()
+                    AddExerciseButton { showingPicker = true }
                 }
                 .padding(.horizontal, DGSpace.s4)
                 .padding(.top, DGSpace.s3)
                 .padding(.bottom, 100)
             }
         }
+        .task { load() }
+        .sheet(isPresented: $showingPicker) {
+            ExercisePickerSheet(onPick: addExercise)
+        }
     }
 
     private var navRow: some View {
         HStack {
-            Button("Cancel", action: onCancel)
+            Button("Cancel", action: onDone)
                 .buttonStyle(.plain)
                 .dgLabel()
             Spacer()
-            Text("Edit Routine")
+            Text(routineID == nil ? "New Routine" : "Edit Routine")
                 .font(DGFont.title3)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
-            Button("Save", action: onSave)
+            Button("Save", action: save)
                 .buttonStyle(.plain)
                 .dgLabel(DGColor.coralText)
+                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
 
-    /// Arranges the routine's exercises to match the mockup: exercise 1 +
-    /// the triceps exercise share superset A, the third exercise stands alone.
-    private var pushALayout: (superset: [ExerciseCardData], solo: ExerciseCardData?) {
-        let items = routine.exercises
-        guard let first = items.first else { return ([], nil) }
-        let ropeIndex = items.firstIndex { $0.name.lowercased().contains("rope") } ?? min(1, items.count - 1)
-        let rope = items.indices.contains(ropeIndex) ? items[ropeIndex] : nil
-        let soloIndex = items.indices.contains(2) ? 2 : nil
-        let solo = soloIndex.map { items[$0] }
-        var superset = [ExerciseCardData.forBench(first)]
-        if let rope, rope.id != first.id { superset.append(.forTricepsRope(rope)) }
-        let soloData = solo.map { ExerciseCardData.forOverhead($0) }
-        return (superset, soloData)
+    // MARK: - Loading
+
+    private func load() {
+        guard let routineID, let result = store.routineDrafts(id: routineID) else { return }
+        name = result.info.name
+        items = zip(result.info.exercises, result.drafts).map { info, draft in
+            EditableExercise(exercise: info, sets: draft.sets, supersetGroup: draft.supersetGroup)
+        }
+    }
+
+    // MARK: - Editing
+
+    private func addExercise(_ exercise: ExerciseInfo) {
+        items.append(
+            EditableExercise(exercise: exercise, sets: [PlannedSetDraft(kind: .working, targetReps: 8)])
+        )
+    }
+
+    private func remove(id: UUID) {
+        items.removeAll { $0.id == id }
+    }
+
+    private func move(id: UUID, up: Bool) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        let target = up ? index - 1 : index + 1
+        guard items.indices.contains(target) else { return }
+        items.swapAt(index, target)
+    }
+
+    /// Assigns this exercise and the one before it the same superset group
+    /// (creating a new group if neither has one yet), or clears both.
+    private func toggleSuperset(id: UUID) {
+        guard let index = items.firstIndex(where: { $0.id == id }), index > 0 else { return }
+        let previousIndex = index - 1
+        let linkedToPrevious = items[index].supersetGroup != nil
+            && items[index].supersetGroup == items[previousIndex].supersetGroup
+        if linkedToPrevious {
+            items[index].supersetGroup = nil
+            let stillLinked = items.indices.contains(index + 1)
+                && items[index + 1].supersetGroup == items[previousIndex].supersetGroup
+            if !stillLinked { items[previousIndex].supersetGroup = nil }
+        } else {
+            let group = (items.compactMap(\.supersetGroup).max() ?? 0) + 1
+            items[previousIndex].supersetGroup = group
+            items[index].supersetGroup = group
+        }
+    }
+
+    private func save() {
+        let drafts = items.map {
+            RoutineExerciseDraft(exerciseID: $0.exercise.id, supersetGroup: $0.supersetGroup, sets: $0.sets)
+        }
+        store.saveRoutine(id: routineID, name: name, exercises: drafts)
+        onDone()
     }
 }
 
-/// "NAME" card: editable title, hairline, body map, "HITS" summary.
+/// "NAME" card: editable title.
 private struct NameCard: View {
     @Binding var name: String
-    var routine: RoutineInfo
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
+        VStack(alignment: .leading, spacing: DGSpace.s2) {
             Text("Name").dgLabel()
             TextField("Routine name", text: $name)
                 .font(DGFont.title2)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
                 .textFieldStyle(.plain)
-            Divider().overlay(DGColor.hairline)
-            HStack(alignment: .top, spacing: DGSpace.s4) {
-                BodyMapPair(intensity: routine.hitMap, height: 44)
-                VStack(alignment: .leading, spacing: DGSpace.s1) {
-                    Text("Hits").dgLabel()
-                    Text("Chest, front delts, triceps · light on back")
-                        .font(DGFont.body)
-                        .foregroundStyle(DGColor.ink1)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
         }
         .dgCard()
     }
 }
 
-/// Violet "progression rule" card, styled like WhyCard.
-private struct ProgressionCard: View {
-    var routine: RoutineInfo
+/// One exercise card: name, move/superset/remove controls, and its set rows.
+private struct BuilderExerciseCard: View {
+    @Binding var item: EditableExercise
+    var isSuperset: Bool
+    var onToggleSuperset: () -> Void
+    var onRemove: () -> Void
+    var onMoveUp: () -> Void
+    var onMoveDown: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s2) {
-            Text("Progression Rule").dgLabel(DGColor.aiVioletText)
-            Text(routine.progressionRule)
-                .font(DGFont.title3)
-                .foregroundStyle(DGColor.ink1)
-            Text(routine.progressionDetail)
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink3)
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: DGSpace.s3) {
+            header
+            if isSuperset {
+                Text("Superset").dgLabel(DGColor.aiVioletText)
+            }
+            VStack(spacing: DGSpace.s2) {
+                ForEach(item.sets.indices, id: \.self) { index in
+                    BuilderSetRow(set: $item.sets[index])
+                }
+            }
+            setsCountStepper
         }
         .padding(DGSpace.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            DGColor.aiViolet.opacity(0.12),
-            in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
+            isSuperset ? DGColor.aiViolet.opacity(0.08) : DGColor.surface1,
+            in: RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
-                .strokeBorder(DGColor.aiViolet.opacity(0.3), lineWidth: 1)
+            RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
+                .strokeBorder(isSuperset ? DGColor.aiViolet.opacity(0.4) : DGColor.hairline, lineWidth: 1)
         }
     }
-}
 
-/// "SUPERSET · A" label with a 5 pt violet rail spanning the two cards.
-private struct SupersetGroup: View {
-    var exercises: [ExerciseCardData]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s2) {
-            Text("Superset · A").dgLabel(DGColor.aiVioletText)
-            HStack(alignment: .top, spacing: DGSpace.s3) {
-                RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                    .fill(DGColor.aiViolet)
-                    .frame(width: 5)
-                    .frame(maxHeight: .infinity)
-                VStack(spacing: DGSpace.s3) {
-                    ForEach(exercises) { BuilderExerciseCard(data: $0) }
-                }
+    private var header: some View {
+        HStack(spacing: DGSpace.s3) {
+            Text(item.exercise.name)
+                .font(DGFont.title3)
+                .textCase(.uppercase)
+                .foregroundStyle(DGColor.ink1)
+            Spacer()
+            Button(action: onToggleSuperset) {
+                Image(systemName: "link")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isSuperset ? DGColor.aiVioletText : DGColor.ink3)
             }
-        }
-    }
-}
-
-/// One exercise row inside the builder: drag handle, name, tags, footnote.
-private struct BuilderExerciseCard: View {
-    var data: ExerciseCardData
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            HStack(spacing: DGSpace.s3) {
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(DGColor.ink4)
-                Text(data.name)
-                    .font(DGFont.title3)
-                    .textCase(.uppercase)
-                    .foregroundStyle(DGColor.ink1)
-            }
-            HStack(spacing: DGSpace.s2) {
-                ForEach(data.tags) { tag in
-                    DGTag(text: tag.text, tint: tag.tint, wash: tag.wash)
-                }
-            }
-            if let footnote = data.footnote {
-                Text(footnote)
-                    .font(DGFont.footnote)
+            .buttonStyle(.plain)
+            Menu {
+                Button("Move Up", systemImage: "arrow.up", action: onMoveUp)
+                Button("Move Down", systemImage: "arrow.down", action: onMoveDown)
+                Button("Remove", systemImage: "trash", role: .destructive, action: onRemove)
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(DGColor.ink3)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .dgCard()
+    }
+
+    private var setsCountStepper: some View {
+        Stepper(value: setsCountBinding, in: 1...8) {
+            Text("\(item.sets.count) sets").font(DGFont.footnote).foregroundStyle(DGColor.ink3)
+        }
+    }
+
+    private var setsCountBinding: Binding<Int> {
+        Binding(
+            get: { item.sets.count },
+            set: { newCount in
+                if newCount > item.sets.count {
+                    let template = item.sets.last ?? PlannedSetDraft(kind: .working, targetReps: 8)
+                    let added = newCount - item.sets.count
+                    item.sets.append(contentsOf: Array(repeating: template, count: added))
+                } else if newCount < item.sets.count, newCount >= 1 {
+                    item.sets.removeLast(item.sets.count - newCount)
+                }
+            }
+        )
+    }
+}
+
+/// One planned-set row: a kind tag (tap for a menu of every `SetKind`) and a
+/// reps stepper, showing a rep range once a high end is set.
+private struct BuilderSetRow: View {
+    @Binding var set: PlannedSetDraft
+
+    var body: some View {
+        HStack(spacing: DGSpace.s3) {
+            kindMenu
+            Stepper(value: repsBinding, in: 1...30) {
+                Text(repsLabel).font(DGFont.body).foregroundStyle(DGColor.ink1)
+            }
+        }
+    }
+
+    private var kindMenu: some View {
+        Menu {
+            ForEach(SetKind.allCases, id: \.self) { kind in
+                Button(kind.displayName) { set.kind = kind }
+            }
+        } label: {
+            DGTag(text: set.kind.displayName, tint: DGColor.ink2, wash: set.kind.color.opacity(0.22))
+        }
+    }
+
+    private var repsLabel: String {
+        if let high = set.targetRepsHigh, high != set.targetReps {
+            return "\(set.targetReps ?? 0)–\(high) reps"
+        }
+        return "\(set.targetReps ?? 0) reps"
+    }
+
+    private var repsBinding: Binding<Int> {
+        Binding(get: { set.targetReps ?? 8 }, set: { set.targetReps = $0 })
     }
 }
 
 /// Dashed-outline "add exercise" affordance.
 private struct AddExerciseButton: View {
+    var action: () -> Void
+
     var body: some View {
-        Button {
-        } label: {
+        Button(action: action) {
             HStack(spacing: DGSpace.s2) {
-                Image(systemName: "plus")
-                    .font(.system(size: 14, weight: .bold))
+                Image(systemName: "plus").font(.system(size: 14, weight: .bold))
                 Text("Add Exercise")
                     .font(DGFont.condensedLabel(14))
                     .tracking(1.2)
@@ -205,55 +287,11 @@ private struct AddExerciseButton: View {
     }
 }
 
-/// Display data for one exercise card in the builder.
-private struct ExerciseCardData: Identifiable {
-    struct Tag: Identifiable {
-        let id = UUID()
-        let text: String
-        let tint: Color
-        let wash: Color
-    }
-
-    let id: UUID
-    let name: String
-    let tags: [Tag]
-    let footnote: String?
-
-    static func forBench(_ exercise: ExerciseInfo) -> ExerciseCardData {
-        ExerciseCardData(
-            id: exercise.id, name: exercise.name,
-            tags: [
-                Tag(text: "2 warm-up", tint: DGColor.setWarmup, wash: DGColor.setWarmup.opacity(0.16)),
-                Tag(text: "3 × 6–8", tint: DGColor.ink2, wash: DGColor.surface3),
-                Tag(text: "RPE 8", tint: DGColor.rpeHard, wash: DGColor.surface3)
-            ],
-            footnote: "Target 82.5 kg · rest 2:30"
-        )
-    }
-
-    static func forTricepsRope(_ exercise: ExerciseInfo) -> ExerciseCardData {
-        ExerciseCardData(
-            id: exercise.id, name: exercise.name,
-            tags: [
-                Tag(text: "3 × 12", tint: DGColor.ink2, wash: DGColor.surface3),
-                Tag(text: "Drop on last", tint: DGColor.infoText, wash: DGColor.info.opacity(0.16))
-            ],
-            footnote: nil
-        )
-    }
-
-    static func forOverhead(_ exercise: ExerciseInfo) -> ExerciseCardData {
-        ExerciseCardData(
-            id: exercise.id, name: exercise.name,
-            tags: [
-                Tag(text: "4 × 6", tint: DGColor.ink2, wash: DGColor.surface3),
-                Tag(text: "75% of 1RM", tint: DGColor.coralText, wash: DGColor.coralWash)
-            ],
-            footnote: nil
-        )
-    }
-}
-
 #Preview {
-    RoutineBuilderView(routine: SampleData.pushA, onCancel: {}, onSave: {})
+    if let container = try? ModelContainer.dagym(inMemory: true) {
+        RoutineBuilderView(routineID: nil, onDone: {})
+            .environment(WorkoutStore(context: container.mainContext))
+    } else {
+        Text("Preview unavailable")
+    }
 }

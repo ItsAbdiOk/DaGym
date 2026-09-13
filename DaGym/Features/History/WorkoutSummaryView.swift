@@ -2,9 +2,11 @@ import GymCore
 import SwiftUI
 
 /// Workout Summary — "Push A Done". Stat tiles, a PR card, muscles hit,
-/// a coach debrief, and a share action.
+/// a notes card, and Done/Share actions. Driven entirely by the
+/// `WorkoutSummary` the store hands back from `finish(session:)`.
 struct WorkoutSummaryView: View {
-    var session: WorkoutSession
+    var summary: WorkoutSummary
+    var title: String
     var onShare: () -> Void
     var onDone: () -> Void
 
@@ -15,9 +17,9 @@ struct WorkoutSummaryView: View {
                 VStack(spacing: DGSpace.s6) {
                     header
                     statRow
-                    PRCard()
-                    MusclesHitCard(session: session)
-                    CoachDebriefCard()
+                    if !summary.prs.isEmpty { PRCard(prs: summary.prs) }
+                    MusclesHitCard(musclesHit: summary.musclesHit)
+                    NotesCard()
                     actionRow
                 }
                 .padding(.horizontal, DGSpace.s4)
@@ -29,8 +31,8 @@ struct WorkoutSummaryView: View {
 
     private var header: some View {
         VStack(spacing: DGSpace.s1) {
-            Text("Saturday · 18:24–19:16").dgLabel()
-            Text("Push A Done")
+            Text("Session complete").dgLabel()
+            Text(title)
                 .font(DGFont.title1)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
@@ -40,17 +42,17 @@ struct WorkoutSummaryView: View {
 
     private var statRow: some View {
         HStack(spacing: DGSpace.s3) {
-            StatTile(value: "52:04", label: "Time").dgCard(radius: 14)
-            StatTile(value: Self.thousands(session.volumeKg), label: "Volume").dgCard(radius: 14)
-            StatTile(value: "\(max(session.setsDone, 18))", label: "Sets").dgCard(radius: 14)
+            StatTile(value: WorkoutSession.clock(summary.durationSeconds), label: "Time").dgCard(radius: 14)
+            StatTile(value: Self.thousands(summary.volumeKg), label: "Volume").dgCard(radius: 14)
+            StatTile(value: "\(summary.setsDone)", label: "Sets").dgCard(radius: 14)
         }
     }
 
     private var actionRow: some View {
         HStack(spacing: DGSpace.s3) {
-            DGPrimaryButton(title: "Share Image", symbol: "square.and.arrow.up", action: onShare)
-            Button(action: onDone) {
-                Image(systemName: "text.alignleft")
+            DGPrimaryButton(title: "Done", symbol: "checkmark", action: onDone)
+            Button(action: onShare) {
+                Image(systemName: "square.and.arrow.up")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(DGColor.ink1)
                     .frame(width: 52, height: 52)
@@ -66,13 +68,22 @@ struct WorkoutSummaryView: View {
         formatter.numberStyle = .decimal
         formatter.groupingSeparator = "\u{2009}"
         formatter.maximumFractionDigits = 0
-        let value = kg > 0 ? kg : 6840
-        return formatter.string(from: NSNumber(value: value)) ?? "\(Int(value))"
+        return formatter.string(from: NSNumber(value: kg)) ?? "\(Int(kg))"
     }
 }
 
-/// Gold-outlined "2 personal records" card.
+/// Gold-outlined "N personal records" card.
 private struct PRCard: View {
+    var prs: [PersonalRecordInfo]
+
+    private var titleText: String {
+        prs.count == 1 ? "1 Personal Record" : "\(prs.count) Personal Records"
+    }
+
+    private var detailText: String {
+        prs.map { "\($0.exerciseName) \($0.line)" }.joined(separator: " · ")
+    }
+
     var body: some View {
         HStack(spacing: DGSpace.s3) {
             RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
@@ -84,11 +95,11 @@ private struct PRCard: View {
                         .foregroundStyle(DGColor.inkOnCoral)
                 }
             VStack(alignment: .leading, spacing: 2) {
-                Text("2 Personal Records")
+                Text(titleText)
                     .font(DGFont.title3)
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.prGoldText)
-                Text("Bench 82.5 × 8 (e1RM 102.5) · Overhead Press 47.5 × 6")
+                Text(detailText)
                     .font(DGFont.footnote)
                     .foregroundStyle(DGColor.ink3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -107,21 +118,33 @@ private struct PRCard: View {
     }
 }
 
-/// Body map + a two-line breakdown of sets per muscle.
+/// Body map + the top three muscles worked, named with their share.
 private struct MusclesHitCard: View {
-    var session: WorkoutSession
+    var musclesHit: [Muscle: Double]
+
+    private var topMuscles: [(muscle: Muscle, share: Double)] {
+        let total = musclesHit.values.reduce(0, +)
+        guard total > 0 else { return [] }
+        return musclesHit.sorted { $0.value > $1.value }.prefix(3)
+            .map { (muscle: $0.key, share: $0.value / total) }
+    }
+
+    private var lines: String {
+        topMuscles.isEmpty
+            ? "No sets logged"
+            : topMuscles.map { "\($0.muscle.displayName) \(Int(($0.share * 100).rounded()))%" }
+                .joined(separator: " · ")
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: DGSpace.s4) {
-            BodyMapPair(intensity: session.musclesHit, height: 96)
+            BodyMapPair(intensity: musclesHit, height: 96)
             VStack(alignment: .leading, spacing: DGSpace.s2) {
                 Text("Muscles Hit").dgLabel()
-                Text("Chest 9 sets")
+                Text(lines)
                     .font(DGFont.body)
                     .foregroundStyle(DGColor.ink1)
-                Text("Triceps 6 · Front delts 5")
-                    .font(DGFont.body)
-                    .foregroundStyle(DGColor.ink1)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
@@ -129,33 +152,33 @@ private struct MusclesHitCard: View {
     }
 }
 
-/// Violet coach debrief card.
-private struct CoachDebriefCard: View {
+/// Neutral placeholder where the coach debrief will live once Phase 6 lands.
+private struct NotesCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s2) {
-            Text("Coach Debrief · 8/10").dgLabel(DGColor.aiVioletText)
-            Text(
-                "Strong session. Bench moved up and effort stayed where you wanted it. Watch the last "
-                    + "AMRAP — reps dropped from 11 to 8, which usually means the earlier sets were "
-                    + "heavier than planned."
-            )
-            .font(DGFont.body)
-            .foregroundStyle(DGColor.ink2)
-            .fixedSize(horizontal: false, vertical: true)
+            Text("Notes").dgLabel()
+            Text("Debrief arrives with the coach.")
+                .font(DGFont.body)
+                .foregroundStyle(DGColor.ink2)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(DGSpace.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            DGColor.aiViolet.opacity(0.12),
-            in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
-        )
+        .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
-                .strokeBorder(DGColor.aiViolet.opacity(0.3), lineWidth: 1)
+                .strokeBorder(DGColor.hairline, lineWidth: 1)
         }
     }
 }
 
 #Preview {
-    WorkoutSummaryView(session: SampleData.makeSession(), onShare: {}, onDone: {})
+    WorkoutSummaryView(
+        summary: WorkoutSummary(
+            durationSeconds: 3124, volumeKg: 6840, setsDone: 18,
+            prs: [PersonalRecordInfo(exerciseName: "Bench", line: "82.5 × 8 (e1RM 102.5)")],
+            musclesHit: [.chest: 1, .triceps: 0.6, .delts: 0.5]
+        ),
+        title: "Push A Done", onShare: {}, onDone: {}
+    )
 }

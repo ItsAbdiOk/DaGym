@@ -64,6 +64,7 @@ extension WorkoutStore {
             exerciseModel.order = index
             exerciseModel.supersetGroup = entry.supersetGroup
             exerciseModel.note = entry.note ?? ""
+            exerciseModel.wasSubstitution = entry.wasSubstitution
             syncSets(entry: entry, into: exerciseModel)
             kept.insert(entry.id)
             existing[entry.id] = exerciseModel
@@ -74,7 +75,39 @@ extension WorkoutStore {
         save()
     }
 
+    /// Discards an in-progress session, deleting its backing `WorkoutModel` (and, by cascade,
+    /// every exercise/set logged so far). Used by the Active Workout screen's "Discard workout"
+    /// confirmation.
+    func discard(session: WorkoutSession) {
+        guard let workoutID = session.workoutID, let workout = fetchWorkoutModel(id: workoutID) else {
+            return
+        }
+        context.delete(workout)
+        save()
+    }
+
+    /// A fresh exercise entry with three working sets, auto-filled from the previous session the
+    /// same way `startWorkout` fills a routine's planned sets. Used when adding an exercise
+    /// mid-workout, where there's no planned-set template to draw from.
+    func autoFilledEntry(for exercise: ExerciseInfo) -> WorkoutExerciseEntry {
+        let workingSet = PlannedSetSpec(
+            kind: .working, targetReps: nil, targetWeightKg: nil, targetSeconds: nil
+        )
+        let planned = Array(repeating: workingSet, count: 3)
+        let sets = autoFilledSets(
+            exerciseID: exercise.id, planned: planned, incrementKg: exercise.incrementKg
+        )
+        return WorkoutExerciseEntry(exercise: exercise, sets: sets)
+    }
+
     // MARK: - Building a session from a routine
+
+    // One planned set as (kind, target reps, target weight, target seconds) — the shape
+    // `GymCore.AutoFill.prescriptions` expects.
+    // swiftlint:disable:next large_tuple
+    private typealias PlannedSetSpec = (
+        kind: SetKind, targetReps: Int?, targetWeightKg: Double?, targetSeconds: Int?
+    )
 
     private func buildEntries(from routine: RoutineModel?) -> [WorkoutExerciseEntry] {
         guard let routine else { return [] }
@@ -82,11 +115,14 @@ extension WorkoutStore {
         return routineExercises.compactMap { routineExercise -> WorkoutExerciseEntry? in
             guard let exerciseModel = routineExercise.exercise else { return nil }
             let info = exerciseInfo(for: exerciseModel)
-            let previousSets = lastCompletedSets(exerciseID: exerciseModel.id)
             let plannedSets = (routineExercise.plannedSets ?? []).sorted { $0.order < $1.order }
-            let sets = plannedSets.enumerated().map { position, planned in
-                autoFilledSet(planned: planned, previous: previousSets, position: position)
+            let planned: [PlannedSetSpec] = plannedSets.map {
+                (kind: $0.setKind, targetReps: $0.targetReps, targetWeightKg: $0.targetWeightKg,
+                 targetSeconds: $0.targetSeconds)
             }
+            let sets = autoFilledSets(
+                exerciseID: exerciseModel.id, planned: planned, incrementKg: info.incrementKg
+            )
             return WorkoutExerciseEntry(
                 exercise: info, sets: sets, supersetGroup: routineExercise.supersetGroup,
                 note: routineExercise.note.isEmpty ? nil : routineExercise.note
@@ -94,31 +130,43 @@ extension WorkoutStore {
         }
     }
 
+    /// Pre-fills a run of planned sets from the previous session, matched by position within
+    /// each set kind (`GymCore.AutoFill`). Shared by `buildEntries` (routine sets) and
+    /// `autoFilledEntry` (a freshly added exercise's default three working sets).
+    private func autoFilledSets(
+        exerciseID: UUID, planned: [PlannedSetSpec], incrementKg: Double
+    ) -> [SetEntry] {
+        let prescriptions = AutoFill.prescriptions(
+            planned: planned, previous: previousSets(exerciseID: exerciseID), incrementKg: incrementKg
+        )
+        return zip(planned, prescriptions).map { plan, rx in
+            SetEntry(
+                kind: plan.kind, weightKg: rx.weightKg, reps: rx.reps, previous: rx.previous,
+                targetSeconds: rx.durationSeconds ?? plan.targetSeconds
+            )
+        }
+    }
+
     /// The most recent finished workout's logged sets for this exercise, in position order.
-    /// Swap for `GymCore.AutoFill.prescription` once the shared module lands (lead's note).
-    private func lastCompletedSets(exerciseID: UUID) -> [SetLogModel] {
+    private func previousSets(exerciseID: UUID) -> [PreviousSet] {
         let predicate = #Predicate<WorkoutModel> { $0.endedAt != nil }
         let descriptor = FetchDescriptor<WorkoutModel>(
             predicate: predicate, sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
         )
         let workouts = (try? context.fetch(descriptor)) ?? []
         for workout in workouts {
-            if let match = (workout.exercises ?? []).first(where: { $0.exercise?.id == exerciseID }) {
-                return (match.sets ?? []).sorted { $0.order < $1.order }
+            guard let match = (workout.exercises ?? []).first(where: { $0.exercise?.id == exerciseID }) else {
+                continue
+            }
+            let sets = (match.sets ?? []).sorted { $0.order < $1.order }
+            return sets.map { setModel in
+                PreviousSet(
+                    kind: setModel.setKind, weightKg: setModel.weightKg, reps: setModel.reps,
+                    durationSeconds: setModel.durationSeconds
+                )
             }
         }
         return []
-    }
-
-    private func autoFilledSet(planned: PlannedSetModel, previous: [SetLogModel], position: Int) -> SetEntry {
-        let ghost = previous.indices.contains(position) ? previous[position] : nil
-        let weight = ghost?.weightKg ?? planned.targetWeightKg ?? 0
-        let reps = ghost?.reps ?? planned.targetReps ?? 0
-        let previousLine = ghost.map { "\(WorkoutSession.format($0.weightKg)) × \($0.reps)" }
-        return SetEntry(
-            kind: planned.setKind, weightKg: weight, reps: reps, previous: previousLine,
-            targetSeconds: planned.targetSeconds
-        )
     }
 
     // MARK: - Syncing

@@ -16,6 +16,7 @@ struct ExerciseInfo: Identifiable, Hashable {
     var bar: Bar? = .olympic
     var isFavorite = false
     var isCustom = false
+    var isPerSide = false
     var bestE1RM: Double?
     var bestSet: String?
     var sessions = 0
@@ -34,7 +35,7 @@ struct ExerciseInfo: Identifiable, Hashable {
     init(
         id: UUID = UUID(), name: String, primary: [Muscle], secondary: [Muscle] = [],
         equipment: String, incrementKg: Double = 2.5, restSeconds: Int = 150, bar: Bar? = .olympic,
-        isFavorite: Bool = false, isCustom: Bool = false, bestE1RM: Double? = nil,
+        isFavorite: Bool = false, isCustom: Bool = false, isPerSide: Bool = false, bestE1RM: Double? = nil,
         bestSet: String? = nil, sessions: Int = 0, instructions: String = "",
         loggingStyle: LoggingStyle = .weightReps
     ) {
@@ -48,6 +49,7 @@ struct ExerciseInfo: Identifiable, Hashable {
         self.bar = bar
         self.isFavorite = isFavorite
         self.isCustom = isCustom
+        self.isPerSide = isPerSide
         self.bestE1RM = bestE1RM
         self.bestSet = bestSet
         self.sessions = sessions
@@ -98,6 +100,15 @@ struct SetEntry: Identifiable, Hashable {
         self.durationSeconds = durationSeconds
         self.targetSeconds = targetSeconds
     }
+
+    /// Converted for the shared `GymCore` stats helpers. `date` isn't tracked
+    /// per set here, so a placeholder is used — callers that need it (PR
+    /// evaluation) build `PerformedSet` directly with the workout's date.
+    var performed: GymCore.PerformedSet {
+        GymCore.PerformedSet(
+            kind: kind, weightKg: weightKg, reps: reps, durationSeconds: durationSeconds, date: Date()
+        )
+    }
 }
 
 struct WorkoutExerciseEntry: Identifiable, Hashable {
@@ -112,11 +123,13 @@ struct WorkoutExerciseEntry: Identifiable, Hashable {
     /// "80 × 8,8,7 · 77.5 × 8,8,8 · 77.5 × 8,7,7"
     var lastSessions: [String] = []
     var sparkline: [Double] = []
+    /// True once this exercise has been swapped mid-workout.
+    var wasSubstitution = false
 
     init(
         id: UUID = UUID(), exercise: ExerciseInfo, sets: [SetEntry], supersetGroup: Int? = nil,
         note: String? = nil, whyTitle: String? = nil, whyBody: String? = nil,
-        lastSessions: [String] = [], sparkline: [Double] = []
+        lastSessions: [String] = [], sparkline: [Double] = [], wasSubstitution: Bool = false
     ) {
         self.id = id
         self.exercise = exercise
@@ -127,6 +140,7 @@ struct WorkoutExerciseEntry: Identifiable, Hashable {
         self.whyBody = whyBody
         self.lastSessions = lastSessions
         self.sparkline = sparkline
+        self.wasSubstitution = wasSubstitution
     }
 
     var doneCount: Int { sets.filter(\.isDone).count }
@@ -191,6 +205,46 @@ struct WorkoutRecord: Identifiable, Hashable {
     }
 }
 
+/// Full read-only detail for one finished workout, built by
+/// `WorkoutStore.workoutDetail(id:)` for `WorkoutDetailView`.
+struct WorkoutDetail: Identifiable {
+    var id: UUID
+    var title: String
+    var startedAt: Date
+    var endedAt: Date?
+    var exercises: [WorkoutExerciseEntry]
+    var notes: String
+    var isBackfilled: Bool
+    var prCount: Int
+
+    init(
+        id: UUID = UUID(), title: String, startedAt: Date, endedAt: Date? = nil,
+        exercises: [WorkoutExerciseEntry] = [], notes: String = "", isBackfilled: Bool = false,
+        prCount: Int = 0
+    ) {
+        self.id = id
+        self.title = title
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.exercises = exercises
+        self.notes = notes
+        self.isBackfilled = isBackfilled
+        self.prCount = prCount
+    }
+
+    var durationMinutes: Int {
+        guard let endedAt else { return 0 }
+        return max(0, Int(endedAt.timeIntervalSince(startedAt) / 60))
+    }
+
+    var volumeKg: Double {
+        exercises.flatMap(\.sets).filter { $0.isDone && $0.kind.countsTowardStats }
+            .reduce(0) { $0 + $1.weightKg * Double($1.reps) }
+    }
+
+    var setsDone: Int { exercises.reduce(0) { $0 + $1.doneCount } }
+}
+
 struct PersonalRecordInfo: Identifiable, Hashable {
     let id = UUID()
     var exerciseName: String
@@ -225,29 +279,40 @@ final class WorkoutSession {
         self.exercises = exercises
     }
 
+    /// Timed-hold live timer, or nil when no hold is in progress.
+    var timedHold: TimedHoldState?
+
+    struct TimedHoldState {
+        var exerciseID: UUID
+        var setID: UUID
+        var targetSeconds: Int?
+        var leadIn: Int
+        var elapsed: Int
+        var isPaused: Bool
+    }
+
     var volumeKg: Double {
-        exercises.flatMap(\.sets).filter { $0.isDone && $0.kind.countsTowardStats }
-            .reduce(0) { $0 + $1.weightKg * Double($1.reps) }
+        GymCore.SessionStats.volumeKg(exercises.flatMap(\.sets).filter(\.isDone).map(\.performed))
     }
 
     var setsDone: Int { exercises.reduce(0) { $0 + $1.doneCount } }
     var setsTotal: Int { exercises.reduce(0) { $0 + $1.sets.count } }
     var prCount: Int { prBanner == nil ? 0 : 1 }
 
+    /// Elapsed seconds since the session started, as of `date`.
+    func elapsedSeconds(at date: Date = Date()) -> Int {
+        max(0, Int(date.timeIntervalSince(startedAt)))
+    }
+
     /// Index of the first exercise with an incomplete set.
     var onDeckIndex: Int? { exercises.firstIndex { !$0.isComplete } }
 
     /// Muscles hit so far, weighted by completed sets.
     var musclesHit: [Muscle: Double] {
-        var counts: [Muscle: Double] = [:]
-        for ex in exercises {
-            let done = Double(ex.doneCount)
-            guard done > 0 else { continue }
-            for muscle in ex.exercise.primary { counts[muscle, default: 0] += done }
-            for muscle in ex.exercise.secondary { counts[muscle, default: 0] += done * 0.5 }
+        let entries = exercises.map {
+            (primary: $0.exercise.primary, secondary: $0.exercise.secondary, completedCount: $0.doneCount)
         }
-        let peak = counts.values.max() ?? 1
-        return counts.mapValues { $0 / peak }
+        return GymCore.SessionStats.musclesHit(sets: entries)
     }
 
     func completeSet(exerciseID: UUID, setID: UUID, effort: Effort? = nil) {

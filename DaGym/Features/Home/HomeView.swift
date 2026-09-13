@@ -1,14 +1,18 @@
 import GymCore
+import SwiftData
 import SwiftUI
 
 /// Home / Today — the app's landing screen. Shows the scheduled routine,
 /// weekly goal, streak, recovery snapshot and the coach's latest suggestion.
 struct HomeView: View {
-    var routine: RoutineInfo
+    var routine: RoutineInfo?
     var onStart: () -> Void
     var onFreestyle: () -> Void
     var onBackfill: () -> Void
     var onSeeRecovery: () -> Void
+
+    @Environment(WorkoutStore.self) private var store
+    @State private var workoutsThisWeek = 0
 
     var body: some View {
         ZStack {
@@ -16,11 +20,16 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: DGSpace.s6) {
                     header
-                    ScheduledCard(
-                        routine: routine, onStart: onStart, onFreestyle: onFreestyle, onBackfill: onBackfill
-                    )
+                    if let routine {
+                        ScheduledCard(
+                            routine: routine, onStart: onStart, onFreestyle: onFreestyle,
+                            onBackfill: onBackfill
+                        )
+                    } else {
+                        RestDayCard(onFreestyle: onFreestyle, onBackfill: onBackfill)
+                    }
                     HStack(spacing: DGSpace.s4) {
-                        WeeklyGoalCard()
+                        WeeklyGoalCard(done: workoutsThisWeek)
                         StreakCard()
                     }
                     RecoveryCard(onSeeRecovery: onSeeRecovery)
@@ -31,6 +40,15 @@ struct HomeView: View {
                 .padding(.bottom, 100)
             }
         }
+        .task { refreshWeeklyCount() }
+    }
+
+    private func refreshWeeklyCount() {
+        let calendar = Calendar.current
+        let now = Date()
+        workoutsThisWeek = store.history().filter {
+            calendar.isDate($0.date, equalTo: now, toGranularity: .weekOfYear)
+        }.count
     }
 
     private var header: some View {
@@ -92,9 +110,38 @@ private struct ScheduledCard: View {
     }
 }
 
+/// Coral-outlined card shown when nothing is scheduled today.
+private struct RestDayCard: View {
+    var onFreestyle: () -> Void
+    var onBackfill: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DGSpace.s3) {
+            Text("Rest Day").dgLabel(DGColor.coralText)
+            Text("Next session: —")
+                .font(DGFont.title2)
+                .textCase(.uppercase)
+                .foregroundStyle(DGColor.ink1)
+            Text("No routine scheduled. Start a freestyle workout whenever you're ready.")
+                .font(DGFont.footnote)
+                .foregroundStyle(DGColor.ink3)
+            HStack(spacing: DGSpace.s3) {
+                DGPrimaryButton(title: "Start a Freestyle Workout", symbol: "plus", action: onFreestyle)
+                DGIconButton(symbol: "calendar", size: 52, action: onBackfill)
+            }
+        }
+        .padding(DGSpace.s5)
+        .background(DGColor.coralWash, in: RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
+                .strokeBorder(DGColor.coral, lineWidth: 1)
+        }
+    }
+}
+
 /// Half-width "3 / 4" weekly goal card with a segmented progress bar.
 private struct WeeklyGoalCard: View {
-    private let done = 3
+    var done: Int
     private let total = 4
 
     var body: some View {
@@ -223,8 +270,25 @@ private struct CoachRow: View {
 }
 
 #Preview {
-    HomeView(
-        routine: SampleData.pushA,
-        onStart: {}, onFreestyle: {}, onBackfill: {}, onSeeRecovery: {}
-    )
+    if let container = try? ModelContainer.dagym(inMemory: true) {
+        HomeView(
+            routine: SampleData.pushA,
+            onStart: {}, onFreestyle: {}, onBackfill: {}, onSeeRecovery: {}
+        )
+        .environment(WorkoutStore(context: container.mainContext))
+    } else {
+        Text("Preview unavailable")
+    }
+}
+
+#Preview("Rest day") {
+    if let container = try? ModelContainer.dagym(inMemory: true) {
+        HomeView(
+            routine: nil,
+            onStart: {}, onFreestyle: {}, onBackfill: {}, onSeeRecovery: {}
+        )
+        .environment(WorkoutStore(context: container.mainContext))
+    } else {
+        Text("Preview unavailable")
+    }
 }

@@ -77,6 +77,37 @@ extension WorkoutStore {
         save()
     }
 
+    /// The routine's summary plus its exercises as editable drafts, in the
+    /// same order — index-paired, so `drafts[i]` is `info.exercises[i]`.
+    /// Used by the routine builder to load a routine back for editing.
+    func routineDrafts(id: UUID) -> (info: RoutineInfo, drafts: [RoutineExerciseDraft])? {
+        guard let model = fetchRoutineModel(id: id) else { return nil }
+        let routineExercises = (model.exercises ?? []).sorted { $0.order < $1.order }
+        let exerciseInfos = routineExercises.compactMap { $0.exercise.map(exerciseInfo(for:)) }
+        let setCount = routineExercises.reduce(0) { $0 + ($1.plannedSets?.count ?? 0) }
+        let info = RoutineInfo(model: model, exercises: exerciseInfos, setCount: setCount)
+        let drafts = routineExercises.compactMap { routineExercise -> RoutineExerciseDraft? in
+            guard let exerciseID = routineExercise.exercise?.id else { return nil }
+            let sets = (routineExercise.plannedSets ?? [])
+                .sorted { $0.order < $1.order }
+                .map(plannedSetDraft)
+            return RoutineExerciseDraft(
+                exerciseID: exerciseID, supersetGroup: routineExercise.supersetGroup,
+                restOverrideSeconds: routineExercise.restOverrideSeconds, note: routineExercise.note,
+                sets: sets
+            )
+        }
+        return (info, drafts)
+    }
+
+    private func plannedSetDraft(_ model: PlannedSetModel) -> PlannedSetDraft {
+        PlannedSetDraft(
+            kind: model.setKind, targetReps: model.targetReps, targetRepsHigh: model.targetRepsHigh,
+            targetWeightKg: model.targetWeightKg, targetRPE: model.targetRPE,
+            targetSeconds: model.targetSeconds
+        )
+    }
+
     private func routineInfo(_ model: RoutineModel) -> RoutineInfo {
         let routineExercises = (model.exercises ?? []).sorted { $0.order < $1.order }
         let exercises = routineExercises.compactMap { $0.exercise.map(ExerciseInfo.init(model:)) }

@@ -39,6 +39,33 @@ extension WorkoutStore {
         save()
     }
 
+    /// Total finished-workout count and lifetime volume, for the History header.
+    func lifetimeStats() -> (workouts: Int, volumeKg: Double) {
+        let finished = finishedWorkoutsNewestFirst()
+        let volume = finished.reduce(0.0) { total, workout in
+            total + workoutVolume(workout)
+        }
+        return (finished.count, volume)
+    }
+
+    /// Full read-only detail for a finished workout, for `WorkoutDetailView`.
+    /// Returns an empty placeholder if the workout can't be found.
+    func workoutDetail(id: UUID) -> WorkoutDetail {
+        guard let model = fetchWorkoutModel(id: id) else {
+            return WorkoutDetail(title: "", startedAt: Date())
+        }
+        let entries = (model.exercises ?? []).sorted { $0.order < $1.order }.map { exerciseModel in
+            let info = exerciseModel.exercise.map(exerciseInfo(for:))
+                ?? ExerciseInfo(name: "Deleted exercise", primary: [], equipment: "other")
+            return WorkoutExerciseEntry(model: exerciseModel, exercise: info)
+        }
+        return WorkoutDetail(
+            id: model.id, title: model.title, startedAt: model.startedAt, endedAt: model.endedAt,
+            exercises: entries, notes: model.notes, isBackfilled: model.isBackfilled,
+            prCount: prCount(for: model.id)
+        )
+    }
+
     /// "80 × 8,8,7" style lines for the last few finished sessions of an exercise.
     func lastSessions(exerciseID: UUID, limit: Int = 3) -> [String] {
         var lines: [String] = []
@@ -65,6 +92,12 @@ extension WorkoutStore {
             predicate: predicate, sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
         )
         return (try? context.fetch(descriptor)) ?? []
+    }
+
+    private func workoutVolume(_ workout: WorkoutModel) -> Double {
+        (workout.exercises ?? []).flatMap { $0.sets ?? [] }
+            .filter { $0.isCompleted && $0.setKind.countsTowardStats }
+            .reduce(0.0) { $0 + $1.weightKg * Double($1.reps) }
     }
 
     private func sessionLine(exerciseID: UUID, in workout: WorkoutModel) -> String? {
@@ -94,63 +127,68 @@ extension WorkoutStore {
         return (try? context.fetchCount(FetchDescriptor(predicate: predicate))) ?? 0
     }
 
-    /// The best eligible set (highest e1RM) inside one exercise entry.
-    private struct BestSet {
-        var weightKg: Double
-        var reps: Int
-        var value: Double
-    }
+    // MARK: - Personal records (GymCore.PersonalRecords)
 
-    /// A PR candidate ready to compare against the cache.
-    private struct PRCandidate {
-        var exerciseID: UUID
-        var exerciseName: String
-        var best: BestSet
-        var date: Date
-        var workoutID: UUID
-    }
-
-    /// Swap for `GymCore.PersonalRecords.evaluate` once the shared module lands (lead's note).
+    /// One e1RM PR per exercise, evaluated with `GymCore.PersonalRecords.evaluate` against the
+    /// cached best (`PersonalRecordModel`, kind "e1rm"). Only the e1RM kind is tracked in the
+    /// cache today, even though `evaluate` can also surface maxWeight/volume/etc — see the
+    /// wiring report for the follow-up to cache those too.
     private func evaluatePRs(session: WorkoutSession, workout: WorkoutModel) -> [PersonalRecordInfo] {
-        session.exercises.compactMap { entry -> PersonalRecordInfo? in
-            guard let best = bestEligibleSet(in: entry) else { return nil }
-            let candidate = PRCandidate(
-                exerciseID: entry.exercise.id, exerciseName: entry.exercise.name, best: best,
-                date: workout.startedAt, workoutID: workout.id
+        let latestDate = latestFinishedWorkoutDate(excluding: workout.id)
+        return session.exercises.compactMap { entry -> PersonalRecordInfo? in
+            let performed = performedSets(in: entry, date: workout.startedAt)
+            guard !performed.isEmpty else { return nil }
+            let records = PersonalRecords.evaluate(
+                newSets: performed, existing: existingE1RMRecords(exerciseID: entry.exercise.id),
+                workoutDate: workout.startedAt, isBackfilled: workout.isBackfilled,
+                latestWorkoutDate: latestDate
             )
-            return recordE1RMIfBest(candidate)
+            guard let record = records.first(where: { $0.kind == .e1rm }) else { return nil }
+            return cacheE1RM(
+                record, exerciseID: entry.exercise.id, exerciseName: entry.exercise.name,
+                workoutID: workout.id
+            )
         }
     }
 
-    private func bestEligibleSet(in entry: WorkoutExerciseEntry) -> BestSet? {
-        var best: BestSet?
-        for setEntry in entry.sets where setEntry.isDone && setEntry.kind.countsTowardStats {
-            guard let value = OneRepMax.estimate(weight: setEntry.weightKg, reps: setEntry.reps) else {
-                continue
-            }
-            if value > (best?.value ?? 0) {
-                best = BestSet(weightKg: setEntry.weightKg, reps: setEntry.reps, value: value)
-            }
-        }
-        return best
+    /// The other finished workout's `startedAt` closest to now (excluding this one), used so a
+    /// backfilled workout can't claim a PR against a session that happened later.
+    private func latestFinishedWorkoutDate(excluding workoutID: UUID) -> Date? {
+        finishedWorkoutsNewestFirst().first { $0.id != workoutID }?.startedAt
     }
 
-    private func recordE1RMIfBest(_ candidate: PRCandidate) -> PersonalRecordInfo? {
-        let exerciseID = candidate.exerciseID
+    private func performedSets(in entry: WorkoutExerciseEntry, date: Date) -> [PerformedSet] {
+        entry.sets.filter { $0.isDone && $0.kind.countsTowardStats }.map { setEntry in
+            PerformedSet(
+                kind: setEntry.kind, weightKg: setEntry.weightKg, reps: setEntry.reps,
+                durationSeconds: setEntry.durationSeconds, date: date
+            )
+        }
+    }
+
+    private func existingE1RMRecords(exerciseID: UUID) -> [PersonalRecord] {
+        let predicate = #Predicate<PersonalRecordModel> { $0.exerciseID == exerciseID && $0.kind == "e1rm" }
+        let fetched = (try? context.fetch(FetchDescriptor(predicate: predicate)))?.first
+        guard let model = fetched else { return [] }
+        return [
+            PersonalRecord(
+                kind: .e1rm, value: model.value, weightKg: model.weightKg, reps: model.reps, date: model.date
+            )
+        ]
+    }
+
+    private func cacheE1RM(
+        _ record: PersonalRecord, exerciseID: UUID, exerciseName: String, workoutID: UUID
+    ) -> PersonalRecordInfo {
         let predicate = #Predicate<PersonalRecordModel> { $0.exerciseID == exerciseID && $0.kind == "e1rm" }
         let existing = (try? context.fetch(FetchDescriptor(predicate: predicate)))?.first
-        if let existing, candidate.date < existing.date { return nil }
-        guard candidate.best.value > (existing?.value ?? 0) else { return nil }
-        let record = existing ?? PersonalRecordModel(exerciseID: exerciseID, kind: "e1rm")
-        if existing == nil { context.insert(record) }
-        record.value = candidate.best.value
-        record.weightKg = candidate.best.weightKg
-        record.reps = candidate.best.reps
-        record.date = candidate.date
-        record.workoutID = candidate.workoutID
-        let weight = WorkoutSession.format(candidate.best.weightKg)
-        let value = WorkoutSession.format(candidate.best.value)
-        let line = "\(weight) × \(candidate.best.reps) → \(value) kg e1RM"
-        return PersonalRecordInfo(exerciseName: candidate.exerciseName, line: line)
+        let model = existing ?? PersonalRecordModel(exerciseID: exerciseID, kind: "e1rm")
+        if existing == nil { context.insert(model) }
+        model.value = record.value
+        model.weightKg = record.weightKg
+        model.reps = record.reps
+        model.date = record.date
+        model.workoutID = workoutID
+        return PersonalRecordInfo(exerciseName: exerciseName, line: PersonalRecords.formatLine(record))
     }
 }

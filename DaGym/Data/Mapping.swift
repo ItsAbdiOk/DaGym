@@ -26,7 +26,7 @@ extension ExerciseInfo {
             id: model.id, name: model.name, primary: model.primary, secondary: model.secondary,
             equipment: model.equipment, incrementKg: model.incrementKg, restSeconds: model.restSeconds,
             bar: model.bar, isFavorite: model.isFavorite, isCustom: model.isCustom,
-            instructions: model.instructions, loggingStyle: model.style
+            isPerSide: model.isPerSide, instructions: model.instructions, loggingStyle: model.style
         )
     }
 }
@@ -62,7 +62,7 @@ extension WorkoutExerciseEntry {
             .map { SetEntry(model: $0) }
         self.init(
             id: model.id, exercise: exercise, sets: sets, supersetGroup: model.supersetGroup,
-            note: model.note.isEmpty ? nil : model.note
+            note: model.note.isEmpty ? nil : model.note, wasSubstitution: model.wasSubstitution
         )
     }
 }

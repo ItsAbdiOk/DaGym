@@ -15,7 +15,7 @@ struct DebugScreenView: View {
         case .home:
             RootView()
         case .workout:
-            ActiveWorkoutView(session: session, onFinish: {})
+            ActiveWorkoutView(session: session, onFinish: { _ in })
         case .rest:
             RestTimerView(session: session, exerciseName: "Bench Press", onClose: {})
         case .library:
@@ -23,11 +23,11 @@ struct DebugScreenView: View {
         case .exerciseDetail:
             NavigationStack { ExerciseDetailView(exercise: SampleData.bench) }
         case .builder:
-            RoutineBuilderView(routine: SampleData.pushA, onCancel: {}, onSave: {})
+            RoutineBuilderView(routineID: nil, onDone: {})
         case .summary:
-            WorkoutSummaryView(session: session, onShare: {}, onDone: {})
+            WorkoutSummaryView(summary: debugSummary, title: session.title, onShare: {}, onDone: {})
         case .history:
-            tabbed(.progress) { HistoryView(records: SampleData.history, onBackfill: {}) }
+            tabbed(.progress) { HistoryTabView() }
         case .backfill:
             sheetHost { BackfillSheet(onFreestyle: { _, _ in }, onRoutine: { _, _ in }) }
         case .keypad:
@@ -45,6 +45,15 @@ struct DebugScreenView: View {
         }
     }
 
+    /// A `WorkoutSummary` built from `SampleData.makeSession()` for the
+    /// `.summary` debug route (no persisted workout exists in this path).
+    private var debugSummary: WorkoutSummary {
+        WorkoutSummary(
+            durationSeconds: 3124, volumeKg: session.volumeKg, setsDone: session.setsDone,
+            prs: session.prBanner.map { [$0] } ?? [], musclesHit: session.musclesHit
+        )
+    }
+
     private func tabbed<Content: View>(_ selected: DGTab, @ViewBuilder content: () -> Content) -> some View {
         ZStack(alignment: .bottom) {
             content()
@@ -53,7 +62,7 @@ struct DebugScreenView: View {
     }
 
     private func sheetHost<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some View {
-        ActiveWorkoutView(session: session, onFinish: {})
+        ActiveWorkoutView(session: session, onFinish: { _ in })
             .sheet(isPresented: .constant(true)) { content() }
     }
 }

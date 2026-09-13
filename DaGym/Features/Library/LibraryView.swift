@@ -1,27 +1,40 @@
 import GymCore
+import SwiftData
 import SwiftUI
 
-/// Exercise Library — search, filter chips and a scrolling list of
-/// exercises grouped under the active filter.
-struct LibraryView: View {
-    private enum Filter: String, CaseIterable, Identifiable {
-        case chest, barbell, favourites, custom
+/// Equipment filter / picker options shared with `NewExerciseSheet`.
+enum EquipmentOption: String, CaseIterable, Identifiable {
+    case barbell, dumbbell, bodyweight, cable, machine, kettlebell, bands, ezBar, other
 
-        var id: String { rawValue }
+    var id: String { rawValue }
 
-        var title: String {
-            switch self {
-            case .chest: "Chest"
-            case .barbell: "Barbell"
-            case .favourites: "Favourites"
-            case .custom: "Custom"
-            }
+    var title: String {
+        switch self {
+        case .barbell: "Barbell"
+        case .dumbbell: "Dumbbell"
+        case .bodyweight: "Bodyweight"
+        case .cable: "Cable"
+        case .machine: "Machine"
+        case .kettlebell: "Kettlebell"
+        case .bands: "Bands"
+        case .ezBar: "EZ Bar"
+        case .other: "Other"
         }
     }
+}
 
-    @State private var exercises = SampleData.library
+/// Exercise Library — search, filter chips and a scrolling list of
+/// exercises grouped under the active filter, driven by the store.
+struct LibraryView: View {
+    @Environment(WorkoutStore.self) private var store
+
+    @State private var exercises: [ExerciseInfo] = []
+    @State private var totalCount = 0
     @State private var searchText = ""
-    @State private var selectedFilter: Filter? = .chest
+    @State private var selectedMuscle: Muscle?
+    @State private var selectedEquipment: EquipmentOption?
+    @State private var favoritesOnly = false
+    @State private var customOnly = false
     @State private var showingNewExercise = false
 
     var body: some View {
@@ -32,7 +45,8 @@ struct LibraryView: View {
                     VStack(alignment: .leading, spacing: DGSpace.s5) {
                         header
                         searchField
-                        chipRow
+                        muscleChipRow
+                        equipmentChipRow
                         sectionLabel
                         rows
                     }
@@ -43,8 +57,14 @@ struct LibraryView: View {
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $showingNewExercise) {
-                NewExerciseSheet { new in exercises.append(new) }
+                NewExerciseSheet { _ in refresh() }
             }
+            .task { refresh() }
+            .onChange(of: searchText) { _, _ in refresh() }
+            .onChange(of: selectedMuscle) { _, _ in refresh() }
+            .onChange(of: selectedEquipment) { _, _ in refresh() }
+            .onChange(of: favoritesOnly) { _, _ in refresh() }
+            .onChange(of: customOnly) { _, _ in refresh() }
         }
     }
 
@@ -64,7 +84,7 @@ struct LibraryView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(DGColor.ink3)
-            TextField("Search 480 exercises", text: $searchText)
+            TextField("Search \(totalCount) exercises", text: $searchText)
                 .font(DGFont.body)
                 .foregroundStyle(DGColor.ink1)
                 .textInputAutocapitalization(.never)
@@ -75,31 +95,46 @@ struct LibraryView: View {
         .dgGlass(.thin, radius: 14)
     }
 
-    private var chipRow: some View {
+    private var muscleChipRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DGSpace.s2) {
-                ForEach(Filter.allCases) { filter in
-                    DGChip(title: filter.title, selected: selectedFilter == filter) {
-                        selectedFilter = selectedFilter == filter ? nil : filter
+                DGChip(title: "All", selected: selectedMuscle == nil) { selectedMuscle = nil }
+                ForEach(Muscle.allCases) { muscle in
+                    DGChip(title: muscle.displayName, selected: selectedMuscle == muscle) {
+                        selectedMuscle = selectedMuscle == muscle ? nil : muscle
                     }
                 }
             }
         }
     }
 
+    private var equipmentChipRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DGSpace.s2) {
+                ForEach(EquipmentOption.allCases) { option in
+                    DGChip(title: option.title, selected: selectedEquipment == option) {
+                        selectedEquipment = selectedEquipment == option ? nil : option
+                    }
+                }
+                DGChip(title: "Favourites", selected: favoritesOnly) { favoritesOnly.toggle() }
+                DGChip(title: "Custom", selected: customOnly) { customOnly.toggle() }
+            }
+        }
+    }
+
     private var sectionLabel: some View {
-        Text("\(sectionTitle) · \(filtered.count) exercises").dgLabel()
+        Text("\(sectionTitle) · \(exercises.count) exercises").dgLabel()
     }
 
     private var sectionTitle: String {
-        selectedFilter?.title.uppercased() ?? "All"
+        selectedMuscle?.displayName.uppercased() ?? "ALL"
     }
 
     private var rows: some View {
         LazyVStack(spacing: DGSpace.s3) {
-            ForEach(filtered) { exercise in
+            ForEach(exercises) { exercise in
                 NavigationLink(value: exercise) {
-                    LibraryRow(exercise: exercise)
+                    LibraryRow(exercise: exercise) { toggleFavorite(exercise.id) }
                 }
                 .buttonStyle(.plain)
             }
@@ -109,28 +144,24 @@ struct LibraryView: View {
         }
     }
 
-    private var filtered: [ExerciseInfo] {
-        exercises.filter { matchesFilter($0) && matchesSearch($0) }
+    private func refresh() {
+        exercises = store.exercises(
+            matching: searchText, muscle: selectedMuscle, equipment: selectedEquipment?.rawValue,
+            favoritesOnly: favoritesOnly, customOnly: customOnly
+        )
+        totalCount = store.exercises().count
     }
 
-    private func matchesFilter(_ exercise: ExerciseInfo) -> Bool {
-        switch selectedFilter {
-        case .chest: exercise.primary.contains(.chest)
-        case .barbell: exercise.equipment == "Barbell"
-        case .favourites: exercise.isFavorite
-        case .custom: exercise.isCustom
-        case nil: true
-        }
-    }
-
-    private func matchesSearch(_ exercise: ExerciseInfo) -> Bool {
-        searchText.isEmpty || exercise.name.localizedCaseInsensitiveContains(searchText)
+    private func toggleFavorite(_ id: UUID) {
+        store.toggleFavorite(id: id)
+        refresh()
     }
 }
 
 /// One 72 pt row in the library list.
 private struct LibraryRow: View {
     var exercise: ExerciseInfo
+    var onToggleFavorite: () -> Void
 
     var body: some View {
         HStack(spacing: DGSpace.s3) {
@@ -170,11 +201,14 @@ private struct LibraryRow: View {
                 Text("E1RM").dgLabel()
             }
         } else if exercise.isFavorite {
-            Image(systemName: "star.fill")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(DGColor.prGoldText)
-                .frame(width: 28, height: 28)
-                .background(DGColor.prGold.opacity(0.18), in: Circle())
+            Button(action: onToggleFavorite) {
+                Image(systemName: "star.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(DGColor.prGoldText)
+                    .frame(width: 28, height: 28)
+                    .background(DGColor.prGold.opacity(0.18), in: Circle())
+            }
+            .buttonStyle(.plain)
         } else if exercise.loggingStyle == .weightedBodyweight {
             DGTag(text: "BW+", tint: DGColor.infoText, wash: DGColor.info.opacity(0.16))
         } else if exercise.isCustom {
@@ -184,5 +218,8 @@ private struct LibraryRow: View {
 }
 
 #Preview {
-    LibraryView()
+    if let store = PreviewStore.make() {
+        LibraryView()
+            .environment(store)
+    }
 }

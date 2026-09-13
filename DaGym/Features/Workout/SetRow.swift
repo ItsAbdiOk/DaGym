@@ -8,6 +8,7 @@ struct SetRow: View {
     var badgeIndex: Int
     var isCurrent: Bool
     var effortScale: Effort.Scale
+    var isPerSide: Bool = false
     var onTapWeight: () -> Void
     var onTapReps: () -> Void
     var onTapEffort: () -> Void
@@ -25,10 +26,17 @@ struct SetRow: View {
             }
             .buttonStyle(.plain)
             Button(action: onTapReps) {
-                Text(String(set.reps))
-                    .dgMetric(DGFont.metricM)
-                    .foregroundStyle(DGColor.ink1)
-                    .frame(minWidth: 30, alignment: .leading)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(repsText)
+                        .dgMetric(DGFont.metricM)
+                        .foregroundStyle(DGColor.ink1)
+                    if isPerSide {
+                        Text("per side")
+                            .font(DGFont.caption)
+                            .foregroundStyle(DGColor.ink4)
+                    }
+                }
+                .frame(minWidth: 30, alignment: .leading)
             }
             .buttonStyle(.plain)
             effortChip
@@ -42,6 +50,12 @@ struct SetRow: View {
             RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
                 .strokeBorder(rowStroke, lineWidth: isCurrent ? 1 : 0)
         }
+    }
+
+    /// AMRAP sets show "AMRAP" until a rep count has actually been logged.
+    private var repsText: String {
+        let isPendingAmrap = set.kind == .amrap && !set.isDone
+        return isPendingAmrap ? "AMRAP" : String(set.reps)
     }
 
     private var previousGhost: some View {

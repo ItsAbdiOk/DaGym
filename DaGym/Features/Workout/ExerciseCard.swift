@@ -13,7 +13,7 @@ struct ExerciseCard: View {
     var onTapEffort: (UUID) -> Void
     var onToggleDone: (SetEntry) -> Void
     var onMore: () -> Void
-    var onStartTimed: () -> Void
+    var onStartTimed: (UUID) -> Void
 
     var body: some View {
         if entry.isComplete {
@@ -115,7 +115,7 @@ private struct OnDeckExerciseCard: View {
             ForEach(Array(entry.sets.enumerated()), id: \.element.id) { index, set in
                 SetRow(
                     set: set, badgeIndex: workingIndex(upTo: index), isCurrent: set.id == firstOpenID,
-                    effortScale: effortScale,
+                    effortScale: effortScale, isPerSide: entry.exercise.isPerSide,
                     onTapWeight: { onTapWeight(set.id) }, onTapReps: { onTapReps(set.id) },
                     onTapEffort: { onTapEffort(set.id) }, onToggleDone: { onToggleDone(set) }
                 )
@@ -131,7 +131,9 @@ private struct OnDeckExerciseCard: View {
 /// Collapsed one-line row for an incomplete exercise that isn't on deck yet.
 private struct CollapsedExerciseRow: View {
     var entry: WorkoutExerciseEntry
-    var onStartTimed: () -> Void
+    var onStartTimed: (UUID) -> Void
+
+    private var firstOpenSetID: UUID? { entry.sets.first { !$0.isDone }?.id ?? entry.sets.first?.id }
 
     var body: some View {
         HStack(spacing: DGSpace.s3) {
@@ -139,6 +141,7 @@ private struct CollapsedExerciseRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.exercise.name)
                     .font(DGFont.title3)
+                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Text(summaryLine)
                     .font(DGFont.footnote)
@@ -146,14 +149,18 @@ private struct CollapsedExerciseRow: View {
             }
             Spacer(minLength: DGSpace.s2)
             if entry.isTimed {
-                Button("Start", action: onStartTimed)
-                    .buttonStyle(.plain)
-                    .font(DGFont.condensedLabel(12))
-                    .textCase(.uppercase)
-                    .foregroundStyle(DGColor.ink1)
-                    .padding(.horizontal, DGSpace.s3)
-                    .frame(height: 36)
-                    .dgGlass(.regular, in: Capsule())
+                Button {
+                    if let setID = firstOpenSetID { onStartTimed(setID) }
+                } label: {
+                    Text("Start")
+                        .font(DGFont.condensedLabel(12))
+                        .textCase(.uppercase)
+                        .foregroundStyle(DGColor.ink1)
+                        .padding(.horizontal, DGSpace.s3)
+                        .frame(height: 36)
+                        .dgGlass(.regular, in: Capsule())
+                }
+                .buttonStyle(.plain)
             } else {
                 Text("\(entry.doneCount)/\(entry.sets.count)")
                     .dgMetric(DGFont.subhead)
@@ -243,7 +250,7 @@ private struct Sparkline: View {
                 ExerciseCard(
                     entry: entry, isOnDeck: entry.exercise.id == SampleData.bench.id, effortScale: .rpe,
                     onTapWeight: { _ in }, onTapReps: { _ in }, onTapEffort: { _ in },
-                    onToggleDone: { _ in }, onMore: {}, onStartTimed: {}
+                    onToggleDone: { _ in }, onMore: {}, onStartTimed: { _ in }
                 )
             }
         }

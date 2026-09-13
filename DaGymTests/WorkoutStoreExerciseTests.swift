@@ -30,4 +30,27 @@ struct WorkoutStoreExerciseTests {
         let favoriteNames = results.prefix(while: \.isFavorite).map(\.name)
         #expect(favoriteNames == ["Zercher Squat"])
     }
+
+    @Test("updateExerciseSettings writes rest, bar type and increment back to the model")
+    func updateExerciseSettings() throws {
+        let container = try ModelContainer.dagym(inMemory: true)
+        let context = ModelContext(container)
+        let store = WorkoutStore(context: context)
+
+        let created = store.createCustomExercise(
+            name: "Incline Press", primary: [.chest], equipment: "Barbell", style: .weightReps
+        )
+        #expect(created.restSeconds == 150)
+
+        store.updateExerciseSettings(id: created.id, restSeconds: 120, barType: "ezBar", incrementKg: 1.25)
+
+        let model = store.fetchExerciseModel(id: created.id)
+        #expect(model?.restSeconds == 120)
+        #expect(model?.barType == "ezBar")
+        #expect(model?.incrementKg == 1.25)
+
+        let refreshed = store.exercises(matching: "Incline Press").first
+        #expect(refreshed?.restSeconds == 120)
+        #expect(refreshed?.incrementKg == 1.25)
+    }
 }

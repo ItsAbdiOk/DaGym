@@ -76,7 +76,7 @@ public enum AutoFill {
         let weightReps = "\(WeightFormat.kg(previous.weightKg)) × \(previous.reps)"
         let ghost = previous.durationSeconds.map(clock) ?? weightReps
         return Prescription(
-            weightKg: plan.targetWeightKg ?? previous.weightKg,
+            weightKg: previous.weightKg,
             reps: previous.reps,
             durationSeconds: previous.durationSeconds,
             previous: ghost,

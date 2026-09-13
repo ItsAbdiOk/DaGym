@@ -46,14 +46,15 @@ struct AutoFillTests {
         #expect(result[0].reason == "From your plan")
     }
 
-    @Test("when a previous exists, plan target weight overrides its weight")
-    func planWeightOverridesPrevious() {
+    @Test("when a previous exists, last session wins over the plan's target weight")
+    func previousWinsOverPlan() {
         let planned: [(kind: SetKind, targetReps: Int?, targetWeightKg: Double?, targetSeconds: Int?)] = [
             (.working, nil, 90, nil)
         ]
         let previous = [PreviousSet(kind: .working, weightKg: 80, reps: 8, durationSeconds: nil)]
         let result = AutoFill.prescriptions(planned: planned, previous: previous, incrementKg: 2.5)
-        #expect(result[0].weightKg == 90)
+        // The plan target is a starting point; what you actually lifted last time is current.
+        #expect(result[0].weightKg == 80)
         #expect(result[0].reps == 8)
         #expect(result[0].previous == "80 × 8")
     }
