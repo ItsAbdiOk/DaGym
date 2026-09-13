@@ -38,7 +38,8 @@ extension SetEntry {
         self.init(
             id: model.id, kind: model.setKind, weightKg: model.weightKg, reps: model.reps,
             effort: model.rpe.map { Effort(rpe: $0) }, isDone: model.isCompleted,
-            durationSeconds: model.durationSeconds, targetSeconds: nil
+            durationSeconds: model.durationSeconds, targetSeconds: nil,
+            prescriptionReason: model.prescriptionReason, assistanceKg: model.assistanceKg
         )
     }
 }
@@ -54,6 +55,8 @@ extension SetLogModel {
         durationSeconds = entry.durationSeconds
         rpe = entry.effort?.rpe
         isCompleted = entry.isDone
+        assistanceKg = entry.assistanceKg
+        if !entry.prescriptionReason.isEmpty { prescriptionReason = entry.prescriptionReason }
     }
 }
 
@@ -64,7 +67,8 @@ extension WorkoutExerciseEntry {
             .map { SetEntry(model: $0) }
         self.init(
             id: model.id, exercise: exercise, sets: sets, supersetGroup: model.supersetGroup,
-            note: model.note.isEmpty ? nil : model.note, wasSubstitution: model.wasSubstitution
+            note: model.note.isEmpty ? nil : model.note, wasSubstitution: model.wasSubstitution,
+            wasPlannedDeload: model.wasPlannedDeload
         )
     }
 }
@@ -81,16 +85,127 @@ extension RoutineInfo {
     }
 
     private static func progressionLabel(_ model: RoutineModel) -> String {
+        if let rule = model.progressionRuleValue { return rule.displayName }
         switch model.progressionRule {
-        case "linear": "Linear progression"
-        default: "Double progression · \(model.repRangeLow)–\(model.repRangeHigh) reps"
+        case "linear": return "Linear progression"
+        default: return "Double progression · \(model.repRangeLow)–\(model.repRangeHigh) reps"
         }
     }
 
     private static func progressionDetailText(_ model: RoutineModel) -> String {
+        if let rule = model.progressionRuleValue { return rule.explanation }
         switch model.progressionRule {
-        case "linear": "Hit every rep and the weight goes up next time."
-        default: "Hit the top of the rep range on every set and the weight goes up one increment."
+        case "linear": return "Hit every rep and the weight goes up next time."
+        default: return "Hit the top of the rep range on every set and the weight goes up one increment."
+        }
+    }
+}
+
+// MARK: - Progression rule / stall-state JSON coding (plan.md §6.5)
+
+/// Opaque JSON coding for `GymCore.ProgressionRule`, stored on
+/// `RoutineModel.progressionRuleJSON`/`RoutineExerciseModel.progressionRuleJSON`.
+extension ProgressionRule {
+    /// The rule editor's job (A8): reject a non-positive increment rather than persist a rule
+    /// that can never increase (the engine holds forever with "no increment set"). Clamps up to
+    /// the smallest increment the picker's own stepper allows.
+    var incrementRejectingNonPositive: ProgressionRule {
+        let floor = 0.5
+        switch self {
+        case .linear(let incrementKg):
+            return .linear(incrementKg: max(incrementKg, floor))
+        case .doubleProgression(let low, let high, let incrementKg):
+            return .doubleProgression(low: low, high: high, incrementKg: max(incrementKg, floor))
+        case .linearAMRAP(let incrementKg):
+            return .linearAMRAP(incrementKg: max(incrementKg, floor))
+        case .assisted(let stepKg):
+            return .assisted(stepKg: max(stepKg, floor))
+        case .rpeBased, .percentOfTrainingMax, .bodyweight, .timed:
+            return self
+        }
+    }
+}
+
+enum ProgressionRuleCoding {
+    static func encode(_ rule: ProgressionRule) -> String {
+        guard let data = try? JSONEncoder().encode(rule) else { return "" }
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    static func decode(_ json: String?) -> ProgressionRule? {
+        guard let json, let data = json.data(using: .utf8), !json.isEmpty else { return nil }
+        return try? JSONDecoder().decode(ProgressionRule.self, from: data)
+    }
+}
+
+/// A `Codable` mirror of `GymCore.StallState` (which isn't itself `Codable`), stored as JSON on
+/// `RoutineExerciseModel.stallJSON`.
+struct StallStateDTO: Codable {
+    var consecutiveMisses: Int = 0
+    var lastWeightKg: Double?
+    /// Double progression's "no improvement" tracker (`StallState.lastWeakestReps`).
+    var lastWeakestReps: Int?
+    /// Timed rule's "what was actually asked" judging target (`StallState.lastTargetSeconds`).
+    var lastTargetSeconds: Int?
+    /// Percent/TM rule's once-per-cycle bump gate (`StallState.trainingMaxCycle`).
+    var trainingMaxCycle: Int?
+
+    init(
+        consecutiveMisses: Int = 0, lastWeightKg: Double? = nil, lastWeakestReps: Int? = nil,
+        lastTargetSeconds: Int? = nil, trainingMaxCycle: Int? = nil
+    ) {
+        self.consecutiveMisses = consecutiveMisses
+        self.lastWeightKg = lastWeightKg
+        self.lastWeakestReps = lastWeakestReps
+        self.lastTargetSeconds = lastTargetSeconds
+        self.trainingMaxCycle = trainingMaxCycle
+    }
+
+    init(_ state: StallState) {
+        consecutiveMisses = state.consecutiveMisses
+        lastWeightKg = state.lastWeightKg
+        lastWeakestReps = state.lastWeakestReps
+        lastTargetSeconds = state.lastTargetSeconds
+        trainingMaxCycle = state.trainingMaxCycle
+    }
+
+    var stallState: StallState {
+        StallState(
+            consecutiveMisses: consecutiveMisses, lastWeightKg: lastWeightKg,
+            lastWeakestReps: lastWeakestReps, lastTargetSeconds: lastTargetSeconds,
+            trainingMaxCycle: trainingMaxCycle
+        )
+    }
+}
+
+extension RoutineModel {
+    /// The routine-level rule, decoded from `progressionRuleJSON`. Nil for routines saved before
+    /// this existed — callers fall back to `progressionRule`/`repRangeLow`/`repRangeHigh`.
+    var progressionRuleValue: ProgressionRule? {
+        get { ProgressionRuleCoding.decode(progressionRuleJSON) }
+        set { progressionRuleJSON = newValue.map(ProgressionRuleCoding.encode) ?? "" }
+    }
+}
+
+extension RoutineExerciseModel {
+    /// Per-exercise override; nil defers to the routine's rule.
+    var overrideRuleValue: ProgressionRule? {
+        get { ProgressionRuleCoding.decode(progressionRuleJSON) }
+        set { progressionRuleJSON = newValue.map(ProgressionRuleCoding.encode) }
+    }
+
+    var stallStateValue: StallState {
+        get {
+            guard let data = stallJSON.data(using: .utf8),
+                  let dto = try? JSONDecoder().decode(StallStateDTO.self, from: data) else {
+                return StallState()
+            }
+            return dto.stallState
+        }
+        set {
+            let dto = StallStateDTO(newValue)
+            guard let data = try? JSONEncoder().encode(dto) else { return }
+            stallJSON = String(data: data, encoding: .utf8) ?? "{}"
         }
     }
 }

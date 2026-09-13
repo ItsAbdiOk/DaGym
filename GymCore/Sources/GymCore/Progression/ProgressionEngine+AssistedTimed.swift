@@ -1,0 +1,109 @@
+import Foundation
+
+extension ProgressionEngine {
+    /// Assisted rule (plan.md §7): reduce assistance by one step once every
+    /// working set hits its target reps, never below the floor. A partial session
+    /// is a miss. Hitting the target at the floor hands off — "try it unassisted".
+    /// `Prescription.assistanceKg` carries the assistance (and `weightKg` mirrors it
+    /// for older callers).
+    static func prescribeAssisted(_ context: RuleContext, stepKg: Double) -> Prescribed {
+        guard let baseline = context.baseline else { return context.firstTimePrescribed() }
+        let workingSets = context.baselineWorkingSets
+        guard !workingSets.isEmpty else { return context.firstTimePrescribed() }
+        let assistanceKg = workingSets.first?.assistanceKg ?? 0
+        let summary = performanceSummary(workingSets)
+        let check = setsHitTarget(workingSets: workingSets, planned: context.planned)
+        let hit = check == .hit || check == .rpeOver
+
+        let floor = TrainingConstants.assistedFloorKg
+        let reason: PrescriptionReason
+        let newAssistance: Double
+        if hit, assistanceKg <= floor + 0.001 {
+            newAssistance = floor
+            reason = PrescriptionReason(
+                title: "Try it unassisted",
+                body: "You hit \(summary) with no assistance — switch this exercise to the bodyweight rule.",
+                kind: .plan
+            )
+        } else if hit {
+            newAssistance = max(floor, assistanceKg - stepKg)
+            reason = PrescriptionReason(
+                title: "−\(context.formatted(kg: assistanceKg - newAssistance)) assist",
+                body: "You hit \(summary) last session.", kind: .increase
+            )
+        } else {
+            newAssistance = assistanceKg
+            reason = PrescriptionReason(
+                title: "Repeat \(context.formatted(kg: assistanceKg)) assist",
+                body: check == .noTargets
+                    ? "No rep target is set for this exercise — add target reps to progress automatically."
+                    : "You missed (\(summary)) last session.",
+                kind: .repeat
+            )
+        }
+        let sets = context.planned.map { spec in
+            Prescription(
+                weightKg: newAssistance, reps: spec.targetReps ?? 0, durationSeconds: spec.targetSeconds,
+                previous: nil, reason: reason.title, assistanceKg: newAssistance
+            )
+        }
+        return Prescribed(
+            sets: sets, reason: reason, stall: context.stall, trainingMaxKg: context.trainingMaxKg,
+            previousDate: baseline.date
+        )
+    }
+
+    /// Timed rule (plan.md §7): add seconds to the hold once every set hits the
+    /// hold it was asked for — `stall.lastTargetSeconds` when the engine set it,
+    /// else the plan's target — so a 45 s hold when 60 s was prescribed is a
+    /// miss even though the routine still says 30 s. Past `timedCeilingSeconds`
+    /// the rule stops adding time and suggests load or a harder variation.
+    static func prescribeTimed(_ context: RuleContext, stepSeconds: Int) -> Prescribed {
+        guard let baseline = context.baseline else { return context.firstTimePrescribed() }
+        let workingSets = context.baselineWorkingSets
+        guard let durationSeconds = workingSets.first?.durationSeconds, !workingSets.isEmpty else {
+            return context.firstTimePrescribed()
+        }
+        let planTarget = context.planned.first { $0.kind.countsTowardStats }?.targetSeconds
+        let askedSeconds = context.stall.lastTargetSeconds ?? planTarget ?? durationSeconds
+        let hit = workingSets.allSatisfy { ($0.durationSeconds ?? 0) >= askedSeconds }
+        let ceiling = TrainingConstants.timedCeilingSeconds
+        let loadKg = workingSets.first?.weightKg ?? 0
+
+        let reason: PrescriptionReason
+        let newDuration: Int
+        if hit, askedSeconds >= ceiling {
+            newDuration = askedSeconds
+            reason = PrescriptionReason(
+                title: "Add load or go harder",
+                body: "You're holding \(askedSeconds)s — add weight or a harder variation instead of " +
+                    "more time.",
+                kind: .plan
+            )
+        } else if hit {
+            newDuration = max(askedSeconds, durationSeconds) + stepSeconds
+            reason = PrescriptionReason(
+                title: "+\(stepSeconds)s", body: "You held \(durationSeconds)s last session.", kind: .increase
+            )
+        } else {
+            newDuration = askedSeconds
+            reason = PrescriptionReason(
+                title: "Repeat \(askedSeconds)s",
+                body: "You held \(durationSeconds)s of the \(askedSeconds)s hold last session.", kind: .repeat
+            )
+        }
+        let sets = context.planned.map { spec in
+            Prescription(
+                weightKg: loadKg, reps: spec.targetReps ?? 0, durationSeconds: newDuration,
+                previous: nil, reason: reason.title
+            )
+        }
+        var stall = context.stall
+        stall.lastTargetSeconds = newDuration
+        stall.consecutiveMisses = hit ? 0 : stall.consecutiveMisses + 1
+        return Prescribed(
+            sets: sets, reason: reason, stall: stall, trainingMaxKg: context.trainingMaxKg,
+            previousDate: baseline.date
+        )
+    }
+}

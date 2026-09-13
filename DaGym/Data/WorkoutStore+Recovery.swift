@@ -70,8 +70,7 @@ extension WorkoutStore {
     /// `Recovery.headline` (converted from a 0…1 spent score into a raw fatigue value). Nil
     /// once it's already below that line.
     private func recoveredByDate(fatigue: Double, muscle: Muscle, now: Date) -> Date? {
-        let spentThreshold = TrainingConstants.recoveryHeadlineThreshold
-        let fatigueThreshold = spentThreshold / (1 - spentThreshold)
+        let fatigueThreshold = Recovery.fatigueThreshold(spent: TrainingConstants.recoveryHeadlineThreshold)
         let interval = Recovery.recoveredBy(
             fatigue: fatigue, tau: muscle.recoveryTimeConstantHours, threshold: fatigueThreshold
         )

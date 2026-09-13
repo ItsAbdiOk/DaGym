@@ -39,12 +39,21 @@ public enum Recovery {
     }
 
     /// Saturating 0…1 "how recovered is it" score, 1 = fully fresh (no fatigue), approaching 0
-    /// as fatigue grows without bound. Uses `1 / (1 + fatigue)` rather than `e^(−fatigue)`
-    /// because it decays slower for small fatigue values — a single easy set shouldn't read as
-    /// "still 90%+ fresh only because of exponential steepness" — while both curves agree at the
-    /// endpoints (fatigue 0 → score 1, fatigue → ∞ → score 0).
+    /// as fatigue grows without bound: `1 / (1 + fatigue / k)` with
+    /// `k = TrainingConstants.recoveryFatigueScale`. Raw fatigue is an (effort-weighted) set
+    /// count, so it has to be normalised before saturating — without `k` a single hard set
+    /// read 50 % spent and a 10-set chest day stayed "spent" for four days. With k = 6 one hard
+    /// session's worth of primary sets reads 50 % and clears the headline threshold in ~72 h.
     public static func recoveredScore(fatigue: Double) -> Double {
-        1 / (1 + max(0, fatigue))
+        1 / (1 + max(0, fatigue) / TrainingConstants.recoveryFatigueScale)
+    }
+
+    /// The raw-fatigue value at which `map` reads `spent` — the threshold to hand to
+    /// `recoveredBy(fatigue:tau:threshold:)` for a "spent" score such as
+    /// `TrainingConstants.recoveryHeadlineThreshold`.
+    public static func fatigueThreshold(spent: Double) -> Double {
+        guard spent > 0, spent < 1 else { return spent <= 0 ? 0 : .infinity }
+        return TrainingConstants.recoveryFatigueScale * spent / (1 - spent)
     }
 
     /// The body map's recovery mode wants 0 (fresh) … 1 (spent) — the inverse of

@@ -31,4 +31,10 @@ enum A11yID {
 
     static let historyList = "history.list"
     static let historyRow0 = "history.row.0"
+
+    static let onboardingNext = "onboarding.next"
+    static let onboardingSkip = "onboarding.skip"
+    /// The Welcome step's "Skip and start lifting" — distinct from `onboardingSkip` (which
+    /// skips one optional step) because this one skips the whole flow straight to `RootView`.
+    static let onboardingSkipAll = "onboarding.skipAll"
 }

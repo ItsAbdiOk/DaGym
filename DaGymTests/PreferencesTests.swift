@@ -29,6 +29,8 @@ struct PreferencesTests {
         first.restHaptics = false
         first.restScreenFlash = true
         first.weekStartsMonday = false
+        first.hasCompletedOnboarding = true
+        first.trainingGoal = "strength"
 
         let second = Preferences(suite: suite)
         #expect(second.weightUnit == .lb)
@@ -40,6 +42,8 @@ struct PreferencesTests {
         #expect(second.restHaptics == false)
         #expect(second.restScreenFlash == true)
         #expect(second.weekStartsMonday == false)
+        #expect(second.hasCompletedOnboarding == true)
+        #expect(second.trainingGoal == "strength")
     }
 
     @Test("an unseeded suite falls back to the documented defaults")
@@ -56,6 +60,8 @@ struct PreferencesTests {
         #expect(preferences.restHaptics)
         #expect(!preferences.restScreenFlash)
         #expect(preferences.weekStartsMonday)
+        #expect(!preferences.hasCompletedOnboarding)
+        #expect(preferences.trainingGoal.isEmpty)
     }
 
     @Test("formatWeight/unitSymbol follow the selected unit")

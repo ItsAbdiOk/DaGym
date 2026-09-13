@@ -13,14 +13,19 @@ struct HomeView: View {
     var onFreestyle: () -> Void
     var onBackfill: () -> Void
     var onSeeRecovery: () -> Void
+    /// See `RootView.justCompletedOnboarding` — mirrors it so `refresh()`'s own SwiftData fetches
+    /// only pay the defensive startup delay for that one transition, not every normal launch.
+    var justCompletedOnboarding = false
 
     @Environment(WorkoutStore.self) private var store
+    @Environment(Preferences.self) private var preferences
     @AppStorage("weeklyGoal") private var weeklyGoal = 4
     @State private var streakCurrent = 0
     @State private var streakLongest = 0
     @State private var thisWeekCount = 0
     @State private var recoveryMap: [Muscle: Double] = [:]
     @State private var showingSettings = false
+    @State private var deloadSuggestion: DeloadSuggestionInfo?
 
     var body: some View {
         ZStack {
@@ -43,13 +48,30 @@ struct HomeView: View {
                         StreakCard(current: streakCurrent, longest: streakLongest)
                     }
                     RecoveryCard(map: recoveryMap, onSeeRecovery: onSeeRecovery)
+                    if let deloadSuggestion {
+                        WhyCard(
+                            title: "Why a deload?", message: deloadSuggestion.reason,
+                            primary: "Plan a deload week", secondary: "Not now",
+                            labelColor: DGColor.warning,
+                            onPrimary: planDeload, onSecondary: snoozeDeload
+                        )
+                    }
                 }
                 .padding(.horizontal, DGSpace.s4)
                 .padding(.top, DGSpace.s3)
                 .padding(.bottom, 100)
             }
         }
-        .task { refresh() }
+        .task {
+            // See the matching comment on `RootView`'s `.task`: `HomeView` mounts in the same
+            // breath as `RootView` right after `OnboardingFlow` hands off, and its own SwiftData
+            // fetches (`refresh()` → `WorkoutStore.workoutDates()`) hit the identical crash if
+            // they run before that transaction has fully settled — but only on that transition.
+            if justCompletedOnboarding {
+                try? await Task.sleep(for: .milliseconds(1500))
+            }
+            refresh()
+        }
         .sheet(isPresented: $showingSettings) { SettingsView() }
     }
 
@@ -64,6 +86,21 @@ struct HomeView: View {
         thisWeekCount = streak.thisWeekCount
         let since = calendar.date(byAdding: .day, value: -7, to: now) ?? now
         recoveryMap = Recovery.map(events: store.recoveryEvents(since: since), now: now)
+        deloadSuggestion = store.deloadSuggestion(
+            snoozedUntil: preferences.deloadSnoozedUntil,
+            dismissedFingerprint: preferences.deloadDismissedFingerprint, weeklyGoal: weeklyGoal
+        )
+    }
+
+    private func planDeload() {
+        store.planDeloadWeek()
+        deloadSuggestion = nil
+    }
+
+    private func snoozeDeload() {
+        preferences.deloadSnoozedUntil = Calendar.current.date(byAdding: .day, value: 7, to: Date())
+        preferences.deloadDismissedFingerprint = deloadSuggestion?.fingerprint
+        deloadSuggestion = nil
     }
 
     private var header: some View {

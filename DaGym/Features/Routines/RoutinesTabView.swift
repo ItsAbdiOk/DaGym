@@ -15,6 +15,7 @@ struct RoutinesTabView: View {
         case edit(UUID)
         case new
         case schedule
+        case programs
     }
 
     var body: some View {
@@ -40,6 +41,8 @@ struct RoutinesTabView: View {
                     RoutineBuilderView(routineID: nil, onDone: pop)
                 case .schedule:
                     ScheduleView(onDone: pop)
+                case .programs:
+                    ProgramsView(onDone: pop)
                 }
             }
             .task { refresh() }
@@ -53,9 +56,24 @@ struct RoutinesTabView: View {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
+            programsButton
             DGIconButton(symbol: "calendar") { path.append(Destination.schedule) }
             DGIconButton(symbol: "plus") { path.append(Destination.new) }
         }
+    }
+
+    private var programsButton: some View {
+        Button { path.append(Destination.programs) } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "calendar.badge.clock").font(.system(size: 13, weight: .semibold))
+                Text("Programs").font(DGFont.condensedLabel(13)).tracking(1.2).textCase(.uppercase)
+            }
+            .foregroundStyle(DGColor.ink1)
+            .padding(.horizontal, DGSpace.s3)
+            .frame(height: 36)
+            .dgGlass(.regular, in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder

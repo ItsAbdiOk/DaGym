@@ -62,7 +62,8 @@ private struct OnDeckExerciseCard: View {
                 lastSessionsStrip.padding(.top, DGSpace.s4)
             }
             if let whyTitle = entry.whyTitle, let whyBody = entry.whyBody {
-                WhyCard(title: whyTitle, message: whyBody).padding(.top, DGSpace.s3)
+                WhyCard(title: whyTitle, message: whyBody, labelColor: whyLabelColor)
+                    .padding(.top, DGSpace.s3)
             }
             columnHeader.padding(.top, DGSpace.s4)
             setRows.padding(.top, DGSpace.s2)
@@ -86,6 +87,10 @@ private struct OnDeckExerciseCard: View {
             DGIconButton(symbol: "text.bubble", size: 36, tint: DGColor.ink2, action: onNote)
             DGIconButton(symbol: "ellipsis", action: onMore)
         }
+    }
+
+    private var whyLabelColor: Color {
+        entry.whyKind == .deload ? DGColor.warning : DGColor.aiVioletText
     }
 
     private var footnote: String {

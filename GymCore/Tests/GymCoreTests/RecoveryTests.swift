@@ -48,8 +48,10 @@ struct RecoveryTests {
         let event = StimulusEvent(muscle: .chest, share: 1.0, effort: 1.0, date: Date())
         let map = Recovery.map(events: [event], now: Date())
         let value = try #require(map[.chest])
-        // Fresh stimulus, no elapsed time: fatigue == effort × share == 1, so spent == 1 - 1/(1+1) == 0.5.
-        #expect(abs(value - 0.5) < 0.001)
+        // Fresh stimulus, no elapsed time: fatigue == effort × share == 1, normalised by k = 6,
+        // so spent == 1 - 1/(1 + 1/6) ≈ 0.143.
+        let scale = TrainingConstants.recoveryFatigueScale
+        #expect(abs(value - (1 - 1 / (1 + 1 / scale))) < 0.001)
     }
 
     @Test("recoveredBy solves for the time fatigue drops below the threshold")

@@ -32,4 +32,17 @@ enum LaunchFlags {
 
     /// Either kind of test process.
     static var isTesting: Bool { isUITesting || isUnitTestHost }
+
+    /// Whether this process was launched with `-dgOnboarding`. Paired with `-dgUITest`, this
+    /// resets `Preferences.hasCompletedOnboarding` to `false` so `testOnboardingCompletes` always
+    /// starts from a fresh onboarding flow regardless of what a previous simulator run left in
+    /// `UserDefaults.standard`. Without it, `-dgUITest` alone marks onboarding complete so the
+    /// existing smoke tests land straight on the tab bar.
+    static var forcesOnboarding: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-dgOnboarding")
+        #else
+        false
+        #endif
+    }
 }

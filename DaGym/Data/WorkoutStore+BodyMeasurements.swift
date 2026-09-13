@@ -13,10 +13,19 @@ struct BodyMeasurementInfo: Identifiable, Hashable {
 extension WorkoutStore {
     /// The most recent bodyweight reading across every source (manual or Apple Health), for
     /// `HealthSyncService.pullBodyweight()`'s "newer than ours" check and any future Home display.
-    func latestBodyMeasurement() -> BodyMeasurementModel? {
-        var descriptor = FetchDescriptor<BodyMeasurementModel>(
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
-        )
+    /// - Parameter asOf: when passed, only readings on or before this date are considered — the
+    ///   bodyweight as it was known at a past workout, for PR evaluation (A7).
+    func latestBodyMeasurement(asOf: Date? = nil) -> BodyMeasurementModel? {
+        var descriptor: FetchDescriptor<BodyMeasurementModel>
+        if let asOf {
+            descriptor = FetchDescriptor<BodyMeasurementModel>(
+                predicate: #Predicate { $0.date <= asOf }, sortBy: [SortDescriptor(\.date, order: .reverse)]
+            )
+        } else {
+            descriptor = FetchDescriptor<BodyMeasurementModel>(
+                sortBy: [SortDescriptor(\.date, order: .reverse)]
+            )
+        }
         descriptor.fetchLimit = 1
         return (try? context.fetch(descriptor))?.first
     }

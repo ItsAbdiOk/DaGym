@@ -31,16 +31,24 @@ struct RoutineExerciseDraft {
     var restOverrideSeconds: Int?
     var note: String = ""
     var sets: [PlannedSetDraft]
+    /// Per-exercise progression rule override; nil defers to the routine's rule.
+    var overrideRule: ProgressionRule?
+    var trainingMaxKg: Double?
+    var excludeFromProgression: Bool = false
 
     init(
         exerciseID: UUID, supersetGroup: Int? = nil, restOverrideSeconds: Int? = nil,
-        note: String = "", sets: [PlannedSetDraft] = []
+        note: String = "", sets: [PlannedSetDraft] = [], overrideRule: ProgressionRule? = nil,
+        trainingMaxKg: Double? = nil, excludeFromProgression: Bool = false
     ) {
         self.exerciseID = exerciseID
         self.supersetGroup = supersetGroup
         self.restOverrideSeconds = restOverrideSeconds
         self.note = note
         self.sets = sets
+        self.overrideRule = overrideRule
+        self.trainingMaxKg = trainingMaxKg
+        self.excludeFromProgression = excludeFromProgression
     }
 }
 
@@ -54,10 +62,13 @@ extension WorkoutStore {
     }
 
     /// Upserts a routine and replaces its exercises/planned sets. Pass `id: nil` to create.
+    /// `rule`, when passed, is the source of truth (JSON-encoded onto `progressionRuleJSON`);
+    /// `progressionRule`/`repRangeLow`/`repRangeHigh` stay as the legacy display fallback.
     @discardableResult
     func saveRoutine(
         id: UUID?, name: String, notes: String = "", progressionRule: String = "doubleProgression",
-        repRangeLow: Int = 6, repRangeHigh: Int = 8, exercises: [RoutineExerciseDraft]
+        repRangeLow: Int = 6, repRangeHigh: Int = 8, rule: ProgressionRule? = nil,
+        exercises: [RoutineExerciseDraft]
     ) -> RoutineInfo {
         let model = id.flatMap(fetchRoutineModel) ?? insertedRoutine()
         model.name = name
@@ -65,6 +76,7 @@ extension WorkoutStore {
         model.progressionRule = progressionRule
         model.repRangeLow = repRangeLow
         model.repRangeHigh = repRangeHigh
+        model.progressionRuleValue = rule?.incrementRejectingNonPositive
         model.updatedAt = Date()
         replaceExercises(exercises, on: model)
         save()
@@ -99,7 +111,9 @@ extension WorkoutStore {
             return RoutineExerciseDraft(
                 exerciseID: exerciseID, supersetGroup: routineExercise.supersetGroup,
                 restOverrideSeconds: routineExercise.restOverrideSeconds, note: routineExercise.note,
-                sets: sets
+                sets: sets, overrideRule: routineExercise.overrideRuleValue,
+                trainingMaxKg: routineExercise.trainingMaxKg,
+                excludeFromProgression: routineExercise.excludeFromProgression
             )
         }
         return (info, drafts)
@@ -130,20 +144,34 @@ extension WorkoutStore {
     }
 
     private func replaceExercises(_ drafts: [RoutineExerciseDraft], on routine: RoutineModel) {
-        for existing in routine.exercises ?? [] { context.delete(existing) }
+        // Carried over by exercise id so editing a routine doesn't burn the stall streak/training
+        // max the engine has been building (plan.md §6.5) — exercises are deleted and recreated
+        // on every save, so the progression state has to be preserved explicitly.
+        var carriedState: [UUID: (stallJSON: String, trainingMaxKg: Double?)] = [:]
+        for existing in routine.exercises ?? [] {
+            if let exerciseID = existing.exercise?.id {
+                carriedState[exerciseID] = (existing.stallJSON, existing.trainingMaxKg)
+            }
+            context.delete(existing)
+        }
         routine.exercises = drafts.enumerated().map { index, draft in
-            makeRoutineExercise(draft, order: index, routine: routine)
+            makeRoutineExercise(draft, order: index, routine: routine, carriedState: carriedState)
         }
     }
 
     private func makeRoutineExercise(
-        _ draft: RoutineExerciseDraft, order: Int, routine: RoutineModel
+        _ draft: RoutineExerciseDraft, order: Int, routine: RoutineModel,
+        carriedState: [UUID: (stallJSON: String, trainingMaxKg: Double?)] = [:]
     ) -> RoutineExerciseModel {
         let exerciseModel = fetchExerciseModel(id: draft.exerciseID)
+        let carried = carriedState[draft.exerciseID]
         let routineExercise = RoutineExerciseModel(
             order: order, supersetGroup: draft.supersetGroup, restOverrideSeconds: draft.restOverrideSeconds,
-            note: draft.note, exercise: exerciseModel, routine: routine
+            note: draft.note, stallJSON: carried?.stallJSON ?? "{}",
+            trainingMaxKg: draft.trainingMaxKg ?? carried?.trainingMaxKg,
+            excludeFromProgression: draft.excludeFromProgression, exercise: exerciseModel, routine: routine
         )
+        routineExercise.overrideRuleValue = draft.overrideRule?.incrementRejectingNonPositive
         context.insert(routineExercise)
         routineExercise.plannedSets = draft.sets.enumerated().map { setIndex, setDraft in
             let plannedSet = PlannedSetModel(

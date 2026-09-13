@@ -30,6 +30,10 @@ final class Preferences {
         static let bodyweightGoalKg = "bodyweightGoalKg"
         static let syncPhotos = "syncPhotos"
         static let lockPhotos = "lockPhotos"
+        static let hasCompletedOnboarding = "hasCompletedOnboarding"
+        static let trainingGoal = "trainingGoal"
+        static let deloadSnoozedUntil = "deloadSnoozedUntil"
+        static let deloadDismissedFingerprint = "deloadDismissedFingerprint"
     }
 
     private let defaults: UserDefaults
@@ -125,6 +129,41 @@ final class Preferences {
     var lockPhotos: Bool {
         didSet { defaults.set(lockPhotos, forKey: Key.lockPhotos) }
     }
+    /// Whether `OnboardingFlow` has been completed (or skipped through to the end) at least
+    /// once. Gates `AppRootContainer`'s choice between `OnboardingFlow` and `RootView` (plan
+    /// §6.9). Off until onboarding finishes so a killed app resumes onboarding, not the tab bar.
+    var hasCompletedOnboarding: Bool {
+        didSet { defaults.set(hasCompletedOnboarding, forKey: Key.hasCompletedOnboarding) }
+    }
+    /// The training goal picked on the onboarding Goal step: "strength", "muscle" or "general".
+    /// Empty until the user picks one (onboarding always sets it before finishing).
+    var trainingGoal: String {
+        didSet { defaults.set(trainingGoal, forKey: Key.trainingGoal) }
+    }
+    /// Home's "why a deload?" card hides itself until this date (plan.md §6.5's "Not now",
+    /// a 7-day snooze). Nil means never snoozed.
+    var deloadSnoozedUntil: Date? {
+        didSet {
+            if let deloadSnoozedUntil {
+                defaults.set(deloadSnoozedUntil, forKey: Key.deloadSnoozedUntil)
+            } else {
+                defaults.removeObject(forKey: Key.deloadSnoozedUntil)
+            }
+        }
+    }
+
+    /// The evidence fingerprint (`GymCore.DeloadSuggestion.fingerprint`) of the last deload
+    /// suggestion the user dismissed with "Not now" — suppresses that exact evidence from
+    /// reappearing while still surfacing a newer reason (plan.md §6.5, A4c).
+    var deloadDismissedFingerprint: String? {
+        didSet {
+            if let deloadDismissedFingerprint {
+                defaults.set(deloadDismissedFingerprint, forKey: Key.deloadDismissedFingerprint)
+            } else {
+                defaults.removeObject(forKey: Key.deloadDismissedFingerprint)
+            }
+        }
+    }
 
     init(suite: UserDefaults = .standard) {
         defaults = suite
@@ -149,6 +188,10 @@ final class Preferences {
         bodyweightGoalKg = suite.object(forKey: Key.bodyweightGoalKg) as? Double
         syncPhotos = Self.boolValue(suite, Key.syncPhotos, default: false)
         lockPhotos = Self.boolValue(suite, Key.lockPhotos, default: false)
+        hasCompletedOnboarding = Self.boolValue(suite, Key.hasCompletedOnboarding, default: false)
+        trainingGoal = suite.string(forKey: Key.trainingGoal) ?? ""
+        deloadSnoozedUntil = suite.object(forKey: Key.deloadSnoozedUntil) as? Date
+        deloadDismissedFingerprint = suite.string(forKey: Key.deloadDismissedFingerprint)
     }
 
     /// A canonical kg value, formatted and rounded for the user's unit.

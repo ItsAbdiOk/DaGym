@@ -1,0 +1,113 @@
+import Foundation
+
+/// The grid a prescribed load must land on — a property of the equipment, not
+/// of the progression rule. Barbells round onto loadable plate pairs; dumbbells,
+/// machines and kettlebells step in fixed increments; bodyweight/assisted loads
+/// aren't rounded at all.
+public enum LoadGrid: Hashable, Sendable {
+    /// A bar loaded from a plate inventory (see `PlateCalculator`).
+    case plates(bar: Bar, plates: [PlateStock], collarsKg: Double)
+    /// Fixed steps, e.g. 2 kg dumbbells, a 5 kg machine stack, 4 kg kettlebells.
+    case step(Double)
+    /// No rounding — bodyweight, assisted, cable stacks with micro-plates.
+    case free
+
+    /// The nearest weight on this grid, whichever side of `target` it falls on.
+    public func nearest(_ target: Double) -> Double {
+        switch self {
+        case .plates(let bar, let plates, let collarsKg):
+            switch PlateCalculator.load(target: target, bar: bar, plates: plates, collarsKg: collarsKg) {
+            case .tooLight:
+                return Self.underBarGrid(plates).nearest(target)
+            case .exact(let load):
+                return load.total
+            case .nearest(let below, let above):
+                guard let below else { return above?.total ?? bar.weightKg + collarsKg }
+                guard let above else { return below.total }
+                return (target - below.total) <= (above.total - target) ? below.total : above.total
+            }
+        case .step(let step):
+            guard step > 0 else { return target }
+            return (target / step).rounded() * step
+        case .free:
+            return target
+        }
+    }
+
+    /// The heaviest grid weight at or below `target`. Deloads use this so they
+    /// never round up past the stalled weight.
+    public func nearestBelow(_ target: Double) -> Double {
+        switch self {
+        case .plates(let bar, let plates, let collarsKg):
+            switch PlateCalculator.load(target: target, bar: bar, plates: plates, collarsKg: collarsKg) {
+            case .tooLight:
+                return Self.underBarGrid(plates).nearestBelow(target)
+            case .exact(let load):
+                return load.total
+            case .nearest(let below, _):
+                return below?.total ?? bar.weightKg + collarsKg
+            }
+        case .step(let step):
+            guard step > 0 else { return target }
+            return ((target + 0.001) / step).rounded(.down) * step
+        case .free:
+            return target
+        }
+    }
+
+    /// The lightest grid weight strictly above `current`. Increases use this when the
+    /// rule's increment is smaller than the grid step, so "+1 kg" on a 2.5 kg grid
+    /// still moves the load instead of silently repeating it.
+    public func nearestAbove(_ current: Double) -> Double {
+        switch self {
+        case .plates(let bar, let plates, let collarsKg):
+            let base = bar.weightKg + collarsKg
+            if current < base - 0.001 {
+                let stepped = Self.underBarGrid(plates).nearestAbove(current)
+                return min(stepped, base)
+            }
+            let probe = PlateCalculator.load(
+                target: current + 0.01, bar: bar, plates: plates, collarsKg: collarsKg
+            )
+            switch probe {
+            case .tooLight:
+                return base
+            case .exact(let load):
+                return load.total
+            case .nearest(let below, let above):
+                if let above { return above.total }
+                return max(below?.total ?? current, current)
+            }
+        case .step(let step):
+            guard step > 0 else { return current }
+            return ((current + 0.001) / step).rounded(.down) * step + step
+        case .free:
+            return current
+        }
+    }
+
+    /// A target under the bar can't be on the bar at all — it's a dumbbell, a
+    /// kettlebell, a cable stack. Step it by the smallest plate pair instead of
+    /// snapping it up to an empty bar.
+    private static func underBarGrid(_ plates: [PlateStock]) -> LoadGrid {
+        let smallest = plates.filter { $0.count >= 2 }.map(\.weightKg).min()
+        return .step(smallest.map { $0 * 2 } ?? TrainingConstants.defaultStepKg)
+    }
+}
+
+/// Rounds a target weight onto the loadable plate grid, shared by every
+/// progression rule that needs to turn a computed number into a real weight.
+/// Kept for callers that still think in bar/plates; `LoadGrid` is the general form.
+enum WeightRounding {
+    static func nearest(_ target: Double, bar: Bar, plates: [PlateStock], collarsKg: Double) -> Double {
+        LoadGrid.plates(bar: bar, plates: plates, collarsKg: collarsKg).nearest(target)
+    }
+
+    static func nearestBelow(_ target: Double, bar: Bar, plates: [PlateStock], collarsKg: Double) -> Double {
+        LoadGrid.plates(bar: bar, plates: plates, collarsKg: collarsKg).nearestBelow(target)
+    }
+
+    static func nearestAbove(_ current: Double, bar: Bar, plates: [PlateStock], collarsKg: Double) -> Double {
+        LoadGrid.plates(bar: bar, plates: plates, collarsKg: collarsKg).nearestAbove(current)
+    }
+}

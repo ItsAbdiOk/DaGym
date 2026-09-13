@@ -5,6 +5,12 @@ import GymCore
 /// the app has none. Exercises are looked up by name against the already
 /// seeded exercise library, falling back to the first exercise with the
 /// right primary muscle when a specific name isn't present.
+///
+/// Every starter routine carries an explicit progression rule (plan.md §6.5) so the engine
+/// prescribes from the first session on — a routine saved without a rule is pre-filled by
+/// position from the last session instead (`WorkoutStore.effectiveRule`). Exercises whose
+/// increment or logging style doesn't fit the routine's rule get a per-exercise override
+/// (`starterOverride`): lower-body lifts step 5 kg, bodyweight work goes by reps, holds by seconds.
 @MainActor
 enum RoutineSeeder {
     static func seedStarterRoutinesIfNeeded(store: WorkoutStore) {
@@ -30,6 +36,9 @@ enum RoutineSeeder {
         var pushdownSets = (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 12) }
         pushdownSets[pushdownSets.count - 1].kind = .drop
 
+        let rule = ProgressionRule.doubleProgression(
+            low: 6, high: 8, incrementKg: TrainingConstants.defaultUpperBodyIncrementKg
+        )
         let exercises = [
             RoutineExerciseDraft(
                 exerciseID: bench.id,
@@ -38,25 +47,32 @@ enum RoutineSeeder {
                     PlannedSetDraft(kind: .warmup, targetReps: 5, targetWeightKg: 60)
                 ] + (0..<3).map { _ in
                     PlannedSetDraft(kind: .working, targetReps: 6, targetRepsHigh: 8, targetRPE: 8)
-                }
+                },
+                overrideRule: starterOverride(for: bench, routineRule: rule)
             ),
             RoutineExerciseDraft(
                 exerciseID: incline.id,
-                sets: (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 10) }
+                sets: (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 10) },
+                overrideRule: starterOverride(for: incline, routineRule: rule)
             ),
             RoutineExerciseDraft(
                 exerciseID: shoulderPress.id,
-                sets: (0..<4).map { _ in PlannedSetDraft(kind: .working, targetReps: 6) }
+                sets: (0..<4).map { _ in PlannedSetDraft(kind: .working, targetReps: 6) },
+                overrideRule: starterOverride(for: shoulderPress, routineRule: rule)
             ),
             RoutineExerciseDraft(
                 exerciseID: crossover.id, supersetGroup: 1,
-                sets: (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 12) }
+                sets: (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 12) },
+                overrideRule: starterOverride(for: crossover, routineRule: rule)
             ),
-            RoutineExerciseDraft(exerciseID: pushdown.id, supersetGroup: 1, sets: pushdownSets)
+            RoutineExerciseDraft(
+                exerciseID: pushdown.id, supersetGroup: 1, sets: pushdownSets,
+                overrideRule: starterOverride(for: pushdown, routineRule: rule)
+            )
         ]
         store.saveRoutine(
             id: nil, name: "Push A", progressionRule: "doubleProgression", repRangeLow: 6, repRangeHigh: 8,
-            exercises: exercises
+            rule: rule, exercises: exercises
         )
     }
 
@@ -70,26 +86,33 @@ enum RoutineSeeder {
             let curl = lookup(store, "Dumbbell Bicep Curl", muscle: .biceps)
         else { return }
 
+        let rule = ProgressionRule.linear(incrementKg: TrainingConstants.defaultUpperBodyIncrementKg)
         let exercises = [
             RoutineExerciseDraft(
                 exerciseID: deadlift.id,
                 sets: [PlannedSetDraft(kind: .warmup, targetReps: 8, targetWeightKg: 60)]
-                    + (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 5) }
+                    + (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 5) },
+                overrideRule: starterOverride(for: deadlift, routineRule: rule)
             ),
             RoutineExerciseDraft(
                 exerciseID: pullups.id,
-                sets: (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 8) }
+                sets: (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 8) },
+                overrideRule: starterOverride(for: pullups, routineRule: rule)
             ),
             RoutineExerciseDraft(
                 exerciseID: row.id,
-                sets: (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 8) }
+                sets: (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 8) },
+                overrideRule: starterOverride(for: row, routineRule: rule)
             ),
             RoutineExerciseDraft(
                 exerciseID: curl.id,
-                sets: (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 12) }
+                sets: (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 12) },
+                overrideRule: starterOverride(for: curl, routineRule: rule)
             )
         ]
-        store.saveRoutine(id: nil, name: "Pull B", progressionRule: "linear", exercises: exercises)
+        store.saveRoutine(
+            id: nil, name: "Pull B", progressionRule: "linear", rule: rule, exercises: exercises
+        )
     }
 
     // MARK: - Legs
@@ -102,28 +125,69 @@ enum RoutineSeeder {
             let plank = lookup(store, "Plank", muscle: .abs)
         else { return }
 
+        let rule = ProgressionRule.linear(incrementKg: TrainingConstants.defaultUpperBodyIncrementKg)
         let exercises = [
             RoutineExerciseDraft(
                 exerciseID: squat.id,
                 sets: [
                     PlannedSetDraft(kind: .warmup, targetReps: 8, targetWeightKg: 40),
                     PlannedSetDraft(kind: .warmup, targetReps: 5, targetWeightKg: 60)
-                ] + (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 5) }
+                ] + (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 5) },
+                overrideRule: starterOverride(for: squat, routineRule: rule)
             ),
             RoutineExerciseDraft(
                 exerciseID: legCurl.id,
-                sets: (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 10) }
+                sets: (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 10) },
+                overrideRule: starterOverride(for: legCurl, routineRule: rule)
             ),
             RoutineExerciseDraft(
                 exerciseID: calfRaise.id,
-                sets: (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 15) }
+                sets: (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 15) },
+                overrideRule: starterOverride(for: calfRaise, routineRule: rule)
             ),
             RoutineExerciseDraft(
                 exerciseID: plank.id,
-                sets: (0..<3).map { _ in PlannedSetDraft(kind: .working, targetSeconds: 60) }
+                sets: (0..<3).map { _ in PlannedSetDraft(kind: .working, targetSeconds: 60) },
+                overrideRule: starterOverride(for: plank, routineRule: rule)
             )
         ]
-        store.saveRoutine(id: nil, name: "Legs", progressionRule: "linear", exercises: exercises)
+        store.saveRoutine(id: nil, name: "Legs", progressionRule: "linear", rule: rule, exercises: exercises)
+    }
+
+    // MARK: - Overrides
+
+    /// The per-exercise rule a starter routine's weight-based rule can't express: bodyweight
+    /// reps, timed holds, assisted work, and any lift whose seeded increment isn't the routine's
+    /// (lower-body lifts step 5 kg, dumbbells 2 kg) — those keep the routine's rule shape with
+    /// the exercise's own increment. Nil when the routine's rule already fits.
+    static func starterOverride(
+        for exercise: ExerciseInfo, routineRule: ProgressionRule
+    ) -> ProgressionRule? {
+        switch exercise.loggingStyle {
+        case .bodyweightReps, .weightedBodyweight:
+            // plan.md §6.1: bodyweight work progresses by reps, then sets — added load is manual.
+            return .bodyweight(
+                repCeiling: TrainingConstants.bodyweightRepCeiling,
+                maxSets: TrainingConstants.bodyweightMaxSets
+            )
+        case .timedHold:
+            return .timed(stepSeconds: TrainingConstants.defaultTimedStepSeconds)
+        case .assisted:
+            return .assisted(stepKg: TrainingConstants.defaultAssistedStepKg)
+        case .cardio:
+            return nil
+        case .weightReps:
+            guard exercise.incrementKg > 0 else { return nil }
+            switch routineRule {
+            case .linear(let incrementKg) where incrementKg != exercise.incrementKg:
+                return .linear(incrementKg: exercise.incrementKg)
+            case .doubleProgression(let low, let high, let incrementKg)
+                where incrementKg != exercise.incrementKg:
+                return .doubleProgression(low: low, high: high, incrementKg: exercise.incrementKg)
+            default:
+                return nil
+            }
+        }
     }
 
     // MARK: - Lookup

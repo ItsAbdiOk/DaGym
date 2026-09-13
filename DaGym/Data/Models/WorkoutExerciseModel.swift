@@ -9,6 +9,9 @@ final class WorkoutExerciseModel {
     var supersetGroup: Int?
     var note: String = ""
     var wasSubstitution: Bool = false
+    /// True when this exercise was prescribed as part of a program's planned deload week
+    /// (plan.md §6.5). Excluded as the baseline future progression builds from.
+    var wasPlannedDeload: Bool = false
 
     @Relationship(inverse: \ExerciseModel.workoutExercises)
     var exercise: ExerciseModel?
@@ -19,13 +22,15 @@ final class WorkoutExerciseModel {
 
     init(
         id: UUID = UUID(), order: Int = 0, supersetGroup: Int? = nil, note: String = "",
-        wasSubstitution: Bool = false, exercise: ExerciseModel? = nil, workout: WorkoutModel? = nil
+        wasSubstitution: Bool = false, wasPlannedDeload: Bool = false,
+        exercise: ExerciseModel? = nil, workout: WorkoutModel? = nil
     ) {
         self.id = id
         self.order = order
         self.supersetGroup = supersetGroup
         self.note = note
         self.wasSubstitution = wasSubstitution
+        self.wasPlannedDeload = wasPlannedDeload
         self.exercise = exercise
         self.workout = workout
     }

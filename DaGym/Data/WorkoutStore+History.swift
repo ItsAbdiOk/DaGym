@@ -12,6 +12,12 @@ extension WorkoutStore {
         guard let workoutID = session.workoutID, let workout = fetchWorkoutModel(id: workoutID) else {
             return WorkoutSummary(durationSeconds: 0, volumeKg: 0, setsDone: 0, prs: [], musclesHit: [:])
         }
+        // Computed with this session still excluded from `exerciseHistory` (its own `endedAt`
+        // isn't stamped until after this) — the exact same baseline/stall `startWorkout` used to
+        // prescribe this session, so this simply commits that already-shown result. Persisting
+        // here rather than at start means abandoning a workout (never finishing) never burns a
+        // stall (plan.md §6.5).
+        persistProgression(session: session)
         let endedAt = Date()
         workout.endedAt = endedAt
         let prs = evaluatePRs(session: session, workout: workout)
@@ -222,10 +228,14 @@ extension WorkoutStore {
     }
 
     private func performedSets(in entry: WorkoutExerciseEntry, date: Date) -> [PerformedSet] {
-        entry.sets.filter { $0.isDone && $0.kind.countsTowardStats }.map { setEntry in
+        let isBodyweightStyle = entry.exercise.loggingStyle == .bodyweightReps
+            || entry.exercise.loggingStyle == .assisted || entry.exercise.loggingStyle == .weightedBodyweight
+        let bodyweightKg = isBodyweightStyle ? latestBodyMeasurement(asOf: date)?.bodyweightKg : nil
+        return entry.sets.filter { $0.isDone && $0.kind.countsTowardStats }.map { setEntry in
             PerformedSet(
                 kind: setEntry.kind, weightKg: setEntry.weightKg, reps: setEntry.reps,
-                durationSeconds: setEntry.durationSeconds, date: date
+                durationSeconds: setEntry.durationSeconds, assistanceKg: setEntry.assistanceKg,
+                bodyweightKg: bodyweightKg, date: date
             )
         }
     }

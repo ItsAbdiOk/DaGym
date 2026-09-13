@@ -17,7 +17,9 @@ enum DaGymSchema {
         EquipmentProfileModel.self,
         ScheduleModel.self,
         AchievementModel.self,
-        ProgressPhotoModel.self
+        ProgressPhotoModel.self,
+        ProgramModel.self,
+        ProgramWeekModel.self
     ]
 
     /// Models that live in the separate, always-local photo store (see

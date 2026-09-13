@@ -30,6 +30,10 @@ enum A11yID {
 
     static let historyList = "history.list"
     static let historyRow0 = "history.row.0"
+
+    static let onboardingNext = "onboarding.next"
+    static let onboardingSkip = "onboarding.skip"
+    static let onboardingSkipAll = "onboarding.skipAll"
 }
 
 /// End-to-end smoke coverage for the app's core loop, run against a fresh
@@ -46,6 +50,13 @@ final class SmokeTests: XCTestCase {
     private func launchApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-dgUITest"]
+        app.launch()
+        return app
+    }
+
+    private func launchAppForOnboarding() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-dgUITest", "-dgOnboarding"]
         app.launch()
         return app
     }
@@ -140,5 +151,53 @@ final class SmokeTests: XCTestCase {
             ).firstMatch
             XCTAssertTrue(text.waitForExistence(timeout: defaultTimeout), "\"\(name)\" never appeared")
         }
+    }
+
+    /// Walks the whole onboarding flow (`-dgOnboarding` forces it to show, resetting whatever a
+    /// previous simulator run left in `UserDefaults.standard`), mixing Continue and Skip taps,
+    /// and confirms it lands on Home with `home.start` visible.
+    func testOnboardingCompletes() {
+        let app = launchAppForOnboarding()
+
+        let next = app.buttons[A11yID.onboardingNext]
+        let skip = app.buttons[A11yID.onboardingSkip]
+
+        // Welcome: "Set Up · 5 Questions" (also tagged onboarding.next) walks the flow instead
+        // of skipping it entirely.
+        XCTAssertTrue(next.waitForExistence(timeout: defaultTimeout), "onboarding.next never appeared")
+        next.tap()
+
+        // Units, Goal, Schedule, Equipment: accept the defaults with Continue.
+        for _ in 0..<4 {
+            XCTAssertTrue(next.waitForExistence(timeout: defaultTimeout), "onboarding.next never appeared")
+            next.tap()
+        }
+
+        // Bodyweight, Apple Health, Notifications: skip every optional/permission step.
+        for _ in 0..<3 {
+            XCTAssertTrue(skip.waitForExistence(timeout: defaultTimeout), "onboarding.skip never appeared")
+            skip.tap()
+        }
+
+        // Done: "Get Started" (tagged onboarding.next) finishes onboarding.
+        XCTAssertTrue(next.waitForExistence(timeout: defaultTimeout), "onboarding.next never appeared")
+        next.tap()
+
+        let startButton = app.buttons[A11yID.homeStart]
+        XCTAssertTrue(startButton.waitForExistence(timeout: defaultTimeout), "home.start never appeared")
+    }
+
+    /// Welcome's "Skip and start lifting" (`onboarding.skipAll`) finishes onboarding immediately
+    /// with defaults, bypassing every question — a separate, shorter path onto Home from the
+    /// same `OnboardingFlow` → `RootView` hand-off `testOnboardingCompletes` exercises.
+    func testOnboardingSkipAllLandsOnHome() {
+        let app = launchAppForOnboarding()
+
+        let skipAll = app.buttons[A11yID.onboardingSkipAll]
+        XCTAssertTrue(skipAll.waitForExistence(timeout: defaultTimeout), "onboarding.skipAll never appeared")
+        skipAll.tap()
+
+        let startButton = app.buttons[A11yID.homeStart]
+        XCTAssertTrue(startButton.waitForExistence(timeout: defaultTimeout), "home.start never appeared")
     }
 }

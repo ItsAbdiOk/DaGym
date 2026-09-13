@@ -9,6 +9,11 @@ private struct EditableExercise: Identifiable {
     var exercise: ExerciseInfo
     var sets: [PlannedSetDraft]
     var supersetGroup: Int?
+    /// Per-exercise progression override (plan.md §6.5): `overrideEnabled` gates whether
+    /// `overrideState.rule` is saved, so turning it off cleanly falls back to the routine's rule.
+    var overrideEnabled = false
+    var overrideState = RuleState()
+    var excludeFromProgression = false
 }
 
 /// Routine Builder — editable name, a reorderable list of exercises with
@@ -22,6 +27,7 @@ struct RoutineBuilderView: View {
     @State private var name = "New Routine"
     @State private var items: [EditableExercise] = []
     @State private var showingPicker = false
+    @State private var ruleState = RuleState()
 
     var body: some View {
         ZStack {
@@ -31,6 +37,7 @@ struct RoutineBuilderView: View {
                     navRow
                     NameCard(name: $name, hitMap: hitMap, hitSummary: hitSummary)
                         .animation(DGMotion.standard, value: hitMap)
+                    ProgressionRulePickerView(title: "Progression", state: $ruleState).dgCard()
                     ForEach($items) { $item in
                         BuilderExerciseCard(
                             item: $item, isSuperset: item.supersetGroup != nil,
@@ -86,8 +93,15 @@ struct RoutineBuilderView: View {
     private func load() {
         guard let routineID, let result = store.routineDrafts(id: routineID) else { return }
         name = result.info.name
+        let rule = store.fetchRoutineModel(id: routineID)?.progressionRuleValue
+        ruleState = RuleState.from(rule ?? .doubleProgression(low: 6, high: 8, incrementKg: 2.5))
         items = zip(result.info.exercises, result.drafts).map { info, draft in
-            EditableExercise(exercise: info, sets: draft.sets, supersetGroup: draft.supersetGroup)
+            EditableExercise(
+                exercise: info, sets: draft.sets, supersetGroup: draft.supersetGroup,
+                overrideEnabled: draft.overrideRule != nil,
+                overrideState: RuleState.from(draft.overrideRule ?? ruleState.rule),
+                excludeFromProgression: draft.excludeFromProgression
+            )
         }
     }
 
@@ -130,10 +144,14 @@ struct RoutineBuilderView: View {
     }
 
     private func save() {
-        let drafts = items.map {
-            RoutineExerciseDraft(exerciseID: $0.exercise.id, supersetGroup: $0.supersetGroup, sets: $0.sets)
+        let drafts = items.map { item in
+            RoutineExerciseDraft(
+                exerciseID: item.exercise.id, supersetGroup: item.supersetGroup, sets: item.sets,
+                overrideRule: item.overrideEnabled ? item.overrideState.rule : nil,
+                excludeFromProgression: item.excludeFromProgression
+            )
         }
-        store.saveRoutine(id: routineID, name: name, exercises: drafts)
+        store.saveRoutine(id: routineID, name: name, rule: ruleState.rule, exercises: drafts)
         onDone()
     }
 }
@@ -190,6 +208,7 @@ private struct BuilderExerciseCard: View {
                 }
             }
             setsCountStepper
+            progressionOverride
         }
         .padding(DGSpace.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -232,6 +251,22 @@ private struct BuilderExerciseCard: View {
         Stepper(value: setsCountBinding, in: 1...8) {
             Text("\(item.sets.count) sets").font(DGFont.footnote).foregroundStyle(DGColor.ink3)
         }
+    }
+
+    /// Per-exercise progression override + exclude toggles (plan.md §6.5).
+    private var progressionOverride: some View {
+        VStack(alignment: .leading, spacing: DGSpace.s2) {
+            Toggle("Override progression", isOn: $item.overrideEnabled)
+                .font(DGFont.footnote)
+                .tint(DGColor.coral)
+            if item.overrideEnabled {
+                ProgressionRulePickerView(title: "Override", state: $item.overrideState)
+            }
+            Toggle("Exclude from progression", isOn: $item.excludeFromProgression)
+                .font(DGFont.footnote)
+                .tint(DGColor.coral)
+        }
+        .padding(.top, DGSpace.s2)
     }
 
     private var setsCountBinding: Binding<Int> {

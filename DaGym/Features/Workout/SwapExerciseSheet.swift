@@ -2,22 +2,17 @@ import GymCore
 import SwiftUI
 
 /// Mid-workout swap: pick a reason, see why the coach chose these three,
-/// then swap. See mockup 10_01 (left).
+/// then swap. See mockup 10_01 (left). Suggestions come from
+/// `WorkoutStore.substitutes(for:reason:)` (plan §6.6, rule-based).
 struct SwapExerciseSheet: View {
     var exercise: ExerciseInfo
     var onPick: (ExerciseInfo) -> Void
 
-    @State private var reason = Reason.machineTaken
+    @Environment(WorkoutStore.self) private var store
     @Environment(\.dismiss) private var dismiss
-
-    private let candidates = [SampleData.inclineDB, SampleData.deficitPushup, SampleData.weightedDip]
-
-    fileprivate enum Reason: String, CaseIterable {
-        case machineTaken = "Machine taken"
-        case noBarbell = "No barbell"
-        case shoulderHurts = "Shoulder hurts"
-        case shortOnTime = "Short on time"
-    }
+    @State private var reason = SwapReason.machineTaken
+    @State private var suggestions: [SubstitutionSuggestion] = []
+    @State private var showingLibrary = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s5) {
@@ -26,22 +21,9 @@ struct SwapExerciseSheet: View {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             reasonChips
-            WhyCard(
-                title: "Why these three",
-                message: "All three hit "
-                    + "\(exercise.primary.first?.displayName.lowercased() ?? "the same muscle") "
-                    + "as the prime mover with the same set count, and none needs the "
-                    + "\(exercise.equipment.lowercased()) station."
-            )
-            VStack(spacing: DGSpace.s2) {
-                ForEach(Array(candidates.enumerated()), id: \.element.id) { index, candidate in
-                    CandidateRow(exercise: candidate, isPrimary: index == 0) {
-                        onPick(candidate)
-                        dismiss()
-                    }
-                }
-            }
-            Button("Search the library instead") {}
+            WhyCard(title: "Why these three", message: whyMessage)
+            candidateList
+            Button("Search the library instead") { showingLibrary = true }
                 .buttonStyle(.plain)
                 .font(DGFont.condensedLabel(13))
                 .textCase(.uppercase)
@@ -54,26 +36,71 @@ struct SwapExerciseSheet: View {
         .presentationDetents([.height(560)])
         .presentationDragIndicator(.visible)
         .presentationBackground(DGColor.surface1)
+        .task(id: reason) { refresh() }
+        .sheet(isPresented: $showingLibrary) {
+            ExercisePickerSheet(onPick: use)
+        }
     }
 
     private var reasonChips: some View {
         FlowChips(reason: $reason)
     }
+
+    @ViewBuilder
+    private var candidateList: some View {
+        if suggestions.isEmpty {
+            EmptyState(
+                symbol: "arrow.triangle.2.circlepath",
+                title: "Nothing Fits Yet",
+                message: "No exercise in your library matches this reason and equipment. "
+                    + "Search the library instead."
+            )
+        } else {
+            VStack(spacing: DGSpace.s2) {
+                ForEach(Array(suggestions.enumerated()), id: \.element.id) { index, suggestion in
+                    CandidateRow(suggestion: suggestion, isPrimary: index == 0, onUse: use)
+                }
+            }
+        }
+    }
+
+    /// The lead suggestion's "why", or a fallback when nothing qualified.
+    private var whyMessage: String {
+        suggestions.first?.why
+            ?? "Nothing in your equipment matches \(exercise.name) for this reason yet — "
+                + "try the library instead."
+    }
+
+    private func refresh() {
+        suggestions = store.substitutes(for: exercise.id, reason: reason)
+    }
+
+    private func use(_ candidate: ExerciseInfo) {
+        onPick(candidate)
+        dismiss()
+    }
 }
 
 /// Reason chips wrap onto a second line, matching the mockup's two-row layout.
 private struct FlowChips: View {
-    @Binding var reason: SwapExerciseSheet.Reason
+    @Binding var reason: SwapReason
+
+    private static let options: [(reason: SwapReason, title: String)] = [
+        (.machineTaken, "Machine taken"),
+        (.noBarbell, "No barbell"),
+        (.shoulderHurts, "Shoulder hurts"),
+        (.shortOnTime, "Short on time")
+    ]
 
     var body: some View {
         let columns = [GridItem(.adaptive(minimum: 110), spacing: DGSpace.s2)]
         LazyVGrid(columns: columns, alignment: .leading, spacing: DGSpace.s2) {
-            ForEach(SwapExerciseSheet.Reason.allCases, id: \.self) { option in
+            ForEach(Array(Self.options.enumerated()), id: \.offset) { _, option in
                 DGChip(
-                    title: option.rawValue, selected: reason == option,
+                    title: option.title, selected: reason == option.reason,
                     selectedFill: DGColor.aiViolet, selectedInk: .white
                 ) {
-                    reason = option
+                    reason = option.reason
                 }
             }
         }
@@ -81,9 +108,11 @@ private struct FlowChips: View {
 }
 
 private struct CandidateRow: View {
-    var exercise: ExerciseInfo
+    var suggestion: SubstitutionSuggestion
     var isPrimary: Bool
-    var onUse: () -> Void
+    var onUse: (ExerciseInfo) -> Void
+
+    private var exercise: ExerciseInfo { suggestion.exercise }
 
     var body: some View {
         HStack(spacing: DGSpace.s3) {
@@ -97,12 +126,12 @@ private struct CandidateRow: View {
                 Text(exercise.name.uppercased())
                     .font(DGFont.title3)
                     .foregroundStyle(DGColor.ink1)
-                Text(footnote)
+                Text(suggestion.why)
                     .font(DGFont.footnote)
                     .foregroundStyle(DGColor.ink3)
             }
             Spacer(minLength: DGSpace.s2)
-            Button("Use", action: onUse)
+            Button("Use") { onUse(exercise) }
                 .buttonStyle(.plain)
                 .font(DGFont.condensedLabel(12))
                 .textCase(.uppercase)
@@ -113,15 +142,17 @@ private struct CandidateRow: View {
         }
         .dgCard(padding: DGSpace.s3)
     }
-
-    private var footnote: String {
-        exercise.equipment + (exercise.sessions > 0 ? " · \(exercise.sessions) sessions logged" : " · new")
-    }
 }
 
 #Preview {
-    Color.clear
-        .sheet(isPresented: .constant(true)) {
-            SwapExerciseSheet(exercise: SampleData.cableFly, onPick: { _ in })
-        }
+    if let store = PreviewStore.make() {
+        return AnyView(
+            Color.clear
+                .sheet(isPresented: .constant(true)) {
+                    SwapExerciseSheet(exercise: SampleData.cableFly, onPick: { _ in })
+                }
+                .environment(store)
+        )
+    }
+    return AnyView(EmptyView())
 }

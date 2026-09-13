@@ -65,4 +65,47 @@ struct WorkoutStorePersonalRecordsTests {
         let groups = store.personalRecords()
         #expect(!groups.contains { $0.exerciseName == "Plank" })
     }
+
+    @Test("an assisted pull-up session earns an e1RM PR and a least-assistance PR")
+    func assistedPullUpEarnsE1rmAndLeastAssistancePRs() throws {
+        let store = try makeStore()
+        store.logBodyweight(kg: 80)
+        let pullUp = store.createCustomExercise(
+            name: "Assisted Pull-Up", primary: [.lats], equipment: "machine", style: .assisted
+        )
+        let routineID = makeRoutine(store: store, exerciseIDs: [pullUp.id])
+
+        let session = store.startWorkout(routineID: routineID)
+        session.exercises[0].sets[1].weightKg = 0
+        session.exercises[0].sets[1].reps = 6
+        session.exercises[0].sets[1].assistanceKg = 20
+        session.exercises[0].sets[1].isDone = true
+        _ = store.finish(session: session)
+
+        let group = try #require(store.personalRecords().first { $0.exerciseName == "Assisted Pull-Up" })
+        #expect(group.records.contains { $0.kindLabel == "Estimated 1RM" })
+        #expect(group.records.contains { $0.kindLabel == "Least assistance" })
+    }
+
+    @Test("a weighted pull-up's e1RM reflects bodyweight + added load, not the added load alone")
+    func weightedPullUpE1rmIncludesBodyweight() throws {
+        let store = try makeStore()
+        store.logBodyweight(kg: 80)
+        let pullUp = store.createCustomExercise(
+            name: "Weighted Pull-Up", primary: [.lats], equipment: "other", style: .weightedBodyweight
+        )
+        let routineID = makeRoutine(store: store, exerciseIDs: [pullUp.id])
+
+        let session = store.startWorkout(routineID: routineID)
+        session.exercises[0].sets[1].weightKg = 20
+        session.exercises[0].sets[1].reps = 5
+        session.exercises[0].sets[1].isDone = true
+        _ = store.finish(session: session)
+
+        let group = try #require(store.personalRecords().first { $0.exerciseName == "Weighted Pull-Up" })
+        let record = try #require(group.records.first { $0.kindLabel == "Estimated 1RM" })
+        // "e1RM 23" would mean the added-weight-only bug; the real e1RM off bodyweight (80) + 20
+        // at 5 reps is well above bodyweight.
+        #expect(record.line.contains("e1RM 23") == false)
+    }
 }

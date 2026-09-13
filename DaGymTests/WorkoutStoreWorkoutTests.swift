@@ -13,7 +13,9 @@ struct WorkoutStoreWorkoutTests {
         return WorkoutStore(context: ModelContext(container))
     }
 
-    private func makeRoutine(store: WorkoutStore, exerciseID: UUID) -> UUID {
+    /// A routine saved with no progression rule: its sets are pre-filled by position from the
+    /// last session (plan.md §6.1), never prescribed by the engine. Pass `rule:` for the other path.
+    private func makeRoutine(store: WorkoutStore, exerciseID: UUID, rule: ProgressionRule? = nil) -> UUID {
         let draft = RoutineExerciseDraft(
             exerciseID: exerciseID,
             sets: [
@@ -22,10 +24,10 @@ struct WorkoutStoreWorkoutTests {
                 PlannedSetDraft(kind: .working, targetReps: 8, targetWeightKg: 60)
             ]
         )
-        return store.saveRoutine(id: nil, name: "Push A", exercises: [draft]).id
+        return store.saveRoutine(id: nil, name: "Push A", rule: rule, exercises: [draft]).id
     }
 
-    @Test("startWorkout auto-fills from the previous session by set position")
+    @Test("startWorkout auto-fills from the previous session by set position when the routine has no rule")
     func autoFillsFromPrevious() throws {
         let store = try makeStore()
         let exercise = store.createCustomExercise(
@@ -45,6 +47,35 @@ struct WorkoutStoreWorkoutTests {
         #expect(workingSet.reps == 8)
         #expect(workingSet.previousWeightKg == 62.5)
         #expect(workingSet.previousReps == 8)
+        #expect(second.exercises[0].whyTitle == nil)
+    }
+
+    @Test("startWorkout lets the progression engine prescribe when the routine has a rule")
+    func ruleWinsOverAutoFill() throws {
+        let store = try makeStore()
+        let exercise = store.createCustomExercise(
+            name: "Bench Press", primary: [.chest], equipment: "Barbell", style: .weightReps
+        )
+        let routineID = makeRoutine(store: store, exerciseID: exercise.id, rule: .linear(incrementKg: 2.5))
+
+        let first = store.startWorkout(routineID: routineID)
+        for index in 1...2 {
+            first.exercises[0].sets[index].weightKg = 62.5
+            first.exercises[0].sets[index].reps = 8
+            first.exercises[0].sets[index].isDone = true
+        }
+        _ = store.finish(session: first)
+
+        // Both planned working sets were done and hit their 8-rep target (skipping one would be
+        // a miss), so linear adds the increment and keeps the plan's target reps — the previous
+        // session still shows as the ghost.
+        let second = store.startWorkout(routineID: routineID)
+        let workingSet = second.exercises[0].sets[1]
+        #expect(workingSet.weightKg == 65)
+        #expect(workingSet.reps == 8)
+        #expect(workingSet.previousWeightKg == 62.5)
+        #expect(workingSet.previousReps == 8)
+        #expect(second.exercises[0].whyTitle == "+2.5 kg")
     }
 
     @Test("finish excludes warm-ups from volume; a lower e1RM records no PR")

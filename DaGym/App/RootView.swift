@@ -4,6 +4,11 @@ import SwiftUI
 /// App shell: switches between the five tabs and presents the active
 /// workout (and its summary) full-screen when a session is started.
 struct RootView: View {
+    /// True only for the single `RootView` that replaces `OnboardingFlow` right after
+    /// `onComplete` — see the `.task` below for why that specific transition needs a startup
+    /// delay that a normal cold launch straight into `RootView` does not.
+    var justCompletedOnboarding = false
+
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
     @State private var tab = DGTab.today
@@ -21,7 +26,21 @@ struct RootView: View {
             DGTabBar(selected: $tab)
                 .padding(.bottom, 8)
         }
-        .task { refreshRoutine() }
+        .task {
+            // `RootView` replacing `OnboardingFlow` mid-lifecycle (as opposed to a cold launch
+            // mounting `RootView` fresh) tears down Onboarding's whole deep view hierarchy while
+            // building this one, all in the same transaction — and fetching via a `#Predicate`
+            // macro while AttributeGraph's background queue is still draining type-layout work
+            // for that churn has been observed to crash (`WorkoutStore.routines()`,
+            // `EXC_BREAKPOINT` inside `SwiftData`/`swift_conformsToProtocol`, confirmed with a
+            // debugger attached — a real SwiftData/AttributeGraph race, not app logic). A cold
+            // launch straight into `RootView` doesn't have a prior subtree to tear down and has
+            // never reproduced this, so only pay the delay for the onboarding hand-off.
+            if justCompletedOnboarding {
+                try? await Task.sleep(for: .milliseconds(1500))
+            }
+            refreshRoutine()
+        }
         .onAppear { startPendingRestTimerIfNeeded() }
         .onChange(of: tab) { _, _ in refreshRoutine() }
         .onOpenURL(perform: handleOpenURL)
@@ -50,7 +69,7 @@ struct RootView: View {
             HomeView(
                 routine: routine, nextSessionText: nextSessionText, onStart: startFromScheduledRoutine,
                 onFreestyle: startFreestyle, onBackfill: { showingBackfill = true },
-                onSeeRecovery: { showRecovery = true }
+                onSeeRecovery: { showRecovery = true }, justCompletedOnboarding: justCompletedOnboarding
             )
         case .routines:
             RoutinesTabView(onStart: startWorkout)

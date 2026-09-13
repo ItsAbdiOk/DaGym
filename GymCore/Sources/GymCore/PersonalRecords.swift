@@ -93,7 +93,7 @@ public enum PersonalRecords {
         case .maxRepsAtWeight:
             return "\(pr.reps) reps at \(WeightFormat.kg(pr.weightKg)) kg"
         case .volume:
-            return "Volume \(WeightFormat.kg(pr.value)) kg"
+            return "Best set \(WeightFormat.kg(pr.weightKg)) × \(pr.reps) (\(WeightFormat.kg(pr.value)) kg)"
         case .longestHold:
             return "Hold \(clock(Int(pr.value)))"
         case .leastAssistance:
@@ -162,20 +162,24 @@ public enum PersonalRecords {
         ]
     }
 
-    /// Per weight, more reps than the existing record at that same weight.
+    /// Per weight, more reps than the existing record at that same weight. Weights are keyed
+    /// on a 0.25 kg grid so an lb re-entry (60.0004 kg) doesn't open a second "at 60 kg" row.
     private static func maxRepsAtWeightRecords(
         sets: [PerformedSet], date: Date, existing: [PersonalRecord]
     ) -> [PersonalRecord] {
         var bestRepsByWeight: [Double: Int] = [:]
         for set in sets where set.reps >= 1 {
-            let current = bestRepsByWeight[set.weightKg] ?? 0
+            let key = weightKey(set.weightKg)
+            let current = bestRepsByWeight[key] ?? 0
             if set.reps > current {
-                bestRepsByWeight[set.weightKg] = set.reps
+                bestRepsByWeight[key] = set.reps
             }
         }
         var records: [PersonalRecord] = []
         for (weight, reps) in bestRepsByWeight.sorted(by: { $0.key < $1.key }) {
-            let currentBest = existing.first { $0.kind == .maxRepsAtWeight && $0.weightKg == weight }?.reps
+            let currentBest = existing.first {
+                $0.kind == .maxRepsAtWeight && weightKey($0.weightKg) == weight
+            }?.reps
             if let currentBest, reps <= currentBest { continue }
             records.append(
                 PersonalRecord(
@@ -184,6 +188,10 @@ public enum PersonalRecords {
             )
         }
         return records
+    }
+
+    private static func weightKey(_ weightKg: Double) -> Double {
+        (weightKg / 0.25).rounded() * 0.25
     }
 
     private static func clock(_ seconds: Int) -> String {

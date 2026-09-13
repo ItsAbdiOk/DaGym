@@ -29,13 +29,30 @@ struct AppRootContainer: View {
     private let container: ModelContainer?
     private let preferences: Preferences
     @State private var phase = LaunchPhase.loading
+    // Mirrors `preferences.hasCompletedOnboarding` in `@State` so finishing onboarding is
+    // guaranteed to invalidate this view. `preferences` is a plain `let`: reading its properties
+    // from `body` only reliably drives a re-render while this struct's own identity is stable,
+    // and `AppRootContainer` can be re-initialized (a fresh `Preferences()`) by its parent scene,
+    // which would otherwise leave onboarding stuck showing its last screen after `onComplete`.
+    @State private var hasCompletedOnboarding: Bool
+    // Set only by `onComplete` below — distinguishes "just finished onboarding this launch" from
+    // "onboarding was already done", so `RootView` only pays its post-onboarding startup delay
+    // (see `RootView.justCompletedOnboarding`) when it's actually replacing `OnboardingFlow`.
+    @State private var justCompletedOnboarding = false
 
     init() {
         if LaunchFlags.isUITesting {
             UIView.setAnimationsEnabled(false)
         }
         let preferences = Preferences()
+        if LaunchFlags.isUITesting {
+            // `-dgUITest` alone should land existing smoke tests straight on the tab bar;
+            // `-dgUITest -dgOnboarding` resets onboarding so `testOnboardingCompletes` always
+            // starts fresh, regardless of what a previous simulator run left in UserDefaults.
+            preferences.hasCompletedOnboarding = !LaunchFlags.forcesOnboarding
+        }
         self.preferences = preferences
+        _hasCompletedOnboarding = State(initialValue: preferences.hasCompletedOnboarding)
         container = Self.resolveContainer(cloudKitEnabled: preferences.iCloudSyncEnabled)
     }
 
@@ -68,12 +85,32 @@ struct AppRootContainer: View {
                 .modelContainer(container)
                 .task { await seed(context: container.mainContext) }
         case .ready(let store, let healthSync):
-            RootView()
-                .environment(store)
-                .environment(preferences)
-                .environment(healthSync)
-                .modelContainer(container)
-                .task { healthSync.bind(to: store) }
+            Group {
+                if hasCompletedOnboarding {
+                    RootView(justCompletedOnboarding: justCompletedOnboarding)
+                } else {
+                    OnboardingFlow(onComplete: {
+                        // Flip the `@State` gate first: it's what this view's `body` actually
+                        // switches on, so setting it first means the very next render already
+                        // shows `RootView`. `preferences` is `@Observable` and read elsewhere
+                        // (e.g. re-launch), so mutating it too is still needed for persistence —
+                        // but mutating it *before* the `@State` flip made its own change
+                        // notification force an extra synchronous re-render in between (still
+                        // showing `OnboardingFlow`, since the `@State` flip hadn't happened yet),
+                        // which raced with `RootView`'s first layout and either left it
+                        // un-hit-testable or crashed SwiftData's fetch mid-transition. Ordering it
+                        // second makes that extra render harmless: it just redraws `RootView`.
+                        hasCompletedOnboarding = true
+                        justCompletedOnboarding = true
+                        preferences.hasCompletedOnboarding = true
+                    })
+                }
+            }
+            .environment(store)
+            .environment(preferences)
+            .environment(healthSync)
+            .modelContainer(container)
+            .task { healthSync.bind(to: store) }
         }
     }
 

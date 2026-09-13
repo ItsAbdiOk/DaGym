@@ -164,12 +164,16 @@ struct WhyCard: View {
     var message: String
     var primary: String?
     var secondary: String?
+    /// Label tint — violet (default) reads "coach explained this"; pass `DGColor.warning` for a
+    /// deload back-off (`GymCore.PrescriptionReason.Kind.deload`) so it reads as a heads-up
+    /// rather than routine coaching.
+    var labelColor: Color = DGColor.aiVioletText
     var onPrimary: (() -> Void)?
     var onSecondary: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s2) {
-            Text(title).dgLabel(DGColor.aiVioletText)
+            Text(title).dgLabel(labelColor)
             Text(message)
                 .font(DGFont.subhead)
                 .foregroundStyle(DGColor.ink2)
