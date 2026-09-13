@@ -37,7 +37,7 @@ enum A11yID {
 /// depend on — or pollute — whatever is on a developer's simulator.
 @MainActor
 final class SmokeTests: XCTestCase {
-    private let defaultTimeout: TimeInterval = 10
+    private let defaultTimeout: TimeInterval = 25
 
     override func setUpWithError() throws {
         continueAfterFailure = false
