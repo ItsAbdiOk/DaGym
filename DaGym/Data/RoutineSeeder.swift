@@ -65,8 +65,8 @@ enum RoutineSeeder {
             RoutineExerciseDraft(
                 exerciseID: bench.id,
                 sets: [
-                    PlannedSetDraft(kind: .warmup, targetReps: 10, targetWeightKg: 40),
-                    PlannedSetDraft(kind: .warmup, targetReps: 5, targetWeightKg: 60)
+                    PlannedSetDraft(kind: .warmup, targetReps: 10),
+                    PlannedSetDraft(kind: .warmup, targetReps: 5)
                 ] + (0..<3).map { _ in
                     PlannedSetDraft(kind: .working, targetReps: 6, targetRepsHigh: 8, targetRPE: 8)
                 },
@@ -113,7 +113,7 @@ enum RoutineSeeder {
         let exercises = [
             RoutineExerciseDraft(
                 exerciseID: deadlift.id,
-                sets: [PlannedSetDraft(kind: .warmup, targetReps: 8, targetWeightKg: 60)]
+                sets: [PlannedSetDraft(kind: .warmup, targetReps: 8)]
                     + (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 5) },
                 overrideRule: starterOverride(for: deadlift, routineRule: rule)
             ),
@@ -154,8 +154,8 @@ enum RoutineSeeder {
             RoutineExerciseDraft(
                 exerciseID: squat.id,
                 sets: [
-                    PlannedSetDraft(kind: .warmup, targetReps: 8, targetWeightKg: 40),
-                    PlannedSetDraft(kind: .warmup, targetReps: 5, targetWeightKg: 60)
+                    PlannedSetDraft(kind: .warmup, targetReps: 8),
+                    PlannedSetDraft(kind: .warmup, targetReps: 5)
                 ] + (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 5) },
                 overrideRule: starterOverride(for: squat, routineRule: rule)
             ),

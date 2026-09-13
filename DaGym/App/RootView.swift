@@ -96,11 +96,7 @@ struct RootView: View {
         case .library:
             LibraryView()
         case .coach:
-            EmptyState(
-                symbol: "sparkles",
-                title: "Coach Is Warming Up",
-                message: "Log a couple of sessions and the coach will start offering suggestions."
-            )
+            CoachPlaceholderView()
         }
     }
 

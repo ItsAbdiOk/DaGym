@@ -23,6 +23,7 @@ extension WorkoutStore {
             exercises: entries
         )
         session.workoutID = model.id
+        session.fillPlaceholderWarmups()
         return session
     }
 

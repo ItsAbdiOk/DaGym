@@ -15,25 +15,22 @@ struct HistoryView: View {
     var currentStreakWeeks: Int
     var onBackfill: () -> Void
     var onDelete: (UUID) -> Void
+    /// Body-wide charts rendered above the tiles, scrolling with the list as one page.
+    var charts: AnyView = AnyView(EmptyView())
 
     @Environment(Preferences.self) private var preferences
 
     var body: some View {
         ZStack {
             AmbientWash()
-            VStack(spacing: 0) {
-                header
-                    .padding(.horizontal, DGSpace.s4)
-                    .padding(.top, DGSpace.s3)
-                    .padding(.bottom, DGSpace.s3)
-                list
-            }
+            list
         }
         .overlay(alignment: .bottom) { backfillButton }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: DGSpace.s4) {
+            charts
             tiles
             VStack(alignment: .leading, spacing: DGSpace.s1) {
                 Text("History").dgLabel()
@@ -48,9 +45,20 @@ struct HistoryView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// "RECORDS" and "RECOVERY" glass tiles, navigating into their full screens.
+    /// Records / Recovery / Consistency / Milestones / Body tiles in a horizontally scrolling
+    /// row — five of them never fit a phone width side by side.
     private var tiles: some View {
-        HStack(spacing: DGSpace.s3) {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DGSpace.s3) {
+                tileRow
+            }
+            .padding(.horizontal, DGSpace.s4)
+        }
+        .padding(.horizontal, -DGSpace.s4)
+        .scrollClipDisabled()
+    }
+
+    @ViewBuilder private var tileRow: some View {
             ProgressTile(
                 title: "Records", subtitle: Self.pluralized(recordsCount, "record"),
                 symbol: "star.fill", tint: DGColor.prGoldText
@@ -70,13 +78,19 @@ struct HistoryView: View {
             ProgressTile(
                 title: "Body", subtitle: "Weight & goal", symbol: "figure", tint: DGColor.infoText
             ) { BodyView() }
-        }
     }
 
     private var list: some View {
         let groups = weekGroups
         let firstLabel = groups.first?.label
         return List {
+            header
+                .padding(.horizontal, DGSpace.s4)
+                .padding(.top, DGSpace.s3)
+                .padding(.bottom, DGSpace.s2)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             ForEach(groups, id: \.label) { group in
                 Section {
                     ForEach(Array(group.records.enumerated()), id: \.element.id) { offset, record in
@@ -239,7 +253,8 @@ private struct ProgressTile<Destination: View>: View {
                 Spacer(minLength: 0)
             }
             .padding(DGSpace.s3)
-            .frame(maxWidth: .infinity, minHeight: DGTap.min)
+            .frame(width: 184, alignment: .leading)
+            .frame(minHeight: DGTap.min)
             .dgGlass(.regular, radius: DGRadius.md)
         }
         .buttonStyle(DGPressStyle())

@@ -63,7 +63,7 @@ struct ActiveWorkoutView: View {
         .onAppear { UIApplication.shared.isIdleTimerDisabled = preferences.keepScreenAwake }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         .sheet(item: $activeSheet, onDismiss: { store.sync(session: session) }, content: sheetContent)
-        .confirmationDialog("Finish workout", isPresented: $showFinishConfirm, titleVisibility: .visible) {
+        .confirmationDialog(finishPrompt, isPresented: $showFinishConfirm, titleVisibility: .visible) {
             Button("Finish workout", action: finishSession)
             Button("Discard workout", role: .destructive, action: discardSession)
         }
@@ -381,5 +381,15 @@ enum ActiveSheet: Identifiable {
         ActiveWorkoutView(session: SampleData.makeSession(), onFinish: { _ in })
             .environment(WorkoutStore(context: container.mainContext))
             .environment(Preferences())
+    }
+}
+
+private extension ActiveWorkoutView {
+    /// What finishing now would save — the title of the finish/discard dialog, so it never just
+    /// repeats the button label.
+    var finishPrompt: String {
+        let done = session.setsDone
+        guard done > 0 else { return "Nothing logged yet" }
+        return "\(done) of \(session.setsTotal) sets done · \(WorkoutSession.clock(session.elapsedSeconds()))"
     }
 }

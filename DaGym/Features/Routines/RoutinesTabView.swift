@@ -34,16 +34,21 @@ struct RoutinesTabView: View {
             }
             .navigationBarHidden(true)
             .navigationDestination(for: Destination.self) { destination in
-                switch destination {
-                case .edit(let id):
-                    RoutineBuilderView(routineID: id, onDone: pop)
-                case .new:
-                    RoutineBuilderView(routineID: nil, onDone: pop)
-                case .schedule:
-                    ScheduleView(onDone: pop)
-                case .programs:
-                    ProgramsView(onDone: pop)
+                // Each destination draws its own Cancel/Done row, so the system bar (and its
+                // back button) would only double up.
+                Group {
+                    switch destination {
+                    case .edit(let id):
+                        RoutineBuilderView(routineID: id, onDone: pop)
+                    case .new:
+                        RoutineBuilderView(routineID: nil, onDone: pop)
+                    case .schedule:
+                        ScheduleView(onDone: pop)
+                    case .programs:
+                        ProgramsView(onDone: pop)
+                    }
                 }
+                .toolbar(.hidden, for: .navigationBar)
             }
             .task { refresh() }
             .onChange(of: store.changeToken) { refresh() }
@@ -133,7 +138,9 @@ private struct RoutineCard: View {
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Spacer()
+                // Leaves room for the share button `RoutinesTabView` overlays in the top-right.
                 Text("~\(routine.estimatedMinutes) MIN").dgLabel()
+                    .padding(.trailing, DGTap.min - DGSpace.s3)
             }
             Text(exerciseNames)
                 .font(DGFont.footnote)

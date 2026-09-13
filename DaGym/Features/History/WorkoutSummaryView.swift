@@ -177,24 +177,30 @@ private struct MusclesHitCard: View {
             .map { (muscle: $0.key, share: $0.value / total) }
     }
 
-    private var lines: String {
-        topMuscles.isEmpty
-            ? "No sets logged"
-            : topMuscles.map { "\($0.muscle.displayName) \(Int(($0.share * 100).rounded()))%" }
-                .joined(separator: " · ")
-    }
-
     var body: some View {
         HStack(alignment: .top, spacing: DGSpace.s4) {
             BodyMapPair(intensity: musclesHit, height: 96)
             VStack(alignment: .leading, spacing: DGSpace.s2) {
                 Text("Muscles Hit").dgLabel()
-                Text(lines)
-                    .font(DGFont.body)
-                    .foregroundStyle(DGColor.ink1)
-                    .fixedSize(horizontal: false, vertical: true)
+                if topMuscles.isEmpty {
+                    Text("No sets logged")
+                        .font(DGFont.body)
+                        .foregroundStyle(DGColor.ink1)
+                } else {
+                    // One muscle per line: "Triceps 25%" must never wrap between name and number.
+                    ForEach(topMuscles, id: \.muscle) { item in
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(item.muscle.displayName)
+                                .font(DGFont.body)
+                                .foregroundStyle(DGColor.ink1)
+                            Spacer(minLength: DGSpace.s2)
+                            Text("\(Int((item.share * 100).rounded()))%")
+                                .font(DGFont.title3)
+                                .foregroundStyle(DGColor.ink2)
+                        }
+                    }
+                }
             }
-            Spacer(minLength: 0)
         }
         .dgCard()
     }

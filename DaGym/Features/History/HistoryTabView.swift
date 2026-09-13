@@ -21,22 +21,13 @@ struct HistoryTabView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                ScrollView {
-                    ProgressChartsSection()
-                        .padding(.horizontal, DGSpace.s4)
-                        .padding(.top, DGSpace.s3)
-                        .padding(.bottom, DGSpace.s2)
-                }
-                .frame(maxHeight: 380)
-                HistoryView(
-                    records: records, workoutsCount: workoutsCount, volumeKg: volumeKg,
-                    recordsCount: recordsCount, recoveryHeadline: recoveryHeadline,
-                    currentStreakWeeks: currentStreakWeeks,
-                    onBackfill: { showingBackfill = true }, onDelete: deleteWorkout
-                )
-                .frame(maxHeight: .infinity)
-            }
+            HistoryView(
+                records: records, workoutsCount: workoutsCount, volumeKg: volumeKg,
+                recordsCount: recordsCount, recoveryHeadline: recoveryHeadline,
+                currentStreakWeeks: currentStreakWeeks,
+                onBackfill: { showingBackfill = true }, onDelete: deleteWorkout,
+                charts: AnyView(ProgressChartsSection())
+            )
             .navigationDestination(for: UUID.self) { id in
                 WorkoutDetailView(workoutID: id)
             }

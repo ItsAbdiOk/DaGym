@@ -240,6 +240,8 @@ private struct CollapsedExerciseRow: View {
             let target = first.targetSeconds ?? 0
             return "\(entry.sets.count) holds · target \(WorkoutSession.clock(target))"
         }
+        // A weight of 0 means "not entered yet" (or bodyweight) — nothing worth printing.
+        guard first.weightKg > 0 else { return "\(entry.sets.count) × \(first.reps)" }
         let weight = preferences.formatWeight(kg: first.weightKg)
         let suffix = entry.exercise.isPerSide ? "\(preferences.unitSymbol) per side" : preferences.unitSymbol
         return "\(entry.sets.count) × \(first.reps) · \(weight) \(suffix)"
@@ -270,6 +272,7 @@ private struct CompletedExerciseRow: View {
             let best = entry.sets.compactMap(\.durationSeconds).max() ?? 0
             return "\(name) · \(entry.sets.count) holds · best \(WorkoutSession.clock(best))"
         }
+        guard first.weightKg > 0 else { return "\(name) · \(entry.sets.count) × \(first.reps)" }
         let weight = preferences.formatWeight(kg: first.weightKg)
         return "\(name) · \(entry.sets.count) × \(first.reps) · \(weight) \(preferences.unitSymbol)"
     }

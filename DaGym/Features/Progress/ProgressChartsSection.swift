@@ -39,10 +39,13 @@ struct ProgressChartsSection: View {
     }
 
     private var header: some View {
-        HStack {
-            Text("Progress").dgLabel()
+        HStack(alignment: .center, spacing: DGSpace.s3) {
+            Text("Progress")
+                .font(DGFont.title1)
+                .textCase(.uppercase)
+                .foregroundStyle(DGColor.ink1)
             Spacer()
-            Button("1RM Calculator") { showingCalculator = true }
+            Button("1RM Calc") { showingCalculator = true }
                 .buttonStyle(.plain)
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
@@ -81,7 +84,7 @@ struct ThisWeekStrip: View {
             )
             DeltaStat(
                 value: WorkoutSession.clock(thisWeek.avgDurationSeconds), label: "Avg Duration",
-                delta: countDelta(thisWeek.avgDurationSeconds, lastWeek.avgDurationSeconds)
+                delta: clockDelta(thisWeek.avgDurationSeconds, lastWeek.avgDurationSeconds)
             )
         }
         .dgCard(padding: 0)
@@ -93,6 +96,14 @@ struct ThisWeekStrip: View {
         let percent = Int(((current - previous) / previous * 100).rounded())
         guard percent != 0 else { return nil }
         return percent > 0 ? "+\(percent)%" : "\(percent)%"
+    }
+
+    /// "+2:47" / "-0:30" — a duration delta reads as time, not a bare second count. Nil when
+    /// there's no previous week to compare against.
+    private func clockDelta(_ current: Int, _ previous: Int) -> String? {
+        guard previous > 0, current != previous else { return nil }
+        let delta = current - previous
+        return (delta > 0 ? "+" : "-") + WorkoutSession.clock(abs(delta))
     }
 
     private func countDelta(_ current: Int, _ previous: Int) -> String? {
@@ -138,6 +149,20 @@ struct WeeklyVolumeCard: View {
                 Spacer()
                 if let delta { Text(delta).font(DGFont.footnote).foregroundStyle(deltaColor) }
             }
+            if weeks.allSatisfy({ $0.volumeKg == 0 }) {
+                Text("Working sets with weight will show up here week by week.")
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.ink4)
+            } else {
+                volumeChart
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dgCard()
+    }
+
+    private var volumeChart: some View {
+        VStack {
             Chart(Array(weeks.enumerated()), id: \.offset) { index, week in
                 let label = Self.weekLabel(week.weekStart, calendar: preferences.trainingCalendar)
                 BarMark(x: .value("Week", label), y: .value("Volume", week.volumeKg))
@@ -152,7 +177,6 @@ struct WeeklyVolumeCard: View {
             }
             .frame(height: 120)
         }
-        .dgCard()
     }
 
     private var delta: String? {
@@ -205,6 +229,7 @@ struct SetsPerMuscleCard: View {
                     .frame(maxWidth: .infinity)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .dgCard()
     }
 

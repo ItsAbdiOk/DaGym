@@ -128,10 +128,16 @@ struct ExerciseDetailView: View {
         }
     }
 
+    /// "barbell · olympic bar · 2.5 kg increment"; a bodyweight move has no bar and no
+    /// increment worth stating, so it reads just "bodyweight".
     private var equipmentLine: String {
-        let barName = exercise.bar?.name.lowercased() ?? "bodyweight"
-        let increment = preferences.formatWeight(kg: exercise.incrementKg)
-        return "\(exercise.equipment) · \(barName) · \(increment) \(preferences.unitSymbol) increment"
+        var parts = [exercise.equipment]
+        if let bar = exercise.bar { parts.append(bar.name.lowercased()) }
+        if exercise.incrementKg > 0 {
+            let increment = preferences.formatWeight(kg: exercise.incrementKg)
+            parts.append("\(increment) \(preferences.unitSymbol) increment")
+        }
+        return parts.joined(separator: " · ")
     }
 
     private var statTiles: some View {

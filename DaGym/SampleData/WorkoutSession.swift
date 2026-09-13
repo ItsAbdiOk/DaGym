@@ -226,6 +226,20 @@ final class WorkoutSession {
         exercises[ei].sets.insert(contentsOf: newSets, at: workingIndex)
     }
 
+    /// Replaces placeholder warm-ups (planned with no weight, so they'd show 0 kg) with a ramp
+    /// generated from the first working set, once that weight is known. Planned warm-ups that
+    /// carry a real weight are the user's own and stay untouched.
+    func fillPlaceholderWarmups() {
+        for entry in exercises {
+            let warmups = entry.sets.filter { $0.kind == .warmup }
+            guard !warmups.isEmpty, warmups.allSatisfy({ $0.weightKg == 0 }),
+                  let working = entry.sets.first(where: { $0.kind == .working }), working.weightKg > 0,
+                  let ei = exercises.firstIndex(where: { $0.id == entry.id }) else { continue }
+            exercises[ei].sets.removeAll { $0.kind == .warmup }
+            addWarmups(exerciseID: entry.id)
+        }
+    }
+
     func adjustRest(by delta: Int) {
         guard let restEndDate else { return }
         let current = now()

@@ -12,9 +12,13 @@ struct SwipeToRevealRow<Content: View, Actions: View>: View {
 
     var body: some View {
         ZStack(alignment: .trailing) {
+            // Hidden until open: a done row's tinted fill is translucent, so the buttons would
+            // otherwise show through it.
             actions()
                 .frame(width: actionsWidth, alignment: .trailing)
                 .clipShape(RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous))
+                .opacity(isOpen ? 1 : 0)
+                .allowsHitTesting(isOpen)
             content()
                 .offset(x: isOpen ? -actionsWidth : 0)
                 .gesture(dragGesture)
