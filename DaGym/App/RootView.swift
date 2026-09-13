@@ -1,3 +1,4 @@
+import Combine
 import GymCore
 import SwiftData
 import SwiftUI
@@ -5,13 +6,9 @@ import SwiftUI
 /// App shell: switches between the five tabs and presents the active
 /// workout (and its summary) full-screen when a session is started.
 struct RootView: View {
-    /// True only for the single `RootView` that replaces `OnboardingFlow` right after
-    /// `onComplete` — see the `.task` below for why that specific transition needs a startup
-    /// delay that a normal cold launch straight into `RootView` does not.
-    var justCompletedOnboarding = false
-
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
+    @Environment(\.scenePhase) private var scenePhase
     @State private var tab = DGTab.today
     @State private var routine: RoutineInfo?
     @State private var routines: [RoutineInfo] = []
@@ -23,6 +20,7 @@ struct RootView: View {
     @State private var pendingPlanImport: PlanDocument?
     @State private var pendingPlanReport: PlanImportReport?
     @State private var planImportError: String?
+    @State private var resumePrompt: UnfinishedWorkoutPrompt?
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -31,25 +29,28 @@ struct RootView: View {
                 .padding(.bottom, 8)
         }
         .task {
-            // `RootView` replacing `OnboardingFlow` mid-lifecycle (as opposed to a cold launch
-            // mounting `RootView` fresh) tears down Onboarding's whole deep view hierarchy while
-            // building this one, all in the same transaction — and fetching via a `#Predicate`
-            // macro while AttributeGraph's background queue is still draining type-layout work
-            // for that churn has been observed to crash (`WorkoutStore.routines()`,
-            // `EXC_BREAKPOINT` inside `SwiftData`/`swift_conformsToProtocol`, confirmed with a
-            // debugger attached — a real SwiftData/AttributeGraph race, not app logic). A cold
-            // launch straight into `RootView` doesn't have a prior subtree to tear down and has
-            // never reproduced this, so only pay the delay for the onboarding hand-off.
-            if justCompletedOnboarding {
-                try? await Task.sleep(for: .milliseconds(1500))
-            }
-            refreshRoutine()
+            refresh()
+            // A Siri "start workout" hand-off above wins over the prompt: nothing to resume
+            // while a session is already on screen.
+            if session == nil { resumePrompt = UnfinishedWorkoutPrompt.newest(in: store) }
         }
-        .onAppear {
-            startPendingRestTimerIfNeeded()
-            startPendingWorkoutIfNeeded()
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { refresh() }
         }
+        .onReceive(
+            NotificationCenter.default.publisher(for: .NSCalendarDayChanged).receive(on: DispatchQueue.main)
+        ) { _ in refresh() }
         .onChange(of: tab) { _, _ in refreshRoutine() }
+        .onChange(of: store.changeToken) { _, _ in refresh() }
+        .confirmationDialog(
+            "Resume Workout?", isPresented: resumePromptBinding, titleVisibility: .visible,
+            presenting: resumePrompt
+        ) { prompt in
+            Button("Resume \(prompt.title)") { resumeUnfinished(prompt) }
+            Button("Discard", role: .destructive) { discardUnfinished(prompt) }
+        } message: { prompt in
+            Text(prompt.detail)
+        }
         .onOpenURL(perform: handleOpenURL)
         .sheet(isPresented: $showingBackfill) {
             BackfillSheet(
@@ -86,7 +87,7 @@ struct RootView: View {
             HomeView(
                 routine: routine, nextSessionText: nextSessionText, onStart: startFromScheduledRoutine,
                 onFreestyle: startFreestyle, onBackfill: { showingBackfill = true },
-                onSeeRecovery: { showRecovery = true }, justCompletedOnboarding: justCompletedOnboarding
+                onSeeRecovery: { showRecovery = true }
             )
         case .routines:
             RoutinesTabView(onStart: startWorkout)
@@ -103,10 +104,41 @@ struct RootView: View {
         }
     }
 
+    /// Re-reads everything this shell derives from the store, then acts on any Siri / Control
+    /// Center hand-off — in that order, so the flag is never consumed against a routine that
+    /// hasn't loaded yet. Runs on first mount, every return to the foreground (a warm launch from
+    /// an intent lands here, not in `.task`) and at midnight, when today's routine changes.
+    private func refresh() {
+        refreshRoutine()
+        WidgetSnapshotWriter.refresh(store: store, preferences: preferences)
+        for action in PendingIntentHandoff.consume(routineLoaded: true) {
+            switch action {
+            case .startWorkout: startPendingWorkout()
+            case .startRestTimer: startPendingRestTimer()
+            }
+        }
+    }
+
     private func refreshRoutine() {
         routines = store.routines()
         routine = store.todaysRoutine()
         nextSessionText = Self.nextSessionText(store.nextSession())
+    }
+
+    private var resumePromptBinding: Binding<Bool> {
+        Binding(get: { resumePrompt != nil }, set: { if !$0 { resumePrompt = nil } })
+    }
+
+    private func resumeUnfinished(_ prompt: UnfinishedWorkoutPrompt) {
+        resumePrompt = nil
+        guard let resumed = store.resumeSession(for: prompt.id) else { return }
+        session = resumed
+        seedEffortScale()
+    }
+
+    private func discardUnfinished(_ prompt: UnfinishedWorkoutPrompt) {
+        resumePrompt = nil
+        store.deleteWorkout(id: prompt.id)
     }
 
     /// "Next: Pull B · Thursday" for the rest-day card.
@@ -150,13 +182,12 @@ struct RootView: View {
         session?.effortScale = preferences.effortScale
     }
 
-    /// Control Center "Rest timer" hookup (`StartRestTimerIntent`/`PendingIntentAction`): if the
-    /// intent opened the app, reuse the active session or start today's routine, then rest before
-    /// its first on-deck set. `WorkoutSession.startRest` needs a real exercise/set to attach the
-    /// rest to, so a freestyle session (no exercises yet) has nothing to rest before and this is
-    /// a no-op — starting a routine covers the common case.
-    private func startPendingRestTimerIfNeeded() {
-        guard PendingIntentAction.consumeStartRestTimer() else { return }
+    /// Control Center "Rest timer" hookup (`StartRestTimerIntent`/`PendingIntentAction`): the
+    /// intent opened the app, so reuse the active session or start today's routine, then rest
+    /// before its first on-deck set. `WorkoutSession.startRest` needs a real exercise/set to
+    /// attach the rest to, so a freestyle session (no exercises yet) has nothing to rest before
+    /// and this is a no-op — starting a routine covers the common case.
+    private func startPendingRestTimer() {
         if session == nil {
             startFromScheduledRoutine()
         }
@@ -168,11 +199,11 @@ struct RootView: View {
     }
 
     /// "Start today's workout" Siri Shortcut hookup (`StartWorkoutIntent`/
-    /// `PendingWorkoutIntentAction`): if the intent opened the app and nothing is already in
+    /// `PendingWorkoutIntentAction`): the intent opened the app, so if nothing is already in
     /// progress, start today's scheduled routine — same as tapping "Start" on Home. Leaves an
     /// already-active session alone rather than replacing it.
-    private func startPendingWorkoutIfNeeded() {
-        guard PendingWorkoutIntentAction.consumeStartWorkout(), session == nil else { return }
+    private func startPendingWorkout() {
+        guard session == nil else { return }
         startFromScheduledRoutine()
     }
 
@@ -243,6 +274,57 @@ struct RootView: View {
         PlanShareService.importPlan(document: document, context: store.context)
         pendingPlanImport = nil
         refreshRoutine()
+    }
+}
+
+/// The Siri / Control Center flags (`PendingWorkoutIntentAction`, `PendingIntentAction`) are read
+/// in one place, and only once today's routine has been fetched: a flag set before `RootView`
+/// has a routine stays set (`routineLoaded: false`) rather than being burned against
+/// `routine == nil`, so the hand-off survives both a cold launch and a warm one.
+@MainActor
+enum PendingIntentHandoff {
+    enum Action: Equatable {
+        case startWorkout
+        case startRestTimer
+    }
+
+    /// The actions to run now, clearing their flags; empty (flags untouched) until
+    /// `routineLoaded`. Rest timer first: it starts today's routine itself if it must.
+    static func consume(routineLoaded: Bool) -> [Action] {
+        guard routineLoaded else { return [] }
+        var actions: [Action] = []
+        if PendingIntentAction.consumeStartRestTimer() { actions.append(.startRestTimer) }
+        if PendingWorkoutIntentAction.consumeStartWorkout() { actions.append(.startWorkout) }
+        return actions
+    }
+}
+
+/// What the launch-time Resume/Discard prompt shows for the newest workout a crash or
+/// force-quit left unfinished (anything older than a day was already purged at launch).
+struct UnfinishedWorkoutPrompt: Identifiable, Equatable {
+    let id: UUID
+    let title: String
+    let startedAt: Date
+    let setsDone: Int
+
+    /// "Started 25 min ago · 3 sets logged"
+    var detail: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        let started = formatter.localizedString(for: startedAt, relativeTo: Date())
+        let sets = setsDone == 1 ? "1 set logged" : "\(setsDone) sets logged"
+        return "Started \(started) · \(sets)"
+    }
+
+    /// The newest unfinished workout, or `nil` when there is nothing to resume.
+    @MainActor
+    static func newest(in store: WorkoutStore) -> UnfinishedWorkoutPrompt? {
+        guard let model = store.unfinishedWorkouts().first else { return nil }
+        let setsDone = (model.exercises ?? []).flatMap { $0.sets ?? [] }.filter(\.isCompleted).count
+        return UnfinishedWorkoutPrompt(
+            id: model.id, title: model.title.isEmpty ? "Workout" : model.title, startedAt: model.startedAt,
+            setsDone: setsDone
+        )
     }
 }
 

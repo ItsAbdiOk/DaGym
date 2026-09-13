@@ -35,12 +35,12 @@ extension WorkoutStore {
     /// only the celebration animation that's gated separately, by `Milestones.isCelebrationWorthy`.
     @discardableResult
     func evaluateMilestones(
-        for workout: WorkoutModel, weeklyGoal: Int, calendar: Calendar = .current
+        for workout: WorkoutModel, weeklyGoal: Int, calendar: Calendar = .current, unit: WeightUnit = .kg
     ) -> [AchievementInfo] {
         let state = milestoneState(weeklyGoal: weeklyGoal, calendar: calendar)
         let earned = earnedTiers()
         let newlyEarned = Milestones.evaluate(
-            state: state, earned: earned.map { (id: $0.key, tier: $0.value) }
+            state: state, earned: earned.map { (id: $0.key, tier: $0.value) }, unit: unit
         )
         for achievement in newlyEarned {
             let model = AchievementModel(

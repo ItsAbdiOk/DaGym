@@ -2,22 +2,42 @@ import SwiftUI
 import GymCore
 
 /// Renders one screen directly for screenshots (`-dgScreen <route>`).
-/// Debug builds only.
+/// Debug builds only. Supplies its own `HealthSyncService` so the Settings → Apple Health and
+/// Body routes have the environment `RootView` would give them.
 struct DebugScreenView: View {
     let route: DebugRoute
+    @Environment(WorkoutStore.self) private var store
+    @Environment(Preferences.self) private var preferences
     @State private var session = SampleData.makeSession()
     @State private var weight = 82.5
     @State private var scale = Effort.Scale.rpe
     @State private var tab = DGTab.today
+    @State private var healthSync: HealthSyncService?
 
     var body: some View {
+        Group {
+            if let healthSync {
+                screen.environment(healthSync)
+            } else {
+                AmbientWash()
+            }
+        }
+        .task {
+            // The `.rest` route is the real in-workout rest UI mid-countdown.
+            if route == .rest { session.startRest(seconds: 90, after: 0, set: 0) }
+            healthSync = HealthSyncService(workoutStore: store, preferences: preferences)
+        }
+    }
+
+    @ViewBuilder
+    private var screen: some View {
         switch route {
         case .home:
             RootView()
         case .workout:
             ActiveWorkoutView(session: session, onFinish: { _ in })
         case .rest:
-            RestTimerView(session: session, exerciseName: "Bench Press", onClose: {})
+            ActiveWorkoutView(session: session, onFinish: { _ in })
         case .library:
             tabbed(.library) { LibraryView() }
         case .exerciseDetail:
@@ -29,7 +49,11 @@ struct DebugScreenView: View {
         case .history:
             tabbed(.progress) { HistoryTabView() }
         case .backfill:
-            sheetHost { BackfillSheet(onFreestyle: { _, _ in }, onRoutine: { _, _ in }) }
+            sheetHost {
+                BackfillSheet(
+                    routines: [SampleData.pushA], onFreestyle: { _, _ in }, onRoutine: { _, _, _ in }
+                )
+            }
         case .keypad:
             sheetHost {
                 WeightKeypadSheet(

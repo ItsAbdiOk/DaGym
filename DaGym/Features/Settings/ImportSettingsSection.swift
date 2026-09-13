@@ -142,19 +142,26 @@ private struct ImportCSVPreviewSheet: View {
                 .frame(width: 36, height: 5)
                 .padding(.top, DGSpace.s2)
             header
-            countsCard
-            if !preview.unmatchedExerciseNames.isEmpty {
-                namesCard(
-                    title: "\(preview.unmatchedExerciseNames.count) new exercise"
-                        + (preview.unmatchedExerciseNames.count == 1 ? "" : "s"),
-                    names: preview.unmatchedExerciseNames
-                )
-            }
-            if !preview.problems.isEmpty {
-                namesCard(
-                    title: "\(preview.problems.count) problem" + (preview.problems.count == 1 ? "" : "s"),
-                    names: preview.problems.map { "Line \($0.line): \($0.message)" }
-                )
+            // The unmatched-name and problem lists are unbounded (a Strong export can carry
+            // dozens), so they scroll and the Cancel/Import row stays reachable underneath.
+            ScrollView {
+                VStack(spacing: DGSpace.s5) {
+                    countsCard
+                    if !preview.unmatchedExerciseNames.isEmpty {
+                        namesCard(
+                            title: "\(preview.unmatchedExerciseNames.count) new exercise"
+                                + (preview.unmatchedExerciseNames.count == 1 ? "" : "s"),
+                            names: preview.unmatchedExerciseNames
+                        )
+                    }
+                    if !preview.problems.isEmpty {
+                        namesCard(
+                            title: "\(preview.problems.count) problem"
+                                + (preview.problems.count == 1 ? "" : "s"),
+                            names: preview.problems.map { "Line \($0.line): \($0.message)" }
+                        )
+                    }
+                }
             }
             actions
         }
@@ -163,13 +170,12 @@ private struct ImportCSVPreviewSheet: View {
         .frame(maxWidth: .infinity, alignment: .top)
         .background(DGColor.surface1)
         .clipShape(RoundedRectangle(cornerRadius: DGRadius.sheet, style: .continuous))
-        .presentationDetents([.height(detentHeight)])
+        .presentationDetents(hasExtras ? [.medium, .large] : [.medium])
         .presentationDragIndicator(.hidden)
     }
 
-    private var detentHeight: CGFloat {
-        let hasExtras = !preview.unmatchedExerciseNames.isEmpty || !preview.problems.isEmpty
-        return hasExtras ? 480 : 320
+    private var hasExtras: Bool {
+        !preview.unmatchedExerciseNames.isEmpty || !preview.problems.isEmpty
     }
 
     private var header: some View {

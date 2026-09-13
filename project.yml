@@ -206,7 +206,6 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: NO
-        SKIP_INSTALL: NO
 
   # Standalone Apple Watch app. Not yet embedded in the iOS app: that wiring
   # lands with Phase 5 (watch), so the iOS build never waits on a watchOS

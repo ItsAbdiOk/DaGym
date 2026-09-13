@@ -1,11 +1,17 @@
 import GymCore
 import SwiftUI
 
-/// Log a bodyweight reading: a keypad-style ± stepper in the user's unit. Saves a
-/// `BodyMeasurementModel` and, when bodyweight sync is on, pushes the same reading to Apple
-/// Health (plan.md §6.8). Reached via the "Bodyweight" row in Settings — the dedicated Body tab
-/// is Phase 3.
+/// A keypad-style ± bodyweight stepper in the user's unit, used for two things: logging a
+/// reading (saves a `BodyMeasurementModel` and, when bodyweight sync is on, pushes it to Apple
+/// Health — plan.md §6.8) and setting the goal weight `BodyView`'s chart draws its goal line
+/// against (`Preferences.bodyweightGoalKg`). Reached from the Body tab and Settings.
 struct BodyweightSheet: View {
+    enum Purpose {
+        case log, goal
+    }
+
+    var purpose: Purpose = .log
+
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
     @Environment(HealthSyncService.self) private var healthSync
@@ -15,21 +21,32 @@ struct BodyweightSheet: View {
 
     var body: some View {
         VStack(spacing: DGSpace.s6) {
-            Text("Bodyweight").dgLabel()
+            Text(purpose == .goal ? "Goal Bodyweight" : "Bodyweight").dgLabel()
             stepperRow
             Text(preferences.unitSymbol.uppercased()).dgLabel()
             quickSteps
             DGPrimaryButton(title: "Save", symbol: "checkmark", fill: DGColor.success, height: 52) {
                 save()
             }
+            if purpose == .goal, preferences.bodyweightGoalKg != nil {
+                Button("Clear goal", action: clearGoal)
+                    .buttonStyle(.plain)
+                    .dgLabel(DGColor.danger)
+            }
         }
         .padding(.horizontal, DGSpace.s5)
         .padding(.top, DGSpace.s8)
         .padding(.bottom, DGSpace.s4)
-        .presentationDetents([.height(360)])
+        .presentationDetents([.height(purpose == .goal ? 400 : 360)])
         .presentationDragIndicator(.visible)
         .presentationBackground(DGColor.surface1)
-        .task { kg = store.latestBodyMeasurement()?.bodyweightKg ?? kg }
+        .task { kg = initialKg }
+    }
+
+    /// The current goal when editing it; otherwise the latest reading (a sensible goal start too).
+    private var initialKg: Double {
+        if purpose == .goal, let goal = preferences.bodyweightGoalKg { return goal }
+        return store.latestBodyMeasurement()?.bodyweightKg ?? kg
     }
 
     private var stepperRow: some View {
@@ -80,10 +97,20 @@ struct BodyweightSheet: View {
 
     private func save() {
         Haptics.confirm()
-        store.logBodyweight(kg: kg, source: "manual")
-        if preferences.healthSyncBodyweight {
-            Task { await healthSync.pushBodyweight(kg: kg) }
+        switch purpose {
+        case .goal:
+            preferences.bodyweightGoalKg = kg
+        case .log:
+            store.logBodyweight(kg: kg, source: "manual")
+            if preferences.healthSyncBodyweight {
+                Task { await healthSync.pushBodyweight(kg: kg) }
+            }
         }
+        dismiss()
+    }
+
+    private func clearGoal() {
+        preferences.bodyweightGoalKg = nil
         dismiss()
     }
 }

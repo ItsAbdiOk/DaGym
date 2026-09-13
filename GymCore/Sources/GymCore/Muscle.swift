@@ -18,7 +18,7 @@ public enum Muscle: String, CaseIterable, Codable, Sendable, Identifiable {
     public var displayName: String {
         switch self {
         case .traps: "Traps"
-        case .delts: "Front delts"
+        case .delts: "Delts"
         case .chest: "Chest"
         case .abs: "Abs"
         case .obliques: "Obliques"

@@ -18,9 +18,13 @@ struct ImportPreviewSheet: View {
                 .frame(width: 36, height: 5)
                 .padding(.top, DGSpace.s2)
             header
-            countsCard
-            if !report.problems.isEmpty {
-                problemsCard
+            ScrollView {
+                VStack(spacing: DGSpace.s5) {
+                    countsCard
+                    if !report.problems.isEmpty {
+                        problemsCard
+                    }
+                }
             }
             actions
         }
@@ -29,11 +33,9 @@ struct ImportPreviewSheet: View {
         .frame(maxWidth: .infinity, alignment: .top)
         .background(DGColor.surface1)
         .clipShape(RoundedRectangle(cornerRadius: DGRadius.sheet, style: .continuous))
-        .presentationDetents([.height(detentHeight)])
+        .presentationDetents(report.problems.isEmpty ? [.medium] : [.medium, .large])
         .presentationDragIndicator(.hidden)
     }
-
-    private var detentHeight: CGFloat { report.problems.isEmpty ? 340 : 460 }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: DGSpace.s2) {

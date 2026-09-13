@@ -17,9 +17,10 @@ struct ExerciseEntity: AppEntity {
     }
 }
 
-/// Backed by a short-lived store (`IntentStoreAccess`) plus the pure `IntentFormatting.matchingExercises`
-/// ranker — Siri's own text-field resolution for `\(\.$exercise)` calls `entities(matching:)` as the
-/// user types.
+/// Backed by the process-wide store (`IntentStoreAccess`) plus the pure
+/// `IntentFormatting.matchingExercises` ranker — Siri's own text-field resolution for
+/// `\(\.$exercise)` calls `entities(matching:)` as the user types, so each call must be cheap:
+/// no container is opened here, only one exercise fetch.
 struct ExerciseEntityQuery: EntityStringQuery {
     @MainActor
     func entities(for identifiers: [ExerciseEntity.ID]) async throws -> [ExerciseEntity] {

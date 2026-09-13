@@ -13,13 +13,9 @@ struct HomeView: View {
     var onFreestyle: () -> Void
     var onBackfill: () -> Void
     var onSeeRecovery: () -> Void
-    /// See `RootView.justCompletedOnboarding` — mirrors it so `refresh()`'s own SwiftData fetches
-    /// only pay the defensive startup delay for that one transition, not every normal launch.
-    var justCompletedOnboarding = false
 
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
-    @AppStorage("weeklyGoal") private var weeklyGoal = 4
     @State private var streakCurrent = 0
     @State private var streakLongest = 0
     @State private var thisWeekCount = 0
@@ -44,7 +40,7 @@ struct HomeView: View {
                         )
                     }
                     HStack(spacing: DGSpace.s4) {
-                        WeeklyGoalCard(done: thisWeekCount, total: weeklyGoal)
+                        WeeklyGoalCard(done: thisWeekCount, total: preferences.weeklyGoal)
                         StreakCard(current: streakCurrent, longest: streakLongest)
                     }
                     RecoveryCard(map: recoveryMap, onSeeRecovery: onSeeRecovery)
@@ -62,34 +58,22 @@ struct HomeView: View {
                 .padding(.bottom, 100)
             }
         }
-        .task {
-            // See the matching comment on `RootView`'s `.task`: `HomeView` mounts in the same
-            // breath as `RootView` right after `OnboardingFlow` hands off, and its own SwiftData
-            // fetches (`refresh()` → `WorkoutStore.workoutDates()`) hit the identical crash if
-            // they run before that transaction has fully settled — but only on that transition.
-            if justCompletedOnboarding {
-                try? await Task.sleep(for: .milliseconds(1500))
-            }
-            refresh()
-        }
+        .task { refresh() }
+        .onChange(of: store.changeToken) { refresh() }
+        .onChange(of: preferences.weeklyGoal) { refresh() }
+        .onChange(of: preferences.weekStartsMonday) { refresh() }
         .sheet(isPresented: $showingSettings) { SettingsView() }
     }
 
+    /// The scheduled routine itself comes from `RootView` (it owns "Start"); everything else
+    /// is one `HomeSnapshot` pass so the numbers agree with the widget and the Progress tab.
     private func refresh() {
-        let calendar = Calendar.current
-        let now = Date()
-        let streak = Streaks.weekly(
-            workoutDates: store.workoutDates(), weeklyGoal: weeklyGoal, calendar: calendar, now: now
-        )
-        streakCurrent = streak.current
-        streakLongest = streak.longest
-        thisWeekCount = streak.thisWeekCount
-        let since = calendar.date(byAdding: .day, value: -7, to: now) ?? now
-        recoveryMap = Recovery.map(events: store.recoveryEvents(since: since), now: now)
-        deloadSuggestion = store.deloadSuggestion(
-            snoozedUntil: preferences.deloadSnoozedUntil,
-            dismissedFingerprint: preferences.deloadDismissedFingerprint, weeklyGoal: weeklyGoal
-        )
+        let snapshot = HomeSnapshot.make(store: store, preferences: preferences)
+        streakCurrent = snapshot.streakCurrent
+        streakLongest = snapshot.streakLongest
+        thisWeekCount = snapshot.thisWeekCount
+        recoveryMap = snapshot.recoveryMap
+        deloadSuggestion = snapshot.deloadSuggestion
     }
 
     private func planDeload() {
@@ -180,19 +164,14 @@ private struct RestDayCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
-            Text("Rest Day").dgLabel(DGColor.coralText)
-            Text("Next session: —")
+            Text(HomeSnapshot.restDayHeadline).dgLabel(DGColor.coralText)
+            Text(nextSessionText ?? "Nothing scheduled")
                 .font(DGFont.title2)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
-            Text("No routine scheduled. Start a freestyle workout whenever you're ready.")
+            Text("No routine scheduled today. Start a freestyle workout whenever you're ready.")
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
-            if let nextSessionText {
-                Text(nextSessionText)
-                    .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.ink3)
-            }
             HStack(spacing: DGSpace.s3) {
                 DGPrimaryButton(title: "Start a Freestyle Workout", symbol: "plus", action: onFreestyle)
                     .accessibilityIdentifier(A11yID.homeStart)

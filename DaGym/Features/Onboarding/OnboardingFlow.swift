@@ -5,11 +5,14 @@ import SwiftUI
 /// `preferences.hasCompletedOnboarding` is `false` (see `DaGymApp.swift`).
 /// Every step persists its answer immediately — `Preferences` and
 /// `WorkoutStore` writes happen as the user taps, not batched at the end —
-/// so a killed app resumes on the same step rather than losing progress.
+/// and the current step is saved too, so a killed app resumes where it was
+/// rather than losing progress. UI-test launches always start at Welcome.
 struct OnboardingFlow: View {
     var onComplete: () -> Void
 
     @State private var step = OnboardingStep.welcome
+
+    static let savedStepKey = "onboardingStep"
 
     var body: some View {
         ZStack {
@@ -23,13 +26,27 @@ struct OnboardingFlow: View {
             .padding(.bottom, DGSpace.s5)
         }
         .animation(DGMotion.standard, value: step)
+        .onAppear(perform: restoreStep)
+        .onChange(of: step) { UserDefaults.standard.set(step.rawValue, forKey: Self.savedStepKey) }
+    }
+
+    private func restoreStep() {
+        guard !LaunchFlags.isTesting,
+              let saved = OnboardingStep(rawValue: UserDefaults.standard.integer(forKey: Self.savedStepKey)),
+              saved != .done else { return }
+        step = saved
+    }
+
+    private func complete() {
+        UserDefaults.standard.removeObject(forKey: Self.savedStepKey)
+        onComplete()
     }
 
     @ViewBuilder
     private var stepContent: some View {
         switch step {
         case .welcome:
-            OnboardingWelcomeStep(onStart: advance, onSkip: onComplete)
+            OnboardingWelcomeStep(onStart: advance, onSkip: complete)
         case .units:
             OnboardingUnitsStep(onNext: advance)
         case .goal:
@@ -45,7 +62,7 @@ struct OnboardingFlow: View {
         case .notifications:
             OnboardingNotificationsStep(onNext: advance, onSkip: advance)
         case .done:
-            OnboardingDoneStep(onFinish: onComplete)
+            OnboardingDoneStep(onFinish: complete)
         }
     }
 
@@ -79,7 +96,7 @@ struct OnboardingFlow: View {
 
     private func advance() {
         guard let next = OnboardingStep(rawValue: step.rawValue + 1) else {
-            onComplete()
+            complete()
             return
         }
         step = next

@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var showingHealthSettings = false
     @State private var showingBodyweightSheet = false
     @State private var eventStore: EventStoring = EventKitStore()
+    @State private var syncTask: Task<Void, Never>?
     /// The weekly-goal stepper needs its own reschedule (S14/F14): `RemindersSettingsSection`'s
     /// three bindings reschedule on change, but the notification body embeds
     /// `weeklyGoal - thisWeekCount` at schedule time, so a goal edit here must reschedule too or
@@ -158,6 +159,10 @@ struct SettingsView: View {
             SettingsRow(label: "Keep screen awake") {
                 Toggle("", isOn: binding(\.keepScreenAwake)).tint(DGColor.coral).labelsHidden()
             }
+            SettingsDivider()
+            SettingsRow(label: "Lock progress photos") {
+                Toggle("", isOn: binding(\.lockPhotos)).tint(DGColor.coral).labelsHidden()
+            }
         }
     }
 
@@ -191,12 +196,14 @@ struct SettingsView: View {
         let schedule = store.schedule()
         let routines = store.routines()
         let hour = preferences.scheduledStartHour
-        let existingEventIDs = store.scheduleEventIDs()
-        Task {
+        // Serialised so a toggle flicked twice can't run two syncs over the same event IDs.
+        let previous = syncTask
+        syncTask = Task {
+            await previous?.value
             let service = CalendarSyncService(eventStore: eventStore)
             let request = ScheduleSyncRequest(
                 schedule: schedule, routines: routines, startDate: Date(), defaultStartHour: hour,
-                existingEventIDs: existingEventIDs
+                existingEventIDs: store.scheduleEventIDs()
             )
             guard let updated = try? await service.sync(request) else { return }
             store.saveScheduleEventIDs(updated)
@@ -224,7 +231,7 @@ struct SettingsView: View {
                 acknowledgementsRow
             }
             .dgCard(padding: 0)
-            Text("Data stays on your device")
+            Text(preferences.iCloudSyncEnabled ? "Synced with your iCloud" : "Data stays on your device")
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink4)
         }

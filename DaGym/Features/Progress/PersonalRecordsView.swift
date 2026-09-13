@@ -5,6 +5,7 @@ import SwiftUI
 /// screen where that colour is earned.
 struct PersonalRecordsView: View {
     @Environment(WorkoutStore.self) private var store
+    @Environment(Preferences.self) private var preferences
     @State private var groups: [ExerciseRecords] = []
 
     var body: some View {
@@ -32,7 +33,7 @@ struct PersonalRecordsView: View {
                 .padding(.bottom, DGSpace.s8)
             }
         }
-        .task { groups = store.personalRecords() }
+        .task { groups = store.personalRecords(unit: preferences.weightUnit) }
     }
 
     private var header: some View {
@@ -106,6 +107,7 @@ private struct RecordRow: View {
     if let container = try? ModelContainer.dagym(inMemory: true) {
         PersonalRecordsView()
             .environment(WorkoutStore(context: container.mainContext))
+            .environment(Preferences())
     } else {
         Text("Preview unavailable")
     }

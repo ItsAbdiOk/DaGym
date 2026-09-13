@@ -29,6 +29,7 @@ struct EquipmentSettingsSection: View {
                 .foregroundStyle(DGColor.ink4)
         }
         .task { refresh() }
+        .onChange(of: store.changeToken) { refresh() }
         .sheet(item: $editingProfile, onDismiss: refresh) { profile in
             EquipmentProfileView(
                 profile: profile, isNew: isNewProfile,

@@ -24,13 +24,15 @@ enum PlanPDFRenderer {
     private static let rowHeight: CGFloat = 28
     private static let columnWidths: [CGFloat] = [0.34, 0.16, 0.18, 0.12, 0.20]
 
-    static func render(_ document: PlanDocument, pageSize: PlanPDFPageSize = .a4) -> Data {
+    static func render(
+        _ document: PlanDocument, pageSize: PlanPDFPageSize = .a4, unit: WeightUnit = .kg
+    ) -> Data {
         let bounds = CGRect(origin: .zero, size: pageSize.size)
         let renderer = UIGraphicsPDFRenderer(bounds: bounds)
         return renderer.pdfData { context in
             for routine in document.routines {
                 context.beginPage()
-                drawRoutine(routine, in: bounds)
+                drawRoutine(routine, in: bounds, unit: unit)
             }
             if let program = document.program {
                 context.beginPage()
@@ -41,7 +43,7 @@ enum PlanPDFRenderer {
 
     // MARK: - Routine page
 
-    private static func drawRoutine(_ routine: PlanRoutine, in bounds: CGRect) {
+    private static func drawRoutine(_ routine: PlanRoutine, in bounds: CGRect, unit: WeightUnit) {
         let width = bounds.width - margin * 2
         var y = margin
         draw(routine.name.uppercased(), at: CGPoint(x: margin, y: y), font: titleFont, color: .black)
@@ -54,7 +56,7 @@ enum PlanPDFRenderer {
         for exercise in routine.exercises.sorted(by: { $0.order < $1.order }) {
             let isSupersetStart = exercise.supersetGroup != nil && exercise.supersetGroup != lastGroup
             if isSupersetStart { drawSupersetMarker(at: CGPoint(x: margin - 14, y: y), height: rowHeight) }
-            drawExerciseRow(exercise, at: CGPoint(x: margin, y: y), width: width)
+            drawExerciseRow(exercise, at: CGPoint(x: margin, y: y), width: width, unit: unit)
             lastGroup = exercise.supersetGroup
             y += rowHeight
         }
@@ -73,9 +75,11 @@ enum PlanPDFRenderer {
         drawLine(from: CGPoint(x: origin.x, y: lineY), to: CGPoint(x: origin.x + width, y: lineY))
     }
 
-    private static func drawExerciseRow(_ exercise: PlanRoutineExercise, at origin: CGPoint, width: CGFloat) {
+    private static func drawExerciseRow(
+        _ exercise: PlanRoutineExercise, at origin: CGPoint, width: CGFloat, unit: WeightUnit
+    ) {
         let cells = [
-            exercise.exerciseName, setsRepsText(exercise), targetText(exercise),
+            exercise.exerciseName, setsRepsText(exercise), targetText(exercise, unit: unit),
             restText(exercise.restOverrideSeconds), exercise.note
         ]
         drawRow(cells, at: origin, width: width, font: bodyFont, color: .black)
@@ -95,9 +99,9 @@ enum PlanPDFRenderer {
         return "\(sets.count) × \(reps)"
     }
 
-    private static func targetText(_ exercise: PlanRoutineExercise) -> String {
+    private static func targetText(_ exercise: PlanRoutineExercise, unit: WeightUnit) -> String {
         guard let first = exercise.sets.min(by: { $0.order < $1.order }) else { return "–" }
-        if let weight = first.targetWeightKg { return "\(WeightFormat.kg(weight)) kg" }
+        if let weight = first.targetWeightKg { return "\(unit.format(kg: weight)) \(unit.symbol)" }
         if let rpe = first.targetRPE { return "RPE \(WeightFormat.kg(rpe))" }
         if let seconds = first.targetSeconds { return "\(seconds)s" }
         return "–"

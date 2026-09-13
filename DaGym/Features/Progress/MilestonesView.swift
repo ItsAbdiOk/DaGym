@@ -19,10 +19,14 @@ struct MilestonesView: View {
                     header
                     VStack(spacing: DGSpace.s3) {
                         ForEach(earned) { item in
-                            MilestoneCard(item: item, earnedLine: earnedLine(for: item)) { selected = item }
+                            MilestoneCard(
+                                item: item, earnedLine: earnedLine(for: item), unit: preferences.weightUnit
+                            ) { selected = item }
                         }
                         ForEach(locked) { item in
-                            MilestoneCard(item: item, earnedLine: nil) { selected = item }
+                            MilestoneCard(
+                                item: item, earnedLine: nil, unit: preferences.weightUnit
+                            ) { selected = item }
                         }
                     }
                 }
@@ -33,7 +37,10 @@ struct MilestonesView: View {
         }
         .task { refresh() }
         .sheet(item: $selected) { item in
-            MilestoneDetailSheet(item: item, achievements: achievements.filter { $0.milestoneID == item.id })
+            MilestoneDetailSheet(
+                item: item, achievements: achievements.filter { $0.milestoneID == item.id },
+                unit: preferences.weightUnit
+            )
         }
     }
 
@@ -58,8 +65,38 @@ struct MilestonesView: View {
 
     private func refresh() {
         let weeklyGoal = preferences.weeklyGoal
-        progress = store.milestoneProgress(weeklyGoal: weeklyGoal)
+        progress = store.milestoneProgress(weeklyGoal: weeklyGoal, calendar: preferences.trainingCalendar)
         achievements = store.achievements()
+    }
+}
+
+/// Locked/threshold copy for a milestone, unit-aware for the metrics that carry a weight.
+/// Pulled out of the view so it's testable without a store or SwiftUI.
+enum MilestoneCopy {
+    static func lockedSubtitle(metric: MilestoneMetric, nextThreshold: Double?, unit: WeightUnit) -> String {
+        guard let nextThreshold else { return "Every tier earned" }
+        switch metric {
+        case .strengthRatio:
+            return "Need \(WeightFormat.kg(nextThreshold))× bodyweight"
+        case .workoutCount:
+            return "Need \(Int(nextThreshold)) workouts"
+        case .streakWeeks:
+            return "Need a \(Int(nextThreshold))-week streak"
+        case .lifetimeTonnageKg:
+            return "Need \(unit.format(kg: nextThreshold)) \(unit.symbol) lifetime"
+        case .consistencyWeeks:
+            return "Need \(Int(nextThreshold)) weeks at your goal"
+        }
+    }
+
+    static func thresholdLabel(metric: MilestoneMetric, threshold: Double, unit: WeightUnit) -> String {
+        switch metric {
+        case .strengthRatio: return "\(WeightFormat.kg(threshold))× bodyweight"
+        case .workoutCount: return "\(Int(threshold)) workouts"
+        case .streakWeeks: return "\(Int(threshold))-week streak"
+        case .lifetimeTonnageKg: return "\(unit.format(kg: threshold)) \(unit.symbol) lifetime"
+        case .consistencyWeeks: return "\(Int(threshold)) weeks at goal"
+        }
     }
 }
 
@@ -67,6 +104,7 @@ struct MilestonesView: View {
 private struct MilestoneCard: View {
     var item: MilestoneProgress
     var earnedLine: String?
+    var unit: WeightUnit
     var onTap: () -> Void
 
     var body: some View {
@@ -122,19 +160,9 @@ private struct MilestoneCard: View {
     }
 
     private var lockedSubtitle: String {
-        guard let nextThreshold = item.nextThreshold else { return "Every tier earned" }
-        switch item.definition.metric {
-        case .strengthRatio:
-            return "Need \(WeightFormat.kg(nextThreshold))× bodyweight"
-        case .workoutCount:
-            return "Need \(Int(nextThreshold)) workouts"
-        case .streakWeeks:
-            return "Need a \(Int(nextThreshold))-week streak"
-        case .lifetimeTonnageKg:
-            return "Need \(WeightFormat.kg(nextThreshold)) kg lifetime"
-        case .consistencyWeeks:
-            return "Need \(Int(nextThreshold)) weeks at your goal"
-        }
+        MilestoneCopy.lockedSubtitle(
+            metric: item.definition.metric, nextThreshold: item.nextThreshold, unit: unit
+        )
     }
 
     private var tierColor: Color {
@@ -159,6 +187,7 @@ private struct MilestoneCard: View {
 private struct MilestoneDetailSheet: View {
     var item: MilestoneProgress
     var achievements: [AchievementInfo]
+    var unit: WeightUnit
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s5) {
@@ -167,7 +196,7 @@ private struct MilestoneDetailSheet: View {
                 ForEach(item.definition.tiers, id: \.tier) { tier, threshold in
                     TierRow(
                         tier: tier, threshold: threshold, metric: item.definition.metric,
-                        earnedLine: achievements.first { $0.tier == tier }?.line
+                        earnedLine: achievements.first { $0.tier == tier }?.line, unit: unit
                     )
                 }
             }
@@ -187,6 +216,7 @@ private struct TierRow: View {
     var threshold: Double
     var metric: MilestoneMetric
     var earnedLine: String?
+    var unit: WeightUnit
 
     var body: some View {
         HStack(spacing: DGSpace.s3) {
@@ -205,13 +235,7 @@ private struct TierRow: View {
     }
 
     private var thresholdLabel: String {
-        switch metric {
-        case .strengthRatio: return "\(WeightFormat.kg(threshold))× bodyweight"
-        case .workoutCount: return "\(Int(threshold)) workouts"
-        case .streakWeeks: return "\(Int(threshold))-week streak"
-        case .lifetimeTonnageKg: return "\(WeightFormat.kg(threshold)) kg lifetime"
-        case .consistencyWeeks: return "\(Int(threshold)) weeks at goal"
-        }
+        MilestoneCopy.thresholdLabel(metric: metric, threshold: threshold, unit: unit)
     }
 
     private var tierColor: Color {

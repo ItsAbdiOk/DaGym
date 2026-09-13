@@ -136,7 +136,7 @@ private struct ReadOnlySetRow: View {
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             if let effort = set.effort {
-                Text(effort.displayValue(scale: .rpe))
+                Text(effort.displayValue(scale: preferences.effortScale))
                     .font(DGFont.footnote)
                     .foregroundStyle(effort.color)
                     .padding(.horizontal, DGSpace.s2)

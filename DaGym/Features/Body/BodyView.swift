@@ -13,6 +13,7 @@ struct BodyView: View {
     @State private var series: [BodyMeasurementInfo] = []
     @State private var recent: [BodyMeasurementInfo] = []
     @State private var isLoggingWeight = false
+    @State private var isEditingGoal = false
     @State private var isSyncing = false
     @State private var isShowingPhotos = false
 
@@ -33,7 +34,9 @@ struct BodyView: View {
             }
         }
         .task { refresh() }
+        .onChange(of: store.changeToken) { refresh() }
         .sheet(isPresented: $isLoggingWeight, onDismiss: refresh) { BodyweightSheet() }
+        .sheet(isPresented: $isEditingGoal) { BodyweightSheet(purpose: .goal) }
         .sheet(isPresented: $isShowingPhotos) {
             PhotoLockGate { ProgressPhotosView() }
         }
@@ -65,7 +68,10 @@ struct BodyView: View {
                     }
                 }
                 Spacer()
-                if let change = changeText { Text(change).dgLabel(changeColor) }
+                VStack(alignment: .trailing, spacing: DGSpace.s2) {
+                    if let change = changeText { Text(change).dgLabel(changeColor) }
+                    goalButton
+                }
             }
             if series.isEmpty {
                 EmptyState(
@@ -77,6 +83,23 @@ struct BodyView: View {
             }
         }
         .dgCard()
+    }
+
+    /// "Goal 80 kg" / "Set Goal" — the only writer of `Preferences.bodyweightGoalKg`.
+    private var goalButton: some View {
+        Button { isEditingGoal = true } label: {
+            Text(goalLabel)
+                .dgLabel(DGColor.infoText)
+                .padding(.horizontal, DGSpace.s3)
+                .frame(height: 28)
+                .dgGlass(.thin, radius: DGRadius.sm)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var goalLabel: String {
+        guard let goalKg = preferences.bodyweightGoalKg else { return "Set Goal" }
+        return "Goal \(preferences.formatWeight(kg: goalKg))"
     }
 
     private var chart: some View {

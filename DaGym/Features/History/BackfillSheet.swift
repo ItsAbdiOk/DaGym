@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// "Log a past workout" — pick when it happened, then choose freestyle or a
-/// routine. Detent-sized glass sheet, ~420 pt. When `routines` is non-empty,
-/// "Use a Routine" opens a menu to pick which one; see the convenience
-/// initializer below for callers that haven't adopted the picker yet.
+/// "Log a past workout" — pick when it happened (never in the future — a future date would
+/// count toward this week's goal), then choose freestyle or a routine. Detent-sized glass
+/// sheet, ~420 pt. When `routines` is non-empty, "Use a Routine" opens a menu to pick which one.
 struct BackfillSheet: View {
     var routines: [RoutineInfo]
     var onFreestyle: (Date, Int) -> Void
@@ -22,16 +21,6 @@ struct BackfillSheet: View {
         self.routines = routines
         self.onFreestyle = onFreestyle
         self.onRoutine = onRoutine
-    }
-
-    /// Source-compatible with callers built against the original two-step
-    /// backfill flow (no routine picker): the placeholder id third callers
-    /// ignore, since they resolve which routine to use themselves.
-    init(onFreestyle: @escaping (Date, Int) -> Void, onRoutine: @escaping (Date, Int) -> Void) {
-        self.init(
-            routines: [], onFreestyle: onFreestyle,
-            onRoutine: { date, minutes, _ in onRoutine(date, minutes) }
-        )
     }
 
     var body: some View {
@@ -77,15 +66,11 @@ struct BackfillSheet: View {
         .presentationDragIndicator(.hidden)
     }
 
-    /// A plain button (old direct-call behaviour) when there's nothing to pick from; a menu of
-    /// `routines` otherwise.
+    /// A menu of `routines`; hidden when there's nothing to pick from (a routine-less backfill
+    /// would resolve to an untitled session).
     @ViewBuilder
     private var routineButton: some View {
-        if routines.isEmpty {
-            DGPrimaryButton(title: "Use a Routine") {
-                onRoutine(combined, durationMinutes, UUID())
-            }
-        } else {
+        if !routines.isEmpty {
             Menu {
                 ForEach(routines) { routine in
                     Button(routine.name) { onRoutine(combined, durationMinutes, routine.id) }
@@ -107,7 +92,7 @@ struct BackfillSheet: View {
     private var fieldsCard: some View {
         VStack(spacing: 0) {
             FieldRow(title: "Date") {
-                DatePicker("", selection: $date, displayedComponents: .date)
+                DatePicker("", selection: $date, in: ...Date(), displayedComponents: .date)
                     .labelsHidden()
                     .datePickerStyle(.compact)
             }
@@ -169,6 +154,6 @@ private struct FieldRow<Control: View>: View {
     Color.black
         .ignoresSafeArea()
         .sheet(isPresented: .constant(true)) {
-            BackfillSheet(onFreestyle: { _, _ in }, onRoutine: { _, _ in })
+            BackfillSheet(onFreestyle: { _, _ in }, onRoutine: { _, _, _ in })
         }
 }

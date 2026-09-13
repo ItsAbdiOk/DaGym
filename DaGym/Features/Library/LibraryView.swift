@@ -59,7 +59,14 @@ struct LibraryView: View {
             .sheet(isPresented: $showingNewExercise) {
                 NewExerciseSheet { _ in refresh() }
             }
-            .task { refresh() }
+            .task {
+                totalCount = store.exercises().count
+                refresh()
+            }
+            .onChange(of: store.changeToken) { _, _ in
+                totalCount = store.exercises().count
+                refresh()
+            }
             .onChange(of: searchText) { _, _ in refresh() }
             .onChange(of: selectedMuscle) { _, _ in refresh() }
             .onChange(of: selectedEquipment) { _, _ in refresh() }
@@ -150,7 +157,6 @@ struct LibraryView: View {
             matching: searchText, muscle: selectedMuscle, equipment: selectedEquipment?.rawValue,
             favoritesOnly: favoritesOnly, customOnly: customOnly
         )
-        totalCount = store.exercises().count
     }
 
     private func toggleFavorite(_ id: UUID) {
@@ -182,6 +188,7 @@ private struct LibraryRow: View {
             }
             Spacer()
             accessory
+            favoriteButton
         }
         .frame(height: 72)
         .dgCard(radius: 14, padding: 12)
@@ -194,6 +201,21 @@ private struct LibraryRow: View {
             .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
+    /// Every row can be (un)favourited from the list, whether or not it has a lift on record.
+    private var favoriteButton: some View {
+        Button(action: onToggleFavorite) {
+            Image(systemName: exercise.isFavorite ? "star.fill" : "star")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(exercise.isFavorite ? DGColor.prGoldText : DGColor.ink4)
+                .frame(width: 28, height: 28)
+                .background(
+                    exercise.isFavorite ? DGColor.prGold.opacity(0.18) : DGColor.surface2, in: Circle()
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(exercise.isFavorite ? "Remove from favourites" : "Add to favourites")
+    }
+
     @ViewBuilder
     private var accessory: some View {
         if let best = exercise.bestE1RM {
@@ -203,15 +225,6 @@ private struct LibraryRow: View {
                     .foregroundStyle(DGColor.prGoldText)
                 Text("E1RM").dgLabel()
             }
-        } else if exercise.isFavorite {
-            Button(action: onToggleFavorite) {
-                Image(systemName: "star.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(DGColor.prGoldText)
-                    .frame(width: 28, height: 28)
-                    .background(DGColor.prGold.opacity(0.18), in: Circle())
-            }
-            .buttonStyle(.plain)
         } else if exercise.loggingStyle == .weightedBodyweight {
             DGTag(text: "BW+", tint: DGColor.infoText, wash: DGColor.info.opacity(0.16))
         } else if exercise.isCustom {

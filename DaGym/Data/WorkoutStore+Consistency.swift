@@ -55,7 +55,7 @@ extension WorkoutStore {
         let minutesTotal = workouts.reduce(0) { total, workout in total + minutes(of: workout) }
         return WeekActivity(
             workouts: workouts.count, sets: sets, volumeKg: volumeTotal, durationMinutes: minutesTotal,
-            prs: prsLogged(from: from, to: to)
+            prs: prCount(from: from, to: to)
         )
     }
 
@@ -71,15 +71,5 @@ extension WorkoutStore {
     private func minutes(of workout: WorkoutModel) -> Int {
         guard let endedAt = workout.endedAt else { return 0 }
         return max(0, Int(endedAt.timeIntervalSince(workout.startedAt) / 60))
-    }
-
-    /// Headline (e1RM) personal records logged in `[from, to)`, matching the count `history()`
-    /// shows per workout.
-    private func prsLogged(from: Date, to: Date) -> Int {
-        let headline = PRKind.e1rm.rawValue
-        let predicate = #Predicate<PersonalRecordModel> {
-            $0.kind == headline && $0.date >= from && $0.date < to
-        }
-        return (try? context.fetchCount(FetchDescriptor(predicate: predicate))) ?? 0
     }
 }

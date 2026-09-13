@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The "APPLE HEALTH" settings screen (plan.md §6.8): connect, then three plain-language toggles
+/// The "APPLE HEALTH" settings screen (plan.md §6.8): connect, then two plain-language toggles
 /// for exactly what's shared. Presented as a sheet from `SettingsView`'s "Apple Health" row.
 struct HealthSettingsView: View {
     @Environment(Preferences.self) private var preferences
@@ -82,13 +82,6 @@ struct HealthSettingsView: View {
                     detail: "Health becomes the source of truth for your bodyweight: readings sync "
                         + "both ways, and a logged entry here is sent to Health too.",
                     isOn: binding(\.healthSyncBodyweight)
-                )
-                HealthDivider()
-                HealthToggleRow(
-                    title: "Read recovery signals",
-                    detail: "Heart-rate variability, resting heart rate and sleep, read only — used "
-                        + "to suggest lighter or heavier sessions. Never written to.",
-                    isOn: binding(\.healthReadRecovery)
                 )
             }
             .dgCard(padding: 0)

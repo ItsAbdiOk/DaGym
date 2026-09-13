@@ -46,6 +46,7 @@ struct RoutinesTabView: View {
                 }
             }
             .task { refresh() }
+            .onChange(of: store.changeToken) { refresh() }
         }
     }
 
@@ -132,7 +133,7 @@ private struct RoutineCard: View {
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Spacer()
-                Text("~\(estimatedMinutes) MIN").dgLabel()
+                Text("~\(routine.estimatedMinutes) MIN").dgLabel()
             }
             Text(exerciseNames)
                 .font(DGFont.footnote)
@@ -161,8 +162,6 @@ private struct RoutineCard: View {
             .background(DGColor.coral, in: Capsule())
     }
 
-    /// setCount × 2.5 min + 5, rounded down to the minute.
-    private var estimatedMinutes: Int { Int(Double(routine.setCount) * 2.5) + 5 }
     private var exerciseNames: String { routine.exercises.map(\.name).joined(separator: " · ") }
     private var topMuscles: [Muscle] {
         routine.hitMap.sorted { $0.value > $1.value }.prefix(3).map(\.key)

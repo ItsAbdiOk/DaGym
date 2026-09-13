@@ -24,6 +24,7 @@ struct RoutineBuilderView: View {
     var onDone: () -> Void
 
     @Environment(WorkoutStore.self) private var store
+    @Environment(Preferences.self) private var preferences
     @State private var name = "New Routine"
     @State private var items: [EditableExercise] = []
     @State private var showingPicker = false
@@ -37,7 +38,10 @@ struct RoutineBuilderView: View {
                     navRow
                     NameCard(name: $name, hitMap: hitMap, hitSummary: hitSummary)
                         .animation(DGMotion.standard, value: hitMap)
-                    ProgressionRulePickerView(title: "Progression", state: $ruleState).dgCard()
+                    ProgressionRulePickerView(
+                        title: "Progression", state: $ruleState, unit: preferences.weightUnit
+                    )
+                    .dgCard()
                     ForEach($items) { $item in
                         BuilderExerciseCard(
                             item: $item, isSuperset: item.supersetGroup != nil,
@@ -194,6 +198,7 @@ private struct NameCard: View {
 
 /// One exercise card: name, move/superset/remove controls, and its set rows.
 private struct BuilderExerciseCard: View {
+    @Environment(Preferences.self) private var preferences
     @Binding var item: EditableExercise
     var isSuperset: Bool
     var onToggleSuperset: () -> Void
@@ -265,7 +270,9 @@ private struct BuilderExerciseCard: View {
                 .font(DGFont.footnote)
                 .tint(DGColor.coral)
             if item.overrideEnabled {
-                ProgressionRulePickerView(title: "Override", state: $item.overrideState)
+                ProgressionRulePickerView(
+                    title: "Override", state: $item.overrideState, unit: preferences.weightUnit
+                )
             }
             Toggle("Exclude from progression", isOn: $item.excludeFromProgression)
                 .font(DGFont.footnote)
@@ -321,8 +328,15 @@ private struct BuilderSetRow: View {
         return "\(set.targetReps ?? 0) reps"
     }
 
+    /// Steps the low end of the range; a high end below it is dragged up so "10–8" can't appear.
     private var repsBinding: Binding<Int> {
-        Binding(get: { set.targetReps ?? 8 }, set: { set.targetReps = $0 })
+        Binding(
+            get: { set.targetReps ?? 8 },
+            set: { reps in
+                set.targetReps = reps
+                if let high = set.targetRepsHigh, high < reps { set.targetRepsHigh = reps }
+            }
+        )
     }
 }
 

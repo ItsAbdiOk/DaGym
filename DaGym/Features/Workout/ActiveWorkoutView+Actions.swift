@@ -9,7 +9,10 @@ extension ActiveWorkoutView {
 
     func finishSession() {
         RestActivityController.shared.endNow()
-        let summary = store.finish(session: session, weeklyGoal: preferences.weeklyGoal)
+        let summary = store.finish(
+            session: session, weeklyGoal: preferences.weeklyGoal,
+            calendar: preferences.trainingCalendar, unit: preferences.weightUnit
+        )
         onFinish(summary)
     }
 

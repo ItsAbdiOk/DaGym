@@ -3,7 +3,7 @@ import Foundation
 // swiftlint:disable large_tuple
 /// Turns a routine's planned exercises into the "muscles hit" body-map
 /// intensities, and those intensities into the plain-language "HITS" line
-/// shown next to the map (e.g. "Chest, front delts, triceps · light on back").
+/// shown next to the map (e.g. "Chest, delts, triceps · light on back").
 public enum RoutineMuscles {
     /// Weighted, normalised hit map for a set of planned exercises: primary
     /// muscles count `setCount` sets, secondary muscles count at half
@@ -34,7 +34,7 @@ public enum RoutineMuscles {
     ///
     /// Wording rule: muscles at or above 0.6 are named individually,
     /// highest first, with only the first capitalised and the rest
-    /// lowercase (e.g. "Chest, front delts, triceps"). Muscles between 0.2
+    /// lowercase (e.g. "Chest, delts, triceps"). Muscles between 0.2
     /// and 0.6 are not named individually; instead their regions (see
     /// `region(for:)`) are folded into a trailing "light on <region>"
     /// clause, in descending order of their best muscle's score, deduped.

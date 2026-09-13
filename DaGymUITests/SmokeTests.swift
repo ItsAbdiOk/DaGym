@@ -154,36 +154,36 @@ final class SmokeTests: XCTestCase {
     }
 
     /// Walks the whole onboarding flow (`-dgOnboarding` forces it to show, resetting whatever a
-    /// previous simulator run left in `UserDefaults.standard`), mixing Continue and Skip taps,
-    /// and confirms it lands on Home with `home.start` visible.
+    /// previous simulator run left in `UserDefaults.standard`), skipping every optional step and
+    /// accepting the defaults on the rest, and confirms it lands on Home with `home.start`
+    /// visible. Steps are discovered rather than counted, and `onboarding.next` is resolved
+    /// with `firstMatch`, so adding a step or a second Continue-tagged control to one changes
+    /// nothing here — only a step with no way forward, or one that never reaches Home, fails.
     func testOnboardingCompletes() {
         let app = launchAppForOnboarding()
 
-        let next = app.buttons[A11yID.onboardingNext]
-        let skip = app.buttons[A11yID.onboardingSkip]
+        let next = app.buttons.matching(identifier: A11yID.onboardingNext).firstMatch
+        let skip = app.buttons.matching(identifier: A11yID.onboardingSkip).firstMatch
+        let startButton = app.buttons[A11yID.homeStart]
 
         // Welcome: "Set Up · 5 Questions" (also tagged onboarding.next) walks the flow instead
         // of skipping it entirely.
         XCTAssertTrue(next.waitForExistence(timeout: defaultTimeout), "onboarding.next never appeared")
         next.tap()
 
-        // Units, Goal, Schedule, Equipment: accept the defaults with Continue.
-        for _ in 0..<4 {
+        // Every following step shows Continue, and the optional / permission steps also show
+        // Skip; take Skip when it's offered. Bounded well above the real step count so a step
+        // that never advances fails fast instead of looping.
+        for _ in 0..<12 {
+            if startButton.waitForExistence(timeout: 1) { break }
             XCTAssertTrue(next.waitForExistence(timeout: defaultTimeout), "onboarding.next never appeared")
-            next.tap()
+            if skip.exists {
+                skip.tap()
+            } else {
+                next.tap()
+            }
         }
 
-        // Bodyweight, Apple Health, Notifications: skip every optional/permission step.
-        for _ in 0..<3 {
-            XCTAssertTrue(skip.waitForExistence(timeout: defaultTimeout), "onboarding.skip never appeared")
-            skip.tap()
-        }
-
-        // Done: "Get Started" (tagged onboarding.next) finishes onboarding.
-        XCTAssertTrue(next.waitForExistence(timeout: defaultTimeout), "onboarding.next never appeared")
-        next.tap()
-
-        let startButton = app.buttons[A11yID.homeStart]
         XCTAssertTrue(startButton.waitForExistence(timeout: defaultTimeout), "home.start never appeared")
     }
 

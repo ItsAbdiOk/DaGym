@@ -14,6 +14,7 @@ struct ProgressPhotosView: View {
     @State private var photos: [ProgressPhotoInfo] = []
     @State private var isCapturing = false
     @State private var isComparing = false
+    @State private var pendingDelete: ProgressPhotoInfo?
 
     var body: some View {
         NavigationStack {
@@ -49,6 +50,15 @@ struct ProgressPhotosView: View {
         }
         .task { refresh() }
         .onChange(of: pose) { refresh() }
+        .onChange(of: store.changeToken) { refresh() }
+        .confirmationDialog(
+            "Delete this photo?", isPresented: deleteDialogBinding, titleVisibility: .visible,
+            presenting: pendingDelete
+        ) { photo in
+            Button("Delete Photo", role: .destructive) { delete(photo) }
+        } message: { _ in
+            Text("This can't be undone.")
+        }
         .sheet(isPresented: $isCapturing, onDismiss: refresh) {
             PhotoCaptureView(pose: pose)
         }
@@ -76,13 +86,30 @@ struct ProgressPhotosView: View {
             )
         } else {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: DGSpace.s3) {
-                ForEach(photos) { PhotoGridCell(photo: $0, preferences: preferences) }
+                ForEach(photos) { photo in
+                    PhotoGridCell(photo: photo, preferences: preferences)
+                        .contextMenu {
+                            Button("Delete Photo", systemImage: "trash", role: .destructive) {
+                                pendingDelete = photo
+                            }
+                        }
+                }
             }
         }
     }
 
     private func refresh() {
         photos = store.photos(pose: pose)
+    }
+
+    private var deleteDialogBinding: Binding<Bool> {
+        Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })
+    }
+
+    private func delete(_ photo: ProgressPhotoInfo) {
+        store.deletePhoto(id: photo.id)
+        pendingDelete = nil
+        refresh()
     }
 }
 

@@ -15,6 +15,7 @@ struct ScheduleView: View {
     @State private var routines: [RoutineInfo] = []
     @State private var schedule = WeeklySchedule()
     @State private var moveRequest: MoveRequest?
+    @State private var syncTask: Task<Void, Never>?
     @State private var eventStore: EventStoring = EventKitStore()
 
     var body: some View {
@@ -132,16 +133,20 @@ struct ScheduleView: View {
 
     private func persist() {
         store.saveSchedule(schedule)
+        WidgetSnapshotWriter.refresh(store: store, preferences: preferences)
         guard preferences.calendarSyncEnabled else { return }
         let snapshot = schedule
         let currentRoutines = routines
         let hour = preferences.scheduledStartHour
-        let existingEventIDs = store.scheduleEventIDs()
-        Task {
+        // Two quick edits must not sync concurrently: the second would read the same
+        // `existingEventIDs` as the first and create duplicate events. Chain on the last task.
+        let previous = syncTask
+        syncTask = Task {
+            await previous?.value
             let service = CalendarSyncService(eventStore: eventStore)
             let request = ScheduleSyncRequest(
                 schedule: snapshot, routines: currentRoutines, startDate: Date(), defaultStartHour: hour,
-                existingEventIDs: existingEventIDs
+                existingEventIDs: store.scheduleEventIDs()
             )
             guard let updated = try? await service.sync(request) else { return }
             store.saveScheduleEventIDs(updated)

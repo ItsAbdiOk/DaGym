@@ -49,14 +49,14 @@ struct RoutineMusclesTests {
     func summaryNamesHighMuscles() {
         let hit: [Muscle: Double] = [.chest: 1.0, .delts: 0.8, .triceps: 0.65]
         let summary = RoutineMuscles.summary(hitMap: hit)
-        #expect(summary.hasPrefix("Chest, front delts, triceps"))
+        #expect(summary.hasPrefix("Chest, delts, triceps"))
     }
 
     @Test("summary folds 0.2..<0.6 muscles into a light-on clause")
     func summaryLightClause() {
         let hit: [Muscle: Double] = [.chest: 1.0, .delts: 0.8, .triceps: 0.65, .lowerBack: 0.3]
         let summary = RoutineMuscles.summary(hitMap: hit)
-        #expect(summary == "Chest, front delts, triceps · light on back")
+        #expect(summary == "Chest, delts, triceps · light on back")
     }
 
     @Test("summary omits muscles worked below 0.2")

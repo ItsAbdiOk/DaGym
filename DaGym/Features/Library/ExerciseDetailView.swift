@@ -17,7 +17,16 @@ struct ExerciseDetailView: View {
     @State private var showingCalculator = false
 
     private static let restOptions = [60, 90, 120, 150, 180, 210, 240, 300]
-    private static let incrementOptions = [0.5, 1, 1.25, 2, 2.5, 5, 10]
+
+    /// Increment choices in kg, in the lifter's unit: the standard kg microplate steps, or a
+    /// lb lifter's own steps (0.5 lb up to a 25 lb jump) converted to kg — offering "5 lb" rather
+    /// than kg's 2.5 kg (5.5 lb) rounded through `preferences.formatWeight`.
+    private static func incrementOptions(for unit: WeightUnit) -> [Double] {
+        switch unit {
+        case .kg: return [0.5, 1, 1.25, 2, 2.5, 5, 10]
+        case .lb: return [0.5, 1, 2, 2.5, 5, 10, 25].map(unit.toKg)
+        }
+    }
 
     init(exercise: ExerciseInfo) {
         _exercise = State(initialValue: exercise)
@@ -199,7 +208,7 @@ struct ExerciseDetailView: View {
                 label: "Weight increment",
                 value: "\(preferences.formatWeight(kg: incrementKg)) \(preferences.unitSymbol)"
             ) {
-                ForEach(Self.incrementOptions, id: \.self) { increment in
+                ForEach(Self.incrementOptions(for: preferences.weightUnit), id: \.self) { increment in
                     Button("\(preferences.formatWeight(kg: increment)) \(preferences.unitSymbol)") {
                         updateIncrement(increment)
                     }

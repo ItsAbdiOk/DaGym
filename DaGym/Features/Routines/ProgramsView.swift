@@ -25,6 +25,7 @@ struct ProgramsView: View {
             }
         }
         .task { refresh() }
+        .onChange(of: store.changeToken) { refresh() }
         .confirmationDialog("New Program", isPresented: $showingNew, titleVisibility: .visible) {
             ForEach(StarterProgramKind.allCases) { kind in
                 Button(kind.rawValue) { create(kind) }

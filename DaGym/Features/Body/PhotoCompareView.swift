@@ -4,16 +4,20 @@ import UIKit
 /// Compares two photos of the same pose — side-by-side, or a slider wipe between them using a
 /// mask + `DragGesture` (plan.md §6.4). Defaults to the oldest and newest photo in `photos`
 /// (`WorkoutStore.photos(pose:)` returns newest-first, so that's the last and first index).
+/// `photos` carries thumbnails only; the two photos on screen are fetched at full size through
+/// `WorkoutStore.photo(id:)` as they're picked.
 struct PhotoCompareView: View {
     var pose: ProgressPhotoPose
     var photos: [ProgressPhotoInfo]
 
+    @Environment(WorkoutStore.self) private var store
     @Environment(\.dismiss) private var dismiss
 
     @State private var beforeIndex: Int
     @State private var afterIndex: Int
     @State private var isSideBySide = true
     @State private var sliderFraction: CGFloat = 0.5
+    @State private var fullImageData: [UUID: Data] = [:]
 
     init(pose: ProgressPhotoPose, photos: [ProgressPhotoInfo]) {
         self.pose = pose
@@ -39,6 +43,7 @@ struct PhotoCompareView: View {
             }
             .navigationTitle("Compare \(pose.label)")
             .navigationBarTitleDisplayMode(.inline)
+            .task(id: [beforeIndex, afterIndex]) { loadFullImages() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Done") { dismiss() }
@@ -120,9 +125,18 @@ struct PhotoCompareView: View {
             }
     }
 
+    private func loadFullImages() {
+        for index in [beforeIndex, afterIndex] {
+            guard let id = photos[safe: index]?.id, fullImageData[id] == nil,
+                  let data = store.photo(id: id)?.imageData else { continue }
+            fullImageData[id] = data
+        }
+    }
+
     private func image(for index: Int) -> some View {
         Group {
-            if let data = photos[safe: index]?.imageData ?? photos[safe: index]?.thumbnailData,
+            if let photo = photos[safe: index],
+               let data = fullImageData[photo.id] ?? photo.imageData ?? photo.thumbnailData,
                let uiImage = UIImage(data: data) {
                 Image(uiImage: uiImage).resizable()
             } else {
@@ -145,6 +159,9 @@ private extension Array {
 }
 
 #Preview {
-    PhotoCompareView(pose: .front, photos: [])
-        .environment(Preferences())
+    if let store = PreviewStore.make() {
+        PhotoCompareView(pose: .front, photos: [])
+            .environment(store)
+            .environment(Preferences())
+    }
 }

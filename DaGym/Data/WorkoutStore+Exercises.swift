@@ -108,8 +108,11 @@ extension WorkoutStore {
         return best
     }
 
+    /// Finished workouts only: an in-progress (or abandoned) session isn't a session yet.
     private func sessionCount(exerciseID: UUID) -> Int {
-        let predicate = #Predicate<WorkoutExerciseModel> { $0.exercise?.id == exerciseID }
+        let predicate = #Predicate<WorkoutExerciseModel> {
+            $0.exercise?.id == exerciseID && $0.workout?.endedAt != nil
+        }
         return (try? context.fetchCount(FetchDescriptor(predicate: predicate))) ?? 0
     }
 }

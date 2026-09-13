@@ -40,6 +40,11 @@ final class WorkoutStore {
     /// doesn't contain it — a trap, not an error).
     let photoContext: ModelContext?
 
+    /// Bumps on every successful `save()`/`savePhotos()` — the one signal screens key their
+    /// `refresh()` on (`.onChange(of: store.changeToken)`) so a finished workout, a schedule
+    /// edit or a photo delete shows up without a tab switch. Never decrements.
+    private(set) var changeToken = 0
+
     init(context: ModelContext, photoContext: ModelContext?) {
         self.context = context
         self.photoContext = photoContext
@@ -55,6 +60,7 @@ final class WorkoutStore {
         guard let photoContext, photoContext.hasChanges else { return }
         do {
             try photoContext.save()
+            changeToken += 1
         } catch {
             storeLogger.error("Photo store save failed: \(error.localizedDescription, privacy: .public)")
         }
@@ -64,6 +70,7 @@ final class WorkoutStore {
         guard context.hasChanges else { return }
         do {
             try context.save()
+            changeToken += 1
         } catch {
             storeLogger.error("Save failed: \(error.localizedDescription, privacy: .public)")
         }

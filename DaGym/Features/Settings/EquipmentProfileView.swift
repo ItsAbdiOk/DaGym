@@ -11,15 +11,18 @@ struct EquipmentProfileView: View {
     var onDelete: (() -> Void)?
 
     @Environment(WorkoutStore.self) private var store
+    @Environment(Preferences.self) private var preferences
     @Environment(\.dismiss) private var dismiss
 
     @State private var name: String
     @State private var barKg: Double
     @State private var collarsKg: Double
     @State private var availableEquipment: Set<String>
-    @State private var plateRows: [PlateRowDraft]
+    @State private var plateRows: [PlateRowDraft] = []
 
-    private static let standardWeightsKg: [Double] = [25, 20, 15, 10, 5, 2.5, 1.25]
+    /// `profile.plateStock` keyed by weight, so the unit-dependent standard plate list (set up
+    /// once `preferences` is available, in `.task`) can carry over the counts already saved.
+    private let existingPlateCounts: [Double: Int]
 
     init(profile: EquipmentProfileInfo, isNew: Bool = false, onDelete: (() -> Void)? = nil) {
         self.profile = profile
@@ -29,9 +32,8 @@ struct EquipmentProfileView: View {
         _barKg = State(initialValue: profile.barKg)
         _collarsKg = State(initialValue: profile.collarsKg)
         _availableEquipment = State(initialValue: Set(profile.availableEquipment))
-        let existing = Dictionary(uniqueKeysWithValues: profile.plateStock.map { ($0.weightKg, $0.count) })
-        _plateRows = State(
-            initialValue: Self.standardWeightsKg.map { PlateRowDraft(weightKg: $0, count: existing[$0] ?? 0) }
+        existingPlateCounts = Dictionary(
+            profile.plateStock.map { ($0.weightKg, $0.count) }, uniquingKeysWith: +
         )
     }
 
@@ -52,6 +54,12 @@ struct EquipmentProfileView: View {
                 .padding(.horizontal, DGSpace.s4)
                 .padding(.top, DGSpace.s3)
                 .padding(.bottom, DGSpace.s8)
+            }
+        }
+        .task {
+            guard plateRows.isEmpty else { return }
+            plateRows = EquipmentStep.standardWeightsKg(for: preferences.weightUnit).map {
+                PlateRowDraft(weightKg: $0, count: existingPlateCounts[$0] ?? 0)
             }
         }
     }
@@ -95,23 +103,27 @@ struct EquipmentProfileView: View {
     }
 
     private var barCard: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
+        let unit = preferences.weightUnit
+        return VStack(alignment: .leading, spacing: DGSpace.s3) {
             Text("Bar").dgLabel()
             VStack(spacing: 0) {
-                stepperRow(label: "Bar weight", value: $barKg, range: 5...30, step: 0.5, suffix: "kg")
+                stepperRow(label: "Bar weight", value: $barKg, range: 5...30, step: stepKg(unit), unit: unit)
                 Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
-                stepperRow(label: "Collars", value: $collarsKg, range: 0...5, step: 0.5, suffix: "kg")
+                stepperRow(label: "Collars", value: $collarsKg, range: 0...5, step: stepKg(unit), unit: unit)
             }
             .dgCard(padding: 0)
         }
     }
 
+    private func stepKg(_ unit: WeightUnit) -> Double { EquipmentStep.stepKg(for: unit) }
+
     private var plateCard: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
+        let unit = preferences.weightUnit
+        return VStack(alignment: .leading, spacing: DGSpace.s3) {
             Text("Plate Inventory").dgLabel()
             VStack(spacing: 0) {
                 ForEach(Array(plateRows.enumerated()), id: \.element.weightKg) { index, row in
-                    plateRow(index: index, row: row)
+                    plateRow(index: index, row: row, unit: unit)
                     if index < plateRows.count - 1 {
                         Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
                     }
@@ -140,13 +152,13 @@ struct EquipmentProfileView: View {
     }
 
     private func stepperRow(
-        label: String, value: Binding<Double>, range: ClosedRange<Double>, step: Double, suffix: String
+        label: String, value: Binding<Double>, range: ClosedRange<Double>, step: Double, unit: WeightUnit
     ) -> some View {
         HStack {
             Text(label).font(DGFont.body).foregroundStyle(DGColor.ink1)
             Spacer()
             Stepper(value: value, in: range, step: step) {
-                Text("\(Self.formatted(value.wrappedValue)) \(suffix)")
+                Text("\(unit.format(kg: value.wrappedValue)) \(unit.symbol)")
                     .font(DGFont.subhead)
                     .foregroundStyle(DGColor.ink3)
             }
@@ -155,9 +167,11 @@ struct EquipmentProfileView: View {
         .frame(minHeight: 52)
     }
 
-    private func plateRow(index: Int, row: PlateRowDraft) -> some View {
+    private func plateRow(index: Int, row: PlateRowDraft, unit: WeightUnit) -> some View {
         HStack {
-            Text("\(Self.formatted(row.weightKg)) kg").font(DGFont.body).foregroundStyle(DGColor.ink1)
+            Text("\(unit.format(kg: row.weightKg)) \(unit.symbol)")
+                .font(DGFont.body)
+                .foregroundStyle(DGColor.ink1)
             Spacer()
             Stepper(value: countBinding(index: index), in: 0...40, step: 2) {
                 Text("×\(plateRows[index].count)").font(DGFont.subhead).foregroundStyle(DGColor.ink3)
@@ -212,10 +226,6 @@ struct EquipmentProfileView: View {
         .buttonStyle(.plain)
     }
 
-    private static func formatted(_ value: Double) -> String {
-        value == value.rounded() ? String(Int(value)) : String(value)
-    }
-
     private func save() {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -245,6 +255,21 @@ private struct PlateRowDraft {
     var isStocked: Bool { count > 0 }
 }
 
+/// Unit-aware sizing for this screen's steppers, pulled out so it's testable without SwiftUI.
+enum EquipmentStep {
+    /// The plate sizes offered, in the lifter's unit: the standard kg set, or the standard
+    /// 45/35/25/10/5/2.5 lb set converted to kg (`WeightUnit.plateStock`).
+    static func standardWeightsKg(for unit: WeightUnit) -> [Double] {
+        WeightUnit.plateStock(for: unit).map(\.weightKg)
+    }
+
+    /// A kg lifter keeps the existing half-kg bar/collar step; a lb lifter steps by a whole
+    /// pound.
+    static func stepKg(for unit: WeightUnit) -> Double {
+        unit == .kg ? 0.5 : unit.toKg(1)
+    }
+}
+
 #Preview {
     if let store = PreviewStore.make() {
         EquipmentSeeder.seedIfNeeded(store: store)
@@ -252,7 +277,9 @@ private struct PlateRowDraft {
             id: UUID(), name: "Gym", isActive: true, barKg: 20, availableEquipment: [],
             plateStock: PlateStock.standardKg, collarsKg: 0
         )
-        return AnyView(EquipmentProfileView(profile: profile).environment(store))
+        return AnyView(
+            EquipmentProfileView(profile: profile).environment(store).environment(Preferences())
+        )
     }
     return AnyView(EmptyView())
 }

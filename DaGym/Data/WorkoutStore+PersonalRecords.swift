@@ -19,8 +19,9 @@ struct ExerciseRecords: Identifiable {
 
 extension WorkoutStore {
     /// All cached `PersonalRecordModel`s, grouped by exercise and sorted alphabetically.
-    /// Records within an exercise are ordered by kind, then newest first.
-    func personalRecords() -> [ExerciseRecords] {
+    /// Records within an exercise are ordered by kind, then newest first. `unit` controls how
+    /// each line is formatted; defaults to kg for callers that haven't gone unit-aware yet.
+    func personalRecords(unit: WeightUnit = .kg) -> [ExerciseRecords] {
         let models = (try? context.fetch(FetchDescriptor<PersonalRecordModel>())) ?? []
         let grouped = Dictionary(grouping: models) { $0.exerciseID }
         return grouped
@@ -35,19 +36,20 @@ extension WorkoutStore {
                         let ri = order.firstIndex(of: PRKind(rawValue: rhs.kind) ?? .e1rm) ?? 0
                         return li != ri ? li < ri : lhs.date > rhs.date
                     }
-                    .map(personalRecordLine)
+                    .map { self.personalRecordLine($0, unit: unit) }
                 return ExerciseRecords(id: exerciseID, exerciseName: exerciseModel.name, records: lines)
             }
             .sorted { $0.exerciseName.localizedCaseInsensitiveCompare($1.exerciseName) == .orderedAscending }
     }
 
-    private func personalRecordLine(_ model: PersonalRecordModel) -> PersonalRecordLine {
+    private func personalRecordLine(_ model: PersonalRecordModel, unit: WeightUnit) -> PersonalRecordLine {
         let kind = PRKind(rawValue: model.kind) ?? .e1rm
         let record = PersonalRecord(
             kind: kind, value: model.value, weightKg: model.weightKg, reps: model.reps, date: model.date
         )
         return PersonalRecordLine(
-            kindLabel: Self.kindLabel(kind), line: PersonalRecords.formatLine(record), date: model.date
+            kindLabel: Self.kindLabel(kind), line: PersonalRecords.formatLine(record, unit: unit),
+            date: model.date
         )
     }
 
@@ -93,7 +95,9 @@ extension WorkoutStore {
     /// "one PR line per exercise" UI. The other kinds (maxWeight, volume, maxRepsAtWeight, …) are
     /// cached for `exerciseInfo(for:)`-style lookups and future screens without changing what the
     /// Finish summary shows.
-    func evaluatePRs(session: WorkoutSession, workout: WorkoutModel) -> [PersonalRecordInfo] {
+    func evaluatePRs(
+        session: WorkoutSession, workout: WorkoutModel, unit: WeightUnit = .kg
+    ) -> [PersonalRecordInfo] {
         let latestDate = latestFinishedWorkoutDate(excluding: workout.id)
         return session.exercises.compactMap { entry -> PersonalRecordInfo? in
             let performed = performedSets(in: entry, date: workout.startedAt)
@@ -109,7 +113,7 @@ extension WorkoutStore {
             }
             guard let e1rm = records.first(where: { $0.kind == .e1rm }) else { return nil }
             return PersonalRecordInfo(
-                exerciseName: entry.exercise.name, line: PersonalRecords.formatLine(e1rm)
+                exerciseName: entry.exercise.name, line: PersonalRecords.formatLine(e1rm, unit: unit)
             )
         }
     }

@@ -18,15 +18,15 @@ struct DaGymApp: App {
     }
 }
 
-/// Resolves the persistent store (falling back to an in-memory one rather
-/// than crashing), seeds it, then shows `RootView` with the store injected.
+/// Resolves the persistent store through `ContainerProvider` (once per process, falling back
+/// to an in-memory one rather than crashing), seeds it, then shows `RootView` with the store
+/// injected.
 struct AppRootContainer: View {
     private enum LaunchPhase {
         case loading
-        case ready(WorkoutStore, HealthSyncService)
+        case ready(WorkoutStore, HealthSyncService, RemoteChangeDeduper)
     }
 
-    private let container: ModelContainer?
     private let preferences: Preferences
     @State private var phase = LaunchPhase.loading
     // Mirrors `preferences.hasCompletedOnboarding` in `@State` so finishing onboarding is
@@ -34,11 +34,9 @@ struct AppRootContainer: View {
     // from `body` only reliably drives a re-render while this struct's own identity is stable,
     // and `AppRootContainer` can be re-initialized (a fresh `Preferences()`) by its parent scene,
     // which would otherwise leave onboarding stuck showing its last screen after `onComplete`.
+    // The container itself is not stored here for the same reason: `ContainerProvider.shared`
+    // resolves it once, so a re-init never opens a second container on the same store files.
     @State private var hasCompletedOnboarding: Bool
-    // Set only by `onComplete` below — distinguishes "just finished onboarding this launch" from
-    // "onboarding was already done", so `RootView` only pays its post-onboarding startup delay
-    // (see `RootView.justCompletedOnboarding`) when it's actually replacing `OnboardingFlow`.
-    @State private var justCompletedOnboarding = false
 
     init() {
         if LaunchFlags.isUITesting {
@@ -53,14 +51,19 @@ struct AppRootContainer: View {
         }
         self.preferences = preferences
         _hasCompletedOnboarding = State(initialValue: preferences.hasCompletedOnboarding)
-        container = Self.resolveContainer(cloudKitEnabled: preferences.iCloudSyncEnabled)
+    }
+
+    private var container: ModelContainer? {
+        ContainerProvider.shared.main(cloudKitEnabled: preferences.iCloudSyncEnabled)
     }
 
     var body: some View {
         Group {
-            if LaunchFlags.isUnitTestHost {
+            if LaunchFlags.isUnitTestHost, !LaunchFlags.isUITesting {
                 // Unit tests build their own in-memory containers; the host app must do nothing
                 // (no seeding, notifications, HealthKit, widgets) so the runner connects instantly.
+                // A `-dgUITest` launch always wins, though: it must land on the seeded in-memory
+                // store even if the XCTest environment `isUnitTestHost` sniffs for leaks in.
                 AmbientWash()
             } else if let container {
                 launchContent(container: container)
@@ -83,11 +86,11 @@ struct AppRootContainer: View {
         case .loading:
             AmbientWash()
                 .modelContainer(container)
-                .task { await seed(context: container.mainContext) }
-        case .ready(let store, let healthSync):
+                .task { await seed() }
+        case .ready(let store, let healthSync, _):
             Group {
                 if hasCompletedOnboarding {
-                    RootView(justCompletedOnboarding: justCompletedOnboarding)
+                    RootView()
                 } else {
                     OnboardingFlow(onComplete: {
                         // Flip the `@State` gate first: it's what this view's `body` actually
@@ -101,7 +104,6 @@ struct AppRootContainer: View {
                         // un-hit-testable or crashed SwiftData's fetch mid-transition. Ordering it
                         // second makes that extra render harmless: it just redraws `RootView`.
                         hasCompletedOnboarding = true
-                        justCompletedOnboarding = true
                         preferences.hasCompletedOnboarding = true
                     })
                 }
@@ -114,42 +116,22 @@ struct AppRootContainer: View {
         }
     }
 
-    private func seed(context: ModelContext) async {
-        ExerciseSeeder.seedIfNeeded(context: context)
-        let photoContainer = try? ModelContainer.dagymPhotos(inMemory: LaunchFlags.isTesting)
-        let store = WorkoutStore(context: context, photoContext: photoContainer.map(ModelContext.init))
+    private func seed() async {
+        let provider = ContainerProvider.shared
+        guard let store = provider.store(cloudKitEnabled: preferences.iCloudSyncEnabled) else { return }
+        ExerciseSeeder.seedIfNeeded(context: store.context)
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
         EquipmentSeeder.seedIfNeeded(store: store)
+        store.dedupeSeededRows()
+        // A second iCloud device imports the first one's seeded rows after launch; fold those
+        // as they land. Kept in `phase` so the observer lives as long as the store does.
+        let deduper = store.startRemoteChangeDedupe()
+        // Half-finished workouts older than a day are abandoned, not resumable; `RootView`
+        // offers to resume anything newer.
+        store.purgeUnfinished(olderThan: Date().addingTimeInterval(-24 * 60 * 60))
         let healthSync = HealthSyncService(workoutStore: store, preferences: preferences)
         TrainingNotificationScheduler().bind(store: store, preferences: preferences)
-        phase = .ready(store, healthSync)
-    }
-
-    /// Tries the persistent store first (with CloudKit sync if `cloudKitEnabled`), retries
-    /// without CloudKit if that specifically fails (no iCloud account, simulator without
-    /// sign-in, missing entitlement on an ad-hoc build), then falls back to an in-memory store so
-    /// no disk/CloudKit/migration failure ever crashes the app. Under `-dgUITest`, always uses a
-    /// fresh in-memory store so every test run starts seeded and empty, with no leftover state
-    /// from a previous run.
-    private static func resolveContainer(cloudKitEnabled: Bool) -> ModelContainer? {
-        if LaunchFlags.isTesting {
-            return try? ModelContainer.dagym(inMemory: true)
-        }
-        if let container = try? ModelContainer.dagym(cloudKitEnabled: cloudKitEnabled) {
-            return container
-        }
-        if cloudKitEnabled {
-            appLogger.error("CloudKit-backed store failed to load; retrying with sync disabled.")
-            if let container = try? ModelContainer.dagym(cloudKitEnabled: false) {
-                return container
-            }
-        }
-        appLogger.error("Persistent store failed to load; falling back to an in-memory store.")
-        if let container = try? ModelContainer.dagym(inMemory: true) {
-            return container
-        }
-        appLogger.fault("In-memory store also failed to load; DaGym has no working store this launch.")
-        return nil
+        phase = .ready(store, healthSync, deduper)
     }
 }
 

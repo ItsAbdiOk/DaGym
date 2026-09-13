@@ -5,8 +5,11 @@ import SwiftUI
 /// percentage table rounded to the user's plate grid (plan.md §6.4). Reachable from the Progress
 /// tab and from a single exercise's detail screen.
 struct OneRepMaxCalculatorView: View {
+    /// The exercise's own bar (an EZ bar override, say); the plate inventory and collar weight
+    /// still come from `store.activeEquipment()` — see `equipment`.
     var bar: Bar
 
+    @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
     @Environment(\.dismiss) private var dismiss
     @State private var weightKg: Double
@@ -21,6 +24,16 @@ struct OneRepMaxCalculatorView: View {
         _weightKg = State(initialValue: weightKg)
         _reps = State(initialValue: reps)
         self.bar = bar
+    }
+
+    /// The plate math source for the percent table: this exercise's bar with the active
+    /// equipment profile's plates/collars, so the calculator's "25 + 1.25 per side" matches what
+    /// the progression engine actually rounds prescriptions to, rather than a fixed default
+    /// plate set (S7(b)).
+    private var equipment: ProgressionEquipment {
+        var active = store.activeEquipment()
+        active.bar = bar
+        return active
     }
 
     var body: some View {
@@ -97,7 +110,7 @@ struct OneRepMaxCalculatorView: View {
             Text("Percent Of 1RM").dgLabel()
             VStack(spacing: 0) {
                 ForEach(Self.percentages, id: \.self) { percent in
-                    PercentRow(percent: percent, mean: mean, bar: bar, preferences: preferences)
+                    PercentRow(percent: percent, mean: mean, equipment: equipment, preferences: preferences)
                     if percent != Self.percentages.last {
                         Divider().overlay(DGColor.hairline)
                     }
@@ -132,7 +145,7 @@ private struct FormulaValue: View {
 private struct PercentRow: View {
     var percent: Int
     var mean: Double
-    var bar: Bar
+    var equipment: ProgressionEquipment
     var preferences: Preferences
 
     var body: some View {
@@ -156,14 +169,30 @@ private struct PercentRow: View {
     private var target: Double { mean * Double(percent) / 100 }
 
     private var plateLabel: String {
-        let plates = WeightUnit.plateStock(for: preferences.weightUnit)
-        switch PlateCalculator.load(target: target, bar: bar, plates: plates) {
+        let result = PlateCalculator.load(
+            target: target, bar: equipment.bar, plates: equipment.plates, collarsKg: equipment.collarsKg
+        )
+        switch result {
         case .tooLight:
             return "Bar only"
         case .exact(let load):
             return load.perSideDescription.isEmpty ? "Bar only" : load.perSideDescription
         case .nearest(let below, _):
             return below.map { $0.perSideDescription.isEmpty ? "Bar only" : $0.perSideDescription } ?? "—"
+        }
+    }
+}
+
+/// Step size for the calculator's weight stepper, pulled out so it's testable without SwiftUI.
+enum OneRepMaxStep {
+    /// `weightKg` is bound in kg, so the step must be converted from the *display* unit rather
+    /// than reusing `displayStep` (a rounding granularity) directly — that walked a 500 lb
+    /// stepper off the 0.5 lb grid `formatWeight` rounds to. A round step in the lifter's own
+    /// unit: 1 kg, or 5 lb.
+    static func stepKg(for unit: WeightUnit) -> Double {
+        switch unit {
+        case .kg: return unit.displayStep * 4
+        case .lb: return unit.toKg(5)
         }
     }
 }
@@ -179,7 +208,7 @@ private struct WeightStepperRow: View {
                 .font(DGFont.body)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
-            Stepper(value: $weightKg, in: 0...500, step: preferences.weightUnit.displayStep * 4) {
+            Stepper(value: $weightKg, in: 0...500, step: OneRepMaxStep.stepKg(for: preferences.weightUnit)) {
                 Text("\(preferences.formatWeight(kg: weightKg)) \(preferences.unitSymbol)")
                     .dgMetric(DGFont.metricM, tracking: -0.5)
                     .foregroundStyle(DGColor.ink1)
@@ -216,6 +245,9 @@ private struct RepsStepperRow: View {
 }
 
 #Preview {
-    OneRepMaxCalculatorView(weightKg: 82.5, reps: 6)
-        .environment(Preferences())
+    if let store = PreviewStore.make() {
+        OneRepMaxCalculatorView(weightKg: 82.5, reps: 6)
+            .environment(store)
+            .environment(Preferences())
+    }
 }

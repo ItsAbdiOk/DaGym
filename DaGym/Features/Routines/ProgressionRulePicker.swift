@@ -29,26 +29,48 @@ struct RuleState: Hashable {
     var repLow: Int = 6
     var repHigh: Int = 8
     var targetRPE: Double = 8
+    /// The rule this state was built from, kept so knobs the picker doesn't expose (the
+    /// `.percentOfTrainingMax` wave scheme, the `.bodyweight` rep ceiling/max sets, the
+    /// `.timed` step) survive an edit instead of resetting to `TrainingConstants` defaults —
+    /// only used when `kind` still matches the case it came from.
+    private var originalRule: ProgressionRule?
 
-    /// The rule this state builds, filling the cases this picker doesn't expose knobs for
-    /// (bodyweight/timed) with `GymCore.TrainingConstants`' defaults.
+    /// The rule this state builds. Cases the picker doesn't expose knobs for reuse
+    /// `originalRule`'s parameters when `kind` still matches it, else fall back to
+    /// `GymCore.TrainingConstants`' defaults.
     var rule: ProgressionRule {
         switch kind {
         case .linear: .linear(incrementKg: incrementKg)
         case .doubleProgression: .doubleProgression(low: repLow, high: repHigh, incrementKg: incrementKg)
         case .linearAMRAP: .linearAMRAP(incrementKg: incrementKg)
         case .rpeBased: .rpeBased(targetRPE: targetRPE)
-        case .trainingMax: .percentOfTrainingMax(scheme: .classic)
-        case .bodyweight: .bodyweight(
-            repCeiling: TrainingConstants.bodyweightRepCeiling, maxSets: TrainingConstants.bodyweightMaxSets
-        )
+        case .trainingMax:
+            if case .percentOfTrainingMax(let scheme) = originalRule {
+                .percentOfTrainingMax(scheme: scheme)
+            } else {
+                .percentOfTrainingMax(scheme: .classic)
+            }
+        case .bodyweight:
+            if case .bodyweight(let repCeiling, let maxSets) = originalRule {
+                .bodyweight(repCeiling: repCeiling, maxSets: maxSets)
+            } else {
+                .bodyweight(
+                    repCeiling: TrainingConstants.bodyweightRepCeiling,
+                    maxSets: TrainingConstants.bodyweightMaxSets
+                )
+            }
         case .assisted: .assisted(stepKg: incrementKg)
-        case .timed: .timed(stepSeconds: TrainingConstants.defaultTimedStepSeconds)
+        case .timed:
+            if case .timed(let stepSeconds) = originalRule {
+                .timed(stepSeconds: stepSeconds)
+            } else {
+                .timed(stepSeconds: TrainingConstants.defaultTimedStepSeconds)
+            }
         }
     }
 
     static func from(_ rule: ProgressionRule) -> RuleState {
-        return switch rule {
+        var state: RuleState = switch rule {
         case .linear(let inc): RuleState(kind: .linear, incrementKg: inc)
         case .doubleProgression(let low, let high, let inc):
             RuleState(kind: .doubleProgression, incrementKg: inc, repLow: low, repHigh: high)
@@ -59,6 +81,8 @@ struct RuleState: Hashable {
         case .assisted(let step): RuleState(kind: .assisted, incrementKg: step)
         case .timed: RuleState(kind: .timed)
         }
+        state.originalRule = rule
+        return state
     }
 }
 
@@ -67,17 +91,19 @@ struct RuleState: Hashable {
 struct ProgressionRulePickerView: View {
     var title: String
     @Binding var state: RuleState
+    var unit: WeightUnit = .kg
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s2) {
             Text(title).dgLabel()
             kindMenu
-            Text(state.rule.explanation())
+            Text(state.rule.explanation(unit: unit))
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
             if usesIncrement {
-                Stepper(value: $state.incrementKg, in: 0.5...25, step: 0.5) {
-                    Text("Increment \(RuleState.formatted(state.incrementKg)) kg").font(DGFont.subhead)
+                Stepper(value: $state.incrementKg, in: 0.5...25, step: incrementStepKg) {
+                    Text("Increment \(unit.format(kg: state.incrementKg)) \(unit.symbol)")
+                        .font(DGFont.subhead)
                 }
             }
             if state.kind == .doubleProgression {
@@ -100,6 +126,8 @@ struct ProgressionRulePickerView: View {
         [.linear, .doubleProgression, .linearAMRAP, .assisted].contains(state.kind)
     }
 
+    private var incrementStepKg: Double { RuleIncrementStep.stepKg(for: unit) }
+
     private var kindMenu: some View {
         Menu {
             ForEach(RuleKind.allCases) { kind in
@@ -114,5 +142,14 @@ struct ProgressionRulePickerView: View {
 extension RuleState {
     fileprivate static func formatted(_ value: Double) -> String {
         value.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(value)) : String(value)
+    }
+}
+
+/// Step size for the rule picker's increment stepper, pulled out so it's testable without
+/// SwiftUI. A kg lifter keeps the existing half-kg step; a lb lifter steps by a whole pound so
+/// they can land on round numbers like "5 lb" instead of kg's 0.5 step (2.27 kg increments).
+enum RuleIncrementStep {
+    static func stepKg(for unit: WeightUnit) -> Double {
+        unit == .kg ? 0.5 : unit.toKg(1)
     }
 }

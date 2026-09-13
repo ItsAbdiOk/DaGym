@@ -5,9 +5,12 @@ import SwiftData
 extension WorkoutStore {
     /// Ends the session, computes PRs against the cache and returns a summary. Backfilled or
     /// otherwise earlier-dated workouts never claim a PR against a later-dated one.
-    /// `weeklyGoal` (`Preferences.weeklyGoal`) feeds the streak/consistency milestones; it's
-    /// additive with a default so existing call sites compile unchanged.
-    func finish(session: WorkoutSession, weeklyGoal: Int = 4) -> WorkoutSummary {
+    /// `weeklyGoal` (`Preferences.weeklyGoal`) and `calendar` (`Preferences.trainingCalendar`,
+    /// whose `firstWeekday` defines "this week") feed the streak/consistency milestones; both
+    /// are additive with defaults so existing call sites compile unchanged.
+    func finish(
+        session: WorkoutSession, weeklyGoal: Int = 4, calendar: Calendar = .current, unit: WeightUnit = .kg
+    ) -> WorkoutSummary {
         sync(session: session)
         guard let workoutID = session.workoutID, let workout = fetchWorkoutModel(id: workoutID) else {
             return WorkoutSummary(durationSeconds: 0, volumeKg: 0, setsDone: 0, prs: [], musclesHit: [:])
@@ -30,8 +33,10 @@ extension WorkoutStore {
         // session ends now.
         let endedAt = workout.isBackfilled ? (workout.endedAt ?? now) : now
         workout.endedAt = endedAt
-        let prs = evaluatePRs(session: session, workout: workout)
-        let earnedAchievements = evaluateMilestones(for: workout, weeklyGoal: weeklyGoal)
+        let prs = evaluatePRs(session: session, workout: workout, unit: unit)
+        let earnedAchievements = evaluateMilestones(
+            for: workout, weeklyGoal: weeklyGoal, calendar: calendar, unit: unit
+        )
         // Backfilled/past-dated workouts still earn milestones (persisted above) but never
         // celebrate — the summary card only shows the ones worth celebrating right now.
         let achievements = Milestones.isCelebrationWorthy(workoutDate: workout.startedAt, now: now)
