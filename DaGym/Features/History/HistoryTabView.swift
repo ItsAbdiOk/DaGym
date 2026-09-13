@@ -14,17 +14,29 @@ struct HistoryTabView: View {
     @State private var volumeKg: Double = 0
     @State private var recordsCount = 0
     @State private var recoveryHeadline = ""
+    @State private var currentStreakWeeks = 0
     @State private var showingBackfill = false
     @State private var backfillSession: WorkoutSession?
     @State private var finishedWorkout: FinishedWorkout?
 
     var body: some View {
         NavigationStack {
-            HistoryView(
-                records: records, workoutsCount: workoutsCount, volumeKg: volumeKg,
-                recordsCount: recordsCount, recoveryHeadline: recoveryHeadline,
-                onBackfill: { showingBackfill = true }, onDelete: deleteWorkout
-            )
+            VStack(spacing: 0) {
+                ScrollView {
+                    ProgressChartsSection()
+                        .padding(.horizontal, DGSpace.s4)
+                        .padding(.top, DGSpace.s3)
+                        .padding(.bottom, DGSpace.s2)
+                }
+                .frame(maxHeight: 380)
+                HistoryView(
+                    records: records, workoutsCount: workoutsCount, volumeKg: volumeKg,
+                    recordsCount: recordsCount, recoveryHeadline: recoveryHeadline,
+                    currentStreakWeeks: currentStreakWeeks,
+                    onBackfill: { showingBackfill = true }, onDelete: deleteWorkout
+                )
+                .frame(maxHeight: .infinity)
+            }
             .navigationDestination(for: UUID.self) { id in
                 WorkoutDetailView(workoutID: id)
             }
@@ -58,6 +70,10 @@ struct HistoryTabView: View {
         routines = store.routines()
         recordsCount = store.personalRecords().reduce(0) { $0 + $1.records.count }
         recoveryHeadline = Recovery.headline(map: store.recoverySnapshot().map).title
+        currentStreakWeeks = Streaks.weekly(
+            workoutDates: store.workoutDates(), weeklyGoal: preferences.weeklyGoal,
+            calendar: Calendar.current, now: Date()
+        ).current
     }
 
     private func deleteWorkout(_ id: UUID) {

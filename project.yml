@@ -223,6 +223,11 @@ schemes:
     test:
       config: Debug
       gatherCoverageData: true
+      # The unit-test host launches with this flag so it stays inert (no CloudKit, seeding,
+      # HealthKit or notifications) and the runner connects instantly. XCUITest launches
+      # the app itself with its own arguments, so this does not affect UI tests.
+      commandLineArguments:
+        "-dgTestHost": true
       targets:
         - DaGymTests
         - DaGymUITests

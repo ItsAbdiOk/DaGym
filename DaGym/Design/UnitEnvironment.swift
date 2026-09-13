@@ -24,6 +24,10 @@ final class Preferences {
         static let calendarSyncEnabled = "calendarSyncEnabled"
         static let scheduledStartHour = "scheduledStartHour"
         static let iCloudSyncEnabled = "iCloudSyncEnabled"
+        static let streakRemindersEnabled = "streakRemindersEnabled"
+        static let weeklyRecapEnabled = "weeklyRecapEnabled"
+        static let reminderHour = "reminderHour"
+        static let bodyweightGoalKg = "bodyweightGoalKg"
     }
 
     private let defaults: UserDefaults
@@ -83,6 +87,29 @@ final class Preferences {
     var iCloudSyncEnabled: Bool {
         didSet { defaults.set(iCloudSyncEnabled, forKey: Key.iCloudSyncEnabled) }
     }
+    /// The Saturday-evening "goal at risk" notification (plan.md §6.4). On by default.
+    var streakRemindersEnabled: Bool {
+        didSet { defaults.set(streakRemindersEnabled, forKey: Key.streakRemindersEnabled) }
+    }
+    /// The Sunday 18:00 weekly-recap notification. On by default.
+    var weeklyRecapEnabled: Bool {
+        didSet { defaults.set(weeklyRecapEnabled, forKey: Key.weeklyRecapEnabled) }
+    }
+    /// Local hour (0–23) both training reminders fire at.
+    var reminderHour: Int {
+        didSet { defaults.set(reminderHour, forKey: Key.reminderHour) }
+    }
+    /// The bodyweight goal line on the Body screen's chart (plan.md §6.4). Nil until the user
+    /// sets one — no goal is assumed.
+    var bodyweightGoalKg: Double? {
+        didSet {
+            if let bodyweightGoalKg {
+                defaults.set(bodyweightGoalKg, forKey: Key.bodyweightGoalKg)
+            } else {
+                defaults.removeObject(forKey: Key.bodyweightGoalKg)
+            }
+        }
+    }
 
     init(suite: UserDefaults = .standard) {
         defaults = suite
@@ -101,6 +128,10 @@ final class Preferences {
         calendarSyncEnabled = Self.boolValue(suite, Key.calendarSyncEnabled, default: false)
         scheduledStartHour = Self.intValue(suite, Key.scheduledStartHour, default: 18)
         iCloudSyncEnabled = Self.boolValue(suite, Key.iCloudSyncEnabled, default: true)
+        streakRemindersEnabled = Self.boolValue(suite, Key.streakRemindersEnabled, default: true)
+        weeklyRecapEnabled = Self.boolValue(suite, Key.weeklyRecapEnabled, default: true)
+        reminderHour = Self.intValue(suite, Key.reminderHour, default: 18)
+        bodyweightGoalKg = suite.object(forKey: Key.bodyweightGoalKg) as? Double
     }
 
     /// A canonical kg value, formatted and rounded for the user's unit.

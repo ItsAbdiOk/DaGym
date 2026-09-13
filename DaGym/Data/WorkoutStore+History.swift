@@ -5,7 +5,9 @@ import SwiftData
 extension WorkoutStore {
     /// Ends the session, computes PRs against the cache and returns a summary. Backfilled or
     /// otherwise earlier-dated workouts never claim a PR against a later-dated one.
-    func finish(session: WorkoutSession) -> WorkoutSummary {
+    /// `weeklyGoal` (`Preferences.weeklyGoal`) feeds the streak/consistency milestones; it's
+    /// additive with a default so existing call sites compile unchanged.
+    func finish(session: WorkoutSession, weeklyGoal: Int = 4) -> WorkoutSummary {
         sync(session: session)
         guard let workoutID = session.workoutID, let workout = fetchWorkoutModel(id: workoutID) else {
             return WorkoutSummary(durationSeconds: 0, volumeKg: 0, setsDone: 0, prs: [], musclesHit: [:])
@@ -13,12 +15,19 @@ extension WorkoutStore {
         let endedAt = Date()
         workout.endedAt = endedAt
         let prs = evaluatePRs(session: session, workout: workout)
+        let earnedAchievements = evaluateMilestones(for: workout, weeklyGoal: weeklyGoal)
+        // Backfilled/past-dated workouts still earn milestones (persisted above) but never
+        // celebrate — the summary card only shows the ones worth celebrating right now.
+        let achievements = Milestones.isCelebrationWorthy(workoutDate: workout.startedAt, now: endedAt)
+            ? earnedAchievements : []
         save()
         onWorkoutFinished?(workout)
+        workoutFinishedObservers.forEach { $0(workout) }
         WidgetSnapshotWriter.refresh(store: self)
         return WorkoutSummary(
             durationSeconds: max(0, Int(endedAt.timeIntervalSince(workout.startedAt))),
-            volumeKg: session.volumeKg, setsDone: session.setsDone, prs: prs, musclesHit: session.musclesHit
+            volumeKg: session.volumeKg, setsDone: session.setsDone, prs: prs, musclesHit: session.musclesHit,
+            achievements: achievements
         )
     }
 

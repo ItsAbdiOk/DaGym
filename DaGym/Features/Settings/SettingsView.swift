@@ -23,6 +23,7 @@ struct SettingsView: View {
                     effortCard
                     restTimerCard
                     trainingCard
+                    RemindersSettingsSection()
                     displayCard
                     calendarCard
                     ICloudSettingsSection()

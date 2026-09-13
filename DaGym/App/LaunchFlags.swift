@@ -20,8 +20,14 @@ enum LaunchFlags {
     /// App Group store and HealthKit so the host launches instantly and tests build their own
     /// in-memory containers.
     static var isUnitTestHost: Bool {
+        if ProcessInfo.processInfo.arguments.contains("-dgTestHost") { return true }
         let env = ProcessInfo.processInfo.environment
-        return env["XCTestConfigurationFilePath"] != nil || env["XCTestBundlePath"] != nil
+        if env["XCTestConfigurationFilePath"] != nil || env["XCTestBundlePath"] != nil
+            || env["XCTestSessionIdentifier"] != nil {
+            return true
+        }
+        // The XCTest framework is only ever loaded into a test host.
+        return NSClassFromString("XCTestCase") != nil
     }
 
     /// Either kind of test process.

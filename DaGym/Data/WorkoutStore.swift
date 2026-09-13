@@ -12,6 +12,8 @@ struct WorkoutSummary {
     var setsDone: Int
     var prs: [PersonalRecordInfo]
     var musclesHit: [Muscle: Double]
+    /// Milestone tiers newly earned by this workout (plan.md §6.4), empty most of the time.
+    var achievements: [AchievementInfo] = []
 }
 
 /// The single source of truth for exercises, routines and workouts. Wraps a
@@ -27,6 +29,10 @@ final class WorkoutStore {
     /// `HealthSyncService.bind(to:)` to write the session to Apple Health — this type stays
     /// unaware of HealthKit itself (plan.md §6.8).
     var onWorkoutFinished: ((WorkoutModel) -> Void)?
+    /// A second, additive hook list for the same "workout just finished" moment — used by
+    /// `TrainingNotificationScheduler` to reschedule the streak/recap notifications without
+    /// touching `onWorkoutFinished`, which `HealthSyncService` already owns.
+    var workoutFinishedObservers: [(WorkoutModel) -> Void] = []
 
     init(context: ModelContext) {
         self.context = context

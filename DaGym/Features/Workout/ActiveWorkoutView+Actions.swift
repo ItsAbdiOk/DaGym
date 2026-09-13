@@ -8,7 +8,7 @@ extension ActiveWorkoutView {
     // MARK: Finish / discard
 
     func finishSession() {
-        let summary = store.finish(session: session)
+        let summary = store.finish(session: session, weeklyGoal: preferences.weeklyGoal)
         onFinish(summary)
     }
 

@@ -1,4 +1,3 @@
-import Charts
 import GymCore
 import SwiftData
 import SwiftUI
@@ -12,13 +11,11 @@ struct ExerciseDetailView: View {
 
     @State private var exercise: ExerciseInfo
     @State private var lastSessions: [String] = []
-    @State private var series: [(date: Date, value: Double)] = []
     @State private var restSeconds: Int
     @State private var incrementKg: Double
     @State private var barTypeKey: String?
-    @State private var selectedMetric = "1RM"
+    @State private var showingCalculator = false
 
-    private static let metrics = ["1RM", "Top Set", "Volume", "Reps"]
     private static let restOptions = [60, 90, 120, 150, 180, 210, 240, 300]
     private static let incrementOptions = [0.5, 1, 1.25, 2, 2.5, 5, 10]
 
@@ -36,7 +33,9 @@ struct ExerciseDetailView: View {
                     topRow
                     titleBlock
                     statTiles
-                    ChartCard(series: series, selectedMetric: $selectedMetric, metrics: Self.metrics)
+                    ExerciseChartView(exerciseID: exercise.id)
+                        .dgCard()
+                    oneRepMaxRow
                     lastSessionsCard
                     instructionsCard
                     settingsCard
@@ -48,6 +47,34 @@ struct ExerciseDetailView: View {
         }
         .navigationBarHidden(true)
         .task { refresh() }
+        .sheet(isPresented: $showingCalculator) {
+            OneRepMaxCalculatorView(
+                weightKg: exercise.bestE1RM ?? incrementKg * 20, reps: 5, bar: exercise.bar ?? .olympic
+            )
+        }
+    }
+
+    private var oneRepMaxRow: some View {
+        Button {
+            showingCalculator = true
+        } label: {
+            HStack {
+                Image(systemName: "function")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(DGColor.prGoldText)
+                Text("1RM Calculator")
+                    .font(DGFont.body)
+                    .foregroundStyle(DGColor.ink1)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(DGColor.ink4)
+            }
+            .padding(.horizontal, DGSpace.s5)
+            .frame(minHeight: DGTap.min)
+            .dgCard(padding: 0)
+        }
+        .buttonStyle(DGPressStyle())
     }
 
     private var topRow: some View {
@@ -190,7 +217,6 @@ struct ExerciseDetailView: View {
             barTypeKey = model.barType
         }
         lastSessions = store.lastSessions(exerciseID: exercise.id)
-        series = store.e1rmSeries(exerciseID: exercise.id)
     }
 
     private func toggleFavorite() {
@@ -240,97 +266,6 @@ private enum BarOption: String, CaseIterable, Identifiable {
 
     static func from(_ value: String?) -> BarOption {
         BarOption(rawValue: value ?? "none") ?? .none
-    }
-}
-
-/// Estimated-1RM trend chart with the metric segment toggle, built from
-/// real per-session e1RM points. Falls back to an empty state under three.
-private struct ChartCard: View {
-    var series: [(date: Date, value: Double)]
-    @Binding var selectedMetric: String
-    var metrics: [String]
-
-    @Environment(Preferences.self) private var preferences
-
-    var body: some View {
-        if series.count >= 3 {
-            content
-        } else {
-            EmptyState(
-                symbol: "chart.line.uptrend.xyaxis",
-                title: "Not Enough History",
-                message: "Charts need three sessions of an exercise. You have \(series.count)."
-            )
-        }
-    }
-
-    private var content: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s4) {
-            HStack {
-                Text("Estimated 1RM").dgLabel()
-                Spacer()
-                Text("+\(delta) \(preferences.unitSymbol)")
-                    .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.success)
-            }
-            chart
-            segmentToggle
-        }
-        .dgCard()
-    }
-
-    private var delta: String {
-        guard let first = series.first?.value, let last = series.last?.value else { return "0" }
-        return preferences.formatWeight(kg: last - first)
-    }
-
-    private var chart: some View {
-        Chart(Array(series.enumerated()), id: \.offset) { index, point in
-            LineMark(x: .value("Session", point.date), y: .value("E1RM", point.value))
-                .foregroundStyle(DGColor.coral)
-                .lineStyle(StrokeStyle(lineWidth: 2.5))
-            if index == series.count - 1 {
-                PointMark(x: .value("Session", point.date), y: .value("E1RM", point.value))
-                    .foregroundStyle(DGColor.coral)
-                    .symbolSize(64)
-            }
-        }
-        .chartYAxis(.hidden)
-        .chartXAxis {
-            AxisMarks { _ in
-                AxisValueLabel(format: .dateTime.month(.abbreviated))
-                    .font(DGFont.label)
-                    .foregroundStyle(DGColor.ink3)
-            }
-        }
-        .frame(height: 140)
-    }
-
-    private var segmentToggle: some View {
-        HStack(spacing: 2) {
-            ForEach(metrics, id: \.self) { metric in
-                let selected = metric == selectedMetric
-                Button {
-                    selectedMetric = metric
-                } label: {
-                    Text(metric)
-                        .font(DGFont.condensedLabel(12))
-                        .tracking(1.2)
-                        .textCase(.uppercase)
-                        .foregroundStyle(selected ? DGColor.coralText : DGColor.ink3)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 32)
-                        .background {
-                            if selected {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(DGColor.coralWash)
-                            }
-                        }
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .dgGlass(.thin, radius: 12)
     }
 }
 

@@ -41,7 +41,11 @@ struct AppRootContainer: View {
 
     var body: some View {
         Group {
-            if let container {
+            if LaunchFlags.isUnitTestHost {
+                // Unit tests build their own in-memory containers; the host app must do nothing
+                // (no seeding, notifications, HealthKit, widgets) so the runner connects instantly.
+                AmbientWash()
+            } else if let container {
                 launchContent(container: container)
             } else {
                 ZStack {
@@ -79,6 +83,7 @@ struct AppRootContainer: View {
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
         EquipmentSeeder.seedIfNeeded(store: store)
         let healthSync = HealthSyncService(workoutStore: store, preferences: preferences)
+        TrainingNotificationScheduler().bind(store: store, preferences: preferences)
         phase = .ready(store, healthSync)
     }
 

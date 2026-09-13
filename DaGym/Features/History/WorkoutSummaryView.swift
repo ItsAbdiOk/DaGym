@@ -20,6 +20,9 @@ struct WorkoutSummaryView: View {
                     header
                     statRow
                     if !summary.prs.isEmpty { PRCard(prs: summary.prs) }
+                    if !summary.achievements.isEmpty {
+                        MilestoneUnlockedCard(achievements: summary.achievements)
+                    }
                     MusclesHitCard(musclesHit: summary.musclesHit)
                     NotesCard()
                     actionRow
@@ -28,6 +31,10 @@ struct WorkoutSummaryView: View {
                 .padding(.top, DGSpace.s3)
                 .padding(.bottom, 100)
             }
+        }
+        .task {
+            guard !summary.achievements.isEmpty else { return }
+            Haptics.personalRecord()
         }
     }
 
@@ -113,6 +120,52 @@ private struct PRCard: View {
     }
 }
 
+/// Gold "MILESTONE UNLOCKED" card — tasteful, no confetti — listing every tier earned this
+/// workout. `AchievementInfo.line` (from `GymCore.Milestones`) already reads well on its own.
+private struct MilestoneUnlockedCard: View {
+    var achievements: [AchievementInfo]
+
+    private var titleText: String {
+        achievements.count == 1 ? "Milestone Unlocked" : "\(achievements.count) Milestones Unlocked"
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: DGSpace.s3) {
+            RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
+                .fill(DGColor.prGoldDeep)
+                .frame(width: 44, height: 44)
+                .overlay {
+                    Image(systemName: "trophy.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(DGColor.inkOnCoral)
+                }
+            VStack(alignment: .leading, spacing: DGSpace.s1) {
+                Text(titleText)
+                    .font(DGFont.title3)
+                    .textCase(.uppercase)
+                    .foregroundStyle(DGColor.prGoldText)
+                ForEach(achievements) { achievement in
+                    Text("\(achievement.title) · \(achievement.line)")
+                        .font(DGFont.footnote)
+                        .foregroundStyle(DGColor.ink3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(DGSpace.s4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            DGColor.prGold.opacity(0.10),
+            in: RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
+                .strokeBorder(DGColor.prGold.opacity(0.4), lineWidth: 1)
+        }
+    }
+}
+
 /// Body map + the top three muscles worked, named with their share.
 private struct MusclesHitCard: View {
     var musclesHit: [Muscle: Double]
@@ -172,7 +225,13 @@ private struct NotesCard: View {
         summary: WorkoutSummary(
             durationSeconds: 3124, volumeKg: 6840, setsDone: 18,
             prs: [PersonalRecordInfo(exerciseName: "Bench", line: "82.5 × 8 (e1RM 102.5)")],
-            musclesHit: [.chest: 1, .triceps: 0.6, .delts: 0.5]
+            musclesHit: [.chest: 1, .triceps: 0.6, .delts: 0.5],
+            achievements: [
+                AchievementInfo(
+                    milestoneID: "strength.bench", tier: .bronze, title: "Bodyweight Bench",
+                    line: "Bronze · e1RM 102 kg with bodyweight 81 kg"
+                )
+            ]
         ),
         title: "Push A Done", onShare: {}, onDone: {}
     )

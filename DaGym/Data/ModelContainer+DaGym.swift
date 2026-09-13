@@ -15,7 +15,8 @@ enum DaGymSchema {
         BodyMeasurementModel.self,
         PersonalRecordModel.self,
         EquipmentProfileModel.self,
-        ScheduleModel.self
+        ScheduleModel.self,
+        AchievementModel.self
     ]
 }
 

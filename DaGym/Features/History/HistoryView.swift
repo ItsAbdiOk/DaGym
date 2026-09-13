@@ -11,6 +11,8 @@ struct HistoryView: View {
     var recordsCount: Int
     /// `Recovery.headline(map:).title`, for the "RECOVERY" tile's subtitle.
     var recoveryHeadline: String
+    /// Current weekly streak (`GymCore.Streaks.weekly(...).current`), for the "CONSISTENCY" tile.
+    var currentStreakWeeks: Int
     var onBackfill: () -> Void
     var onDelete: (UUID) -> Void
 
@@ -57,6 +59,17 @@ struct HistoryView: View {
                 title: "Recovery", subtitle: recoveryHeadline,
                 symbol: "figure.stand", tint: DGColor.coralText
             ) { RecoveryMapView() }
+            ProgressTile(
+                title: "Consistency", subtitle: Self.pluralized(currentStreakWeeks, "week") + " streak",
+                symbol: "flame.fill", tint: DGColor.prGoldText
+            ) { ConsistencyView() }
+            ProgressTile(
+                title: "Milestones", subtitle: "Tiers & tonnage",
+                symbol: "trophy.fill", tint: DGColor.prGoldText
+            ) { MilestonesView() }
+            ProgressTile(
+                title: "Body", subtitle: "Weight & goal", symbol: "figure", tint: DGColor.infoText
+            ) { BodyView() }
         }
     }
 
@@ -237,7 +250,7 @@ private struct ProgressTile<Destination: View>: View {
         HistoryView(
             records: SampleData.history, workoutsCount: SampleData.history.count,
             volumeKg: 412_000, recordsCount: 12, recoveryHeadline: "Chest still spent",
-            onBackfill: {}, onDelete: { _ in }
+            currentStreakWeeks: 3, onBackfill: {}, onDelete: { _ in }
         )
         .navigationDestination(for: UUID.self) { _ in EmptyView() }
     }
