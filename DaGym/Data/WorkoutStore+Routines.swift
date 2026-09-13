@@ -68,6 +68,7 @@ extension WorkoutStore {
         model.updatedAt = Date()
         replaceExercises(exercises, on: model)
         save()
+        WidgetSnapshotWriter.refresh(store: self)
         return routineInfo(model)
     }
 
@@ -75,6 +76,7 @@ extension WorkoutStore {
         guard let model = fetchRoutineModel(id: id) else { return }
         context.delete(model)
         save()
+        WidgetSnapshotWriter.refresh(store: self)
     }
 
     /// The routine's summary plus its exercises as editable drafts, in the

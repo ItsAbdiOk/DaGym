@@ -62,6 +62,26 @@ targets:
         # foreground-started Live Activity; push-to-start is out of scope for now (see plan §6.2).
         NSSupportsLiveActivities: true
         NSSupportsLiveActivitiesFrequentUpdates: false
+        # Apple Health (plan.md §6.8): bodyweight sync, workout write-back, and read-only
+        # recovery signals (HRV/RHR/sleep, P6). Plain-language, no medical claims.
+        NSHealthShareUsageDescription: >-
+          DaGym reads your bodyweight, heart-rate variability, resting heart rate and sleep to
+          personalise training suggestions. Nothing is uploaded anywhere.
+        NSHealthUpdateUsageDescription: >-
+          DaGym saves your strength workouts and bodyweight to Apple Health.
+        # Calendar sync (plan.md §6.8): write-only access is enough — DaGym only creates,
+        # updates and deletes events in its own "DaGym" calendar, never reads the user's other
+        # events.
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.abdirahmanmohamed.dagym
+            CFBundleURLSchemes: [dagym]
+        NSCalendarsWriteOnlyAccessUsageDescription: >-
+          DaGym adds your scheduled workouts to a "DaGym" calendar so they show up alongside
+          the rest of your day.
+        # iCloud sync (plan.md §6.3): SwiftData + CloudKit private database, App Group so the
+        # widgets extension can read the on-device snapshot without opening the store.
+        UIBackgroundModes:
+          - remote-notification
         UIAppFonts:
           - Barlow-Regular.ttf
           - Barlow-Medium.ttf
@@ -70,6 +90,19 @@ targets:
           - BarlowCondensed-SemiBold.ttf
           - BarlowCondensed-Bold.ttf
           - BarlowCondensed-ExtraBold.ttf
+    # HealthKit + CloudKit + App Group entitlements share this one block — coordinate inside it
+    # rather than adding a second `entitlements:` key.
+    entitlements:
+      path: DaGym/DaGym.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+        com.apple.developer.icloud-services: [CloudKit]
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.dev.abdirahmanmohamed.dagym
+        com.apple.security.application-groups:
+          - group.dev.abdirahmanmohamed.dagym
+        aps-environment: development
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.dagym
@@ -118,6 +151,8 @@ targets:
       - path: DaGymWidgets
       - path: DaGym/Features/LiveActivity/RestActivityAttributes.swift
       - path: DaGym/App/Intents/RestIntents.swift
+      - path: DaGym/App/Intents/StartRestTimerIntent.swift
+      - path: DaGym/Features/Widgets/WidgetSnapshot.swift
     dependencies:
       - package: GymCore
         product: GymCore
@@ -133,6 +168,14 @@ targets:
     resources:
       - path: DaGym/Resources/Fonts/BarlowCondensed-Bold.ttf
       - path: DaGym/Resources/Fonts/BarlowCondensed-ExtraBold.ttf
+    # App Group only: the widgets extension needs it to read `WidgetSnapshot` from shared
+    # UserDefaults (see DaGym/Features/Widgets/WidgetSnapshotWriter.swift). No CloudKit
+    # entitlement here — the widget never opens the SwiftData store directly.
+    entitlements:
+      path: DaGymWidgets/DaGymWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.dev.abdirahmanmohamed.dagym
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.dagym.widgets

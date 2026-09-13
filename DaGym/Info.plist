@@ -18,10 +18,27 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>dev.abdirahmanmohamed.dagym</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>dagym</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>DaGym adds your scheduled workouts to a "DaGym" calendar so they show up alongside the rest of your day.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>DaGym reads your bodyweight, heart-rate variability, resting heart rate and sleep to personalise training suggestions. Nothing is uploaded anywhere.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>DaGym saves your strength workouts and bodyweight to Apple Health.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
@@ -41,6 +58,10 @@
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

@@ -18,6 +18,12 @@ final class Preferences {
         static let restHaptics = "restHaptics"
         static let restScreenFlash = "restScreenFlash"
         static let weekStartsMonday = "weekStartsMonday"
+        static let healthWriteWorkouts = "healthWriteWorkouts"
+        static let healthSyncBodyweight = "healthSyncBodyweight"
+        static let healthReadRecovery = "healthReadRecovery"
+        static let calendarSyncEnabled = "calendarSyncEnabled"
+        static let scheduledStartHour = "scheduledStartHour"
+        static let iCloudSyncEnabled = "iCloudSyncEnabled"
     }
 
     private let defaults: UserDefaults
@@ -49,6 +55,34 @@ final class Preferences {
     var weekStartsMonday: Bool {
         didSet { defaults.set(weekStartsMonday, forKey: Key.weekStartsMonday) }
     }
+    /// Writes every finished workout to Apple Health as an `HKWorkout`. Off until the user turns
+    /// it on in the Apple Health settings screen (plan.md §6.8).
+    var healthWriteWorkouts: Bool {
+        didSet { defaults.set(healthWriteWorkouts, forKey: Key.healthWriteWorkouts) }
+    }
+    /// Two-way bodyweight sync with Apple Health (Health is the source of truth when this is on).
+    var healthSyncBodyweight: Bool {
+        didSet { defaults.set(healthSyncBodyweight, forKey: Key.healthSyncBodyweight) }
+    }
+    /// Reads HRV, resting heart rate and sleep for recovery-aware coaching (P6). Read-only —
+    /// never written.
+    var healthReadRecovery: Bool {
+        didSet { defaults.set(healthReadRecovery, forKey: Key.healthReadRecovery) }
+    }
+    /// Mirrors the weekly schedule onto a dedicated "DaGym" calendar via EventKit (plan.md §6.8).
+    var calendarSyncEnabled: Bool {
+        didSet { defaults.set(calendarSyncEnabled, forKey: Key.calendarSyncEnabled) }
+    }
+    /// Local hour (0–23) planned sessions without a specific time default to.
+    var scheduledStartHour: Int {
+        didSet { defaults.set(scheduledStartHour, forKey: Key.scheduledStartHour) }
+    }
+    /// SwiftData + CloudKit private-database sync (plan.md §6.3). Default on: most people expect
+    /// their data to follow them across devices. Read by `ModelContainer.dagym(...)` — changing
+    /// it applies on next launch, since the store's CloudKit configuration is fixed at open time.
+    var iCloudSyncEnabled: Bool {
+        didSet { defaults.set(iCloudSyncEnabled, forKey: Key.iCloudSyncEnabled) }
+    }
 
     init(suite: UserDefaults = .standard) {
         defaults = suite
@@ -61,6 +95,12 @@ final class Preferences {
         restHaptics = Self.boolValue(suite, Key.restHaptics, default: true)
         restScreenFlash = Self.boolValue(suite, Key.restScreenFlash, default: false)
         weekStartsMonday = Self.boolValue(suite, Key.weekStartsMonday, default: true)
+        healthWriteWorkouts = Self.boolValue(suite, Key.healthWriteWorkouts, default: false)
+        healthSyncBodyweight = Self.boolValue(suite, Key.healthSyncBodyweight, default: false)
+        healthReadRecovery = Self.boolValue(suite, Key.healthReadRecovery, default: false)
+        calendarSyncEnabled = Self.boolValue(suite, Key.calendarSyncEnabled, default: false)
+        scheduledStartHour = Self.intValue(suite, Key.scheduledStartHour, default: 18)
+        iCloudSyncEnabled = Self.boolValue(suite, Key.iCloudSyncEnabled, default: true)
     }
 
     /// A canonical kg value, formatted and rounded for the user's unit.

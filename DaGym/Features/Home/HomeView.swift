@@ -6,9 +6,9 @@ import SwiftUI
 /// weekly goal, streak and recovery snapshot, all computed from real workout history.
 struct HomeView: View {
     var routine: RoutineInfo?
-    /// All saved routines, newest/first-first — used by the rest-day card to suggest
-    /// "Next: <routine name>" when nothing is scheduled today.
-    var routines: [RoutineInfo] = []
+    /// "Next: Pull B · Thursday" for the rest-day card, from `WorkoutStore.nextSession()`.
+    /// `nil` when nothing is scheduled within the lookahead window.
+    var nextSessionText: String?
     var onStart: () -> Void
     var onFreestyle: () -> Void
     var onBackfill: () -> Void
@@ -35,8 +35,7 @@ struct HomeView: View {
                         )
                     } else {
                         RestDayCard(
-                            nextRoutineName: routines.first?.name, onFreestyle: onFreestyle,
-                            onBackfill: onBackfill
+                            nextSessionText: nextSessionText, onFreestyle: onFreestyle, onBackfill: onBackfill
                         )
                     }
                     HStack(spacing: DGSpace.s4) {
@@ -138,7 +137,7 @@ private struct ScheduledCard: View {
 
 /// Coral-outlined card shown when nothing is scheduled today.
 private struct RestDayCard: View {
-    var nextRoutineName: String?
+    var nextSessionText: String?
     var onFreestyle: () -> Void
     var onBackfill: () -> Void
 
@@ -152,8 +151,8 @@ private struct RestDayCard: View {
             Text("No routine scheduled. Start a freestyle workout whenever you're ready.")
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
-            if let nextRoutineName {
-                Text("Next: \(nextRoutineName)")
+            if let nextSessionText {
+                Text(nextSessionText)
                     .font(DGFont.footnote)
                     .foregroundStyle(DGColor.ink3)
             }
@@ -290,7 +289,7 @@ private struct RecoveryCard: View {
 #Preview("Rest day") {
     if let container = try? ModelContainer.dagym(inMemory: true) {
         HomeView(
-            routine: nil, routines: [SampleData.pushA],
+            routine: nil, nextSessionText: "Next: Pull B · Thursday",
             onStart: {}, onFreestyle: {}, onBackfill: {}, onSeeRecovery: {}
         )
         .environment(WorkoutStore(context: container.mainContext))

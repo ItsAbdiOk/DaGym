@@ -14,6 +14,8 @@ extension WorkoutStore {
         workout.endedAt = endedAt
         let prs = evaluatePRs(session: session, workout: workout)
         save()
+        onWorkoutFinished?(workout)
+        WidgetSnapshotWriter.refresh(store: self)
         return WorkoutSummary(
             durationSeconds: max(0, Int(endedAt.timeIntervalSince(workout.startedAt))),
             volumeKg: session.volumeKg, setsDone: session.setsDone, prs: prs, musclesHit: session.musclesHit

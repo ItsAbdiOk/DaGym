@@ -23,6 +23,10 @@ struct WorkoutSummary {
 @Observable
 final class WorkoutStore {
     let context: ModelContext
+    /// Notified with the freshly-ended `WorkoutModel` at the end of `finish(session:)`. Set by
+    /// `HealthSyncService.bind(to:)` to write the session to Apple Health — this type stays
+    /// unaware of HealthKit itself (plan.md §6.8).
+    var onWorkoutFinished: ((WorkoutModel) -> Void)?
 
     init(context: ModelContext) {
         self.context = context

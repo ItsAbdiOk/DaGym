@@ -6,8 +6,12 @@ import SwiftUI
 /// persisted source of truth (see `DaGym/Design/UnitEnvironment.swift`).
 struct SettingsView: View {
     @Environment(Preferences.self) private var preferences
+    @Environment(WorkoutStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var showingAcknowledgements = false
+    @State private var showingHealthSettings = false
+    @State private var showingBodyweightSheet = false
+    @State private var eventStore: EventStoring = EventKitStore()
 
     var body: some View {
         ZStack {
@@ -20,8 +24,11 @@ struct SettingsView: View {
                     restTimerCard
                     trainingCard
                     displayCard
+                    calendarCard
+                    ICloudSettingsSection()
                     DataSettingsSection()
                     EquipmentSettingsSection()
+                    healthCard
                     aboutCard
                 }
                 .padding(.horizontal, DGSpace.s4)
@@ -30,6 +37,30 @@ struct SettingsView: View {
             }
         }
         .sheet(isPresented: $showingAcknowledgements) { AcknowledgementsView() }
+        .sheet(isPresented: $showingHealthSettings) { HealthSettingsView() }
+        .sheet(isPresented: $showingBodyweightSheet) { BodyweightSheet() }
+    }
+
+    private var healthCard: some View {
+        SettingsSection(title: "Apple Health") {
+            Button { showingHealthSettings = true } label: {
+                SettingsRow(label: "Apple Health") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(DGColor.ink4)
+                }
+            }
+            .buttonStyle(.plain)
+            SettingsDivider()
+            Button { showingBodyweightSheet = true } label: {
+                SettingsRow(label: "Bodyweight") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(DGColor.ink4)
+                }
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private var header: some View {
@@ -121,6 +152,58 @@ struct SettingsView: View {
                 Toggle("", isOn: binding(\.keepScreenAwake)).tint(DGColor.coral).labelsHidden()
             }
         }
+    }
+
+    private var calendarCard: some View {
+        SettingsSection(title: "Calendar") {
+            SettingsRow(label: "Add my schedule to Calendar") {
+                Toggle("", isOn: calendarSyncBinding).tint(DGColor.coral).labelsHidden()
+            }
+            SettingsDivider()
+            SettingsRow(label: "Start time") {
+                Stepper(value: binding(\.scheduledStartHour), in: 0...23) {
+                    Text(startHourLabel).font(DGFont.subhead).foregroundStyle(DGColor.ink3)
+                }
+            }
+        }
+    }
+
+    /// Wraps `calendarSyncEnabled` so turning it on kicks off an immediate sync (turning it off
+    /// just stops future syncs — already-created events are left alone).
+    private var calendarSyncBinding: Binding<Bool> {
+        Binding(
+            get: { preferences.calendarSyncEnabled },
+            set: { enabled in
+                preferences.calendarSyncEnabled = enabled
+                if enabled { syncCalendarNow() }
+            }
+        )
+    }
+
+    private func syncCalendarNow() {
+        let schedule = store.schedule()
+        let routines = store.routines()
+        let hour = preferences.scheduledStartHour
+        let existingEventIDs = store.scheduleEventIDs()
+        Task {
+            let service = CalendarSyncService(eventStore: eventStore)
+            let request = ScheduleSyncRequest(
+                schedule: schedule, routines: routines, startDate: Date(), defaultStartHour: hour,
+                existingEventIDs: existingEventIDs
+            )
+            guard let updated = try? await service.sync(request) else { return }
+            store.saveScheduleEventIDs(updated)
+        }
+    }
+
+    private var startHourLabel: String {
+        var components = DateComponents()
+        components.hour = preferences.scheduledStartHour
+        components.minute = 0
+        let date = Calendar.current.date(from: components) ?? Date()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h a"
+        return formatter.string(from: date)
     }
 
     private var aboutCard: some View {

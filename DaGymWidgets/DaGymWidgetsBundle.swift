@@ -5,5 +5,8 @@ import WidgetKit
 struct DaGymWidgetsBundle: WidgetBundle {
     var body: some Widget {
         RestLiveActivity()
+        TodayWorkoutWidget()
+        StreakWidget()
+        RestTimerControl()
     }
 }

@@ -23,18 +23,20 @@ struct DaGymApp: App {
 struct AppRootContainer: View {
     private enum LaunchPhase {
         case loading
-        case ready(WorkoutStore)
+        case ready(WorkoutStore, HealthSyncService)
     }
 
     private let container: ModelContainer?
-    private let preferences = Preferences()
+    private let preferences: Preferences
     @State private var phase = LaunchPhase.loading
 
     init() {
         if LaunchFlags.isUITesting {
             UIView.setAnimationsEnabled(false)
         }
-        container = Self.resolveContainer()
+        let preferences = Preferences()
+        self.preferences = preferences
+        container = Self.resolveContainer(cloudKitEnabled: preferences.iCloudSyncEnabled)
     }
 
     var body: some View {
@@ -61,11 +63,13 @@ struct AppRootContainer: View {
             AmbientWash()
                 .modelContainer(container)
                 .task { await seed(context: container.mainContext) }
-        case .ready(let store):
+        case .ready(let store, let healthSync):
             RootView()
                 .environment(store)
                 .environment(preferences)
+                .environment(healthSync)
                 .modelContainer(container)
+                .task { healthSync.bind(to: store) }
         }
     }
 
@@ -74,19 +78,28 @@ struct AppRootContainer: View {
         let store = WorkoutStore(context: context)
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
         EquipmentSeeder.seedIfNeeded(store: store)
-        phase = .ready(store)
+        let healthSync = HealthSyncService(workoutStore: store, preferences: preferences)
+        phase = .ready(store, healthSync)
     }
 
-    /// Tries the persistent store first; falls back to an in-memory one so a
-    /// disk or migration failure never crashes the app. Under `-dgUITest`,
-    /// always uses a fresh in-memory store so every test run starts seeded
-    /// and empty, with no leftover state from a previous run.
-    private static func resolveContainer() -> ModelContainer? {
-        if LaunchFlags.isUITesting {
+    /// Tries the persistent store first (with CloudKit sync if `cloudKitEnabled`), retries
+    /// without CloudKit if that specifically fails (no iCloud account, simulator without
+    /// sign-in, missing entitlement on an ad-hoc build), then falls back to an in-memory store so
+    /// no disk/CloudKit/migration failure ever crashes the app. Under `-dgUITest`, always uses a
+    /// fresh in-memory store so every test run starts seeded and empty, with no leftover state
+    /// from a previous run.
+    private static func resolveContainer(cloudKitEnabled: Bool) -> ModelContainer? {
+        if LaunchFlags.isTesting {
             return try? ModelContainer.dagym(inMemory: true)
         }
-        if let container = try? ModelContainer.dagym() {
+        if let container = try? ModelContainer.dagym(cloudKitEnabled: cloudKitEnabled) {
             return container
+        }
+        if cloudKitEnabled {
+            appLogger.error("CloudKit-backed store failed to load; retrying with sync disabled.")
+            if let container = try? ModelContainer.dagym(cloudKitEnabled: false) {
+                return container
+            }
         }
         appLogger.error("Persistent store failed to load; falling back to an in-memory store.")
         if let container = try? ModelContainer.dagym(inMemory: true) {

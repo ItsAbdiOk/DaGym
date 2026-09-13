@@ -9,6 +9,7 @@ struct RootView: View {
     @State private var tab = DGTab.today
     @State private var routine: RoutineInfo?
     @State private var routines: [RoutineInfo] = []
+    @State private var nextSessionText: String?
     @State private var session: WorkoutSession?
     @State private var summaryItem: SummaryPresentation?
     @State private var showingBackfill = false
@@ -21,7 +22,9 @@ struct RootView: View {
                 .padding(.bottom, 8)
         }
         .task { refreshRoutine() }
+        .onAppear { startPendingRestTimerIfNeeded() }
         .onChange(of: tab) { _, _ in refreshRoutine() }
+        .onOpenURL(perform: handleOpenURL)
         .sheet(isPresented: $showingBackfill) {
             BackfillSheet(
                 routines: routines, onFreestyle: startBackfillFreestyle, onRoutine: startBackfillRoutine
@@ -45,7 +48,7 @@ struct RootView: View {
         switch tab {
         case .today:
             HomeView(
-                routine: routine, routines: routines, onStart: startFromScheduledRoutine,
+                routine: routine, nextSessionText: nextSessionText, onStart: startFromScheduledRoutine,
                 onFreestyle: startFreestyle, onBackfill: { showingBackfill = true },
                 onSeeRecovery: { showRecovery = true }
             )
@@ -66,7 +69,16 @@ struct RootView: View {
 
     private func refreshRoutine() {
         routines = store.routines()
-        routine = routines.first
+        routine = store.todaysRoutine()
+        nextSessionText = Self.nextSessionText(store.nextSession())
+    }
+
+    /// "Next: Pull B · Thursday" for the rest-day card.
+    private static func nextSessionText(_ next: (date: Date, routine: RoutineInfo)?) -> String? {
+        guard let next else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE"
+        return "Next: \(next.routine.name) · \(formatter.string(from: next.date))"
     }
 
     private func startFromScheduledRoutine() {
@@ -100,6 +112,39 @@ struct RootView: View {
     /// source of truth); the session keeps its own copy so `EffortPickerSheet`'s binding works.
     private func seedEffortScale() {
         session?.effortScale = preferences.effortScale
+    }
+
+    /// Control Center "Rest timer" hookup (`StartRestTimerIntent`/`PendingIntentAction`): if the
+    /// intent opened the app, reuse the active session or start today's routine, then rest before
+    /// its first on-deck set. `WorkoutSession.startRest` needs a real exercise/set to attach the
+    /// rest to, so a freestyle session (no exercises yet) has nothing to rest before and this is
+    /// a no-op — starting a routine covers the common case.
+    private func startPendingRestTimerIfNeeded() {
+        guard PendingIntentAction.consumeStartRestTimer() else { return }
+        if session == nil {
+            startFromScheduledRoutine()
+        }
+        guard let activeSession = session,
+              let exerciseIndex = activeSession.onDeckIndex,
+              let setIndex = activeSession.exercises[exerciseIndex].sets.firstIndex(where: { !$0.isDone })
+        else { return }
+        activeSession.startRest(seconds: preferences.defaultRestSeconds, after: exerciseIndex, set: setIndex)
+    }
+
+    /// Handles the `dagym://start?routine=<uuid>` deep link a synced calendar event opens
+    /// (`CalendarSyncService`). No-op for any other host/URL.
+    private func handleOpenURL(_ url: URL) {
+        if url.host == "today" {
+            tab = .today
+            return
+        }
+        guard url.host == "start",
+              let idString = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                  .queryItems?.first(where: { $0.name == "routine" })?.value,
+              let routineID = UUID(uuidString: idString),
+              let matched = store.routines().first(where: { $0.id == routineID })
+        else { return }
+        startWorkout(matched)
     }
 
     private func finish(_ summary: WorkoutSummary) {

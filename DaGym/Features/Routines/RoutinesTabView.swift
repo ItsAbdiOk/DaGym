@@ -14,6 +14,7 @@ struct RoutinesTabView: View {
     private enum Destination: Hashable {
         case edit(UUID)
         case new
+        case schedule
     }
 
     var body: some View {
@@ -37,6 +38,8 @@ struct RoutinesTabView: View {
                     RoutineBuilderView(routineID: id, onDone: pop)
                 case .new:
                     RoutineBuilderView(routineID: nil, onDone: pop)
+                case .schedule:
+                    ScheduleView(onDone: pop)
                 }
             }
             .task { refresh() }
@@ -50,6 +53,7 @@ struct RoutinesTabView: View {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
+            DGIconButton(symbol: "calendar") { path.append(Destination.schedule) }
             DGIconButton(symbol: "plus") { path.append(Destination.new) }
         }
     }
