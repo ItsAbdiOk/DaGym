@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The Coach tab until Phase 6 lands: an honest "not built yet" card laid out like every other
-/// tab (wash behind, content clear of the floating tab bar) rather than a bare empty state.
+/// tab (wash behind) rather than a bare empty state.
 struct CoachPlaceholderView: View {
     var body: some View {
         ZStack {
@@ -21,7 +21,7 @@ struct CoachPlaceholderView: View {
             }
             .padding(.horizontal, DGSpace.s4)
             .padding(.top, DGSpace.s3)
-            .padding(.bottom, 120)
+            .padding(.bottom, DGSpace.s6)
         }
     }
 }

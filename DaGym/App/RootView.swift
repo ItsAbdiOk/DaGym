@@ -27,11 +27,7 @@ struct RootView: View {
     @State private var resumePrompt: UnfinishedWorkoutPrompt?
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            content
-            DGTabBar(selected: $tab)
-                .padding(.bottom, 8)
-        }
+        tabs
         .task {
             refresh()
             // A Siri "start workout" hand-off above wins over the prompt: nothing to resume
@@ -44,7 +40,10 @@ struct RootView: View {
         .onReceive(
             NotificationCenter.default.publisher(for: .NSCalendarDayChanged).receive(on: DispatchQueue.main)
         ) { _ in refresh() }
-        .onChange(of: tab) { _, _ in refreshRoutine() }
+        .onChange(of: tab) { _, _ in
+            Haptics.step()
+            refreshRoutine()
+        }
         .onChange(of: store.changeToken) { _, _ in refresh() }
         .confirmationDialog(
             "Resume Workout?", isPresented: resumePromptBinding, titleVisibility: .visible,
@@ -90,26 +89,6 @@ struct RootView: View {
             WorkoutSummaryView(
                 summary: item.summary, title: item.title, onShare: {}, onDone: { summaryItem = nil }
             )
-        }
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        switch tab {
-        case .today:
-            HomeView(
-                routine: routine, nextSessionText: nextSessionText, onStart: startFromScheduledRoutine,
-                onFreestyle: startFreestyle, onBackfill: { showingBackfill = true },
-                onSeeRecovery: { showRecovery = true }, onOpenBody: { showingBody = true }
-            )
-        case .routines:
-            RoutinesTabView(onStart: startWorkout)
-        case .progress:
-            HistoryTabView()
-        case .library:
-            LibraryView()
-        case .coach:
-            CoachPlaceholderView()
         }
     }
 
@@ -305,6 +284,36 @@ struct RootView: View {
         PlanShareService.importPlan(document: document, context: store.context)
         pendingPlanImport = nil
         refreshRoutine()
+    }
+}
+
+/// The app's five root tabs in Apple's own tab bar: Liquid Glass, its own safe-area inset
+/// (screens no longer pad for a floating bar) and minimising as content scrolls down under it.
+private extension RootView {
+    var tabs: some View {
+        TabView(selection: $tab) {
+            Tab(value: DGTab.today) {
+                HomeView(
+                    routine: routine, nextSessionText: nextSessionText, onStart: startFromScheduledRoutine,
+                    onFreestyle: startFreestyle, onBackfill: { showingBackfill = true },
+                    onSeeRecovery: { showRecovery = true }, onOpenBody: { showingBody = true }
+                )
+            } label: { tabLabel(.today) }
+            Tab(value: DGTab.routines) {
+                RoutinesTabView(onStart: startWorkout)
+            } label: { tabLabel(.routines) }
+            Tab(value: DGTab.progress) { HistoryTabView() } label: { tabLabel(.progress) }
+            Tab(value: DGTab.library) { LibraryView() } label: { tabLabel(.library) }
+            Tab(value: DGTab.coach) { CoachPlaceholderView() } label: { tabLabel(.coach) }
+        }
+        .tabBarMinimizeBehavior(.onScrollDown)
+        .tint(DGColor.coral) // the system bar's selected tint follows the accent theme
+    }
+
+    /// `DaGymUITests` taps these identifiers, so they ride on each tab's label.
+    func tabLabel(_ tab: DGTab) -> some View {
+        Label(tab.title, systemImage: tab.symbol)
+            .accessibilityIdentifier(tab.accessibilityID)
     }
 }
 

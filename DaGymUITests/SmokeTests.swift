@@ -26,8 +26,6 @@ enum A11yID {
 
     static let summaryDone = "summary.done"
 
-    static let librarySearch = "library.search"
-
     static let historyList = "history.list"
     static let historyRow0 = "history.row.0"
 
@@ -122,9 +120,11 @@ final class SmokeTests: XCTestCase {
         XCTAssertTrue(libraryTab.waitForExistence(timeout: defaultTimeout), "tab.library never appeared")
         libraryTab.tap()
 
-        let searchField = app.textFields[A11yID.librarySearch]
+        // The library uses the system `.searchable` field, which XCUITest exposes as a
+        // search field rather than a text field and which carries no custom identifier.
+        let searchField = app.searchFields.firstMatch
         XCTAssertTrue(
-            searchField.waitForExistence(timeout: defaultTimeout), "library.search never appeared"
+            searchField.waitForExistence(timeout: defaultTimeout), "library search never appeared"
         )
         searchField.tap()
         searchField.typeText("bench")

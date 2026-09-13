@@ -27,8 +27,6 @@ enum A11yID {
 
     static let summaryDone = "summary.done"
 
-    static let librarySearch = "library.search"
-
     static let historyList = "history.list"
     static let historyRow0 = "history.row.0"
 

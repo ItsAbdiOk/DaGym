@@ -113,7 +113,7 @@ struct HistoryView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .environment(\.defaultMinListRowHeight, 0)
-        .safeAreaPadding(.bottom, 120)
+        .safeAreaPadding(.bottom, DGSpace.s6)
         .accessibilityIdentifier(A11yID.historyList)
     }
 

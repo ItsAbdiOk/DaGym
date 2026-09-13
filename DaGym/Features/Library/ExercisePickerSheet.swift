@@ -17,19 +17,29 @@ struct ExercisePickerSheet: View {
     @State private var showAllEquipment = false
 
     var body: some View {
-        ZStack {
-            AmbientWash()
-            VStack(alignment: .leading, spacing: DGSpace.s4) {
-                header
-                searchField
-                if let profile, profile.restrictsLibrary {
-                    EquipmentFilterBanner(profileName: profile.name, showingAll: $showAllEquipment)
+        NavigationStack {
+            ZStack {
+                AmbientWash()
+                VStack(alignment: .leading, spacing: DGSpace.s4) {
+                    if let profile, profile.restrictsLibrary {
+                        EquipmentFilterBanner(profileName: profile.name, showingAll: $showAllEquipment)
+                    }
+                    chipRow
+                    rows
                 }
-                chipRow
-                rows
+                .padding(.horizontal, DGSpace.s4)
+                .padding(.top, DGSpace.s3)
             }
-            .padding(.horizontal, DGSpace.s4)
-            .padding(.top, DGSpace.s3)
+            .navigationTitle("Add Exercise")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .searchable(text: $searchText, prompt: "Search exercises")
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
@@ -42,35 +52,6 @@ struct ExercisePickerSheet: View {
         .onChange(of: searchText) { _, _ in refresh() }
         .onChange(of: selectedMuscle) { _, _ in refresh() }
         .onChange(of: showAllEquipment) { _, _ in refresh() }
-    }
-
-    private var header: some View {
-        HStack {
-            Text("Add Exercise")
-                .font(DGFont.title1)
-                .textCase(.uppercase)
-                .foregroundStyle(DGColor.ink1)
-            Spacer()
-            Button("Cancel") { dismiss() }
-                .buttonStyle(.plain)
-                .dgLabel()
-        }
-    }
-
-    private var searchField: some View {
-        HStack(spacing: DGSpace.s2) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(DGColor.ink3)
-            TextField("Search exercises", text: $searchText)
-                .font(DGFont.body)
-                .foregroundStyle(DGColor.ink1)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-        }
-        .padding(.horizontal, DGSpace.s4)
-        .frame(height: 48)
-        .dgGlass(.thin, radius: 14)
     }
 
     private var chipRow: some View {

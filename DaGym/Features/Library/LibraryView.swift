@@ -45,8 +45,6 @@ struct LibraryView: View {
                 AmbientWash()
                 ScrollView {
                     VStack(alignment: .leading, spacing: DGSpace.s5) {
-                        header
-                        searchField
                         if let profile, profile.restrictsLibrary {
                             EquipmentFilterBanner(profileName: profile.name, showingAll: $showAllEquipment)
                         }
@@ -57,10 +55,18 @@ struct LibraryView: View {
                     }
                     .padding(.horizontal, DGSpace.s4)
                     .padding(.top, DGSpace.s3)
-                    .padding(.bottom, 100)
+                    .padding(.bottom, DGSpace.s6)
                 }
             }
-            .navigationBarHidden(true)
+            .navigationTitle("Library")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("New exercise", systemImage: "plus") { showingNewExercise = true }
+                }
+            }
+            .searchable(text: $searchText, prompt: "Search \(totalCount) exercises")
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
             .sheet(isPresented: $showingNewExercise) {
                 NewExerciseSheet { _ in refresh() }
             }
@@ -81,34 +87,6 @@ struct LibraryView: View {
             .onChange(of: favoritesOnly) { _, _ in refresh() }
             .onChange(of: customOnly) { _, _ in refresh() }
         }
-    }
-
-    private var header: some View {
-        HStack {
-            Text("Library")
-                .font(DGFont.title1)
-                .textCase(.uppercase)
-                .foregroundStyle(DGColor.ink1)
-            Spacer()
-            DGIconButton(symbol: "plus", accessibilityLabel: "New exercise") { showingNewExercise = true }
-        }
-    }
-
-    private var searchField: some View {
-        HStack(spacing: DGSpace.s2) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(DGColor.ink3)
-            TextField("Search \(totalCount) exercises", text: $searchText)
-                .font(DGFont.body)
-                .foregroundStyle(DGColor.ink1)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .accessibilityIdentifier(A11yID.librarySearch)
-        }
-        .padding(.horizontal, DGSpace.s4)
-        .frame(height: 48)
-        .dgGlass(.thin, radius: 14)
     }
 
     private var muscleChipRow: some View {

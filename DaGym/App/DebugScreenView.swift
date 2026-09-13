@@ -11,7 +11,6 @@ struct DebugScreenView: View {
     @State private var session = SampleData.makeSession()
     @State private var weight = 82.5
     @State private var scale = Effort.Scale.rpe
-    @State private var tab = DGTab.today
     @State private var healthSync: HealthSyncService?
 
     var body: some View {
@@ -79,11 +78,34 @@ struct DebugScreenView: View {
         )
     }
 
-    private func tabbed<Content: View>(_ selected: DGTab, @ViewBuilder content: () -> Content) -> some View {
-        ZStack(alignment: .bottom) {
-            content()
-            DGTabBar(selected: .constant(selected)).padding(.bottom, 8)
+    /// Hosts one screen in the real system tab bar so screenshots match the shipping shell.
+    private func tabbed<Content: View>(
+        _ selected: DGTab, @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        TabView(selection: .constant(selected)) {
+            Tab(value: DGTab.today) { slot(.today, selected, content) } label: { label(.today) }
+            Tab(value: DGTab.routines) { slot(.routines, selected, content) } label: { label(.routines) }
+            Tab(value: DGTab.progress) { slot(.progress, selected, content) } label: { label(.progress) }
+            Tab(value: DGTab.library) { slot(.library, selected, content) } label: { label(.library) }
+            Tab(value: DGTab.coach) { slot(.coach, selected, content) } label: { label(.coach) }
         }
+        .tabBarMinimizeBehavior(.onScrollDown)
+    }
+
+    @ViewBuilder
+    private func slot<Content: View>(
+        _ tab: DGTab, _ selected: DGTab, _ content: () -> Content
+    ) -> some View {
+        if tab == selected {
+            content()
+        } else {
+            AmbientWash()
+        }
+    }
+
+    private func label(_ tab: DGTab) -> some View {
+        Label(tab.title, systemImage: tab.symbol)
+            .accessibilityIdentifier(tab.accessibilityID)
     }
 
     private func sheetHost<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some View {
