@@ -1,0 +1,42 @@
+# macOS
+.DS_Store
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+# Package.resolved is deliberately NOT ignored: Xcode Cloud disables automatic
+# resolution and fails without it.
+
+# Secrets — never commit
+*.xcconfig.local
+.env
+.env.*
+Configs/Secrets.xcconfig
+
+# ---------------------------------------------------------------------------
+# This repository is public and contains CODE ONLY. Planning documents, agent
+# instructions, design mockups and notes stay local.
+# ---------------------------------------------------------------------------
+CLAUDE.md
+.claude/
+.gstack/
+plan.md
+design-brief.md
+docs/
+mockups/
+design/
+*.md.local
+notes/

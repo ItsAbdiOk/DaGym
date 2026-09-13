@@ -1,0 +1,110 @@
+# Lint rules for DaGym. Violations are errors: they break the build rather
+# than accumulating quietly.
+
+included:
+  - DaGym
+  - DaGymTests
+  - DaGymWatch
+  - GymCore/Sources
+  - GymCore/Tests
+
+excluded:
+  - DaGym.xcodeproj
+  - .build
+  - GymCore/.build
+
+opt_in_rules:
+  - array_init
+  - closure_spacing
+  - collection_alignment
+  - contains_over_filter_count
+  - contains_over_first_not_nil
+  - empty_collection_literal
+  - empty_count
+  - empty_string
+  - explicit_init
+  - fatal_error_message
+  - first_where
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - last_where
+  - literal_expression_end_indentation
+  - modifier_order
+  - operator_usage_whitespace
+  - overridden_super_call
+  - prefer_self_type_over_type_of_self
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - toggle_bool
+  - unavailable_function
+  - unneeded_parentheses_in_closure_argument
+  - unowned_variable_capture
+  - yoda_condition
+
+analyzer_rules:
+  - unused_import
+
+# Nothing a user types or a network returns may be force-unwrapped.
+force_unwrapping:
+  severity: error
+force_cast:
+  severity: error
+force_try:
+  severity: error
+implicitly_unwrapped_optional:
+  severity: error
+
+line_length:
+  warning: 110
+  error: 140
+  ignores_comments: false
+  ignores_urls: true
+
+type_body_length:
+  warning: 250
+  error: 400
+function_body_length:
+  warning: 60
+  error: 100
+file_length:
+  warning: 400
+  error: 600
+  ignore_comment_only_lines: true
+
+cyclomatic_complexity:
+  warning: 10
+  error: 15
+
+identifier_name:
+  min_length:
+    warning: 2
+    error: 1
+  excluded: [id, x, y, w, r, t, p]
+
+nesting:
+  type_level: 2
+
+custom_rules:
+  no_print_statements:
+    name: "print() in shipping code"
+    regex: '(?<!\/\/\s)\bprint\('
+    match_kinds: [identifier]
+    message: "Use a logger, not print(). print() is invisible in a TestFlight build."
+    severity: error
+
+  no_hardcoded_api_key:
+    name: "Hard-coded API key"
+    # BYO-key mode stores the user's key in the Keychain at runtime. A key
+    # literal in source would ship to everyone.
+    regex: '"(sk-ant-|sk-|AIza)[A-Za-z0-9_\-]{12,}"'
+    excluded: ".*Tests?\\.swift"
+    message: "Never hard-code an API key. Keys live in the Keychain, entered by the user."
+    severity: error
+
+  no_todo_without_owner:
+    name: "Bare TODO"
+    regex: '(TODO|FIXME)(?!\s*\(\w)'
+    message: "TODO/FIXME must name an issue or owner, e.g. TODO(#12): ..."
+    severity: warning
+
+reporter: "xcode"

@@ -1,0 +1,70 @@
+#!/bin/sh
+# Runs before every push. Broken code never leaves this machine, so nothing
+# broken can reach Xcode Cloud / TestFlight.
+#
+# Enable with:  git config core.hooksPath .githooks
+# Bypass once:  git push --no-verify   (use sparingly)
+set -eu
+
+ROOT=$(git rev-parse --show-toplevel)
+cd "$ROOT"
+
+RED=$(printf '\033[31m'); GREEN=$(printf '\033[32m'); OFF=$(printf '\033[0m')
+fail() { printf "%spre-push: %s%s\n" "$RED" "$1" "$OFF" >&2; exit 1; }
+ok()   { printf "%s  ok%s  %s\n" "$GREEN" "$OFF" "$1"; }
+
+echo "pre-push checks..."
+
+# 1. Code only. Planning docs and agent files must never be tracked.
+for f in plan.md design-brief.md CLAUDE.md; do
+    if git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+        fail "$f is tracked by git. This repo is code only."
+    fi
+done
+if git ls-files | grep -qE '^(\.claude|docs|mockups|design)/'; then
+    fail "a non-code directory is tracked (.claude/, docs/, mockups/ or design/)."
+fi
+if git grep -nE '(sk-ant-|sk-|AIza)[A-Za-z0-9_\-]{16,}' -- . ':(exclude)*Tests*' >/dev/null 2>&1; then
+    fail "An API-key-shaped string is present in a tracked file."
+fi
+ok "code only, no credentials"
+
+# 2. Lint.
+command -v swiftlint >/dev/null 2>&1 || fail "swiftlint is not installed. Run: brew install swiftlint"
+swiftlint lint --strict --quiet || fail "lint failed"
+ok "lint clean"
+
+# 3. project.yml is the source of truth; the committed .xcodeproj must match.
+command -v xcodegen >/dev/null 2>&1 || fail "xcodegen is not installed. Run: brew install xcodegen"
+xcodegen generate --quiet 2>/dev/null || xcodegen generate >/dev/null 2>&1
+if ! git diff --quiet -- DaGym.xcodeproj; then
+    fail "DaGym.xcodeproj is out of sync with project.yml. Commit the regenerated project."
+fi
+ok "project in sync"
+
+# 4. GymCore tests: fast, no simulator.
+echo "  running GymCore tests..."
+(cd GymCore && swift test --quiet) >/tmp/dagym-core.log 2>&1 \
+    || { grep -E "✘|error:|Expectation failed" /tmp/dagym-core.log | head -25 >&2; fail "GymCore tests failed (log: /tmp/dagym-core.log)"; }
+ok "GymCore tests passed"
+
+# 5. App tests on the simulator. The slow step.
+SIM=$(xcrun simctl list devices available | grep -oE 'iPhone [0-9]+ Pro' | sort -V | tail -1)
+[ -n "$SIM" ] || SIM=$(xcrun simctl list devices available \
+      | grep -oE 'iPhone [^(]*' | head -1 | sed 's/[[:space:]]*$//')
+[ -n "$SIM" ] || fail "no iPhone simulator available to test against"
+
+echo "  running app tests on $SIM (this is the slow bit)..."
+if ! xcodebuild test \
+        -project DaGym.xcodeproj -scheme DaGym \
+        -destination "platform=iOS Simulator,name=$SIM" \
+        >/tmp/dagym-prepush.log 2>&1; then
+    printf "%spre-push: tests failed%s\n" "$RED" "$OFF" >&2
+    grep -E "✘|error:|Expectation failed|Test run with" /tmp/dagym-prepush.log \
+        | sed 's/^/  /' | head -25 >&2
+    echo "  full log: /tmp/dagym-prepush.log" >&2
+    exit 1
+fi
+ok "app tests passed"
+
+echo "pre-push checks passed."
