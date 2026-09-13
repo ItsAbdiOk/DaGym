@@ -40,3 +40,6 @@ mockups/
 design/
 *.md.local
 notes/
+
+# App Store Connect API identifiers — local only
+Configs/asc.env
