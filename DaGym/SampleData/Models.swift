@@ -206,6 +206,8 @@ final class WorkoutSession {
     var startedAt: Date
     var exercises: [WorkoutExerciseEntry]
     var effortScale: Effort.Scale = .rpe
+    /// The `WorkoutModel` this session is backed by, once persisted.
+    var workoutID: UUID?
 
     // Rest timer
     var restRemaining: Int = 0
