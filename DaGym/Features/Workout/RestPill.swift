@@ -5,9 +5,22 @@ import SwiftUI
 struct RestPill: View {
     var remaining: Int
     var total: Int
+    /// "Next <exercise name>" / "Last set done" — used as-is when `nextWeightKg`/`nextReps`
+    /// are nil; otherwise those raw values are formatted in the user's unit instead.
     var nextLabel: String
+    var nextWeightKg: Double?
+    var nextReps: Int?
     var onAddThirty: () -> Void
     var onSkip: () -> Void
+
+    @Environment(Preferences.self) private var preferences
+
+    private var resolvedNextLabel: String {
+        if let nextWeightKg, let nextReps {
+            return "Next \(preferences.formatWeight(kg: nextWeightKg)) × \(nextReps)"
+        }
+        return nextLabel
+    }
 
     var body: some View {
         HStack(spacing: DGSpace.s3) {
@@ -16,7 +29,7 @@ struct RestPill: View {
                 Text(WorkoutSession.clock(remaining))
                     .dgMetric(DGFont.metricL)
                     .foregroundStyle(DGColor.ink1)
-                Text("Rest · \(nextLabel)")
+                Text("Rest · \(resolvedNextLabel)")
                     .dgLabel()
             }
             Spacer(minLength: DGSpace.s2)
@@ -89,9 +102,13 @@ private struct RestRing: View {
 
 #Preview {
     VStack(spacing: DGSpace.s4) {
-        RestPill(remaining: 92, total: 150, nextLabel: "Next 82.5 × 8", onAddThirty: {}, onSkip: {})
+        RestPill(
+            remaining: 92, total: 150, nextLabel: "", nextWeightKg: 82.5, nextReps: 8,
+            onAddThirty: {}, onSkip: {}
+        )
         RestPillCompact(remaining: 2, total: 60)
     }
     .padding()
     .background(DGColor.bgBase)
+    .environment(Preferences())
 }

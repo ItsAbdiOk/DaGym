@@ -43,7 +43,8 @@ struct WorkoutStoreWorkoutTests {
         let workingSet = second.exercises[0].sets[1]
         #expect(workingSet.weightKg == 62.5)
         #expect(workingSet.reps == 8)
-        #expect(workingSet.previous == "62.5 × 8")
+        #expect(workingSet.previousWeightKg == 62.5)
+        #expect(workingSet.previousReps == 8)
     }
 
     @Test("finish excludes warm-ups from volume; a lower e1RM records no PR")
@@ -113,5 +114,53 @@ struct WorkoutStoreWorkoutTests {
         let history = store.history()
         #expect(history.count == 2)
         #expect(history[0].date >= history[1].date)
+    }
+
+    @Test("finish caches maxWeight and volume PRs; exerciseInfo still reports e1RM from the e1rm kind")
+    func cachesAllPRKinds() throws {
+        let store = try makeStore()
+        let exercise = store.createCustomExercise(
+            name: "Incline Press", primary: [.chest], equipment: "Barbell", style: .weightReps
+        )
+        let routineID = makeRoutine(store: store, exerciseID: exercise.id)
+
+        let session = store.startWorkout(routineID: routineID)
+        session.exercises[0].sets[1].weightKg = 60
+        session.exercises[0].sets[1].reps = 8
+        session.exercises[0].sets[1].isDone = true
+        _ = store.finish(session: session)
+
+        let exerciseID: UUID? = exercise.id
+        let maxWeightPredicate = #Predicate<PersonalRecordModel> {
+            $0.exerciseID == exerciseID && $0.kind == "maxWeight"
+        }
+        let volumePredicate = #Predicate<PersonalRecordModel> {
+            $0.exerciseID == exerciseID && $0.kind == "volume"
+        }
+        let maxWeight = try store.context.fetch(FetchDescriptor(predicate: maxWeightPredicate)).first
+        let volume = try store.context.fetch(FetchDescriptor(predicate: volumePredicate)).first
+        #expect(maxWeight?.value == 60)
+        #expect(volume?.value == 480.0)
+
+        let model = try #require(store.fetchExerciseModel(id: exercise.id))
+        #expect(store.exerciseInfo(for: model).bestE1RM != nil)
+    }
+
+    @Test("sync persists exercise notes and the workout-level note")
+    func syncPersistsNotes() throws {
+        let store = try makeStore()
+        let exercise = store.createCustomExercise(
+            name: "Lat Pulldown", primary: [.lats], equipment: "Machine", style: .weightReps
+        )
+        let routineID = makeRoutine(store: store, exerciseID: exercise.id)
+        let session = store.startWorkout(routineID: routineID)
+        session.exercises[0].note = "Wide grip"
+        session.notes = "Felt strong today"
+        store.sync(session: session)
+
+        let workoutID = try #require(session.workoutID)
+        let detail = store.workoutDetail(id: workoutID)
+        #expect(detail.notes == "Felt strong today")
+        #expect(detail.exercises.first?.note == "Wide grip")
     }
 }

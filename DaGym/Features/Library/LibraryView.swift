@@ -164,6 +164,8 @@ private struct LibraryRow: View {
     var exercise: ExerciseInfo
     var onToggleFavorite: () -> Void
 
+    @Environment(Preferences.self) private var preferences
+
     var body: some View {
         HStack(spacing: DGSpace.s3) {
             thumbnail
@@ -196,7 +198,7 @@ private struct LibraryRow: View {
     private var accessory: some View {
         if let best = exercise.bestE1RM {
             VStack(alignment: .trailing, spacing: 2) {
-                Text(WorkoutSession.format(best))
+                Text(preferences.formatWeight(kg: best))
                     .dgMetric(DGFont.metricM, tracking: -0.5)
                     .foregroundStyle(DGColor.prGoldText)
                 Text("E1RM").dgLabel()
@@ -222,5 +224,6 @@ private struct LibraryRow: View {
     if let store = PreviewStore.make() {
         LibraryView()
             .environment(store)
+            .environment(Preferences())
     }
 }

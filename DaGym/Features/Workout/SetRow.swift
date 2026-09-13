@@ -16,13 +16,36 @@ struct SetRow: View {
     var onTapReps: () -> Void
     var onTapEffort: () -> Void
     var onToggleDone: () -> Void
+    /// Swipe-left actions — see design: "swipe left on a row for delete / change type".
+    var onDelete: () -> Void = {}
+    var onChangeKind: (SetKind) -> Void = { _ in }
+
+    @State private var isSwipeOpen = false
+    @State private var showKindPicker = false
+    @Environment(Preferences.self) private var preferences
 
     var body: some View {
+        SwipeToRevealRow(actionsWidth: 112, isOpen: $isSwipeOpen) {
+            rowContent
+        } actions: {
+            swipeActions
+        }
+        .confirmationDialog("Change set type", isPresented: $showKindPicker, titleVisibility: .visible) {
+            ForEach(SetKind.allCases, id: \.self) { kind in
+                Button(kind.displayName) {
+                    onChangeKind(kind)
+                    isSwipeOpen = false
+                }
+            }
+        }
+    }
+
+    private var rowContent: some View {
         HStack(spacing: DGSpace.s3) {
             SetKindBadge(kind: set.kind, index: badgeIndex)
             previousGhost
             Button(action: onTapWeight) {
-                Text(WorkoutSession.format(set.weightKg))
+                Text(preferences.formatWeight(kg: set.weightKg))
                     .dgMetric(DGFont.metricM)
                     .foregroundStyle(weightColor)
                     .frame(minWidth: 44, alignment: .leading)
@@ -55,6 +78,30 @@ struct SetRow: View {
         }
     }
 
+    private var swipeActions: some View {
+        HStack(spacing: 0) {
+            swipeButton(
+                symbol: "arrow.triangle.2.circlepath", tint: DGColor.setSuperset, fill: DGColor.surface3
+            ) {
+                showKindPicker = true
+            }
+            swipeButton(symbol: "trash", tint: .white, fill: DGColor.danger, action: onDelete)
+        }
+    }
+
+    private func swipeButton(
+        symbol: String, tint: Color, fill: Color, action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(tint)
+                .frame(width: 56, height: DGTap.rowHeight)
+                .background(fill)
+        }
+        .buttonStyle(.plain)
+    }
+
     /// AMRAP sets show "AMRAP" until a rep count has actually been logged.
     private var repsText: String {
         let isPendingAmrap = set.kind == .amrap && !set.isDone
@@ -62,10 +109,15 @@ struct SetRow: View {
     }
 
     private var previousGhost: some View {
-        Text(set.previous ?? "–")
+        Text(previousText)
             .font(DGFont.footnote)
             .foregroundStyle(DGColor.ink3)
             .frame(minWidth: 44, alignment: .leading)
+    }
+
+    private var previousText: String {
+        guard let weight = set.previousWeightKg, let reps = set.previousReps else { return "–" }
+        return "\(preferences.formatWeight(kg: weight)) × \(reps)"
     }
 
     private var effortChip: some View {
@@ -121,23 +173,25 @@ struct SetRow: View {
 #Preview {
     VStack(spacing: DGSpace.s2) {
         SetRow(
-            set: SetEntry(kind: .warmup, weightKg: 40, reps: 10, isDone: true, previous: nil),
+            set: SetEntry(kind: .warmup, weightKg: 40, reps: 10, isDone: true),
             badgeIndex: 0, rowIndex: 0, isCurrent: false, effortScale: .rpe,
             onTapWeight: {}, onTapReps: {}, onTapEffort: {}, onToggleDone: {}
         )
         SetRow(
             set: SetEntry(
-                weightKg: 82.5, reps: 8, effort: Effort(rpe: 8), isDone: true, previous: "80 × 8"
+                weightKg: 82.5, reps: 8, effort: Effort(rpe: 8), isDone: true,
+                previousWeightKg: 80, previousReps: 8
             ),
             badgeIndex: 1, rowIndex: 1, isCurrent: false, effortScale: .rpe,
             onTapWeight: {}, onTapReps: {}, onTapEffort: {}, onToggleDone: {}
         )
         SetRow(
-            set: SetEntry(weightKg: 82.5, reps: 8, previous: "80 × 8"),
+            set: SetEntry(weightKg: 82.5, reps: 8, previousWeightKg: 80, previousReps: 8),
             badgeIndex: 2, rowIndex: 2, isCurrent: true, effortScale: .rpe,
             onTapWeight: {}, onTapReps: {}, onTapEffort: {}, onToggleDone: {}
         )
     }
     .padding()
     .background(DGColor.bgBase)
+    .environment(Preferences())
 }

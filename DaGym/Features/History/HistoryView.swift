@@ -10,6 +10,8 @@ struct HistoryView: View {
     var onBackfill: () -> Void
     var onDelete: (UUID) -> Void
 
+    @Environment(Preferences.self) private var preferences
+
     var body: some View {
         ZStack {
             AmbientWash()
@@ -30,7 +32,10 @@ struct HistoryView: View {
                 .font(DGFont.title1)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
-            Text("\(Self.pluralized(workoutsCount, "workout")) · \(Self.thousands(volumeKg)) kg lifted")
+            Text(
+                "\(Self.pluralized(workoutsCount, "workout")) · "
+                    + "\(preferences.formatVolume(kg: volumeKg)) \(preferences.unitSymbol) lifted"
+            )
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
         }
@@ -128,14 +133,6 @@ struct HistoryView: View {
         }
     }
 
-    private static func thousands(_ kg: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = "\u{2009}"
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: kg)) ?? "\(Int(kg))"
-    }
-
     /// "1 workout" / "2 workouts".
     static func pluralized(_ count: Int, _ noun: String) -> String {
         "\(count) \(noun)\(count == 1 ? "" : "s")"
@@ -145,6 +142,8 @@ struct HistoryView: View {
 /// One workout row: name, day + duration, and a volume/sets/PR footnote.
 private struct RecordCard: View {
     var record: WorkoutRecord
+
+    @Environment(Preferences.self) private var preferences
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s2) {
@@ -164,7 +163,8 @@ private struct RecordCard: View {
     }
 
     private var footnote: String {
-        let base = "\(Self.thousands(record.volumeKg)) kg · \(HistoryView.pluralized(record.sets, "set"))"
+        let volume = "\(preferences.formatVolume(kg: record.volumeKg)) \(preferences.unitSymbol)"
+        let base = "\(volume) · \(HistoryView.pluralized(record.sets, "set"))"
         return record.prCount > 0 ? "\(base) · \(record.prCount) PRs" : base
     }
 
@@ -172,14 +172,6 @@ private struct RecordCard: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE"
         return formatter.string(from: date).uppercased()
-    }
-
-    private static func thousands(_ kg: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = "\u{2009}"
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: kg)) ?? "\(Int(kg))"
     }
 }
 
@@ -191,4 +183,5 @@ private struct RecordCard: View {
         )
         .navigationDestination(for: UUID.self) { _ in EmptyView() }
     }
+    .environment(Preferences())
 }

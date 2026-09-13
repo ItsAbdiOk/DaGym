@@ -6,6 +6,8 @@ struct RestTimerView: View {
     var exerciseName: String
     var onClose: () -> Void
 
+    @Environment(Preferences.self) private var preferences
+
     var body: some View {
         ZStack {
             AmbientWash(heat: 0.9)
@@ -17,7 +19,7 @@ struct RestTimerView: View {
                 Spacer()
                 UpNextCard(
                     setLabel: "Up Next · Set \(session.setsDone + 1) Of \(session.setsTotal)",
-                    detail: Self.stripNextPrefix(session.restNextLabel)
+                    detail: nextDetail
                 )
                 .padding(.horizontal, DGSpace.s4)
                 controls
@@ -66,6 +68,15 @@ struct RestTimerView: View {
             guard !Task.isCancelled else { return }
             session.tickRest()
         }
+    }
+
+    /// "82.5 × 8" when the next step is a plain weight × reps set, in the user's unit;
+    /// otherwise the exercise-name/"Last set done" label with its "Next " prefix stripped.
+    private var nextDetail: String {
+        if let weightKg = session.restNextWeightKg, let reps = session.restNextReps {
+            return "\(preferences.formatWeight(kg: weightKg)) × \(reps)"
+        }
+        return Self.stripNextPrefix(session.restNextLabel)
     }
 
     private static func stripNextPrefix(_ label: String) -> String {
@@ -155,4 +166,5 @@ private struct RestAdjustButton: View {
 
 #Preview {
     RestTimerView(session: SampleData.makeSession(), exerciseName: "Bench Press", onClose: {})
+        .environment(Preferences())
 }

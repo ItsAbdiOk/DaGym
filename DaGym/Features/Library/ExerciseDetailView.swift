@@ -7,6 +7,7 @@ import SwiftUI
 /// editable reference settings for a single exercise.
 struct ExerciseDetailView: View {
     @Environment(WorkoutStore.self) private var store
+    @Environment(Preferences.self) private var preferences
     @Environment(\.dismiss) private var dismiss
 
     @State private var exercise: ExerciseInfo
@@ -93,8 +94,8 @@ struct ExerciseDetailView: View {
 
     private var equipmentLine: String {
         let barName = exercise.bar?.name.lowercased() ?? "bodyweight"
-        let increment = WorkoutSession.format(exercise.incrementKg)
-        return "\(exercise.equipment) · \(barName) · \(increment) kg increment"
+        let increment = preferences.formatWeight(kg: exercise.incrementKg)
+        return "\(exercise.equipment) · \(barName) · \(increment) \(preferences.unitSymbol) increment"
     }
 
     private var statTiles: some View {
@@ -109,7 +110,7 @@ struct ExerciseDetailView: View {
 
     private var goldStat: some View {
         StatTile(
-            value: exercise.bestE1RM.map(WorkoutSession.format) ?? "—",
+            value: exercise.bestE1RM.map { preferences.formatWeight(kg: $0) } ?? "—",
             label: "Best E1RM", tint: DGColor.prGoldText
         )
         .dgCard(
@@ -167,9 +168,14 @@ struct ExerciseDetailView: View {
                 }
             }
             Divider().overlay(DGColor.hairline)
-            MenuSettingsRow(label: "Weight increment", value: "\(WorkoutSession.format(incrementKg)) kg") {
+            MenuSettingsRow(
+                label: "Weight increment",
+                value: "\(preferences.formatWeight(kg: incrementKg)) \(preferences.unitSymbol)"
+            ) {
                 ForEach(Self.incrementOptions, id: \.self) { increment in
-                    Button("\(WorkoutSession.format(increment)) kg") { updateIncrement(increment) }
+                    Button("\(preferences.formatWeight(kg: increment)) \(preferences.unitSymbol)") {
+                        updateIncrement(increment)
+                    }
                 }
             }
         }
@@ -244,6 +250,8 @@ private struct ChartCard: View {
     @Binding var selectedMetric: String
     var metrics: [String]
 
+    @Environment(Preferences.self) private var preferences
+
     var body: some View {
         if series.count >= 3 {
             content
@@ -261,7 +269,7 @@ private struct ChartCard: View {
             HStack {
                 Text("Estimated 1RM").dgLabel()
                 Spacer()
-                Text("+\(delta) kg")
+                Text("+\(delta) \(preferences.unitSymbol)")
                     .font(DGFont.footnote)
                     .foregroundStyle(DGColor.success)
             }
@@ -273,7 +281,7 @@ private struct ChartCard: View {
 
     private var delta: String {
         guard let first = series.first?.value, let last = series.last?.value else { return "0" }
-        return WorkoutSession.format(last - first)
+        return preferences.formatWeight(kg: last - first)
     }
 
     private var chart: some View {
@@ -361,5 +369,6 @@ private struct MenuSettingsRow<Items: View>: View {
             ExerciseDetailView(exercise: SampleData.bench)
         }
             .environment(store)
+            .environment(Preferences())
     }
 }

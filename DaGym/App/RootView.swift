@@ -5,11 +5,13 @@ import SwiftUI
 /// workout (and its summary) full-screen when a session is started.
 struct RootView: View {
     @Environment(WorkoutStore.self) private var store
+    @Environment(Preferences.self) private var preferences
     @State private var tab = DGTab.today
     @State private var routine: RoutineInfo?
     @State private var session: WorkoutSession?
     @State private var summaryItem: SummaryPresentation?
     @State private var showingBackfill = false
+    @State private var showRecovery = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -21,6 +23,9 @@ struct RootView: View {
         .onChange(of: tab) { _, _ in refreshRoutine() }
         .sheet(isPresented: $showingBackfill) {
             BackfillSheet(onFreestyle: startBackfillFreestyle, onRoutine: startBackfillRoutine)
+        }
+        .sheet(isPresented: $showRecovery) {
+            RecoveryMapView()
         }
         .fullScreenCover(item: $session) { activeSession in
             ActiveWorkoutView(session: activeSession, onFinish: finish)
@@ -38,7 +43,7 @@ struct RootView: View {
         case .today:
             HomeView(
                 routine: routine, onStart: startFromScheduledRoutine, onFreestyle: startFreestyle,
-                onBackfill: { showingBackfill = true }, onSeeRecovery: {}
+                onBackfill: { showingBackfill = true }, onSeeRecovery: { showRecovery = true }
             )
         case .routines:
             RoutinesTabView(onStart: startWorkout)
@@ -66,21 +71,31 @@ struct RootView: View {
 
     private func startWorkout(_ routine: RoutineInfo) {
         session = store.startWorkout(routineID: routine.id)
+        seedEffortScale()
     }
 
     private func startFreestyle() {
         session = store.startFreestyle()
+        seedEffortScale()
     }
 
     private func startBackfillFreestyle(date: Date, durationMinutes: Int) {
         showingBackfill = false
         session = store.startBackfill(date: date, durationMinutes: durationMinutes, routineID: nil)
+        seedEffortScale()
     }
 
     private func startBackfillRoutine(date: Date, durationMinutes: Int) {
         showingBackfill = false
         let routineID = store.routines().first?.id
         session = store.startBackfill(date: date, durationMinutes: durationMinutes, routineID: routineID)
+        seedEffortScale()
+    }
+
+    /// New sessions start on the user's saved effort scale (`Preferences.effortScale` is the
+    /// source of truth); the session keeps its own copy so `EffortPickerSheet`'s binding works.
+    private func seedEffortScale() {
+        session?.effortScale = preferences.effortScale
     }
 
     private func finish(_ summary: WorkoutSummary) {
@@ -106,6 +121,7 @@ extension WorkoutSession: Identifiable {
     if let container = try? ModelContainer.dagym(inMemory: true) {
         RootView()
             .environment(WorkoutStore(context: container.mainContext))
+            .environment(Preferences())
             .modelContainer(container)
     } else {
         Text("Preview unavailable")

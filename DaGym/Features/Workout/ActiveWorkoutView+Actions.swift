@@ -71,6 +71,52 @@ extension ActiveWorkoutView {
         store.sync(session: session)
     }
 
+    /// Delete / change-type swipe actions on `SetRow`.
+    func deleteSet(exerciseID: UUID, setID: UUID) {
+        session.removeSet(exerciseID: exerciseID, setID: setID)
+        store.sync(session: session)
+    }
+
+    func changeSetKind(exerciseID: UUID, setID: UUID, to kind: SetKind) {
+        session.changeSetKind(exerciseID: exerciseID, setID: setID, to: kind)
+        store.sync(session: session)
+    }
+
+    /// "Generate warm-ups" from the "…" menu (plan §7).
+    func generateWarmups(exerciseID: UUID) {
+        session.addWarmups(exerciseID: exerciseID)
+        store.sync(session: session)
+    }
+
+    func setNote(exerciseID: UUID, text: String) {
+        guard let index = session.exercises.firstIndex(where: { $0.id == exerciseID }) else { return }
+        session.exercises[index].note = text.isEmpty ? nil : text
+        store.sync(session: session)
+    }
+
+    // MARK: Rest alerts
+
+    /// Preference-gated sound + screen flash at 3-2-1-0, honoring the same UserDefaults keys
+    /// `Preferences` will use. Haptics stay unconditional inside `WorkoutSession.tickRest`.
+    func handleRestTick(_ remaining: Int) {
+        guard remaining <= 3 else { return }
+        let prefs = RestAlertPreferences.current()
+        if prefs.sound {
+            restAlertPlayer.bleep(longer: remaining == 0)
+        }
+        if prefs.screenFlash, remaining == 0 {
+            triggerRestFlash()
+        }
+    }
+
+    private func triggerRestFlash() {
+        withAnimation(.easeOut(duration: 0.15)) { flashOpacity = 0.6 }
+        Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            withAnimation(.easeIn(duration: 0.15)) { flashOpacity = 0 }
+        }
+    }
+
     // MARK: Per-exercise "…" menu
 
     var menuIsPresented: Binding<Bool> {
@@ -84,6 +130,7 @@ extension ActiveWorkoutView {
             Button("Remove exercise", role: .destructive) { removeExercise(id: id) }
             Button("Add set") { addSet(exerciseID: id, kind: .working) }
             Button("Add warm-up set") { addSet(exerciseID: id, kind: .warmup) }
+            Button("Generate warm-ups") { generateWarmups(exerciseID: id) }
         }
     }
 
@@ -95,7 +142,7 @@ extension ActiveWorkoutView {
         case .keypad(let exerciseID, let setID, let field):
             keypadSheet(exerciseID: exerciseID, setID: setID, field: field)
         case .effort(let exerciseID, let setID):
-            EffortPickerSheet(scale: $session.effortScale) { effort in
+            EffortPickerSheet(scale: effortScaleBinding) { effort in
                 session.completeSet(exerciseID: exerciseID, setID: setID, effort: effort)
                 store.sync(session: session)
             }
@@ -110,6 +157,26 @@ extension ActiveWorkoutView {
                 store.sync(session: session)
                 activeSheet = nil
             }
+        case .notes(let exerciseID):
+            notesSheet(exerciseID: exerciseID)
+        }
+    }
+
+    /// Writes to both the session (what the sheet displays) and `Preferences` (the source of
+    /// truth new sessions seed from), so toggling RPE/RIR mid-workout sticks for next time.
+    private var effortScaleBinding: Binding<Effort.Scale> {
+        Binding(
+            get: { session.effortScale },
+            set: { session.effortScale = $0; preferences.effortScale = $0 }
+        )
+    }
+
+    @ViewBuilder
+    private func notesSheet(exerciseID: UUID) -> some View {
+        if let entry = session.exercises.first(where: { $0.id == exerciseID }) {
+            NotesSheet(title: entry.exercise.name, text: entry.note ?? "") { text in
+                setNote(exerciseID: exerciseID, text: text)
+            }
         }
     }
 
@@ -118,17 +185,20 @@ extension ActiveWorkoutView {
         if let ei = session.exercises.firstIndex(where: { $0.id == exerciseID }),
            let si = session.exercises[ei].sets.firstIndex(where: { $0.id == setID }) {
             let exercise = session.exercises[ei].exercise
-            let previous = session.exercises[ei].sets[si].previous
+            let previousWeight = session.exercises[ei].sets[si].previousWeightKg
+            let previousReps = session.exercises[ei].sets[si].previousReps
             switch field {
             case .weight:
                 WeightKeypadSheet(
                     title: "Weight", value: weightBinding(ei: ei, si: si), step: exercise.incrementKg,
-                    bar: exercise.bar, last: previous, unit: "kg", onDone: { store.sync(session: session) }
+                    bar: exercise.bar, last: previousWeight.map { preferences.formatWeight(kg: $0) },
+                    unit: preferences.weightUnit, onDone: { store.sync(session: session) }
                 )
             case .reps:
                 WeightKeypadSheet(
                     title: "Reps", value: repsBinding(ei: ei, si: si), step: 1, bar: nil,
-                    last: previous, unit: "reps", onDone: { store.sync(session: session) }
+                    last: previousReps.map(String.init), unit: nil,
+                    onDone: { store.sync(session: session) }
                 )
             }
         }

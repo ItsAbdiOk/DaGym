@@ -33,7 +33,8 @@ struct DebugScreenView: View {
         case .keypad:
             sheetHost {
                 WeightKeypadSheet(
-                    title: "Bench Press", value: $weight, step: 2.5, bar: .olympic, last: "80", onDone: {}
+                    title: "Bench Press", value: $weight, step: 2.5, bar: .olympic, last: "80", unit: .kg,
+                    onDone: {}
                 )
             }
         case .effort:

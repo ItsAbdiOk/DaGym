@@ -81,6 +81,16 @@ struct ExerciseInfo: Identifiable, Hashable {
         secondary.forEach { map[$0] = 0.45 }
         return map
     }
+
+    /// `GymCore.LoadingStyle` inferred from `equipment`/`bar`, for `WarmupGenerator`.
+    var warmupLoadingStyle: LoadingStyle {
+        switch equipment.lowercased() {
+        case "barbell": return .barbell(bar: bar ?? .olympic)
+        case "dumbbell": return .dumbbell
+        case "machine", "cable", "smith machine": return .machine
+        default: return .bodyweight
+        }
+    }
 }
 
 struct SetEntry: Identifiable, Hashable {
@@ -90,16 +100,18 @@ struct SetEntry: Identifiable, Hashable {
     var reps: Int
     var effort: Effort?
     var isDone = false
-    /// Ghost of the previous session's same set, e.g. "80 × 8".
-    var previous: String?
+    /// Ghost of the previous session's same set: raw data, formatted at
+    /// display time in the user's unit (see `SetRow`).
+    var previousWeightKg: Double?
+    var previousReps: Int?
     /// Timed holds.
     var durationSeconds: Int?
     var targetSeconds: Int?
 
     init(
         id: UUID = UUID(), kind: SetKind = .working, weightKg: Double, reps: Int,
-        effort: Effort? = nil, isDone: Bool = false, previous: String? = nil,
-        durationSeconds: Int? = nil, targetSeconds: Int? = nil
+        effort: Effort? = nil, isDone: Bool = false, previousWeightKg: Double? = nil,
+        previousReps: Int? = nil, durationSeconds: Int? = nil, targetSeconds: Int? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -107,7 +119,8 @@ struct SetEntry: Identifiable, Hashable {
         self.reps = reps
         self.effort = effort
         self.isDone = isDone
-        self.previous = previous
+        self.previousWeightKg = previousWeightKg
+        self.previousReps = previousReps
         self.durationSeconds = durationSeconds
         self.targetSeconds = targetSeconds
     }
@@ -286,12 +299,22 @@ final class WorkoutSession {
     var isBackfilled: Bool
     /// The `WorkoutModel` this session is backed by, once persisted.
     var workoutID: UUID?
+    /// Free-text note for the whole session, persisted to `WorkoutModel.notes`.
+    var notes: String = ""
 
     // Rest timer
     var restRemaining: Int = 0
     var restTotal: Int = 0
+    /// "Next <exercise name>" / "Last set done" — set whenever the next step isn't a plain
+    /// weight × reps set. When it *is*, `restNextWeightKg`/`restNextReps` carry the raw data
+    /// and the view (which has unit `Preferences`) builds the "Next 82.5 × 8" text.
     var restNextLabel: String = ""
+    var restNextWeightKg: Double?
+    var restNextReps: Int?
     var isResting: Bool { restRemaining > 0 }
+    /// Notified on every tick with the new `restRemaining`, so UI-only concerns (rest sound,
+    /// screen flash) can live outside this UI-free model. Set by `ActiveWorkoutView`.
+    var onRestTick: ((Int) -> Void)?
 
     // PR banner
     var prBanner: PersonalRecordInfo?
@@ -362,9 +385,13 @@ final class WorkoutSession {
         restTotal = seconds
         restRemaining = seconds
         let ex = exercises[exerciseIndex]
+        restNextWeightKg = nil
+        restNextReps = nil
+        restNextLabel = ""
         if setIndex + 1 < ex.sets.count {
             let next = ex.sets[setIndex + 1]
-            restNextLabel = "Next \(Self.format(next.weightKg)) × \(next.reps)"
+            restNextWeightKg = next.weightKg
+            restNextReps = next.reps
         } else if exerciseIndex + 1 < exercises.count {
             restNextLabel = "Next \(exercises[exerciseIndex + 1].exercise.name)"
         } else {
@@ -377,6 +404,41 @@ final class WorkoutSession {
         restRemaining -= 1
         if restRemaining <= 3, restRemaining > 0 { Haptics.restTick() }
         if restRemaining == 0 { Haptics.restEnd() }
+        onRestTick?(restRemaining)
+    }
+
+    /// Removes a set, keeping at least one set per exercise (the delete swipe action).
+    func removeSet(exerciseID: UUID, setID: UUID) {
+        guard let ei = exercises.firstIndex(where: { $0.id == exerciseID }),
+              exercises[ei].sets.count > 1,
+              let si = exercises[ei].sets.firstIndex(where: { $0.id == setID }) else { return }
+        exercises[ei].sets.remove(at: si)
+        Haptics.confirm()
+    }
+
+    /// Changes a set's kind (e.g. working → drop set) without touching weight or reps.
+    func changeSetKind(exerciseID: UUID, setID: UUID, to kind: SetKind) {
+        guard let ei = exercises.firstIndex(where: { $0.id == exerciseID }),
+              let si = exercises[ei].sets.firstIndex(where: { $0.id == setID }) else { return }
+        exercises[ei].sets[si].kind = kind
+        Haptics.step()
+    }
+
+    /// Generates and inserts warm-up sets before the exercise's first working set, from
+    /// `GymCore.WarmupGenerator`. A no-op if warm-ups already exist or there's no working set.
+    func addWarmups(exerciseID: UUID) {
+        guard let ei = exercises.firstIndex(where: { $0.id == exerciseID }) else { return }
+        let entry = exercises[ei]
+        guard !entry.sets.contains(where: { $0.kind == .warmup }),
+              let workingIndex = entry.sets.firstIndex(where: { $0.kind == .working }) else { return }
+        let workingSet = entry.sets[workingIndex]
+        let warmups = GymCore.WarmupGenerator.sets(
+            workingWeightKg: workingSet.weightKg, style: entry.exercise.warmupLoadingStyle,
+            estimatedOneRepMax: entry.exercise.bestE1RM, increment: entry.exercise.incrementKg
+        )
+        guard !warmups.isEmpty else { return }
+        let newSets = warmups.map { SetEntry(kind: .warmup, weightKg: $0.weightKg, reps: $0.reps) }
+        exercises[ei].sets.insert(contentsOf: newSets, at: workingIndex)
     }
 
     func adjustRest(by delta: Int) {

@@ -1,6 +1,7 @@
 import GymCore
 import SwiftData
 import SwiftUI
+import UIKit
 
 /// The Active Workout screen: glass nav header, stat strip, muscle map, PR
 /// banner and the exercise list, with a sticky rest pill + action bar at the
@@ -10,10 +11,13 @@ struct ActiveWorkoutView: View {
     var onFinish: (WorkoutSummary) -> Void
 
     @Environment(WorkoutStore.self) var store
+    @Environment(Preferences.self) var preferences
     @Environment(\.dismiss) var dismiss
     @State var activeSheet: ActiveSheet?
     @State var menuExerciseID: UUID?
     @State var showFinishConfirm = false
+    @State var restAlertPlayer = RestAlertPlayer()
+    @State var flashOpacity: Double = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,6 +28,7 @@ struct ActiveWorkoutView: View {
                     musclesCard
                     if let pr = session.prBanner { PRBanner(info: pr) }
                     exerciseList
+                    workoutNoteField
                 }
                 .padding(.horizontal, DGSpace.s4)
                 .padding(.top, DGSpace.s4)
@@ -33,7 +38,13 @@ struct ActiveWorkoutView: View {
         }
         .background(DGColor.bgBase)
         .overlay(alignment: .bottom) { bottomGroup }
-        .task { await runTimers() }
+        .overlay { Color.white.opacity(flashOpacity).ignoresSafeArea().allowsHitTesting(false) }
+        .task {
+            session.onRestTick = handleRestTick
+            await runTimers()
+        }
+        .onAppear { UIApplication.shared.isIdleTimerDisabled = preferences.keepScreenAwake }
+        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         .sheet(item: $activeSheet) { sheet in sheetContent(sheet) }
         .confirmationDialog("Finish workout", isPresented: $showFinishConfirm, titleVisibility: .visible) {
             Button("Finish workout", action: finishSession)
@@ -90,7 +101,10 @@ struct ActiveWorkoutView: View {
 
     private var statStrip: some View {
         HStack(spacing: 0) {
-            StatTile(value: WorkoutSession.format(session.volumeKg), label: "kg volume")
+            StatTile(
+                value: preferences.formatWeight(kg: session.volumeKg),
+                label: "\(preferences.unitSymbol) volume"
+            )
             Divider().overlay(DGColor.hairline)
             StatTile(value: "\(session.setsDone) / \(session.setsTotal)", label: "sets")
             Divider().overlay(DGColor.hairline)
@@ -125,6 +139,19 @@ struct ActiveWorkoutView: View {
     private var muscleNames: String {
         let names = session.musclesHit.sorted { $0.value > $1.value }.map(\.key.displayName)
         return names.isEmpty ? "Not started yet" : names.joined(separator: ", ")
+    }
+
+    /// Free-text note for the whole session, synced on every edit.
+    private var workoutNoteField: some View {
+        VStack(alignment: .leading, spacing: DGSpace.s2) {
+            Text("Workout note").dgLabel()
+            TextField("Optional note for this session", text: $session.notes, axis: .vertical)
+                .font(DGFont.body)
+                .foregroundStyle(DGColor.ink1)
+                .lineLimit(1...4)
+                .onChange(of: session.notes) { _, _ in store.sync(session: session) }
+        }
+        .dgCard(padding: DGSpace.s4)
     }
 
     // MARK: Exercise list
@@ -193,7 +220,12 @@ struct ActiveWorkoutView: View {
                 onTapEffort: { setID in activeSheet = .effort(exerciseID: entry.id, setID: setID) },
                 onToggleDone: { set in toggleDone(exerciseID: entry.id, set: set) },
                 onMore: { menuExerciseID = entry.id },
-                onStartTimed: { setID in startTimedHold(exerciseID: entry.id, setID: setID) }
+                onStartTimed: { setID in startTimedHold(exerciseID: entry.id, setID: setID) },
+                onNote: { activeSheet = .notes(exerciseID: entry.id) },
+                onDeleteSet: { setID in deleteSet(exerciseID: entry.id, setID: setID) },
+                onChangeSetKind: { setID, kind in
+                    changeSetKind(exerciseID: entry.id, setID: setID, to: kind)
+                }
             )
         }
     }
@@ -205,24 +237,40 @@ struct ActiveWorkoutView: View {
             if session.isResting {
                 RestPill(
                     remaining: session.restRemaining, total: session.restTotal,
-                    nextLabel: session.restNextLabel,
+                    nextLabel: session.restNextLabel, nextWeightKg: session.restNextWeightKg,
+                    nextReps: session.restNextReps,
                     onAddThirty: { session.adjustRest(by: 30) }, onSkip: { session.skipRest() }
                 )
             }
-            actionBar
+            WorkoutActionBar(
+                onAddExercise: { activeSheet = .addExercise }, onReorder: { activeSheet = .reorder }
+            )
         }
         .padding(.horizontal, DGSpace.s4)
         .padding(.bottom, DGSpace.s2)
     }
 
-    private var actionBar: some View {
+    // MARK: Timers
+
+    func runTimers() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            session.tickRest()
+            session.tickTimedHold()
+        }
+    }
+}
+
+/// The sticky "Exercise / Reorder / Coach" pill under the rest timer.
+private struct WorkoutActionBar: View {
+    var onAddExercise: () -> Void
+    var onReorder: () -> Void
+
+    var body: some View {
         HStack(spacing: 0) {
-            actionItem(title: "Exercise", symbol: "plus", tint: DGColor.coralText) {
-                activeSheet = .addExercise
-            }
-            actionItem(title: "Reorder", symbol: "list.bullet", tint: DGColor.ink2) {
-                activeSheet = .reorder
-            }
+            actionItem(title: "Exercise", symbol: "plus", tint: DGColor.coralText, action: onAddExercise)
+            actionItem(title: "Reorder", symbol: "list.bullet", tint: DGColor.ink2, action: onReorder)
             actionItem(title: "Coach", symbol: "sparkles", tint: DGColor.ink4, action: {})
                 .opacity(0.5)
         }
@@ -242,17 +290,6 @@ struct ActiveWorkoutView: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
-    }
-
-    // MARK: Timers
-
-    func runTimers() async {
-        while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(1))
-            guard !Task.isCancelled else { return }
-            session.tickRest()
-            session.tickTimedHold()
-        }
     }
 }
 
@@ -291,6 +328,7 @@ enum ActiveSheet: Identifiable {
     case swap(exercise: ExerciseInfo)
     case addExercise
     case reorder
+    case notes(exerciseID: UUID)
 
     enum KeypadField: String { case weight, reps }
 
@@ -306,6 +344,8 @@ enum ActiveSheet: Identifiable {
             "add-exercise"
         case .reorder:
             "reorder"
+        case .notes(let exerciseID):
+            "notes-\(exerciseID)"
         }
     }
 }
@@ -314,5 +354,6 @@ enum ActiveSheet: Identifiable {
     if let container = try? ModelContainer.dagym(inMemory: true) {
         ActiveWorkoutView(session: SampleData.makeSession(), onFinish: { _ in })
             .environment(WorkoutStore(context: container.mainContext))
+            .environment(Preferences())
     }
 }

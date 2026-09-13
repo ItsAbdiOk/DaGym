@@ -17,6 +17,7 @@ struct HomeView: View {
     @State private var streakLongest = 0
     @State private var thisWeekCount = 0
     @State private var recoveryMap: [Muscle: Double] = [:]
+    @State private var showingSettings = false
 
     var body: some View {
         ZStack {
@@ -44,6 +45,7 @@ struct HomeView: View {
             }
         }
         .task { refresh() }
+        .sheet(isPresented: $showingSettings) { SettingsView() }
     }
 
     private func refresh() {
@@ -60,12 +62,16 @@ struct HomeView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s1) {
-            Text(Self.todayLabel).dgLabel()
-            Text("Today")
-                .font(DGFont.title1)
-                .textCase(.uppercase)
-                .foregroundStyle(DGColor.ink1)
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: DGSpace.s1) {
+                Text(Self.todayLabel).dgLabel()
+                Text("Today")
+                    .font(DGFont.title1)
+                    .textCase(.uppercase)
+                    .foregroundStyle(DGColor.ink1)
+            }
+            Spacer()
+            DGIconButton(symbol: "gearshape") { showingSettings = true }
         }
     }
 
@@ -263,6 +269,7 @@ private struct RecoveryCard: View {
             onStart: {}, onFreestyle: {}, onBackfill: {}, onSeeRecovery: {}
         )
         .environment(WorkoutStore(context: container.mainContext))
+        .environment(Preferences())
     } else {
         Text("Preview unavailable")
     }
@@ -275,6 +282,7 @@ private struct RecoveryCard: View {
             onStart: {}, onFreestyle: {}, onBackfill: {}, onSeeRecovery: {}
         )
         .environment(WorkoutStore(context: container.mainContext))
+        .environment(Preferences())
     } else {
         Text("Preview unavailable")
     }

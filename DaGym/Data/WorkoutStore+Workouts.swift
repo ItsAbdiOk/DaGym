@@ -58,6 +58,7 @@ extension WorkoutStore {
         guard let workoutID = session.workoutID, let workout = fetchWorkoutModel(id: workoutID) else {
             return
         }
+        workout.notes = session.notes
         var existing = Dictionary(uniqueKeysWithValues: (workout.exercises ?? []).map { ($0.id, $0) })
         var kept = Set<UUID>()
         for (index, entry) in session.exercises.enumerated() {
@@ -141,8 +142,13 @@ extension WorkoutStore {
             planned: planned, previous: previousSets(exerciseID: exerciseID), incrementKg: incrementKg
         )
         return zip(planned, prescriptions).map { plan, rx in
+            // `rx.previous` is non-nil exactly when `rx.weightKg`/`rx.reps` came from a
+            // matched previous set (see `AutoFill.prescription(for:matching:)`) rather than
+            // a plan target — that's the only case the ghost should show raw previous data.
             SetEntry(
-                kind: plan.kind, weightKg: rx.weightKg, reps: rx.reps, previous: rx.previous,
+                kind: plan.kind, weightKg: rx.weightKg, reps: rx.reps,
+                previousWeightKg: rx.previous != nil ? rx.weightKg : nil,
+                previousReps: rx.previous != nil ? rx.reps : nil,
                 targetSeconds: rx.durationSeconds ?? plan.targetSeconds
             )
         }

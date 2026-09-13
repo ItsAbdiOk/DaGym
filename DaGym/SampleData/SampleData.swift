@@ -99,10 +99,11 @@ enum SampleData {
                 SetEntry(kind: .warmup, weightKg: 40, reps: 10, isDone: true),
                 SetEntry(kind: .warmup, weightKg: 60, reps: 5, isDone: true),
                 SetEntry(
-                    weightKg: 82.5, reps: 8, effort: Effort(rpe: 8), isDone: true, previous: "80 × 8"
+                    weightKg: 82.5, reps: 8, effort: Effort(rpe: 8), isDone: true,
+                    previousWeightKg: 80, previousReps: 8
                 ),
-                SetEntry(weightKg: 82.5, reps: 8, previous: "80 × 8"),
-                SetEntry(kind: .amrap, weightKg: 75, reps: 11, previous: "75 × 11")
+                SetEntry(weightKg: 82.5, reps: 8, previousWeightKg: 80, previousReps: 8),
+                SetEntry(kind: .amrap, weightKg: 75, reps: 11, previousWeightKg: 75, previousReps: 11)
             ],
             whyTitle: "Why 82.5 kg?",
             whyBody: "You pressed 80 × 8 at RPE 7 last Tuesday — one step up keeps you near the effort "
@@ -112,15 +113,17 @@ enum SampleData {
         )
         let incline = WorkoutExerciseEntry(
             exercise: inclineDB,
-            sets: (0..<3).map { _ in SetEntry(weightKg: 26, reps: 10, previous: "24 × 10") },
+            sets: (0..<3).map { _ in
+                SetEntry(weightKg: 26, reps: 10, previousWeightKg: 24, previousReps: 10)
+            },
             supersetGroup: 1
         )
         let rope = WorkoutExerciseEntry(
             exercise: tricepsRope,
             sets: [
-                SetEntry(weightKg: 30, reps: 12, previous: "30 × 12"),
-                SetEntry(weightKg: 30, reps: 12, previous: "30 × 12"),
-                SetEntry(kind: .drop, weightKg: 30, reps: 12, previous: "30 × 12")
+                SetEntry(weightKg: 30, reps: 12, previousWeightKg: 30, previousReps: 12),
+                SetEntry(weightKg: 30, reps: 12, previousWeightKg: 30, previousReps: 12),
+                SetEntry(kind: .drop, weightKg: 30, reps: 12, previousWeightKg: 30, previousReps: 12)
             ],
             supersetGroup: 1
         )
@@ -141,7 +144,8 @@ enum SampleData {
         )
         session.restRemaining = 92
         session.restTotal = 150
-        session.restNextLabel = "Next 82.5 × 8"
+        session.restNextWeightKg = 82.5
+        session.restNextReps = 8
         session.prBanner = PersonalRecordInfo(
             exerciseName: "Bench", line: "Best bench e1RM yet: 102.5 kg, up 2.5 from August."
         )

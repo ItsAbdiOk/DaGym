@@ -5,6 +5,7 @@ import SwiftUI
 /// detail navigation, all driven by the store.
 struct HistoryTabView: View {
     @Environment(WorkoutStore.self) private var store
+    @Environment(Preferences.self) private var preferences
 
     @State private var records: [WorkoutRecord] = []
     @State private var routines: [RoutineInfo] = []
@@ -26,7 +27,9 @@ struct HistoryTabView: View {
         }
         .task { refresh() }
         .sheet(isPresented: $showingBackfill) {
-            BackfillSheet(onFreestyle: startFreestyleBackfill, onRoutine: startRoutineBackfill)
+            BackfillSheet(
+                routines: routines, onFreestyle: startFreestyleBackfill, onRoutine: startRoutineBackfill
+            )
         }
         .fullScreenCover(item: $backfillSession) { session in
             ActiveWorkoutView(session: session) { summary in
@@ -59,14 +62,13 @@ struct HistoryTabView: View {
     private func startFreestyleBackfill(date: Date, minutes: Int) {
         showingBackfill = false
         backfillSession = store.startBackfill(date: date, durationMinutes: minutes, routineID: nil)
+        backfillSession?.effortScale = preferences.effortScale
     }
 
-    /// Matches `RootView`'s backfill-to-routine behaviour: no routine picker in the sheet
-    /// yet, so the most recently used routine is backfilled against.
-    private func startRoutineBackfill(date: Date, minutes: Int) {
+    private func startRoutineBackfill(date: Date, minutes: Int, routineID: UUID) {
         showingBackfill = false
-        let routineID = routines.first?.id
         backfillSession = store.startBackfill(date: date, durationMinutes: minutes, routineID: routineID)
+        backfillSession?.effortScale = preferences.effortScale
     }
 }
 
@@ -81,5 +83,6 @@ private struct FinishedWorkout: Identifiable {
     if let store = PreviewStore.make() {
         HistoryTabView()
             .environment(store)
+            .environment(Preferences())
     }
 }

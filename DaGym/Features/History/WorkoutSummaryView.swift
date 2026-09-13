@@ -10,6 +10,8 @@ struct WorkoutSummaryView: View {
     var onShare: () -> Void
     var onDone: () -> Void
 
+    @Environment(Preferences.self) private var preferences
+
     var body: some View {
         ZStack {
             AmbientWash(heat: 0.9)
@@ -43,7 +45,8 @@ struct WorkoutSummaryView: View {
     private var statRow: some View {
         HStack(spacing: DGSpace.s3) {
             StatTile(value: WorkoutSession.clock(summary.durationSeconds), label: "Time").dgCard(radius: 14)
-            StatTile(value: Self.thousands(summary.volumeKg), label: "Volume").dgCard(radius: 14)
+            StatTile(value: preferences.formatVolume(kg: summary.volumeKg), label: "Volume")
+                .dgCard(radius: 14)
             StatTile(value: "\(summary.setsDone)", label: "Sets").dgCard(radius: 14)
         }
     }
@@ -61,15 +64,6 @@ struct WorkoutSummaryView: View {
             }
             .buttonStyle(DGPressStyle())
         }
-    }
-
-    /// Integer kg with a thin-space thousands separator, e.g. "6 840".
-    private static func thousands(_ kg: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = "\u{2009}"
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: kg)) ?? "\(Int(kg))"
     }
 }
 
@@ -182,4 +176,5 @@ private struct NotesCard: View {
         ),
         title: "Push A Done", onShare: {}, onDone: {}
     )
+    .environment(Preferences())
 }

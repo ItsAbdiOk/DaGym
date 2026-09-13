@@ -48,7 +48,8 @@ struct WorkoutStoreActiveWorkoutTests {
         let secondEntry = store.autoFilledEntry(for: exercise)
         #expect(secondEntry.sets[1].weightKg == 55)
         #expect(secondEntry.sets[1].reps == 10)
-        #expect(secondEntry.sets[1].previous == "55 × 10")
+        #expect(secondEntry.sets[1].previousWeightKg == 55)
+        #expect(secondEntry.sets[1].previousReps == 10)
         store.discard(session: second)
     }
 }

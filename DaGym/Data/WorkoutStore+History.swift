@@ -170,31 +170,36 @@ extension WorkoutStore {
         (workout.exercises ?? []).first { $0.exercise?.id == exerciseID }
     }
 
+    /// Headline records only (e1RM) — the count the user sees; other kinds are cached silently.
     private func prCount(for workoutID: UUID) -> Int {
-        let predicate = #Predicate<PersonalRecordModel> { $0.workoutID == workoutID }
+        let headline = PRKind.e1rm.rawValue
+        let predicate = #Predicate<PersonalRecordModel> { $0.workoutID == workoutID && $0.kind == headline }
         return (try? context.fetchCount(FetchDescriptor(predicate: predicate))) ?? 0
     }
 
     // MARK: - Personal records (GymCore.PersonalRecords)
 
-    /// One e1RM PR per exercise, evaluated with `GymCore.PersonalRecords.evaluate` against the
-    /// cached best (`PersonalRecordModel`, kind "e1rm"). Only the e1RM kind is tracked in the
-    /// cache today, even though `evaluate` can also surface maxWeight/volume/etc — see the
-    /// wiring report for the follow-up to cache those too.
+    /// Evaluates every `PRKind` per exercise and caches all of them (`PersonalRecordModel`), but
+    /// the summary/banner still surfaces only the e1RM kind per exercise — matching the existing
+    /// "one PR line per exercise" UI. The other kinds (maxWeight, volume, maxRepsAtWeight, …) are
+    /// cached for `exerciseInfo(for:)`-style lookups and future screens without changing what the
+    /// Finish summary shows.
     private func evaluatePRs(session: WorkoutSession, workout: WorkoutModel) -> [PersonalRecordInfo] {
         let latestDate = latestFinishedWorkoutDate(excluding: workout.id)
         return session.exercises.compactMap { entry -> PersonalRecordInfo? in
             let performed = performedSets(in: entry, date: workout.startedAt)
             guard !performed.isEmpty else { return nil }
             let records = PersonalRecords.evaluate(
-                newSets: performed, existing: existingE1RMRecords(exerciseID: entry.exercise.id),
+                newSets: performed, existing: existingRecords(exerciseID: entry.exercise.id),
                 workoutDate: workout.startedAt, isBackfilled: workout.isBackfilled,
                 latestWorkoutDate: latestDate
             )
-            guard let record = records.first(where: { $0.kind == .e1rm }) else { return nil }
-            return cacheE1RM(
-                record, exerciseID: entry.exercise.id, exerciseName: entry.exercise.name,
-                workoutID: workout.id
+            for record in records {
+                cacheRecord(record, exerciseID: entry.exercise.id, workoutID: workout.id)
+            }
+            guard let e1rm = records.first(where: { $0.kind == .e1rm }) else { return nil }
+            return PersonalRecordInfo(
+                exerciseName: entry.exercise.name, line: PersonalRecords.formatLine(e1rm)
             )
         }
     }
@@ -214,29 +219,35 @@ extension WorkoutStore {
         }
     }
 
-    private func existingE1RMRecords(exerciseID: UUID) -> [PersonalRecord] {
-        let predicate = #Predicate<PersonalRecordModel> { $0.exerciseID == exerciseID && $0.kind == "e1rm" }
-        let fetched = (try? context.fetch(FetchDescriptor(predicate: predicate)))?.first
-        guard let model = fetched else { return [] }
-        return [
-            PersonalRecord(
-                kind: .e1rm, value: model.value, weightKg: model.weightKg, reps: model.reps, date: model.date
+    /// Every cached record for this exercise, across all kinds — the `existing` bests that
+    /// `PersonalRecords.evaluate` checks each new set against.
+    private func existingRecords(exerciseID: UUID) -> [PersonalRecord] {
+        let predicate = #Predicate<PersonalRecordModel> { $0.exerciseID == exerciseID }
+        let models = (try? context.fetch(FetchDescriptor(predicate: predicate))) ?? []
+        return models.compactMap { model in
+            guard let kind = PRKind(rawValue: model.kind) else { return nil }
+            return PersonalRecord(
+                kind: kind, value: model.value, weightKg: model.weightKg, reps: model.reps, date: model.date
             )
-        ]
+        }
     }
 
-    private func cacheE1RM(
-        _ record: PersonalRecord, exerciseID: UUID, exerciseName: String, workoutID: UUID
-    ) -> PersonalRecordInfo {
-        let predicate = #Predicate<PersonalRecordModel> { $0.exerciseID == exerciseID && $0.kind == "e1rm" }
+    /// Upserts one PR into the cache. `maxRepsAtWeight` keeps one row per weight (a lifter can
+    /// hold separate rep records at 60 kg and 80 kg); every other kind keeps a single best row.
+    private func cacheRecord(_ record: PersonalRecord, exerciseID: UUID, workoutID: UUID) {
+        let kind = record.kind.rawValue
+        let weight = record.weightKg
+        let byWeightToo = record.kind == .maxRepsAtWeight
+        let predicate = #Predicate<PersonalRecordModel> {
+            $0.exerciseID == exerciseID && $0.kind == kind && (!byWeightToo || $0.weightKg == weight)
+        }
         let existing = (try? context.fetch(FetchDescriptor(predicate: predicate)))?.first
-        let model = existing ?? PersonalRecordModel(exerciseID: exerciseID, kind: "e1rm")
+        let model = existing ?? PersonalRecordModel(exerciseID: exerciseID, kind: kind)
         if existing == nil { context.insert(model) }
         model.value = record.value
         model.weightKg = record.weightKg
         model.reps = record.reps
         model.date = record.date
         model.workoutID = workoutID
-        return PersonalRecordInfo(exerciseName: exerciseName, line: PersonalRecords.formatLine(record))
     }
 }

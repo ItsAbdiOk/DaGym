@@ -4,24 +4,29 @@ import SwiftUI
 /// Glass keypad sheet for logging a weight or rep count. Never the system
 /// keyboard — the ± column steps by the exercise's own increment and the
 /// plate line updates live. Detent-sized to ~520 pt. See mockup 10_00.
+///
+/// `value` is always canonical: kg when `unit` is set, raw reps when `unit`
+/// is nil. Everything shown/typed converts to the user's unit at the edges.
 struct WeightKeypadSheet: View {
     var title: String
     @Binding var value: Double
     var step: Double
     var bar: Bar?
     var last: String?
-    var unit: String = "kg"
+    /// The display unit for a weight field, or `nil` for a plain-number field (reps).
+    var unit: WeightUnit?
     var onDone: () -> Void
 
     @State private var buffer = ""
     @Environment(\.dismiss) private var dismiss
+    @Environment(Preferences.self) private var preferences
 
     var body: some View {
         VStack(spacing: DGSpace.s6) {
             Text(title).dgLabel()
             stepperRow
             metaLabel
-            if let bar { PlateLine(target: value, bar: bar) }
+            if unit != nil { PlateLine(target: value, bar: bar ?? preferences.weightUnit.defaultBar) }
             keyGrid
             DGPrimaryButton(title: "Log set", symbol: "checkmark", fill: DGColor.success, height: 52) {
                 onDone()
@@ -68,17 +73,19 @@ struct WeightKeypadSheet: View {
     }
 
     private var metaLabel: some View {
-        var parts = [unit.uppercased(), "STEP \(WorkoutSession.format(step))"]
+        var parts = [unitLabel, "STEP \(formattedStep)"]
         if let last { parts.append("LAST \(last)") }
         return Text(parts.joined(separator: " · ")).dgLabel()
     }
 
     private var keyGrid: some View {
         let columns = Array(repeating: GridItem(.flexible(), spacing: DGSpace.s2), count: 4)
+        let keys = ["1", "2", "3", quickKeyLabel(positive: true), "4", "5", "6",
+                    quickKeyLabel(positive: false), "7", "8", "9"]
         return VStack(spacing: DGSpace.s2) {
             LazyVGrid(columns: columns, spacing: DGSpace.s2) {
-                ForEach(["1", "2", "3", "+2.5", "4", "5", "6", "-2.5", "7", "8", "9"], id: \.self) { key in
-                    KeypadKey(label: key, isAccent: key.contains("2.5")) { tap(key) }
+                ForEach(keys, id: \.self) { key in
+                    KeypadKey(label: key, isAccent: isQuickKey(key)) { tap(key) }
                         .accessibilityIdentifier(digitIdentifier(key) ?? key)
                 }
                 KeypadKey(label: "⌫", isAccent: false) { backspace() }
@@ -91,7 +98,33 @@ struct WeightKeypadSheet: View {
         }
     }
 
-    private var displayValue: String { buffer.isEmpty ? WorkoutSession.format(value) : buffer }
+    /// The current value formatted in the display unit (kg/lb for weight, plain for reps).
+    private var displayValue: String { buffer.isEmpty ? formattedCurrent : buffer }
+
+    private var unitLabel: String { unit?.symbol.uppercased() ?? "REPS" }
+
+    private var formattedCurrent: String {
+        guard let unit else { return WorkoutSession.format(value) }
+        return unit.format(kg: value)
+    }
+
+    private var formattedStep: String {
+        guard let unit else { return WorkoutSession.format(step) }
+        return unit.format(kg: step)
+    }
+
+    /// The quick ± key's amount: the unit's own default increment for a weight field
+    /// (2.5 kg, or 5 lb), 2.5 raw for reps — unchanged from the original quick-jump.
+    private var quickStepAmount: Double { unit?.defaultIncrementKg ?? 2.5 }
+
+    private var quickStepLabel: String {
+        guard let unit else { return WorkoutSession.format(quickStepAmount) }
+        return unit.format(kg: quickStepAmount)
+    }
+
+    private func quickKeyLabel(positive: Bool) -> String { "\(positive ? "+" : "-")\(quickStepLabel)" }
+
+    private func isQuickKey(_ key: String) -> Bool { key.hasPrefix("+") || key.hasPrefix("-") }
 
     /// `A11yID.keypadKey(_:)` for a plain digit key, `nil` for the ± keys.
     private func digitIdentifier(_ key: String) -> String? {
@@ -106,20 +139,26 @@ struct WeightKeypadSheet: View {
     }
 
     private func tap(_ key: String) {
-        if key == "+2.5" || key == "-2.5" {
-            step(by: key == "+2.5" ? 2.5 : -2.5)
+        if isQuickKey(key) {
+            step(by: key.hasPrefix("+") ? quickStepAmount : -quickStepAmount)
             return
         }
         if key == "." && buffer.contains(".") { return }
         buffer.append(key)
-        if let parsed = Double(buffer) { value = parsed }
+        if let parsed = Double(buffer) { value = canonical(parsed) }
         Haptics.step()
     }
 
     private func backspace() {
         guard !buffer.isEmpty else { return }
         buffer.removeLast()
-        value = Double(buffer) ?? 0
+        value = canonical(Double(buffer) ?? 0)
+    }
+
+    /// Converts a typed display-unit value back to the canonical value `value` stores.
+    private func canonical(_ displayed: Double) -> Double {
+        guard let unit else { return displayed }
+        return unit.toKg(displayed)
     }
 }
 
@@ -147,7 +186,12 @@ private struct PlateLine: View {
     var target: Double
     var bar: Bar
 
-    private var result: PlateCalculator.Result { PlateCalculator.load(target: target, bar: bar) }
+    @Environment(Preferences.self) private var preferences
+
+    private var result: PlateCalculator.Result {
+        let plates = WeightUnit.plateStock(for: preferences.weightUnit)
+        return PlateCalculator.load(target: target, bar: bar, plates: plates)
+    }
 
     var body: some View {
         Text(description)
@@ -167,17 +211,21 @@ private struct PlateLine: View {
         return false
     }
 
+    private func perSideText(_ load: PlateLoad) -> String {
+        load.perSide.map { preferences.formatWeight(kg: $0) }.joined(separator: " + ")
+    }
+
     private var description: String {
-        let barText = "Bar \(WorkoutSession.format(bar.weightKg))"
+        let barText = "Bar \(preferences.formatWeight(kg: bar.weightKg))"
         switch result {
         case .tooLight:
             return "\(barText) · below the bar"
         case .exact(let load):
-            let perSide = load.perSideDescription
+            let perSide = perSideText(load)
             return perSide.isEmpty ? "\(barText) · bar only" : "\(barText) · \(perSide) per side"
         case .nearest(let below, let above):
-            let belowText = below.map { WorkoutSession.format($0.total) } ?? "–"
-            let aboveText = above.map { WorkoutSession.format($0.total) } ?? "–"
+            let belowText = below.map { preferences.formatWeight(kg: $0.total) } ?? "–"
+            let aboveText = above.map { preferences.formatWeight(kg: $0.total) } ?? "–"
             return "\(barText) · nearest \(belowText) / \(aboveText)"
         }
     }
@@ -188,7 +236,8 @@ private struct PlateLine: View {
     Color.clear
         .sheet(isPresented: .constant(true)) {
             WeightKeypadSheet(
-                title: "Weight", value: $value, step: 2.5, bar: .olympic, last: "80", onDone: {}
+                title: "Weight", value: $value, step: 2.5, bar: .olympic, last: "80", unit: .kg, onDone: {}
             )
         }
+        .environment(Preferences())
 }

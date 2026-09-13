@@ -14,6 +14,10 @@ struct ExerciseCard: View {
     var onToggleDone: (SetEntry) -> Void
     var onMore: () -> Void
     var onStartTimed: (UUID) -> Void
+    /// Note button in the on-deck header, and the set-row swipe actions.
+    var onNote: () -> Void = {}
+    var onDeleteSet: (UUID) -> Void = { _ in }
+    var onChangeSetKind: (UUID, SetKind) -> Void = { _, _ in }
 
     var body: some View {
         if entry.isComplete {
@@ -22,7 +26,8 @@ struct ExerciseCard: View {
             OnDeckExerciseCard(
                 entry: entry, effortScale: effortScale,
                 onTapWeight: onTapWeight, onTapReps: onTapReps, onTapEffort: onTapEffort,
-                onToggleDone: onToggleDone, onMore: onMore
+                onToggleDone: onToggleDone, onMore: onMore, onNote: onNote,
+                onDeleteSet: onDeleteSet, onChangeSetKind: onChangeSetKind
             )
         } else {
             CollapsedExerciseRow(entry: entry, onStartTimed: onStartTimed)
@@ -39,6 +44,11 @@ private struct OnDeckExerciseCard: View {
     var onTapEffort: (UUID) -> Void
     var onToggleDone: (SetEntry) -> Void
     var onMore: () -> Void
+    var onNote: () -> Void
+    var onDeleteSet: (UUID) -> Void
+    var onChangeSetKind: (UUID, SetKind) -> Void
+
+    @Environment(Preferences.self) private var preferences
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -73,6 +83,7 @@ private struct OnDeckExerciseCard: View {
                     .foregroundStyle(DGColor.ink3)
             }
             Spacer(minLength: 0)
+            DGIconButton(symbol: "text.bubble", size: 36, tint: DGColor.ink2, action: onNote)
             DGIconButton(symbol: "ellipsis", action: onMore)
         }
     }
@@ -80,8 +91,9 @@ private struct OnDeckExerciseCard: View {
     private var footnote: String {
         let step = entry.doneCount + 1 <= entry.sets.count ? entry.doneCount + 1 : entry.sets.count
         let rest = WorkoutSession.clock(entry.exercise.restSeconds)
-        let increment = WorkoutSession.format(entry.exercise.incrementKg)
-        return "Set \(step) of \(entry.sets.count) · rest \(rest) · increment \(increment) kg"
+        let incrementValue = preferences.formatWeight(kg: entry.exercise.incrementKg)
+        let increment = "\(incrementValue) \(preferences.unitSymbol)"
+        return "Set \(step) of \(entry.sets.count) · rest \(rest) · increment \(increment)"
     }
 
     private var lastSessionsStrip: some View {
@@ -102,7 +114,7 @@ private struct OnDeckExerciseCard: View {
         HStack(spacing: DGSpace.s3) {
             Text("Set").frame(width: 28, alignment: .leading)
             Text("Prev").frame(minWidth: 44, alignment: .leading)
-            Text("Kg").frame(minWidth: 44, alignment: .leading)
+            Text(preferences.unitSymbol.uppercased()).frame(minWidth: 44, alignment: .leading)
             Text("Reps").frame(minWidth: 30, alignment: .leading)
             Text(effortScale == .rpe ? "Rpe" : "Rir").frame(width: 28, alignment: .leading)
         }
@@ -118,7 +130,9 @@ private struct OnDeckExerciseCard: View {
                     isCurrent: set.id == firstOpenID,
                     effortScale: effortScale, isPerSide: entry.exercise.isPerSide,
                     onTapWeight: { onTapWeight(set.id) }, onTapReps: { onTapReps(set.id) },
-                    onTapEffort: { onTapEffort(set.id) }, onToggleDone: { onToggleDone(set) }
+                    onTapEffort: { onTapEffort(set.id) }, onToggleDone: { onToggleDone(set) },
+                    onDelete: { onDeleteSet(set.id) },
+                    onChangeKind: { kind in onChangeSetKind(set.id, kind) }
                 )
             }
         }
@@ -133,6 +147,8 @@ private struct OnDeckExerciseCard: View {
 private struct CollapsedExerciseRow: View {
     var entry: WorkoutExerciseEntry
     var onStartTimed: (UUID) -> Void
+
+    @Environment(Preferences.self) private var preferences
 
     private var firstOpenSetID: UUID? { entry.sets.first { !$0.isDone }?.id ?? entry.sets.first?.id }
 
@@ -177,8 +193,9 @@ private struct CollapsedExerciseRow: View {
             let target = first.targetSeconds ?? 0
             return "\(entry.sets.count) holds · target \(WorkoutSession.clock(target))"
         }
-        let weight = WorkoutSession.format(first.weightKg)
-        let suffix = entry.exercise.equipment == "Dumbbell" ? "kg per side" : "kg"
+        let weight = preferences.formatWeight(kg: first.weightKg)
+        let suffix = entry.exercise.equipment == "Dumbbell"
+            ? "\(preferences.unitSymbol) per side" : preferences.unitSymbol
         return "\(entry.sets.count) × \(first.reps) · \(weight) \(suffix)"
     }
 }
@@ -186,6 +203,8 @@ private struct CollapsedExerciseRow: View {
 /// One-liner for a finished exercise.
 private struct CompletedExerciseRow: View {
     var entry: WorkoutExerciseEntry
+
+    @Environment(Preferences.self) private var preferences
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -201,8 +220,8 @@ private struct CompletedExerciseRow: View {
     private var summary: String {
         let name = entry.exercise.name.uppercased()
         guard let first = entry.sets.first else { return name }
-        let weight = WorkoutSession.format(first.weightKg)
-        return "\(name) · \(entry.sets.count) × \(first.reps) · \(weight) kg"
+        let weight = preferences.formatWeight(kg: first.weightKg)
+        return "\(name) · \(entry.sets.count) × \(first.reps) · \(weight) \(preferences.unitSymbol)"
     }
 }
 
@@ -258,4 +277,5 @@ private struct Sparkline: View {
         .padding()
     }
     .background(AmbientWash())
+    .environment(Preferences())
 }

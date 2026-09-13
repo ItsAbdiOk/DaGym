@@ -27,6 +27,7 @@ struct AppRootContainer: View {
     }
 
     private let container: ModelContainer?
+    private let preferences = Preferences()
     @State private var phase = LaunchPhase.loading
 
     init() {
@@ -63,6 +64,7 @@ struct AppRootContainer: View {
         case .ready(let store):
             RootView()
                 .environment(store)
+                .environment(preferences)
                 .modelContainer(container)
         }
     }
@@ -99,6 +101,7 @@ struct AppRootContainer: View {
 struct DebugRootView: View {
     let route: DebugRoute
 
+    private let preferences = Preferences()
     @State private var container: ModelContainer?
     @State private var store: WorkoutStore?
 
@@ -107,6 +110,7 @@ struct DebugRootView: View {
             if let container, let store {
                 DebugScreenView(route: route)
                     .environment(store)
+                    .environment(preferences)
                     .modelContainer(container)
             } else {
                 AmbientWash()

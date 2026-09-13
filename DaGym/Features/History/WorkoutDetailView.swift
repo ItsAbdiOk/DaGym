@@ -8,6 +8,7 @@ struct WorkoutDetailView: View {
     var workoutID: UUID
 
     @Environment(WorkoutStore.self) private var store
+    @Environment(Preferences.self) private var preferences
     @Environment(\.dismiss) private var dismiss
     @State private var detail: WorkoutDetail?
 
@@ -67,7 +68,7 @@ struct WorkoutDetailView: View {
     private func statRow(_ detail: WorkoutDetail) -> some View {
         HStack(spacing: DGSpace.s3) {
             StatTile(value: "\(detail.durationMinutes)", label: "Minutes").dgCard(radius: 14)
-            StatTile(value: WorkoutSession.format(detail.volumeKg), label: "Volume").dgCard(radius: 14)
+            StatTile(value: preferences.formatWeight(kg: detail.volumeKg), label: "Volume").dgCard(radius: 14)
             StatTile(value: "\(detail.setsDone)", label: "Sets").dgCard(radius: 14)
             StatTile(value: "\(detail.prCount)", label: "PRs", tint: DGColor.prGoldText).dgCard(radius: 14)
         }
@@ -125,10 +126,12 @@ private struct ReadOnlySetRow: View {
     var set: SetEntry
     var index: Int
 
+    @Environment(Preferences.self) private var preferences
+
     var body: some View {
         HStack(spacing: DGSpace.s3) {
             SetKindBadge(kind: set.kind, index: index)
-            Text("\(WorkoutSession.format(set.weightKg)) × \(set.reps)")
+            Text("\(preferences.formatWeight(kg: set.weightKg)) × \(set.reps)")
                 .font(DGFont.body)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
@@ -151,5 +154,6 @@ private struct ReadOnlySetRow: View {
             WorkoutDetailView(workoutID: UUID())
         }
             .environment(store)
+            .environment(Preferences())
     }
 }

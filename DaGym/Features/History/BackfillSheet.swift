@@ -1,16 +1,38 @@
 import SwiftUI
 
-/// "Log a past workout" — pick when it happened, then choose freestyle or
-/// a routine. Detent-sized glass sheet, ~420 pt.
+/// "Log a past workout" — pick when it happened, then choose freestyle or a
+/// routine. Detent-sized glass sheet, ~420 pt. When `routines` is non-empty,
+/// "Use a Routine" opens a menu to pick which one; see the convenience
+/// initializer below for callers that haven't adopted the picker yet.
 struct BackfillSheet: View {
+    var routines: [RoutineInfo]
     var onFreestyle: (Date, Int) -> Void
-    var onRoutine: (Date, Int) -> Void
+    var onRoutine: (Date, Int, UUID) -> Void
 
     @State private var date = Date()
     @State private var startTime = Date()
     @State private var durationMinutes = 55
 
     private static let durationOptions = [30, 40, 45, 50, 55, 60, 75, 90]
+
+    init(
+        routines: [RoutineInfo] = [], onFreestyle: @escaping (Date, Int) -> Void,
+        onRoutine: @escaping (Date, Int, UUID) -> Void
+    ) {
+        self.routines = routines
+        self.onFreestyle = onFreestyle
+        self.onRoutine = onRoutine
+    }
+
+    /// Source-compatible with callers built against the original two-step
+    /// backfill flow (no routine picker): the placeholder id third callers
+    /// ignore, since they resolve which routine to use themselves.
+    init(onFreestyle: @escaping (Date, Int) -> Void, onRoutine: @escaping (Date, Int) -> Void) {
+        self.init(
+            routines: [], onFreestyle: onFreestyle,
+            onRoutine: { date, minutes, _ in onRoutine(date, minutes) }
+        )
+    }
 
     var body: some View {
         VStack(spacing: DGSpace.s5) {
@@ -43,9 +65,7 @@ struct BackfillSheet: View {
                         .dgGlass(.regular, radius: DGRadius.lg)
                 }
                 .buttonStyle(DGPressStyle())
-                DGPrimaryButton(title: "Use a Routine") {
-                    onRoutine(combined, durationMinutes)
-                }
+                routineButton
             }
         }
         .padding(.horizontal, DGSpace.s4)
@@ -55,6 +75,33 @@ struct BackfillSheet: View {
         .clipShape(RoundedRectangle(cornerRadius: DGRadius.sheet, style: .continuous))
         .presentationDetents([.height(420)])
         .presentationDragIndicator(.hidden)
+    }
+
+    /// A plain button (old direct-call behaviour) when there's nothing to pick from; a menu of
+    /// `routines` otherwise.
+    @ViewBuilder
+    private var routineButton: some View {
+        if routines.isEmpty {
+            DGPrimaryButton(title: "Use a Routine") {
+                onRoutine(combined, durationMinutes, UUID())
+            }
+        } else {
+            Menu {
+                ForEach(routines) { routine in
+                    Button(routine.name) { onRoutine(combined, durationMinutes, routine.id) }
+                }
+            } label: {
+                Text("Use a Routine")
+                    .font(DGFont.condensedLabel(15))
+                    .tracking(1.5)
+                    .textCase(.uppercase)
+                    .foregroundStyle(DGColor.inkOnCoral)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(DGColor.coral, in: Capsule())
+                    .shadow(color: DGColor.coral.opacity(0.35), radius: 12, y: 6)
+            }
+        }
     }
 
     private var fieldsCard: some View {
