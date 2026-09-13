@@ -34,8 +34,29 @@ final class WorkoutStore {
     /// touching `onWorkoutFinished`, which `HealthSyncService` already owns.
     var workoutFinishedObservers: [(WorkoutModel) -> Void] = []
 
-    init(context: ModelContext) {
+    /// Progress photos live in their own local-only container (see `ModelContainer.dagymPhotos`).
+    /// Defaults to an in-memory photo store so tests and previews need no extra setup.
+    let photoContext: ModelContext
+
+    init(context: ModelContext, photoContext: ModelContext? = nil) {
         self.context = context
+        if let photoContext {
+            self.photoContext = photoContext
+        } else {
+            // Tests/previews: keep photos in memory; the app passes a real photo context.
+            let fallback = (try? ModelContainer.dagymPhotos(inMemory: true))
+                .map(ModelContext.init) ?? context
+            self.photoContext = fallback
+        }
+    }
+
+    func savePhotos() {
+        guard photoContext.hasChanges else { return }
+        do {
+            try photoContext.save()
+        } catch {
+            storeLogger.error("Photo store save failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     func save() {

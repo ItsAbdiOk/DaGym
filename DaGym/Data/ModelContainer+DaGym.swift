@@ -45,35 +45,40 @@ extension ModelContainer {
     /// entitlement on an ad-hoc build), the caller should retry with `cloudKitEnabled: false` —
     /// see `AppRootContainer.resolveContainer()`.
     static func dagym(inMemory: Bool = false, cloudKitEnabled: Bool = true) throws -> ModelContainer {
-        let schema = Schema(DaGymSchema.models)
-        let mainSchema = Schema(DaGymSchema.mainModels)
-        let photoSchema = Schema(DaGymSchema.photoModels)
+        // ONE configuration per container. A single container with two configurations (main +
+        // photos) trapped inside SwiftData's entity→store routing on a real device at the first
+        // fetch after seeding; photos therefore live in their own container (`dagymPhotos`).
+        let schema = Schema(DaGymSchema.mainModels)
         guard !inMemory else {
             // `.none` is explicit: the default (`.automatic`) starts CloudKit mirroring whenever
             // the entitlement is present, which is what tests and previews must never do.
-            // Distinct names matter: two unnamed in-memory stores collapse into one and inserts
-            // then fail with "store does not contain the object's entity".
-            let mainConfiguration = ModelConfiguration(
-                "DaGymMain", schema: mainSchema, isStoredInMemoryOnly: true, cloudKitDatabase: .none
+            let configuration = ModelConfiguration(
+                "DaGymMain", schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none
             )
-            let photoConfiguration = ModelConfiguration(
-                "DaGymPhotos", schema: photoSchema, isStoredInMemoryOnly: true, cloudKitDatabase: .none
-            )
-            return try ModelContainer(for: schema, configurations: [mainConfiguration, photoConfiguration])
+            return try ModelContainer(for: schema, configurations: [configuration])
         }
         StoreMigration.moveLegacyStoreIfNeeded(schema: schema)
         let database: ModelConfiguration.CloudKitDatabase = cloudKitEnabled
             ? .private("iCloud.dev.abdirahmanmohamed.dagym") : .none
-        let mainConfiguration = ModelConfiguration(
-            schema: mainSchema, url: StoreMigration.storeURL(schema: schema), cloudKitDatabase: database
+        let configuration = ModelConfiguration(
+            "DaGymMain", schema: schema, url: StoreMigration.storeURL(schema: schema),
+            cloudKitDatabase: database
         )
-        // Progress photos (plan.md §6.4 "don't sync photos"): a separate, always-local store —
-        // `cloudKitDatabase: .none` is a per-configuration setting, so this is the only way to
-        // keep photos off iCloud while the rest of the app still syncs.
-        let photoConfiguration = ModelConfiguration(
-            schema: photoSchema, url: StoreMigration.photoStoreURL(), cloudKitDatabase: .none
-        )
-        return try ModelContainer(for: schema, configurations: [mainConfiguration, photoConfiguration])
+        return try ModelContainer(for: schema, configurations: [configuration])
+    }
+
+    /// Progress photos (plan.md §6.4 "don't sync photos"): a separate, always-local container
+    /// so photos never touch iCloud no matter what the main store does.
+    static func dagymPhotos(inMemory: Bool = false) throws -> ModelContainer {
+        let schema = Schema(DaGymSchema.photoModels)
+        let configuration = inMemory
+            ? ModelConfiguration(
+                "DaGymPhotos", schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none
+            )
+            : ModelConfiguration(
+                "DaGymPhotos", schema: schema, url: StoreMigration.photoStoreURL(), cloudKitDatabase: .none
+            )
+        return try ModelContainer(for: schema, configurations: [configuration])
     }
 }
 
@@ -153,8 +158,12 @@ enum StoreMigration {
         ModelConfiguration(schema: schema)
     }
 
+    /// Tests point the on-disk stores at a temporary directory so the real App Group is untouched.
+    nonisolated(unsafe) static var containerDirectoryOverride: URL?
+
     private static func containerDirectory() -> URL {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID)
+        if let containerDirectoryOverride { return containerDirectoryOverride }
+        return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID)
             ?? (FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
                 ?? FileManager.default.temporaryDirectory)
     }

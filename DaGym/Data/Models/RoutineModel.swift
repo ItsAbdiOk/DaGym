@@ -18,6 +18,10 @@ final class RoutineModel {
     var updatedAt: Date = Date()
     var sortOrder: Int = 0
     var isArchived: Bool = false
+    /// The `PlanRoutine.id` this routine was created from, when it arrived via a shared
+    /// `.gymplan` file (plan.md §6.8). Nil for routines built in-app. Lets `PlanShareService`
+    /// recognise a re-import of the same file and skip creating a duplicate.
+    var importedFromID: UUID?
 
     @Relationship(deleteRule: .cascade, inverse: \RoutineExerciseModel.routine)
     var exercises: [RoutineExerciseModel]?
@@ -26,7 +30,8 @@ final class RoutineModel {
         id: UUID = UUID(), name: String = "", notes: String = "",
         progressionRule: String = "doubleProgression", repRangeLow: Int = 6, repRangeHigh: Int = 8,
         progressionRuleJSON: String = "",
-        createdAt: Date = Date(), updatedAt: Date = Date(), sortOrder: Int = 0, isArchived: Bool = false
+        createdAt: Date = Date(), updatedAt: Date = Date(), sortOrder: Int = 0, isArchived: Bool = false,
+        importedFromID: UUID? = nil
     ) {
         self.id = id
         self.name = name
@@ -39,5 +44,6 @@ final class RoutineModel {
         self.updatedAt = updatedAt
         self.sortOrder = sortOrder
         self.isArchived = isArchived
+        self.importedFromID = importedFromID
     }
 }

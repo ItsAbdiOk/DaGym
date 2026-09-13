@@ -28,8 +28,8 @@ extension WorkoutStore {
             date: date, pose: pose.rawValue, imageData: processed.imageData,
             thumbnailData: processed.thumbnailData, bodyweightKg: bodyweightKg
         )
-        context.insert(model)
-        save()
+        photoContext.insert(model)
+        savePhotos()
         return model
     }
 
@@ -40,7 +40,7 @@ extension WorkoutStore {
         let descriptor = FetchDescriptor<ProgressPhotoModel>(
             predicate: predicate, sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
-        return ((try? context.fetch(descriptor)) ?? []).compactMap(Self.photoInfo)
+        return ((try? photoContext.fetch(descriptor)) ?? []).compactMap(Self.photoInfo)
     }
 
     /// The most recent photo for a pose — used both by `BodyView`'s summary card and by
@@ -52,15 +52,15 @@ extension WorkoutStore {
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
         descriptor.fetchLimit = 1
-        return ((try? context.fetch(descriptor))?.first).flatMap(Self.photoInfo)
+        return ((try? photoContext.fetch(descriptor))?.first).flatMap(Self.photoInfo)
     }
 
     func deletePhoto(id: UUID) {
         var descriptor = FetchDescriptor<ProgressPhotoModel>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
-        guard let model = (try? context.fetch(descriptor))?.first else { return }
-        context.delete(model)
-        save()
+        guard let model = (try? photoContext.fetch(descriptor))?.first else { return }
+        photoContext.delete(model)
+        savePhotos()
     }
 
     private static func photoInfo(_ model: ProgressPhotoModel) -> ProgressPhotoInfo? {

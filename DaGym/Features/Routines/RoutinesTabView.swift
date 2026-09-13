@@ -86,12 +86,18 @@ struct RoutinesTabView: View {
             )
         } else {
             ForEach(routines) { routine in
-                Button { path.append(Destination.edit(routine.id)) } label: {
-                    RoutineCard(routine: routine, onStart: { onStart(routine) })
-                }
-                .buttonStyle(.plain)
-                .contextMenu {
-                    Button("Delete", role: .destructive) { delete(routine) }
+                ZStack(alignment: .topTrailing) {
+                    Button { path.append(Destination.edit(routine.id)) } label: {
+                        RoutineCard(routine: routine, onStart: { onStart(routine) })
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("Delete", role: .destructive) { delete(routine) }
+                    }
+                    ShareRoutineButton(title: routine.name) {
+                        PlanShareService.exportRoutine(id: routine.id, context: store.context)
+                    }
+                    .padding(DGSpace.s3)
                 }
             }
         }

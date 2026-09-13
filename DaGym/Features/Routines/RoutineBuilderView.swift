@@ -71,6 +71,11 @@ struct RoutineBuilderView: View {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
+            if let routineID {
+                ShareRoutineButton(title: name) {
+                    PlanShareService.exportRoutine(id: routineID, context: store.context)
+                }
+            }
             Button("Save", action: save)
                 .buttonStyle(.plain)
                 .dgLabel(DGColor.coralText)

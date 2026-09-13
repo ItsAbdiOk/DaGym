@@ -75,6 +75,20 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: dev.abdirahmanmohamed.dagym
             CFBundleURLSchemes: [dagym]
+        # Shareable routine/program files (plan.md §6.8): a `.gymplan` is JSON under the hood, so
+        # it conforms to public.json — opening one from Messages/AirDrop/Files launches DaGym via
+        # `RootView.onOpenURL`, which hands the file URL to `PlanImportPreviewSheet`.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: dev.abdirahmanmohamed.dagym.plan
+            UTTypeConformsTo: [public.json]
+            UTTypeDescription: DaGym Plan
+            UTTypeTagSpecification:
+              public.filename-extension: [gymplan]
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: DaGym Plan
+            LSItemContentTypes: [dev.abdirahmanmohamed.dagym.plan]
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Owner
         NSCalendarsWriteOnlyAccessUsageDescription: >-
           DaGym adds your scheduled workouts to a "DaGym" calendar so they show up alongside
           the rest of your day.

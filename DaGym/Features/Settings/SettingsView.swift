@@ -28,6 +28,7 @@ struct SettingsView: View {
                     calendarCard
                     ICloudSettingsSection()
                     DataSettingsSection()
+                    ImportSettingsSection()
                     EquipmentSettingsSection()
                     healthCard
                     aboutCard

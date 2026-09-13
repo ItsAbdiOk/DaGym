@@ -116,7 +116,8 @@ struct AppRootContainer: View {
 
     private func seed(context: ModelContext) async {
         ExerciseSeeder.seedIfNeeded(context: context)
-        let store = WorkoutStore(context: context)
+        let photoContainer = try? ModelContainer.dagymPhotos(inMemory: LaunchFlags.isTesting)
+        let store = WorkoutStore(context: context, photoContext: photoContainer.map(ModelContext.init))
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
         EquipmentSeeder.seedIfNeeded(store: store)
         let healthSync = HealthSyncService(workoutStore: store, preferences: preferences)

@@ -1,3 +1,4 @@
+import GymCore
 import SwiftData
 import SwiftUI
 
@@ -19,6 +20,9 @@ struct RootView: View {
     @State private var summaryItem: SummaryPresentation?
     @State private var showingBackfill = false
     @State private var showRecovery = false
+    @State private var pendingPlanImport: PlanDocument?
+    @State private var pendingPlanReport: PlanImportReport?
+    @State private var planImportError: String?
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -41,7 +45,10 @@ struct RootView: View {
             }
             refreshRoutine()
         }
-        .onAppear { startPendingRestTimerIfNeeded() }
+        .onAppear {
+            startPendingRestTimerIfNeeded()
+            startPendingWorkoutIfNeeded()
+        }
         .onChange(of: tab) { _, _ in refreshRoutine() }
         .onOpenURL(perform: handleOpenURL)
         .sheet(isPresented: $showingBackfill) {
@@ -52,6 +59,16 @@ struct RootView: View {
         .sheet(isPresented: $showRecovery) {
             RecoveryMapView()
         }
+        .sheet(item: $pendingPlanImport) { document in
+            PlanImportPreviewSheet(
+                document: document, report: pendingPlanReport ?? PlanImportReport(),
+                onConfirm: { confirmPlanImport(document) }, onCancel: { pendingPlanImport = nil }
+            )
+        }
+        .alert(
+            "Couldn't Import That Plan", isPresented: planImportErrorBinding,
+            actions: {}, message: { Text(planImportError ?? "") }
+        )
         .fullScreenCover(item: $session) { activeSession in
             ActiveWorkoutView(session: activeSession, onFinish: finish)
         }
@@ -150,9 +167,24 @@ struct RootView: View {
         activeSession.startRest(seconds: preferences.defaultRestSeconds, after: exerciseIndex, set: setIndex)
     }
 
+    /// "Start today's workout" Siri Shortcut hookup (`StartWorkoutIntent`/
+    /// `PendingWorkoutIntentAction`): if the intent opened the app and nothing is already in
+    /// progress, start today's scheduled routine — same as tapping "Start" on Home. Leaves an
+    /// already-active session alone rather than replacing it.
+    private func startPendingWorkoutIfNeeded() {
+        guard PendingWorkoutIntentAction.consumeStartWorkout(), session == nil else { return }
+        startFromScheduledRoutine()
+    }
+
     /// Handles the `dagym://start?routine=<uuid>` deep link a synced calendar event opens
-    /// (`CalendarSyncService`). No-op for any other host/URL.
+    /// (`CalendarSyncService`), and a `.gymplan` file opened from Messages/AirDrop/Files (plan.md
+    /// §6.8) — the latter loads and previews it via `PlanImportPreviewSheet` rather than acting
+    /// immediately. No-op for any other host/URL.
     private func handleOpenURL(_ url: URL) {
+        if url.isFileURL, url.pathExtension.lowercased() == "gymplan" {
+            Task { await loadPlanImport(url: url) }
+            return
+        }
         if url.host == "today" {
             tab = .today
             return
@@ -172,6 +204,52 @@ struct RootView: View {
         summaryItem = SummaryPresentation(summary: summary, title: title)
         refreshRoutine()
     }
+
+    // MARK: - Plan import (plan.md §6.8)
+
+    private var planImportErrorBinding: Binding<Bool> {
+        Binding(get: { planImportError != nil }, set: { if !$0 { planImportError = nil } })
+    }
+
+    private func loadPlanImport(url: URL) async {
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let data = try Data(contentsOf: url)
+            let document = try await Task.detached(priority: .userInitiated) {
+                try PlanCodec.decode(data)
+            }.value
+            pendingPlanReport = PlanShareService.importPlan(
+                document: document, context: store.context, preview: true
+            )
+            pendingPlanImport = document
+        } catch let error as PlanCodec.CodecError {
+            planImportError = Self.message(for: error)
+        } catch {
+            planImportError = "That file isn't a valid DaGym plan."
+        }
+    }
+
+    private static func message(for error: PlanCodec.CodecError) -> String {
+        switch error {
+        case .unsupportedFormatVersion:
+            return "That plan was made by a newer version of DaGym. Update the app and try again."
+        case .decodingFailed:
+            return "That file isn't a valid DaGym plan."
+        }
+    }
+
+    private func confirmPlanImport(_ document: PlanDocument) {
+        PlanShareService.importPlan(document: document, context: store.context)
+        pendingPlanImport = nil
+        refreshRoutine()
+    }
+}
+
+/// `sheet(item:)` needs `Identifiable`; a document's export timestamp is a fine key since two
+/// files opened back-to-back are always distinguishable by when they were made.
+extension PlanDocument: @retroactive Identifiable {
+    public var id: Date { exportedAt }
 }
 
 /// Wraps a `WorkoutSummary` (not itself `Identifiable`) for `fullScreenCover(item:)`.

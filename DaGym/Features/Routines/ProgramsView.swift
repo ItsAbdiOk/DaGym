@@ -57,10 +57,16 @@ struct ProgramsView: View {
             )
         } else {
             ForEach(programs) { program in
-                ProgramCard(
-                    program: program, onStart: { start(program) }, onStop: { stop(program) },
-                    onComplete: { complete(program) }
-                )
+                ZStack(alignment: .topTrailing) {
+                    ProgramCard(
+                        program: program, onStart: { start(program) }, onStop: { stop(program) },
+                        onComplete: { complete(program) }
+                    )
+                    ShareRoutineButton(title: program.name) {
+                        PlanShareService.exportProgram(id: program.id, context: store.context)
+                    }
+                    .padding(DGSpace.s3)
+                }
             }
         }
     }
