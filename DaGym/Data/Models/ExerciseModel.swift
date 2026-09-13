@@ -26,6 +26,15 @@ final class ExerciseModel {
     var instructions: String = ""
     var notes: String = ""
     var createdAt: Date = Date()
+    /// Provenance of `instructions`/`primaryMuscles`/etc: "" (free-exercise-db,
+    /// the original seed), "wger", or "" for user-created custom exercises.
+    var dataSource: String = ""
+    /// wger.de (or other source) permalink for this exercise, when known.
+    var sourceURL: String = ""
+    /// Licence covering `instructions` when sourced externally, e.g. "CC-BY-SA 4.0".
+    var licence: String = ""
+    /// Attribution names for `instructions`, when the source requires them.
+    var authors: [String] = []
 
     /// Inverse declared on `RoutineExerciseModel.exercise`.
     var routineExercises: [RoutineExerciseModel]?
@@ -38,7 +47,8 @@ final class ExerciseModel {
         mechanic: String? = nil, loggingStyle: String = "weightReps", isPerSide: Bool = false,
         isCustom: Bool = false, isFavorite: Bool = false, barType: String? = nil,
         incrementKg: Double = 2.5, restSeconds: Int = 150, instructions: String = "",
-        notes: String = "", createdAt: Date = Date()
+        notes: String = "", createdAt: Date = Date(), dataSource: String = "",
+        sourceURL: String = "", licence: String = "", authors: [String] = []
     ) {
         self.id = id
         self.seedID = seedID
@@ -57,6 +67,10 @@ final class ExerciseModel {
         self.instructions = instructions
         self.notes = notes
         self.createdAt = createdAt
+        self.dataSource = dataSource
+        self.sourceURL = sourceURL
+        self.licence = licence
+        self.authors = authors
     }
 
     var primary: [Muscle] { primaryMuscles.compactMap(Muscle.init(rawValue:)) }

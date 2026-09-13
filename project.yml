@@ -90,6 +90,18 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.dagym.tests
         GENERATE_INFOPLIST_FILE: YES
 
+  DaGymUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: DaGymUITests
+    dependencies:
+      - target: DaGym
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.dagym.uitests
+        GENERATE_INFOPLIST_FILE: YES
+
   # Standalone Apple Watch app. Not yet embedded in the iOS app: that wiring
   # lands with Phase 5 (watch), so the iOS build never waits on a watchOS
   # simulator runtime until the watch app has something to show.
@@ -130,6 +142,7 @@ schemes:
       gatherCoverageData: true
       targets:
         - DaGymTests
+        - DaGymUITests
         - package: GymCore/GymCoreTests
     archive:
       config: Release

@@ -67,12 +67,12 @@ EQUIPMENT_MAP: dict[int, str] = {
 # mismatches the normaliser can't bridge (found by running this script once
 # with ALIASES = {} and inspecting the unmatched list).
 ALIASES: dict[str, str] = {
-    "Bench Press": "Barbell Bench Press",
-    "Dumbbell Bench Press": "Bench Press Dumbbell",
+    "Bench Press": "Barbell Bench Press - Medium Grip",
+    "Dumbbell Bench Press": "Dumbbell Bench Press",
     "Squats": "Barbell Squat",
     "Barbell Squats": "Barbell Squat",
     "Deadlift": "Barbell Deadlift",
-    "Romanian Deadlift": "Romanian Deadlift Barbell",
+    "Romanian Deadlift": "Romanian Deadlift",
     "Pullups": "Pullups",
     "Pull-ups": "Pullups",
     "Chin-ups": "Chin-Up",

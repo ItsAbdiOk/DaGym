@@ -26,7 +26,9 @@ extension ExerciseInfo {
             id: model.id, name: model.name, primary: model.primary, secondary: model.secondary,
             equipment: model.equipment, incrementKg: model.incrementKg, restSeconds: model.restSeconds,
             bar: model.bar, isFavorite: model.isFavorite, isCustom: model.isCustom,
-            isPerSide: model.isPerSide, instructions: model.instructions, loggingStyle: model.style
+            isPerSide: model.isPerSide, instructions: model.instructions, loggingStyle: model.style,
+            dataSource: model.dataSource, sourceURL: model.sourceURL, licence: model.licence,
+            authors: model.authors
         )
     }
 }

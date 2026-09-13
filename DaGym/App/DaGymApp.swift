@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UIKit
 import os
 
 private let appLogger = Logger(subsystem: "dev.abdirahmanmohamed.dagym", category: "app")
@@ -29,6 +30,9 @@ struct AppRootContainer: View {
     @State private var phase = LaunchPhase.loading
 
     init() {
+        if LaunchFlags.isUITesting {
+            UIView.setAnimationsEnabled(false)
+        }
         container = Self.resolveContainer()
     }
 

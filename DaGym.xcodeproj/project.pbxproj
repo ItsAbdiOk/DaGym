@@ -40,6 +40,7 @@
 		6D9A72191F742E8C82CBA3EA /* Mapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4A872EB33B1384FE0ED4D81 /* Mapping.swift */; };
 		70F5C53B2758041C1298E58D /* DaGymApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8717531770A29F8325F2EB0B /* DaGymApp.swift */; };
 		7481ED5EBAB5D0D3B1DA9001 /* exercises.json in Resources */ = {isa = PBXBuildFile; fileRef = D5188FDBBC38087B09BC7B21 /* exercises.json */; };
+		754A7591DAF70A7E2002D314 /* AcknowledgementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ABFE5450FC0D7F29B4C5908 /* AcknowledgementsView.swift */; };
 		7707F6B9DA62321D03D49A0B /* BodyMeasurementModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82C3027AF2B0D036A6C8B457 /* BodyMeasurementModel.swift */; };
 		78D8B980658C9093FFFFB3DE /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAF4D75924B68BE913338D55 /* RootView.swift */; };
 		7A318F77DC9D9DC0F3371C75 /* ActiveWorkoutView+Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65A79B5E7105CA97F8EC7EB2 /* ActiveWorkoutView+Actions.swift */; };
@@ -86,6 +87,7 @@
 		EE318D2CDA56A53D5E29ED06 /* DaGymTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA759CCC6F79FAA7D158DD99 /* DaGymTests.swift */; };
 		F21D4206F1BD3E031E4DF6D5 /* Barlow-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9C8CC141FAAE481D83886ADA /* Barlow-Bold.ttf */; };
 		F34EFBEBAB8ACEA064E01B29 /* NewExerciseSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4439CCD7E47922B8A91E1116 /* NewExerciseSheet.swift */; };
+		F41E7E4CD93A3C0B2ABF236C /* Acknowledgements.md in Resources */ = {isa = PBXBuildFile; fileRef = 994D8B02FF5882E0661B736B /* Acknowledgements.md */; };
 		F5974C3C87257D796714F72C /* SetRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B5F7A34AEA43838E5DDF10 /* SetRow.swift */; };
 		F96472F510F9B9A30C147F7E /* ModelContainer+DaGym.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C33A8B30AF9D88CF1A5B153 /* ModelContainer+DaGym.swift */; };
 /* End PBXBuildFile section */
@@ -137,6 +139,7 @@
 		6B25EDDEF246F3706E22AE7C /* ExercisePickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExercisePickerSheet.swift; sourceTree = "<group>"; };
 		6E798BFEA7AF9CEA9AD1F920 /* BarlowCondensed-ExtraBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "BarlowCondensed-ExtraBold.ttf"; sourceTree = "<group>"; };
 		774832CFA5DC9762C5262881 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
+		7ABFE5450FC0D7F29B4C5908 /* AcknowledgementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AcknowledgementsView.swift; sourceTree = "<group>"; };
 		822D9FBF9D20359A5957F93C /* WorkoutSummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutSummaryView.swift; sourceTree = "<group>"; };
 		82BCDE3C6CF02D9AA5857791 /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
 		82C3027AF2B0D036A6C8B457 /* BodyMeasurementModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyMeasurementModel.swift; sourceTree = "<group>"; };
@@ -147,6 +150,7 @@
 		8F5D706FFFD7DFE212140836 /* RoutineExerciseModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutineExerciseModel.swift; sourceTree = "<group>"; };
 		92AF0F1F5C910BD0D8A49B9F /* WorkoutSession+TimedHold.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkoutSession+TimedHold.swift"; sourceTree = "<group>"; };
 		98BF80AF0A9C7BEDF8FC2C99 /* DaGymWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DaGymWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		994D8B02FF5882E0661B736B /* Acknowledgements.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = Acknowledgements.md; sourceTree = "<group>"; };
 		9B4DFBDECD42C5515967609D /* SetLogModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetLogModel.swift; sourceTree = "<group>"; };
 		9C8CC141FAAE481D83886ADA /* Barlow-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Barlow-Bold.ttf"; sourceTree = "<group>"; };
 		9CC8B372F488A463B6688F03 /* WorkoutStore+Workouts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkoutStore+Workouts.swift"; sourceTree = "<group>"; };
@@ -213,6 +217,7 @@
 			children = (
 				E3340F755B84F1E97BB141A7 /* Fonts */,
 				0FF5D353CF851BA65EBA7BBE /* Seed */,
+				994D8B02FF5882E0661B736B /* Acknowledgements.md */,
 				67DC1845FA4F32B5823BD72A /* Assets.xcassets */,
 			);
 			path = Resources;
@@ -253,6 +258,7 @@
 				191C17AE1439677FA23525C2 /* Home */,
 				0D7985020BC1A8D568A5C75D /* Library */,
 				2EEC4C1BBDA02D82CB7680CD /* Routines */,
+				EB47A6782E1A7F3BDEFFFF50 /* Settings */,
 				BA5D0B8518ADC5B2B11B5C07 /* Workout */,
 			);
 			path = Features;
@@ -464,6 +470,14 @@
 			path = Components;
 			sourceTree = "<group>";
 		};
+		EB47A6782E1A7F3BDEFFFF50 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				7ABFE5450FC0D7F29B4C5908 /* AcknowledgementsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
 		F17F5097FE0164EE293D0B9F /* App */ = {
 			isa = PBXGroup;
 			children = (
@@ -588,6 +602,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F41E7E4CD93A3C0B2ABF236C /* Acknowledgements.md in Resources */,
 				8E1ED2BE6E4A6E0B7F1525E1 /* Assets.xcassets in Resources */,
 				F21D4206F1BD3E031E4DF6D5 /* Barlow-Bold.ttf in Resources */,
 				DAB404015B25B006B20F0619 /* Barlow-Medium.ttf in Resources */,
@@ -641,6 +656,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				754A7591DAF70A7E2002D314 /* AcknowledgementsView.swift in Sources */,
 				7A318F77DC9D9DC0F3371C75 /* ActiveWorkoutView+Actions.swift in Sources */,
 				9037425EF721D80CFD06877F /* ActiveWorkoutView.swift in Sources */,
 				0DBF75078E936A83EEDAC4A5 /* BackfillSheet.swift in Sources */,

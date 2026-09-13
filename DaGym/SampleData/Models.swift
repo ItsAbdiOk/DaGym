@@ -22,6 +22,12 @@ struct ExerciseInfo: Identifiable, Hashable {
     var sessions = 0
     var instructions = ""
     var loggingStyle: LoggingStyle = .weightReps
+    /// Provenance of `instructions`, e.g. "wger".
+    var dataSource = ""
+    var sourceURL = ""
+    /// Licence covering `instructions` when sourced externally, e.g. "CC-BY-SA 4.0".
+    var licence = ""
+    var authors: [String] = []
 
     enum LoggingStyle: String, CaseIterable {
         case weightReps = "Weight × reps"
@@ -37,7 +43,8 @@ struct ExerciseInfo: Identifiable, Hashable {
         equipment: String, incrementKg: Double = 2.5, restSeconds: Int = 150, bar: Bar? = .olympic,
         isFavorite: Bool = false, isCustom: Bool = false, isPerSide: Bool = false, bestE1RM: Double? = nil,
         bestSet: String? = nil, sessions: Int = 0, instructions: String = "",
-        loggingStyle: LoggingStyle = .weightReps
+        loggingStyle: LoggingStyle = .weightReps, dataSource: String = "", sourceURL: String = "",
+        licence: String = "", authors: [String] = []
     ) {
         self.id = id
         self.name = name
@@ -55,6 +62,10 @@ struct ExerciseInfo: Identifiable, Hashable {
         self.sessions = sessions
         self.instructions = instructions
         self.loggingStyle = loggingStyle
+        self.dataSource = dataSource
+        self.sourceURL = sourceURL
+        self.licence = licence
+        self.authors = authors
     }
 
     /// "Chest · front delts · triceps"
