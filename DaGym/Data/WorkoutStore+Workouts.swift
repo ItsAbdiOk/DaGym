@@ -45,7 +45,8 @@ extension WorkoutStore {
         context.insert(model)
         save()
         let session = WorkoutSession(
-            title: model.title, subtitle: routine?.name ?? "Backfilled", startedAt: date, exercises: entries
+            title: model.title, subtitle: routine?.name ?? "Backfilled", startedAt: date, exercises: entries,
+            isBackfilled: true
         )
         session.workoutID = model.id
         return session

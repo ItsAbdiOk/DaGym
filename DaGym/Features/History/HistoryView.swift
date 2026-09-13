@@ -30,7 +30,7 @@ struct HistoryView: View {
                 .font(DGFont.title1)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
-            Text("\(workoutsCount) workouts · \(Self.thousands(volumeKg)) kg lifted")
+            Text("\(Self.pluralized(workoutsCount, "workout")) · \(Self.thousands(volumeKg)) kg lifted")
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
         }
@@ -129,6 +129,11 @@ struct HistoryView: View {
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: kg)) ?? "\(Int(kg))"
     }
+
+    /// "1 workout" / "2 workouts".
+    static func pluralized(_ count: Int, _ noun: String) -> String {
+        "\(count) \(noun)\(count == 1 ? "" : "s")"
+    }
 }
 
 /// One workout row: name, day + duration, and a volume/sets/PR footnote.
@@ -153,7 +158,7 @@ private struct RecordCard: View {
     }
 
     private var footnote: String {
-        let base = "\(Self.thousands(record.volumeKg)) kg · \(record.sets) sets"
+        let base = "\(Self.thousands(record.volumeKg)) kg · \(HistoryView.pluralized(record.sets, "set"))"
         return record.prCount > 0 ? "\(base) · \(record.prCount) PRs" : base
     }
 

@@ -3,7 +3,7 @@ import SwiftData
 import SwiftUI
 
 /// Home / Today — the app's landing screen. Shows the scheduled routine,
-/// weekly goal, streak, recovery snapshot and the coach's latest suggestion.
+/// weekly goal, streak and recovery snapshot, all computed from real workout history.
 struct HomeView: View {
     var routine: RoutineInfo?
     var onStart: () -> Void
@@ -12,7 +12,11 @@ struct HomeView: View {
     var onSeeRecovery: () -> Void
 
     @Environment(WorkoutStore.self) private var store
-    @State private var workoutsThisWeek = 0
+    @AppStorage("weeklyGoal") private var weeklyGoal = 4
+    @State private var streakCurrent = 0
+    @State private var streakLongest = 0
+    @State private var thisWeekCount = 0
+    @State private var recoveryMap: [Muscle: Double] = [:]
 
     var body: some View {
         ZStack {
@@ -29,26 +33,30 @@ struct HomeView: View {
                         RestDayCard(onFreestyle: onFreestyle, onBackfill: onBackfill)
                     }
                     HStack(spacing: DGSpace.s4) {
-                        WeeklyGoalCard(done: workoutsThisWeek)
-                        StreakCard()
+                        WeeklyGoalCard(done: thisWeekCount, total: weeklyGoal)
+                        StreakCard(current: streakCurrent, longest: streakLongest)
                     }
-                    RecoveryCard(onSeeRecovery: onSeeRecovery)
-                    CoachRow()
+                    RecoveryCard(map: recoveryMap, onSeeRecovery: onSeeRecovery)
                 }
                 .padding(.horizontal, DGSpace.s4)
                 .padding(.top, DGSpace.s3)
                 .padding(.bottom, 100)
             }
         }
-        .task { refreshWeeklyCount() }
+        .task { refresh() }
     }
 
-    private func refreshWeeklyCount() {
+    private func refresh() {
         let calendar = Calendar.current
         let now = Date()
-        workoutsThisWeek = store.history().filter {
-            calendar.isDate($0.date, equalTo: now, toGranularity: .weekOfYear)
-        }.count
+        let streak = Streaks.weekly(
+            workoutDates: store.workoutDates(), weeklyGoal: weeklyGoal, calendar: calendar, now: now
+        )
+        streakCurrent = streak.current
+        streakLongest = streak.longest
+        thisWeekCount = streak.thisWeekCount
+        let since = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+        recoveryMap = Recovery.map(events: store.recoveryEvents(since: since), now: now)
     }
 
     private var header: some View {
@@ -79,8 +87,7 @@ private struct ScheduledCard: View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: DGSpace.s1) {
-                    Text("Scheduled · \(routine.weekLabel ?? "")".uppercased())
-                        .dgLabel(DGColor.coralText)
+                    Text(scheduledLabel).dgLabel(DGColor.coralText)
                     Text(routine.name)
                         .font(DGFont.title2)
                         .textCase(.uppercase)
@@ -107,6 +114,11 @@ private struct ScheduledCard: View {
             RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
                 .strokeBorder(DGColor.coral, lineWidth: 1)
         }
+    }
+
+    private var scheduledLabel: String {
+        guard let weekLabel = routine.weekLabel, !weekLabel.isEmpty else { return "Scheduled" }
+        return "Scheduled · \(weekLabel)"
     }
 }
 
@@ -142,7 +154,7 @@ private struct RestDayCard: View {
 /// Half-width "3 / 4" weekly goal card with a segmented progress bar.
 private struct WeeklyGoalCard: View {
     var done: Int
-    private let total = 4
+    var total: Int
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
@@ -175,18 +187,21 @@ private struct WeeklyGoalCard: View {
 
 /// Half-width gold "streak" card.
 private struct StreakCard: View {
+    var current: Int
+    var longest: Int
+
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
             Text("Streak").dgLabel()
             HStack(alignment: .lastTextBaseline, spacing: 4) {
-                Text("3")
+                Text("\(current)")
                     .dgMetric(DGFont.metricM, tracking: -0.5)
                     .foregroundStyle(DGColor.prGoldText)
-                Text("weeks")
+                Text(current == 1 ? "week" : "weeks")
                     .font(DGFont.subhead)
                     .foregroundStyle(DGColor.ink3)
             }
-            Text("Longest: 11 weeks")
+            Text("Longest: \(longest) \(longest == 1 ? "week" : "weeks")")
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
         }
@@ -204,7 +219,10 @@ private struct StreakCard: View {
 
 /// Recovery snapshot with a "see map" link.
 private struct RecoveryCard: View {
+    var map: [Muscle: Double]
     var onSeeRecovery: () -> Void
+
+    private var headline: (title: String, body: String) { Recovery.headline(map: map) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
@@ -219,12 +237,12 @@ private struct RecoveryCard: View {
                     .foregroundStyle(DGColor.coralText)
             }
             HStack(alignment: .top, spacing: DGSpace.s4) {
-                BodyMapPair(mode: .recovery, intensity: SampleData.recoveryMap, height: 56)
+                BodyMapPair(mode: .recovery, intensity: map, height: 56)
                 VStack(alignment: .leading, spacing: DGSpace.s1) {
-                    Text("Chest still spent")
+                    Text(headline.title)
                         .font(DGFont.title3)
                         .foregroundStyle(DGColor.ink1)
-                    Text("Legs and back are fresh — today's push is fine, but Thursday should be a pull.")
+                    Text(headline.body)
                         .font(DGFont.subhead)
                         .foregroundStyle(DGColor.ink3)
                         .fixedSize(horizontal: false, vertical: true)
@@ -232,40 +250,6 @@ private struct RecoveryCard: View {
             }
         }
         .dgCard()
-    }
-}
-
-/// Violet coach suggestion row.
-private struct CoachRow: View {
-    var body: some View {
-        HStack(spacing: DGSpace.s3) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(DGColor.aiVioletText)
-                .frame(width: 36, height: 36)
-                .background(DGColor.aiViolet.opacity(0.18), in: Circle())
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Coach has 1 suggestion")
-                    .font(DGFont.body)
-                    .foregroundStyle(DGColor.ink1)
-                Text("Swap cable fly for dips this week")
-                    .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.ink3)
-            }
-            Spacer()
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(DGColor.ink3)
-        }
-        .padding(DGSpace.s4)
-        .background(
-            DGColor.aiViolet.opacity(0.12),
-            in: RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
-                .strokeBorder(DGColor.aiViolet.opacity(0.3), lineWidth: 1)
-        }
     }
 }
 

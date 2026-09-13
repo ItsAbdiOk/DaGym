@@ -260,6 +260,8 @@ final class WorkoutSession {
     var startedAt: Date
     var exercises: [WorkoutExerciseEntry]
     var effortScale: Effort.Scale = .rpe
+    /// True for a session logged after the fact via "Log a Past Workout".
+    var isBackfilled: Bool
     /// The `WorkoutModel` this session is backed by, once persisted.
     var workoutID: UUID?
 
@@ -272,11 +274,15 @@ final class WorkoutSession {
     // PR banner
     var prBanner: PersonalRecordInfo?
 
-    init(title: String, subtitle: String, startedAt: Date, exercises: [WorkoutExerciseEntry]) {
+    init(
+        title: String, subtitle: String, startedAt: Date, exercises: [WorkoutExerciseEntry],
+        isBackfilled: Bool = false
+    ) {
         self.title = title
         self.subtitle = subtitle
         self.startedAt = startedAt
         self.exercises = exercises
+        self.isBackfilled = isBackfilled
     }
 
     /// Timed-hold live timer, or nil when no hold is in progress.

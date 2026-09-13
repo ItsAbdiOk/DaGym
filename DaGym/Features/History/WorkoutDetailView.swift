@@ -108,7 +108,7 @@ private struct ExerciseEntryCard: View {
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Spacer()
-                Text("\(entry.sets.count) sets").dgLabel()
+                Text(HistoryView.pluralized(entry.sets.count, "set")).dgLabel()
             }
             VStack(spacing: DGSpace.s2) {
                 ForEach(Array(entry.sets.enumerated()), id: \.element.id) { index, set in

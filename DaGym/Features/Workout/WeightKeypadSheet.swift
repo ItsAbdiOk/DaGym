@@ -29,7 +29,7 @@ struct WeightKeypadSheet: View {
             }
         }
         .padding(.horizontal, DGSpace.s5)
-        .padding(.top, DGSpace.s5)
+        .padding(.top, DGSpace.s8)
         .padding(.bottom, DGSpace.s4)
         .presentationDetents([.height(520)])
         .presentationDragIndicator(.visible)

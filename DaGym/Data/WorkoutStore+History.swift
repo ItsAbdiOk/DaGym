@@ -84,7 +84,55 @@ extension WorkoutStore {
         }
     }
 
+    /// Every finished workout's start date, for `Streaks.weekly`.
+    func workoutDates() -> [Date] {
+        finishedWorkoutsNewestFirst().map(\.startedAt)
+    }
+
+    /// Recovery stimulus events (`GymCore.Recovery`) from completed, non-warm-up sets of
+    /// finished workouts started on or after `since`. Primary movers get a full share, secondary
+    /// movers half; effort comes from the set's RPE, mapped to an RIR-based factor.
+    func recoveryEvents(since: Date) -> [StimulusEvent] {
+        let predicate = #Predicate<WorkoutModel> { $0.endedAt != nil && $0.startedAt >= since }
+        let descriptor = FetchDescriptor<WorkoutModel>(predicate: predicate)
+        let workouts = (try? context.fetch(descriptor)) ?? []
+        return workouts.flatMap(recoveryEvents(in:))
+    }
+
     // MARK: - Helpers
+
+    private func recoveryEvents(in workout: WorkoutModel) -> [StimulusEvent] {
+        (workout.exercises ?? []).flatMap { exerciseModel -> [StimulusEvent] in
+            guard let exercise = exerciseModel.exercise else { return [] }
+            let fallbackDate = workout.startedAt
+            return (exerciseModel.sets ?? [])
+                .filter { $0.isCompleted && $0.setKind.countsTowardStats }
+                .flatMap { stimulusEvents(for: $0, exercise: exercise, fallbackDate: fallbackDate) }
+        }
+    }
+
+    private func stimulusEvents(
+        for setLog: SetLogModel, exercise: ExerciseModel, fallbackDate: Date
+    ) -> [StimulusEvent] {
+        let date = setLog.completedAt ?? fallbackDate
+        let effort = Self.effortFactor(rpe: setLog.rpe)
+        let primary = exercise.primary.map { muscle in
+            StimulusEvent(muscle: muscle, share: 1.0, effort: effort, date: date)
+        }
+        let secondary = exercise.secondary.map { muscle in
+            StimulusEvent(muscle: muscle, share: 0.5, effort: effort, date: date)
+        }
+        return primary + secondary
+    }
+
+    /// RIR 0 → 1.0, RIR ≥ 4 → 0.5 (linear in between), unknown RPE → 0.75 (§7 of the plan).
+    private static func effortFactor(rpe: Double?) -> Double {
+        guard let rpe else { return 0.75 }
+        let rir = Effort(rpe: rpe).rir
+        guard rir > 0 else { return 1.0 }
+        guard rir < 4 else { return 0.5 }
+        return 1.0 - Double(rir) * 0.125
+    }
 
     private func finishedWorkoutsNewestFirst() -> [WorkoutModel] {
         let predicate = #Predicate<WorkoutModel> { $0.endedAt != nil }

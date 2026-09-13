@@ -49,7 +49,7 @@ struct ActiveWorkoutView: View {
     private var navHeader: some View {
         HStack(alignment: .top, spacing: DGSpace.s3) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(session.subtitle).dgLabel()
+                Text(startedAtLabel).dgLabel()
                 Text(session.title)
                     .font(DGFont.title1)
                     .textCase(.uppercase)
@@ -71,6 +71,20 @@ struct ActiveWorkoutView: View {
         .padding(.top, DGSpace.s2)
         .padding(.bottom, DGSpace.s3)
         .dgGlass(.regular, radius: 0)
+    }
+
+    /// "SUNDAY · 13 SEP", or "BACKFILL · 11 SEP" for a session logged after the fact.
+    private var startedAtLabel: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d MMM"
+        let dateText = formatter.string(from: session.startedAt).uppercased()
+        guard session.isBackfilled else {
+            let dayFormatter = DateFormatter()
+            dayFormatter.dateFormat = "EEEE"
+            let dayText = dayFormatter.string(from: session.startedAt).uppercased()
+            return "\(dayText) · \(dateText)"
+        }
+        return "Backfill · \(dateText)".uppercased()
     }
 
     private var statStrip: some View {

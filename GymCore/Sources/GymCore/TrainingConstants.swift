@@ -19,4 +19,8 @@ public enum TrainingConstants {
     public static let dumbbellWarmupScheme: [(fraction: Double, reps: Int)] = [
         (0.50, 8), (0.75, 4)
     ]
+
+    /// §7 recovery model. A muscle above this "spent" score (0…1) is called out by name in the
+    /// recovery headline; below it, it's lumped in with the "fresh" muscles.
+    public static let recoveryHeadlineThreshold = 0.3
 }
