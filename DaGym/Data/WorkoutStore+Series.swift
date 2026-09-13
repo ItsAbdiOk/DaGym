@@ -32,6 +32,7 @@ extension WorkoutStore {
     /// Body-wide chart data for `ProgressChartsSection`/`ProgressView`.
     struct BodySeriesBundle {
         var weeklyVolume: [(weekStart: Date, volumeKg: Double)]
+        /// Sets per muscle over the requested `balanceWindow` (default: trailing 7 days).
         var setsPerMuscle: [Muscle: Double]
         var sessionDurations: [(date: Date, durationSeconds: Int)]
         var thisWeek: WeekStats
@@ -67,16 +68,24 @@ extension WorkoutStore {
         )
     }
 
-    /// `weeks` of weekly volume history, sets-per-muscle over the trailing 7 days, every
-    /// session's duration, and this/last week's stats.
-    func bodySeries(weeks: Int, calendar: Calendar = .current) -> BodySeriesBundle {
-        let now = Date()
-        let since = calendar.date(byAdding: .weekOfYear, value: -weeks, to: now) ?? now
+    /// `weeks` of weekly volume history, sets-per-muscle over `balanceWindow` (trailing 7 days
+    /// by default; `.thisWeek(calendar)`, `.days(30)` or `.allTime` for the balance map's other
+    /// horizons — with `hardOnly` counting only RIR ≤ 1 / failure / AMRAP sets), every session's
+    /// duration, and this/last week's stats.
+    func bodySeries(
+        weeks: Int, calendar: Calendar = .current, balanceWindow: BalanceWindow = .days(7),
+        hardOnly: Bool = false, now: Date = Date()
+    ) -> BodySeriesBundle {
+        let weeksSince = calendar.date(byAdding: .weekOfYear, value: -weeks, to: now) ?? now
+        let balanceSince = balanceWindow.earliestDate(now: now, calendar: calendar)
+        let since = balanceSince.map { min($0, weeksSince) }
         let workouts = bodyWorkouts(since: since, calendar: calendar)
         let thisWeekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
         let lastWeekStart = calendar.date(byAdding: .weekOfYear, value: -1, to: thisWeekStart)
         let lastStart = lastWeekStart ?? thisWeekStart
-        let perMuscle = BodySeries.setsPerMuscle(workouts: workouts, days: 7, now: now, calendar: calendar)
+        let perMuscle = BodySeries.setsPerMuscle(
+            workouts: workouts, window: balanceWindow, now: now, calendar: calendar, hardOnly: hardOnly
+        )
         return BodySeriesBundle(
             weeklyVolume: BodySeries.weeklyVolume(workouts: workouts, calendar: calendar),
             setsPerMuscle: perMuscle,
@@ -103,8 +112,14 @@ extension WorkoutStore {
         }
     }
 
-    private func bodyWorkouts(since: Date, calendar: Calendar) -> [BodyWorkout] {
-        let predicate = #Predicate<WorkoutModel> { $0.endedAt != nil && $0.startedAt >= since }
+    /// Finished workouts from `since` on (all of them when nil), oldest first.
+    private func bodyWorkouts(since: Date?, calendar: Calendar) -> [BodyWorkout] {
+        let predicate: Predicate<WorkoutModel>
+        if let since {
+            predicate = #Predicate<WorkoutModel> { $0.endedAt != nil && $0.startedAt >= since }
+        } else {
+            predicate = #Predicate<WorkoutModel> { $0.endedAt != nil }
+        }
         let descriptor = FetchDescriptor<WorkoutModel>(
             predicate: predicate, sortBy: [SortDescriptor(\.startedAt, order: .forward)]
         )
@@ -129,7 +144,7 @@ extension WorkoutStore {
         (setLogs ?? []).filter(\.isCompleted).map { setLog in
             PerformedSet(
                 kind: setLog.setKind, weightKg: setLog.weightKg, reps: setLog.reps,
-                durationSeconds: setLog.durationSeconds, date: sessionDate
+                durationSeconds: setLog.durationSeconds, date: sessionDate, rpe: setLog.rpe
             )
         }
     }

@@ -93,7 +93,12 @@ extension ProgressionEngine {
             )
         }
         let byFraction = context.roundedDown(weightKg * TrainingConstants.amrapMissFraction)
-        let newWeight = min(byFraction, context.roundedDown(weightKg - max(incrementKg, 0)))
+        let candidate = min(byFraction, context.roundedDown(weightKg - max(incrementKg, 0)))
+        guard let newWeight = context.deloadClamped(candidate, below: weightKg) else {
+            return context.lightestLoadPrescribed(
+                weightKg: weightKg, misses: misses, baselineDate: baselineDate
+            )
+        }
         return prescribedResult(
             context, weightKg: newWeight,
             reason: PrescriptionReason(

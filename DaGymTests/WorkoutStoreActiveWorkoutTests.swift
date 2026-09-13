@@ -74,13 +74,16 @@ struct WorkoutStoreActiveWorkoutTests {
 
         let second = store.startFreestyle()
         let secondEntry = store.autoFilledEntry(for: exercise)
-        // The one completed set is previous #1, so it lands on (and ghosts) the first slot.
+        // Only one working set was completed last time, so that's the set count offered now,
+        // and it lands on (and ghosts) the first slot.
+        #expect(secondEntry.sets.count == 1)
         #expect(secondEntry.sets[0].weightKg == 55)
         #expect(secondEntry.sets[0].previousWeightKg == 55)
         #expect(secondEntry.sets[0].previousReps == 10)
-        // Later slots repeat it ("Like your last set") without claiming to be what was done there.
-        #expect(secondEntry.sets[1].weightKg == 55)
-        #expect(secondEntry.sets[1].previousWeightKg == nil)
+        // Asking for more slots repeats it ("Like your last set") without claiming it was done there.
+        let wider = store.autoFilledEntry(for: exercise, setCount: 3)
+        #expect(wider.sets[1].weightKg == 55)
+        #expect(wider.sets[1].previousWeightKg == nil)
         store.discard(session: second)
     }
 }

@@ -135,6 +135,7 @@ private struct HeatmapCard: View {
                     heatmapGrid
                 }
             }
+            .defaultScrollAnchor(.trailing) // today is the last column
             legend
             if let selectedCell {
                 Text(Self.footnote(for: selectedCell))
@@ -148,10 +149,12 @@ private struct HeatmapCard: View {
     private var monthHeader: some View {
         HStack(spacing: Self.spacing) {
             ForEach(Array(grid.indices), id: \.self) { index in
+                // Intrinsic size first, then the square-wide slot: the label overflows to the
+                // right instead of wrapping one letter per line.
                 Text(monthLabels[index] ?? "")
                     .dgLabel()
-                    .frame(width: Self.squareSize, alignment: .leading)
                     .fixedSize()
+                    .frame(width: Self.squareSize, alignment: .leading)
             }
         }
     }

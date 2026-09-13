@@ -14,6 +14,31 @@ struct WorkoutSummary {
     var musclesHit: [Muscle: Double]
     /// Milestone tiers newly earned by this workout (plan.md §6.4), empty most of the time.
     var achievements: [AchievementInfo] = []
+    /// The previous finished workout on the same routine (same title when there's no routine)
+    /// dated before this one — the "vs last time" line. Nil the first time a routine is run.
+    var previous: PreviousWorkoutSummary?
+    /// Best e1RM this session vs the previous one, per exercise this session trained.
+    var e1rmChanges: [ExerciseE1RMChange] = []
+}
+
+/// The headline numbers of the workout `WorkoutSummary.previous` compares against.
+struct PreviousWorkoutSummary: Hashable {
+    var workoutID: UUID
+    var date: Date
+    var volumeKg: Double
+    var setsDone: Int
+    var durationSeconds: Int
+    var prCount: Int
+}
+
+/// One exercise's best e1RM then vs now; either side is nil when that session had no
+/// completed working set with a load and reps.
+struct ExerciseE1RMChange: Hashable, Identifiable {
+    var exerciseID: UUID
+    var name: String
+    var previous: Double?
+    var current: Double?
+    var id: UUID { exerciseID }
 }
 
 /// The single source of truth for exercises, routines and workouts. Wraps a

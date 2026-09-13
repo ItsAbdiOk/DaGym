@@ -14,29 +14,29 @@ enum DGFont {
     }
 
     /// 48/48 · 800 · −3 % — hero numbers.
-    static let metricXL = Font.custom(Family.condensedExtraBold, size: 48)
+    static let metricXL = Font.custom(Family.condensedExtraBold, size: 48, relativeTo: .largeTitle)
     /// 34/36 · 800 · −2 % — timer, elapsed.
-    static let metricL = Font.custom(Family.condensedExtraBold, size: 34)
+    static let metricL = Font.custom(Family.condensedExtraBold, size: 34, relativeTo: .title)
     /// 24/26 · 700 — set-row weight and reps.
-    static let metricM = Font.custom(Family.condensedBold, size: 24)
+    static let metricM = Font.custom(Family.condensedBold, size: 24, relativeTo: .title2)
     /// 28/34 · 700 — screen title.
-    static let title1 = Font.custom(Family.condensedBold, size: 28)
+    static let title1 = Font.custom(Family.condensedBold, size: 28, relativeTo: .title)
     /// 22/28 · 700 — card title.
-    static let title2 = Font.custom(Family.condensedBold, size: 22)
+    static let title2 = Font.custom(Family.condensedBold, size: 22, relativeTo: .title2)
     /// 17/22 · 600 — row title.
-    static let title3 = Font.custom(Family.condensedSemiBold, size: 17)
+    static let title3 = Font.custom(Family.condensedSemiBold, size: 17, relativeTo: .headline)
     /// 16/22 · 500 — prose.
-    static let body = Font.custom(Family.medium, size: 16)
+    static let body = Font.custom(Family.medium, size: 16, relativeTo: .body)
     /// 14/19 · 500.
-    static let subhead = Font.custom(Family.medium, size: 14)
+    static let subhead = Font.custom(Family.medium, size: 14, relativeTo: .subheadline)
     /// 13/17 · 500.
-    static let footnote = Font.custom(Family.medium, size: 13)
+    static let footnote = Font.custom(Family.medium, size: 13, relativeTo: .footnote)
     /// 11/14 · 600.
-    static let caption = Font.custom(Family.semiBold, size: 11)
+    static let caption = Font.custom(Family.semiBold, size: 11, relativeTo: .caption)
     /// Barlow Condensed 12/12 · +12 % tracking, uppercase — micro labels.
-    static let label = Font.custom(Family.condensedBold, size: 12)
+    static let label = Font.custom(Family.condensedBold, size: 12, relativeTo: .caption)
     /// 10 pt condensed — tab bar labels.
-    static let tabLabel = Font.custom(Family.condensedBold, size: 10)
+    static let tabLabel = Font.custom(Family.condensedBold, size: 10, relativeTo: .caption2)
 }
 
 extension View {

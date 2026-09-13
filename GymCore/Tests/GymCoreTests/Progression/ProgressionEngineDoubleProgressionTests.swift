@@ -52,6 +52,89 @@ struct ProgressionEngineDoubleProgressionTests {
         #expect(result.stall.consecutiveMisses == 0)
     }
 
+    @Test("weakest reps 10, 9, 10 never beat the run's best, so the third session deloads")
+    func stallAgainstBestOfRun() {
+        var stall = StallState()
+        var last: Prescribed?
+        for reps in [[10, 10, 10], [10, 9, 10], [10, 10, 10]] {
+            last = ProgressionEngine.prescribe(
+                rule: rule, planned: planned, history: [entry(reps: reps, weightKg: 40)], stall: stall,
+                grid: .step(2.5)
+            )
+            stall = last?.stall ?? stall
+        }
+        #expect(last?.reason.kind == .deload)
+        #expect(last?.sets[0].weightKg == 37.5)
+        #expect(last?.stall.consecutiveMisses == 0)
+    }
+
+    @Test("each session that beats the run's best keeps the miss count at zero")
+    func improvingEachSessionNeverStalls() {
+        var stall = StallState(lastWeightKg: 40, lastWeakestReps: 8, bestWeakestReps: 8)
+        for (reps, next) in [(9, 10), (10, 11), (11, 12)] {
+            let result = ProgressionEngine.prescribe(
+                rule: rule, planned: planned, history: [entry(reps: [reps, reps, reps], weightKg: 40)],
+                stall: stall, grid: .step(2.5)
+            )
+            #expect(result.stall.consecutiveMisses == 0)
+            #expect(result.stall.bestWeakestReps == reps)
+            #expect(result.sets[0].reps == next)
+            stall = result.stall
+        }
+    }
+
+    @Test("a weight change resets the run's best before this session is scored")
+    func weightChangeResetsBest() {
+        let stall = StallState(
+            consecutiveMisses: 1, lastWeightKg: 40, lastWeakestReps: 10, bestWeakestReps: 10
+        )
+        let result = ProgressionEngine.prescribe(
+            rule: rule, planned: planned, history: [entry(reps: [8, 7, 6], weightKg: 42.5)], stall: stall,
+            grid: .step(2.5)
+        )
+        #expect(result.stall.consecutiveMisses == 1)
+        #expect(result.stall.bestWeakestReps == 6)
+        #expect(result.stall.lastWeightKg == 42.5)
+    }
+
+    @Test("per-side totals step by 2")
+    func perSideStepsByTwo() {
+        let result = ProgressionEngine.prescribe(
+            rule: .doubleProgression(low: 12, high: 20, incrementKg: 2.5),
+            planned: planned, history: [entry(reps: [16, 16, 16], weightKg: 10)], stall: StallState(),
+            grid: .step(2), perSide: true
+        )
+        #expect(result.sets.allSatisfy { $0.reps == 18 })
+    }
+
+    @Test("a per-side odd range is rounded up to even, and its rounded top adds weight")
+    func perSideOddRangeRoundsUp() {
+        let odd = ProgressionRule.doubleProgression(low: 7, high: 13, incrementKg: 2.5)
+        let atThirteen = ProgressionEngine.prescribe(
+            rule: odd, planned: planned, history: [entry(reps: [13, 13, 13], weightKg: 10)],
+            stall: StallState(), grid: .step(2), perSide: true
+        )
+        #expect(atThirteen.sets.allSatisfy { $0.weightKg == 10 && $0.reps == 14 })
+        let atFourteen = ProgressionEngine.prescribe(
+            rule: odd, planned: planned, history: [entry(reps: [14, 14, 14], weightKg: 10)],
+            stall: StallState(), grid: .step(2), perSide: true
+        )
+        #expect(atFourteen.reason.kind == .increase)
+        #expect(atFourteen.sets.allSatisfy { $0.weightKg == 12 && $0.reps == 8 })
+    }
+
+    @Test("a stall at the lightest dumbbell holds instead of prescribing a deload to zero")
+    func stallAtLightestLoadHolds() {
+        let stall = StallState(consecutiveMisses: 2, lastWeightKg: 2, lastWeakestReps: 8, bestWeakestReps: 8)
+        let result = ProgressionEngine.prescribe(
+            rule: rule, planned: planned, history: [entry(reps: [8, 8, 8], weightKg: 2)], stall: stall,
+            grid: .step(2)
+        )
+        #expect(result.reason.kind == .repeat)
+        #expect(result.sets.allSatisfy { $0.weightKg == 2 })
+        #expect(result.reason.title.localizedCaseInsensitiveContains("lightest"))
+    }
+
     @Test("no history prescribes a first-time entry")
     func firstTime() {
         let result = ProgressionEngine.prescribe(

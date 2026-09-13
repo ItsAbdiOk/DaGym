@@ -34,6 +34,14 @@ public enum Muscle: String, CaseIterable, Codable, Sendable, Identifiable {
         }
     }
 
+    /// Lower-body lifts take the larger default increment (plan.md §7: 2.5 kg upper / 5 kg lower).
+    public var isLowerBody: Bool {
+        switch self {
+        case .quads, .hams, .glutes, .calves: true
+        default: false
+        }
+    }
+
     /// Recovery time constant in hours (§7 of the plan).
     public var recoveryTimeConstantHours: Double {
         switch self {

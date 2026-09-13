@@ -44,7 +44,7 @@ struct ProgramsView: View {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
-            DGIconButton(symbol: "plus") { showingNew = true }
+            DGIconButton(symbol: "plus", accessibilityLabel: "New program") { showingNew = true }
         }
     }
 

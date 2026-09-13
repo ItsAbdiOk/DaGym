@@ -30,6 +30,8 @@ enum DGTab: String, CaseIterable, Identifiable {
 struct DGTabBar: View {
     @Binding var selected: DGTab
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .caption2) private var barHeight: CGFloat = 64
 
     var body: some View {
         HStack(spacing: 0) {
@@ -38,11 +40,14 @@ struct DGTabBar: View {
                 Button {
                     guard !on else { return }
                     Haptics.step()
-                    withAnimation(DGMotion.standard) { selected = tab }
+                    withAnimation(DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion)) {
+                        selected = tab
+                    }
                 } label: {
                     VStack(spacing: 3) {
                         Image(systemName: tab.symbol)
                             .font(.system(size: 22, weight: .semibold))
+                            .accessibilityHidden(true)
                         Text(tab.title)
                             .font(DGFont.tabLabel)
                             .tracking(1)
@@ -58,10 +63,12 @@ struct DGTabBar: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier(tabIdentifier(tab))
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
         .padding(6)
-        .frame(height: 64)
+        .frame(height: barHeight)
         .dgGlass(.thick, in: Capsule())
         .shadow(color: .black.opacity(scheme == .dark ? 0.8 : 0.34), radius: 20, y: 16)
         .padding(.horizontal, 10)
@@ -77,7 +84,7 @@ struct DGTabBar: View {
         }
     }
 
-    private var activeInk: Color { scheme == .dark ? DGColor.coral : Color(hex: 0xB83E2A) }
+    private var activeInk: Color { scheme == .dark ? DGColor.coral : DGColor.coralText }
     private var idleInk: Color { DGColor.ink3 }
     private var pillFill: Color {
         scheme == .dark ? .white.opacity(0.14) : DGColor.coralPress.opacity(0.12)

@@ -18,7 +18,10 @@ struct WorkoutBuilder {
                 notes: entry.workoutNotes
             )
         }
-        workouts[workoutKey]?.addSet(set, exerciseName: entry.exerciseName, exerciseNote: entry.exerciseNote)
+        workouts[workoutKey]?.addSet(
+            set, exerciseName: entry.exerciseName, exerciseNote: entry.exerciseNote,
+            exerciseCategory: entry.exerciseCategory
+        )
     }
 
     /// Workouts in the order their first row appeared, each sorted internally by exercise's
@@ -42,20 +45,25 @@ struct WorkoutBuilder {
             self.notes = notes
         }
 
-        mutating func addSet(_ set: ImportedSet, exerciseName: String, exerciseNote: String) {
+        mutating func addSet(
+            _ set: ImportedSet, exerciseName: String, exerciseNote: String, exerciseCategory: String?
+        ) {
             if exercises[exerciseName] == nil {
                 exerciseOrder.append(exerciseName)
                 exercises[exerciseName] = ExerciseInProgress(name: exerciseName)
             }
             exercises[exerciseName]?.sets.append(set)
-            if let note = exercises[exerciseName], note.note.isEmpty, !exerciseNote.isEmpty {
+            if let existing = exercises[exerciseName], existing.note.isEmpty, !exerciseNote.isEmpty {
                 exercises[exerciseName]?.note = exerciseNote
+            }
+            if let existing = exercises[exerciseName], existing.category == nil, let exerciseCategory {
+                exercises[exerciseName]?.category = exerciseCategory
             }
         }
 
         func finish() -> ImportedWorkout {
             let entries = exerciseOrder.compactMap { exercises[$0] }.map {
-                ImportedExercise(name: $0.name, note: $0.note, sets: $0.sets)
+                ImportedExercise(name: $0.name, note: $0.note, category: $0.category, sets: $0.sets)
             }
             return ImportedWorkout(
                 startedAt: startedAt, endedAt: endedAt, title: title, notes: notes, exercises: entries
@@ -66,6 +74,7 @@ struct WorkoutBuilder {
     private struct ExerciseInProgress {
         var name: String
         var note = ""
+        var category: String?
         var sets: [ImportedSet] = []
     }
 }
@@ -79,4 +88,5 @@ struct WorkoutRowInfo {
     var workoutNotes: String
     var exerciseName: String
     var exerciseNote: String
+    var exerciseCategory: String?
 }

@@ -58,7 +58,8 @@ extension ProgressionEngine {
     /// else the plan's target — so a 45 s hold when 60 s was prescribed is a
     /// miss even though the routine still says 30 s. A plan edited since the
     /// engine last set a target outranks that memory. Past `timedCeilingSeconds`
-    /// the rule stops adding time and suggests load or a harder variation.
+    /// the rule stops adding time and suggests load or a harder variation. Three
+    /// short holds in a row back the ask off to 90 %, rounded down to 5 s.
     static func prescribeTimed(_ context: RuleContext, stepSeconds: Int) -> Prescribed {
         guard let baseline = context.baseline else { return context.firstTimePrescribed() }
         let workingSets = context.baselineWorkingSets
@@ -74,6 +75,8 @@ extension ProgressionEngine {
         let ceiling = TrainingConstants.timedCeilingSeconds
         let loadKg = workingSets.first?.weightKg ?? 0
 
+        let misses = hit ? 0 : context.stall.consecutiveMisses + 1
+        let backedOff = timedBackoff(askedSeconds: askedSeconds, stepSeconds: stepSeconds)
         let reason: PrescriptionReason
         let newDuration: Int
         if hit, askedSeconds >= ceiling {
@@ -88,6 +91,14 @@ extension ProgressionEngine {
             newDuration = max(askedSeconds, durationSeconds) + stepSeconds
             reason = PrescriptionReason(
                 title: "+\(stepSeconds)s", body: "You held \(durationSeconds)s last session.", kind: .increase
+            )
+        } else if misses >= TrainingConstants.linearMissesBeforeDeload, let backedOff {
+            newDuration = backedOff
+            reason = PrescriptionReason(
+                title: "Back off to \(backedOff)s",
+                body: "\(misses) sessions in a row short of \(askedSeconds)s (last: \(durationSeconds)s) " +
+                    "— shorten the hold and rebuild.",
+                kind: .deload
             )
         } else {
             newDuration = askedSeconds
@@ -105,10 +116,20 @@ extension ProgressionEngine {
         var stall = context.stall
         stall.lastTargetSeconds = newDuration
         stall.lastPlanTargetSeconds = planTarget
-        stall.consecutiveMisses = hit ? 0 : stall.consecutiveMisses + 1
+        stall.consecutiveMisses = reason.kind == .deload ? 0 : misses
         return Prescribed(
             sets: sets, reason: reason, stall: stall, trainingMaxKg: context.trainingMaxKg,
             previousDate: baseline.date
         )
+    }
+
+    /// 90 % of the asked hold rounded down to 5 s, never under one step and always
+    /// shorter than what was asked; nil when the ask is already as short as it can be.
+    static func timedBackoff(askedSeconds: Int, stepSeconds: Int) -> Int? {
+        let rounding = TrainingConstants.timedRoundingSeconds
+        let fraction = TrainingConstants.timedBackoffFraction
+        let rounded = Int((Double(askedSeconds) * fraction / Double(rounding)).rounded(.down)) * rounding
+        let backedOff = max(max(stepSeconds, 1), rounded)
+        return backedOff < askedSeconds ? backedOff : nil
     }
 }

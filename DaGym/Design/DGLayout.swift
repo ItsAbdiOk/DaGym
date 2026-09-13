@@ -44,4 +44,12 @@ enum DGMotion {
     static let sheet = Animation.interpolatingSpring(stiffness: 220, damping: 26)
     static let timer = Animation.linear(duration: 1)
     static let celebrate = Animation.timingCurve(0.2, 0, 0, 1, duration: 0.72)
+
+    /// Reduce Motion-aware variant of a token: a quick cross-fade in place of the eased
+    /// move/spring so state still changes instantly without motion. Callers read
+    /// `@Environment(\.accessibilityReduceMotion)` and pass it through here rather than
+    /// branching at every call site.
+    static func aware(_ token: Animation, reduceMotion: Bool) -> Animation {
+        reduceMotion ? .linear(duration: 0.001) : token
+    }
 }

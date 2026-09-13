@@ -63,7 +63,7 @@ struct SeedDedupeTests {
         #expect(Set(exercises.map(\.id)) == survivorIDs)
 
         let routines = try context.fetch(FetchDescriptor<RoutineModel>())
-        #expect(routines.count == 3)
+        #expect(routines.count == RoutineSeeder.starterIDs.count)
         #expect(routines.filter { $0.name == "Push A" }.count == 1)
         for slot in routines.flatMap({ $0.exercises ?? [] }) {
             let exerciseID = try #require(slot.exercise?.id)
@@ -81,7 +81,7 @@ struct SeedDedupeTests {
         let before = try context.fetch(FetchDescriptor<ExerciseModel>()).count
         #expect(store.dedupeSeededRows() == 0)
         #expect(try context.fetch(FetchDescriptor<ExerciseModel>()).count == before)
-        #expect(store.routines().count == 3)
+        #expect(store.routines().count == RoutineSeeder.starterIDs.count)
         #expect(store.equipmentProfiles().count == 2)
     }
 

@@ -106,8 +106,11 @@ private struct OnDeckExerciseCard: View {
                     .foregroundStyle(DGColor.ink3)
             }
             Spacer(minLength: 0)
-            DGIconButton(symbol: "text.bubble", size: 36, tint: DGColor.ink2, action: onNote)
-            DGIconButton(symbol: "ellipsis", action: onMore)
+            DGIconButton(
+                symbol: "text.bubble", size: 36, tint: DGColor.ink2, accessibilityLabel: "Notes",
+                action: onNote
+            )
+            DGIconButton(symbol: "ellipsis", accessibilityLabel: "More options", action: onMore)
         }
     }
 

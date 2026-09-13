@@ -46,6 +46,6 @@ struct OnDiskContainerTests {
         ExerciseSeeder.seedIfNeeded(context: context)
         let store = WorkoutStore(context: context, photoContext: photoContext)
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
-        #expect(store.routines().count == 3)
+        #expect(store.routines().count == RoutineSeeder.starterIDs.count)
     }
 }

@@ -71,6 +71,6 @@ extension WorkoutSession {
         exercises[ei].sets[si].durationSeconds = durationSeconds
         exercises[ei].sets[si].isDone = true
         Haptics.setDone()
-        startRest(seconds: exercises[ei].exercise.restSeconds, after: ei, set: si)
+        startRest(seconds: restSeconds(after: ei, set: si), after: ei, set: si)
     }
 }

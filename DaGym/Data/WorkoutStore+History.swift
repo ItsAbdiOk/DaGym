@@ -28,6 +28,7 @@ extension WorkoutStore {
         // here rather than at start means abandoning a workout (never finishing) never burns a
         // stall (plan.md §6.5).
         persistProgression(session: session)
+        pruneUnfinishedRows(of: workout)
         let now = Date()
         // A backfilled workout keeps the `date + duration` end it was started with; only a live
         // session ends now.
@@ -48,6 +49,21 @@ extension WorkoutStore {
         return summary(for: workout, session: session, prs: prs, achievements: achievements)
     }
 
+    /// History only ever holds what was actually done: an unticked planned row, and an exercise
+    /// left with no rows, are dropped here — in `finish`, not `sync`, so an in-progress session
+    /// keeps its planned rows for resume. The `WorkoutModel` itself stays even when it empties.
+    private func pruneUnfinishedRows(of workout: WorkoutModel) {
+        for exerciseModel in workout.exercises ?? [] {
+            for setModel in (exerciseModel.sets ?? []).filter({ !$0.isCompleted }) {
+                context.delete(setModel)
+            }
+            exerciseModel.sets = (exerciseModel.sets ?? []).filter(\.isCompleted)
+        }
+        let emptied = (workout.exercises ?? []).filter { ($0.sets ?? []).isEmpty }
+        emptied.forEach(context.delete)
+        workout.exercises = (workout.exercises ?? []).filter { !($0.sets ?? []).isEmpty }
+    }
+
     private func summary(
         for workout: WorkoutModel, session: WorkoutSession, prs: [PersonalRecordInfo],
         achievements: [AchievementInfo]
@@ -56,11 +72,52 @@ extension WorkoutStore {
         // Working sets only, the same count the History row and the weekly recap show.
         let setsDone = session.exercises.flatMap(\.sets)
             .filter { $0.isDone && $0.kind.countsTowardStats }.count
+        let previous = previousWorkout(before: workout)
         return WorkoutSummary(
             durationSeconds: max(0, Int(endedAt.timeIntervalSince(workout.startedAt))),
             volumeKg: session.volumeKg, setsDone: setsDone, prs: prs, musclesHit: session.musclesHit,
-            achievements: achievements
+            achievements: achievements, previous: previous.map(previousWorkoutSummary),
+            e1rmChanges: e1rmChanges(session: session, previous: previous)
         )
+    }
+
+    /// The latest finished workout on the same routine — same title when neither has a routine
+    /// — started before this one. "Before its own date", not "newest overall", so a backfill
+    /// compares against what came before it.
+    private func previousWorkout(before workout: WorkoutModel) -> WorkoutModel? {
+        finishedWorkoutsNewestFirst().first { candidate in
+            guard candidate.id != workout.id, candidate.startedAt < workout.startedAt else { return false }
+            if let routineID = workout.routineID { return candidate.routineID == routineID }
+            return candidate.routineID == nil && candidate.title == workout.title
+        }
+    }
+
+    private func previousWorkoutSummary(_ workout: WorkoutModel) -> PreviousWorkoutSummary {
+        let sets = (workout.exercises ?? []).flatMap { $0.sets ?? [] }
+            .filter { $0.isCompleted && $0.setKind.countsTowardStats }
+        let endedAt = workout.endedAt ?? workout.startedAt
+        return PreviousWorkoutSummary(
+            workoutID: workout.id, date: workout.startedAt, volumeKg: workoutVolume(workout),
+            setsDone: sets.count,
+            durationSeconds: max(0, Int(endedAt.timeIntervalSince(workout.startedAt))),
+            prCount: prCount(for: workout.id)
+        )
+    }
+
+    private func e1rmChanges(session: WorkoutSession, previous: WorkoutModel?) -> [ExerciseE1RMChange] {
+        var seen = Set<UUID>()
+        return session.exercises.compactMap { entry in
+            guard seen.insert(entry.exercise.id).inserted else { return nil }
+            let current = entry.sets
+                .filter { $0.isDone && $0.kind.countsTowardStats }
+                .compactMap { OneRepMax.estimate(weight: $0.weightKg, reps: $0.reps) }
+                .max()
+            let before = previous.flatMap { bestE1RM(exerciseID: entry.exercise.id, in: $0) }
+            guard current != nil || before != nil else { return nil }
+            return ExerciseE1RMChange(
+                exerciseID: entry.exercise.id, name: entry.exercise.name, previous: before, current: current
+            )
+        }
     }
 
     /// In-progress (never finished, never discarded) workouts, newest first — what a crash or
@@ -145,11 +202,13 @@ extension WorkoutStore {
         )
     }
 
-    /// "80 × 8,8,7" style lines for the last few finished sessions of an exercise.
+    /// "80 × 8,8,7" style lines for the last few finished sessions of an exercise — "0:45, 0:40"
+    /// for a timed hold, "12, 12, 10" for unloaded reps (see `sessionLine`).
     func lastSessions(exerciseID: UUID, limit: Int = 3) -> [String] {
+        let style = fetchExerciseModel(id: exerciseID)?.style ?? .weightReps
         var lines: [String] = []
         for workout in finishedWorkoutsNewestFirst() {
-            guard let line = sessionLine(exerciseID: exerciseID, in: workout) else { continue }
+            guard let line = sessionLine(exerciseID: exerciseID, style: style, in: workout) else { continue }
             lines.append(line)
             if lines.count == limit { break }
         }
@@ -160,6 +219,32 @@ extension WorkoutStore {
     func e1rmSeries(exerciseID: UUID) -> [(Date, Double)] {
         finishedWorkoutsNewestFirst().reversed().compactMap { workout in
             bestE1RM(exerciseID: exerciseID, in: workout).map { (workout.startedAt, $0) }
+        }
+    }
+
+    /// The card sparkline's per-session value, oldest first, by how the exercise is logged:
+    /// best hold for a timed exercise, best reps for unloaded reps, else best e1RM.
+    func sparklineSeries(exerciseID: UUID) -> [(Date, Double)] {
+        let style = fetchExerciseModel(id: exerciseID)?.style ?? .weightReps
+        switch style {
+        case .timedHold, .cardio:
+            return bestPerSession(exerciseID: exerciseID) { Double($0.durationSeconds ?? 0) }
+        case .bodyweightReps:
+            return bestPerSession(exerciseID: exerciseID) { Double($0.reps) }
+        case .weightReps, .assisted, .weightedBodyweight:
+            return e1rmSeries(exerciseID: exerciseID)
+        }
+    }
+
+    private func bestPerSession(
+        exerciseID: UUID, value: (SetLogModel) -> Double
+    ) -> [(Date, Double)] {
+        finishedWorkoutsNewestFirst().reversed().compactMap { workout in
+            guard let match = matchingExercise(exerciseID: exerciseID, in: workout) else { return nil }
+            let best = (match.sets ?? [])
+                .filter { $0.isCompleted && $0.setKind.countsTowardStats }
+                .map(value).max()
+            return best.map { (workout.startedAt, $0) }
         }
     }
 
@@ -227,14 +312,23 @@ extension WorkoutStore {
             .reduce(0.0) { $0 + $1.weightKg * Double($1.reps) }
     }
 
-    private func sessionLine(exerciseID: UUID, in workout: WorkoutModel) -> String? {
+    private func sessionLine(
+        exerciseID: UUID, style: ExerciseInfo.LoggingStyle, in workout: WorkoutModel
+    ) -> String? {
         guard let match = matchingExercise(exerciseID: exerciseID, in: workout) else { return nil }
         let sets = (match.sets ?? [])
             .filter { $0.isCompleted && $0.setKind.countsTowardStats }
             .sorted { $0.order < $1.order }
         guard let first = sets.first else { return nil }
-        let reps = sets.map { String($0.reps) }.joined(separator: ",")
-        return "\(WorkoutSession.format(first.weightKg)) × \(reps)"
+        switch style {
+        case .timedHold, .cardio:
+            return sets.map { WorkoutSession.clock($0.durationSeconds ?? 0) }.joined(separator: ", ")
+        case .bodyweightReps:
+            return sets.map { String($0.reps) }.joined(separator: ", ")
+        case .weightReps, .assisted, .weightedBodyweight:
+            let reps = sets.map { String($0.reps) }.joined(separator: ",")
+            return "\(WorkoutSession.format(first.weightKg)) × \(reps)"
+        }
     }
 
     private func bestE1RM(exerciseID: UUID, in workout: WorkoutModel) -> Double? {

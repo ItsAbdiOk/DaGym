@@ -29,6 +29,7 @@ struct RoutineBuilderView: View {
     @State private var items: [EditableExercise] = []
     @State private var showingPicker = false
     @State private var ruleState = RuleState()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -37,7 +38,9 @@ struct RoutineBuilderView: View {
                 VStack(alignment: .leading, spacing: DGSpace.s6) {
                     navRow
                     NameCard(name: $name, hitMap: hitMap, hitSummary: hitSummary)
-                        .animation(DGMotion.standard, value: hitMap)
+                        .animation(
+                            DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion), value: hitMap
+                        )
                     ProgressionRulePickerView(
                         title: "Progression", state: $ruleState, unit: preferences.weightUnit
                     )
@@ -108,7 +111,9 @@ struct RoutineBuilderView: View {
             EditableExercise(
                 exercise: info, sets: draft.sets, supersetGroup: draft.supersetGroup,
                 overrideEnabled: draft.overrideRule != nil,
-                overrideState: RuleState.from(draft.overrideRule ?? ruleState.rule),
+                overrideState: draft.overrideRule.map(RuleState.from) ?? RuleState.exerciseOverride(
+                    of: ruleState.rule, for: info, unit: preferences.weightUnit
+                ),
                 excludeFromProgression: draft.excludeFromProgression
             )
         }
@@ -118,7 +123,12 @@ struct RoutineBuilderView: View {
 
     private func addExercise(_ exercise: ExerciseInfo) {
         items.append(
-            EditableExercise(exercise: exercise, sets: [PlannedSetDraft(kind: .working, targetReps: 8)])
+            EditableExercise(
+                exercise: exercise, sets: [PlannedSetDraft(kind: .working, targetReps: 8)],
+                overrideState: RuleState.exerciseOverride(
+                    of: ruleState.rule, for: exercise, unit: preferences.weightUnit
+                )
+            )
         )
     }
 
@@ -245,6 +255,7 @@ private struct BuilderExerciseCard: View {
                     .foregroundStyle(isSuperset ? DGColor.aiVioletText : DGColor.ink3)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(isSuperset ? "Remove from superset" : "Link into superset")
             Menu {
                 Button("Move Up", systemImage: "arrow.up", action: onMoveUp)
                 Button("Move Down", systemImage: "arrow.down", action: onMoveDown)
@@ -254,6 +265,7 @@ private struct BuilderExerciseCard: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(DGColor.ink3)
             }
+            .accessibilityLabel("More options for \(item.exercise.name)")
         }
     }
 

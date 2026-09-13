@@ -52,6 +52,27 @@ struct ProgressionEngineAMRAPTests {
         #expect(result.stall.consecutiveMisses == 0)
     }
 
+    @Test("a second miss on the empty bar holds instead of backing off to the same weight")
+    func secondMissOnEmptyBarHolds() {
+        let result = ProgressionEngine.prescribe(
+            rule: rule, planned: planned, history: [entry(amrapReps: 5, weightKg: 20)],
+            stall: StallState(consecutiveMisses: 1, lastWeightKg: 20),
+            grid: .plates(bar: .olympic, plates: PlateStock.standardKg, collarsKg: 0)
+        )
+        #expect(result.reason.kind == .repeat)
+        #expect(result.sets.allSatisfy { $0.weightKg == 20 })
+    }
+
+    @Test("a second miss on a 4 kg dumbbell backs off to 2 kg, not below")
+    func secondMissFlooredAtGrid() {
+        let result = ProgressionEngine.prescribe(
+            rule: rule, planned: planned, history: [entry(amrapReps: 5, weightKg: 4)],
+            stall: StallState(consecutiveMisses: 1, lastWeightKg: 4), grid: .step(2)
+        )
+        #expect(result.reason.kind == .deload)
+        #expect(result.sets.allSatisfy { $0.weightKg == 2 })
+    }
+
     @Test("hitting between target and double target adds the normal increment")
     func normalIncrementBetweenTargets() {
         let result = ProgressionEngine.prescribe(

@@ -1,10 +1,96 @@
 import SwiftUI
 import UIKit
 
+/// The five accent themes a user can pick in Settings › Display (plan.md Phase 8). Coral is the
+/// shipped brand colour and stays the default; the other four keep the same hue in light and
+/// dark mode (only the exact stop shifts) and each has a `text` variant stepped for 4.5:1
+/// contrast on small text, matching how `coral`/`coralText` already behave.
+enum DGAccent: String, CaseIterable, Codable, Hashable {
+    case coral
+    case ember
+    case lime
+    case ice
+    case violet
+
+    var displayName: String {
+        switch self {
+        case .coral: "Coral"
+        case .ember: "Ember"
+        case .lime: "Lime"
+        case .ice: "Ice"
+        case .violet: "Violet"
+        }
+    }
+
+    /// The base accent colour (buttons, active tab, progress fills) for the given scheme.
+    /// `coral` is pinned to the single shipped hex in both schemes — that's the value every
+    /// existing screen was designed against. The other four step to a deeper, more-saturated
+    /// stop in light mode (same reasoning as `surface`/`ink`'s `dynamic` pairs above): a hue
+    /// bright enough to read on near-black in dark mode washes out against the light backgrounds.
+    func base(dark: Bool) -> Color {
+        switch self {
+        case .coral:
+            // Shipped brand colour — exact hex the app has always used, unchanged either way.
+            Color(hex: 0xF4705C)
+        case .ember:
+            Color(hex: dark ? 0xF2883C : 0xD9701F)
+        case .lime:
+            Color(hex: dark ? 0x9BD75E : 0x7CBA3E)
+        case .ice:
+            Color(hex: dark ? 0x58C4E8 : 0x2F9CC4)
+        case .violet:
+            // Dark stop reuses the existing `aiViolet` hue so the AI-badge and accent never clash.
+            Color(hex: dark ? 0x7B8CFF : 0x5A67D9)
+        }
+    }
+
+    /// Small-text-safe variant: stepped down in light mode for 4.5:1 contrast on `bgBase`/
+    /// `surface1`, brightened slightly in dark mode — same treatment as `coralText`.
+    func text(dark: Bool) -> Color {
+        switch self {
+        case .coral:
+            Color(hex: dark ? 0xFF8F7A : 0xB83E2A)
+        case .ember:
+            Color(hex: dark ? 0xFFA666 : 0xA85A16)
+        case .lime:
+            Color(hex: dark ? 0xB7E888 : 0x4C7A1E)
+        case .ice:
+            Color(hex: dark ? 0x7ED3F0 : 0x155E77)
+        case .violet:
+            Color(hex: dark ? 0x9CA8FF : 0x3B49C0)
+        }
+    }
+
+    /// Pressed/active state (`coralPress`'s role): one fixed darker stop, same in both schemes —
+    /// mirrors how the shipped `coralPress` never forked by scheme either.
+    var press: Color {
+        switch self {
+        case .coral: Color(hex: 0xD9503B)
+        case .ember: Color(hex: 0xC96B22)
+        case .lime: Color(hex: 0x74A83E)
+        case .ice: Color(hex: 0x2F92B8)
+        case .violet: Color(hex: 0x5566D9)
+        }
+    }
+}
+
 /// Colour tokens from the design system (deliverable 01). Prefix `--dg-`.
 /// Data hues (set types, effort, recovery) are identical in both schemes;
 /// only surfaces, ink and text-tints change.
 enum DGColor {
+    /// The active accent theme. `Preferences.init` seeds this from the persisted value at launch
+    /// and `accent`'s `didSet` keeps it in sync after that, so every `DGColor.coral`/`coralText`
+    /// read below reflects the user's choice without threading `Preferences` through the ~50 call
+    /// sites that already read these as bare statics.
+    ///
+    /// `nonisolated(unsafe)`, not `@MainActor`: `UIColor`'s dynamic-provider closure (used below
+    /// to make `coral`/`coralText` re-render on trait changes, same as the plain `dynamic(...)`
+    /// tokens above) isn't guaranteed to run on the main actor — asset rendering and widget
+    /// snapshotting can resolve traits off-main. `DGAccent` is a plain `String` enum (no payload,
+    /// word-sized tag), only ever written from `Preferences` on the main actor, and read far more
+    /// often than written, so a torn read is not a practical concern.
+    nonisolated(unsafe) static var current: DGAccent = .coral
+
     // MARK: Surfaces
     static let bgSunken = dynamic(dark: 0x060607, light: 0xE8E6E1)
     static let bgBase = dynamic(dark: 0x0B0B0C, light: 0xF4F3F0)
@@ -23,12 +109,16 @@ enum DGColor {
     static let hairline = dynamic(dark: 0xFFFFFF, light: 0x121213, alpha: 0.09)
 
     // MARK: Brand
-    static let coral = Color(hex: 0xF4705C)
-    static let coralPress = Color(hex: 0xD9503B)
-    static let coralWash = Color(hex: 0xF4705C).opacity(0.14)
+    // "coral" is the historical name; it now resolves from the active `DGAccent` (`current`,
+    // default `.coral`) so every existing call site — buttons, active-tab fills, progress rings —
+    // re-themes without being touched. Computed (not `static let`), so each access re-reads
+    // `current` rather than caching the value from first launch.
+    static var coral: Color { accentAware { $0.base(dark: $1) } }
+    static var coralPress: Color { current.press }
+    static var coralWash: Color { coral.opacity(0.14) }
     static let inkOnCoral = Color(hex: 0x2B0C07)
     /// Coral as small text: steps down in light mode for 4.5:1 contrast.
-    static let coralText = dynamic(dark: 0xFF8F7A, light: 0xB83E2A)
+    static var coralText: Color { accentAware { $0.text(dark: $1) } }
 
     // MARK: Set types — each hue is load-bearing
     static let setWarmup = Color(hex: 0xF5B23C)
@@ -67,9 +157,9 @@ enum DGColor {
     /// Body-map fill for a muscle with no data.
     static let bodyMapInert = dynamic(dark: 0xFFFFFF, light: 0x121213, alpha: 0.10)
     /// "Muscles hit" steps: 22 / 46 / 72 / 100 % coral.
-    static let hitSteps: [Color] = [
-        coral.opacity(0.22), coral.opacity(0.46), coral.opacity(0.72), coral
-    ]
+    static var hitSteps: [Color] {
+        [coral.opacity(0.22), coral.opacity(0.46), coral.opacity(0.72), coral]
+    }
 
     // MARK: Helpers
     private static func dynamic(dark: UInt32, light: UInt32, alpha: CGFloat = 1) -> Color {
@@ -77,6 +167,15 @@ enum DGColor {
             trait.userInterfaceStyle == .dark
                 ? UIColor(hex: dark, alpha: alpha)
                 : UIColor(hex: light, alpha: alpha)
+        })
+    }
+
+    /// Builds a `Color` that re-reads `current` (the active accent) on every trait-collection
+    /// resolution, the same way `dynamic(dark:light:)` re-reads its two fixed hexes — so
+    /// `coral`/`coralText` track both the user's accent choice and the system's light/dark mode.
+    private static func accentAware(_ resolve: @Sendable @escaping (DGAccent, Bool) -> Color) -> Color {
+        Color(uiColor: UIColor { trait in
+            UIColor(resolve(current, trait.userInterfaceStyle == .dark))
         })
     }
 }

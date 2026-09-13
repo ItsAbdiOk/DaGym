@@ -145,19 +145,33 @@ struct StallStateDTO: Codable {
     var lastWeightKg: Double?
     /// Double progression's "no improvement" tracker (`StallState.lastWeakestReps`).
     var lastWeakestReps: Int?
-    /// Timed rule's "what was actually asked" judging target (`StallState.lastTargetSeconds`).
+    /// Double progression's best weakest-set reps seen at `lastWeightKg`
+    /// (`StallState.bestWeakestReps`).
+    var bestWeakestReps: Int?
+    /// Timed rule's "what was actually asked" judging target (`StallState.lastTargetSeconds`)
+    /// and the plan target it was set against.
     var lastTargetSeconds: Int?
+    var lastPlanTargetSeconds: Int?
+    /// Reps rules' "what was actually asked" judging target (`StallState.lastTargetReps`) and
+    /// the plan target it was set against.
+    var lastTargetReps: Int?
+    var lastPlanTargetReps: Int?
     /// Percent/TM rule's once-per-cycle bump gate (`StallState.trainingMaxCycle`).
     var trainingMaxCycle: Int?
 
     init(
         consecutiveMisses: Int = 0, lastWeightKg: Double? = nil, lastWeakestReps: Int? = nil,
-        lastTargetSeconds: Int? = nil, trainingMaxCycle: Int? = nil
+        bestWeakestReps: Int? = nil, lastTargetSeconds: Int? = nil, lastPlanTargetSeconds: Int? = nil,
+        lastTargetReps: Int? = nil, lastPlanTargetReps: Int? = nil, trainingMaxCycle: Int? = nil
     ) {
         self.consecutiveMisses = consecutiveMisses
         self.lastWeightKg = lastWeightKg
         self.lastWeakestReps = lastWeakestReps
+        self.bestWeakestReps = bestWeakestReps
         self.lastTargetSeconds = lastTargetSeconds
+        self.lastPlanTargetSeconds = lastPlanTargetSeconds
+        self.lastTargetReps = lastTargetReps
+        self.lastPlanTargetReps = lastPlanTargetReps
         self.trainingMaxCycle = trainingMaxCycle
     }
 
@@ -165,14 +179,20 @@ struct StallStateDTO: Codable {
         consecutiveMisses = state.consecutiveMisses
         lastWeightKg = state.lastWeightKg
         lastWeakestReps = state.lastWeakestReps
+        bestWeakestReps = state.bestWeakestReps
         lastTargetSeconds = state.lastTargetSeconds
+        lastPlanTargetSeconds = state.lastPlanTargetSeconds
+        lastTargetReps = state.lastTargetReps
+        lastPlanTargetReps = state.lastPlanTargetReps
         trainingMaxCycle = state.trainingMaxCycle
     }
 
     var stallState: StallState {
         StallState(
             consecutiveMisses: consecutiveMisses, lastWeightKg: lastWeightKg,
-            lastWeakestReps: lastWeakestReps, lastTargetSeconds: lastTargetSeconds,
+            lastWeakestReps: lastWeakestReps, bestWeakestReps: bestWeakestReps,
+            lastTargetSeconds: lastTargetSeconds, lastPlanTargetSeconds: lastPlanTargetSeconds,
+            lastTargetReps: lastTargetReps, lastPlanTargetReps: lastPlanTargetReps,
             trainingMaxCycle: trainingMaxCycle
         )
     }

@@ -173,6 +173,76 @@ struct WorkoutImportTests {
         #expect(components.year == 2024 && components.month == 3 && components.day == 11)
     }
 
+    @Test("Hevy row with blank reps but a duration becomes a timed set, not an error")
+    func hevyBlankRepsWithDurationIsTimedSet() throws {
+        let header = Self.hevyHeader
+        let row = [
+            "Plank Day", "11 Mar 2024, 18:24", "11 Mar 2024, 19:05", "", "Plank", "", "", "1", "normal",
+            "", "", "", "60", ""
+        ]
+        let csv = Self.csv(header, [row])
+        let result = try #require(WorkoutImport.parse(csv: csv))
+        #expect(result.problems.isEmpty)
+        #expect(result.emptyRows == 0)
+        let set = try #require(result.workouts.first?.exercises.first?.sets.first)
+        #expect(set.reps == 0)
+        #expect(set.durationSeconds == 60)
+    }
+
+    @Test("a Hevy row with nothing measured is skipped and counted as an empty row")
+    func hevyEmptyRowIsSkipped() throws {
+        let header = Self.hevyHeader
+        let row = [
+            "Push Day", "11 Mar 2024, 18:24", "11 Mar 2024, 19:05", "", "Bench Press", "", "", "1",
+            "normal", "", "", "", "", ""
+        ]
+        let csv = Self.csv(header, [row])
+        let result = try #require(WorkoutImport.parse(csv: csv))
+        #expect(result.problems.isEmpty)
+        #expect(result.emptyRows == 1)
+        #expect(result.workouts.isEmpty)
+    }
+
+    @Test("Hevy RPE is never attached to a reps-less timed set")
+    func hevyNoRPEOnTimedSet() throws {
+        let header = Self.hevyHeader
+        let row = [
+            "Plank Day", "11 Mar 2024, 18:24", "11 Mar 2024, 19:05", "", "Plank", "", "", "1", "normal",
+            "", "", "", "60", "8"
+        ]
+        let csv = Self.csv(header, [row])
+        let result = try #require(WorkoutImport.parse(csv: csv))
+        let set = try #require(result.workouts.first?.exercises.first?.sets.first)
+        #expect(set.rpe == nil)
+    }
+
+    // MARK: - FitNotes Kind/Notes
+
+    @Test("FitNotes iOS Kind column marks a warm-up; Notes is used when Comment is absent")
+    func fitNotesKindAndNotesColumns() throws {
+        let header = [
+            "Date", "Exercise", "Category", "Weight (kgs)", "Reps", "Distance Unit", "Kind", "Notes"
+        ]
+        let rows = [
+            ["2024-03-11", "Squat", "Legs", "60", "5", "", "Warm-up", ""],
+            ["2024-03-11", "Squat", "Legs", "100", "5", "", "Working", "felt strong"]
+        ]
+        let csv = Self.csv(header, rows)
+        let result = try #require(WorkoutImport.parse(csv: csv))
+        #expect(result.problems.isEmpty)
+        let sets = try #require(result.workouts.first?.exercises.first?.sets)
+        #expect(sets[0].kind == .warmup)
+        #expect(sets[1].kind == .working)
+        #expect(result.workouts.first?.exercises.first?.note == "felt strong")
+    }
+
+    @Test("FitNotes carries the Category column onto the imported exercise")
+    func fitNotesExposesCategory() throws {
+        let result = try #require(WorkoutImport.parse(csv: Self.fitNotesCSV))
+        let squat = try #require(result.workouts.first?.exercises.first)
+        #expect(squat.category == "Legs")
+    }
+
     // MARK: - Detection failure
 
     @Test("unrecognized header returns nil")

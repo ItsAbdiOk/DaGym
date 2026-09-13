@@ -108,6 +108,7 @@ private struct ExercisePickerRow: View {
                 .padding(6)
                 .frame(width: 44, height: 44)
                 .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(exercise.name)
                     .font(DGFont.title3)
@@ -124,10 +125,14 @@ private struct ExercisePickerRow: View {
                 Image(systemName: "star.fill")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(DGColor.prGoldText)
+                    .accessibilityHidden(true)
             }
         }
-        .frame(height: 72)
+        .frame(minHeight: 72)
         .dgCard(radius: 14, padding: 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(exercise.isFavorite ? "\(exercise.name), favourite" : exercise.name)
+        .accessibilityValue(exercise.muscleLine)
     }
 }
 

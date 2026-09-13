@@ -85,6 +85,8 @@ public enum ProgressionEngine {
     ///     never bumps.
     ///   - trainingMaxIncrementKg: the per-cycle TM bump for this lift (2.5 kg
     ///     upper / 5 kg lower); defaults to `TrainingConstants.trainingMaxUpperIncrementKg`.
+    ///   - perSide: the exercise is unilateral and reps are logged as totals, so rep
+    ///     targets step by 2 and stay even (plan.md §7).
     public static func prescribe(
         rule: ProgressionRule,
         planned: [PlannedSetSpec],
@@ -99,7 +101,8 @@ public enum ProgressionEngine {
         collarsKg: Double = 0,
         grid: LoadGrid? = nil,
         cycleIndex: Int? = nil,
-        trainingMaxIncrementKg: Double? = nil
+        trainingMaxIncrementKg: Double? = nil,
+        perSide: Bool = false
     ) -> Prescribed {
         let context = RuleContext(
             planned: planned,
@@ -112,7 +115,8 @@ public enum ProgressionEngine {
             unit: unit,
             grid: grid ?? .unknown(bar: bar, plates: plates, collarsKg: collarsKg),
             cycleIndex: cycleIndex,
-            trainingMaxIncrementKg: trainingMaxIncrementKg ?? TrainingConstants.trainingMaxUpperIncrementKg
+            trainingMaxIncrementKg: trainingMaxIncrementKg ?? TrainingConstants.trainingMaxUpperIncrementKg,
+            perSide: perSide
         )
         switch rule {
         case .linear(let incrementKg):
@@ -148,6 +152,15 @@ struct RuleContext {
     var grid: LoadGrid
     var cycleIndex: Int?
     var trainingMaxIncrementKg: Double
+    var perSide: Bool = false
+
+    /// Rep targets move one at a time, or two when reps are per-side totals.
+    var repStep: Int { perSide ? 2 : 1 }
+
+    /// Per-side totals stay even: 17 becomes 18. Identity otherwise.
+    func evenReps(_ reps: Int) -> Int {
+        perSide && !reps.isMultiple(of: 2) ? reps + 1 : reps
+    }
 
     var baselineWorkingSets: [HistorySet] { baseline?.workingSets ?? [] }
 
@@ -167,6 +180,46 @@ struct RuleContext {
         guard current > 0.001 else { return raised }
         let cap = roundedDown(current * (1 + TrainingConstants.maxSessionIncreaseFraction))
         return min(raised, max(oneStep, cap))
+    }
+
+    /// Clamps a deload candidate onto the grid between its lightest positive load and
+    /// the heaviest load strictly under `weightKg` — a deload is always a real decrease
+    /// and never zero or negative. Nil when no such load exists (an empty bar, the
+    /// lightest dumbbell): hold instead of deloading.
+    func deloadClamped(_ candidate: Double, below weightKg: Double) -> Double? {
+        // Wider than the grid's own rounding slack, so "just under" isn't snapped back up.
+        let epsilon = 0.01
+        if case .free = grid {
+            return candidate > epsilon && candidate < weightKg - epsilon ? candidate : nil
+        }
+        let heaviestBelow = grid.nearestBelow(weightKg - epsilon)
+        let lightest = grid.nearestAbove(0)
+        guard heaviestBelow > epsilon, heaviestBelow < weightKg - epsilon,
+              lightest <= heaviestBelow + epsilon else { return nil }
+        return min(max(candidate, lightest), heaviestBelow)
+    }
+
+    /// The hold for a deload that has nowhere to go: same weight, `.repeat`, and the
+    /// miss streak kept so the advice stands until the lifter changes something.
+    func lightestLoadPrescribed(weightKg: Double, misses: Int, baselineDate: Date?) -> Prescribed {
+        let title = "Already at the lightest load"
+        let sets = planned.map {
+            Prescription(
+                weightKg: weightKg, reps: $0.targetReps ?? 0, durationSeconds: $0.targetSeconds,
+                previous: nil, reason: title
+            )
+        }
+        return Prescribed(
+            sets: sets,
+            reason: PrescriptionReason(
+                title: title,
+                body: "\(misses) sessions in a row missed at \(formatted(kg: weightKg)) and there's " +
+                    "nothing lighter on this equipment — try a lighter variation.",
+                kind: .repeat
+            ),
+            stall: stall.advancing(misses: misses, weightKg: weightKg),
+            trainingMaxKg: trainingMaxKg, previousDate: baselineDate
+        )
     }
 
     /// A kg value in the user's unit with its symbol: "82.5 kg", "135 lb".

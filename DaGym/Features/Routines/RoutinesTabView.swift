@@ -63,8 +63,12 @@ struct RoutinesTabView: View {
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             programsButton
-            DGIconButton(symbol: "calendar") { path.append(Destination.schedule) }
-            DGIconButton(symbol: "plus") { path.append(Destination.new) }
+            DGIconButton(symbol: "calendar", accessibilityLabel: "Schedule") {
+                path.append(Destination.schedule)
+            }
+            DGIconButton(symbol: "plus", accessibilityLabel: "New routine") {
+                path.append(Destination.new)
+            }
         }
     }
 
@@ -142,6 +146,7 @@ private struct RoutineCard: View {
                 Text("~\(routine.estimatedMinutes) MIN").dgLabel()
                     .padding(.trailing, DGTap.min - DGSpace.s3)
             }
+            .accessibilityElement(children: .combine)
             Text(exerciseNames)
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
@@ -152,6 +157,7 @@ private struct RoutineCard: View {
                 }
                 Spacer(minLength: DGSpace.s2)
                 startPill
+                    .accessibilityLabel("Start \(routine.name)")
             }
         }
         .dgCard()

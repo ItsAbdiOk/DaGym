@@ -76,6 +76,10 @@ public enum TrainingConstants {
     /// the rule stops adding time and suggests load / a harder variation instead.
     public static let defaultTimedStepSeconds = 5
     public static let timedCeilingSeconds = 120
+    /// Timed rule: after `linearMissesBeforeDeload` short holds in a row, back the hold off to
+    /// this fraction of what was asked, rounded down to `timedRoundingSeconds`.
+    public static let timedBackoffFraction = 0.90
+    public static let timedRoundingSeconds = 5
 
     /// Percent/training-max rule: TM as a fraction of e1RM when none is set yet, and the
     /// per-cycle bump applied after week 4.
@@ -103,4 +107,27 @@ public enum TrainingConstants {
     /// Deload plan: fraction of normal sets and load to prescribe.
     public static let deloadSetsFraction = 0.6
     public static let deloadLoadFraction = 0.9
+}
+
+// MARK: - Recovery reference, retention and balance (OpenGym parity, insights recs 2–4)
+
+extension TrainingConstants {
+    /// §7 recovery model: two stimulus events on the same muscle further apart than this are
+    /// treated as separate sessions when scoring against the lifter's own reference.
+    public static let recoverySessionGapHours = 6.0
+    /// §7 recovery model: weight of the newest session in the downward-only running reference
+    /// (0.5 ≈ a 3-session horizon). The reference starts at `recoveryFatigueScale` and only
+    /// ever moves down toward the lifter's habitual session size.
+    public static let recoveryReferenceSmoothing = 0.5
+
+    /// Strength retention: full (1.0) for this many days after a muscle's last counting set…
+    public static let retentionFullDays = 14.0
+    /// …then halves every this many days…
+    public static let retentionHalfLifeDays = 28.0
+    /// …down to this floor, which is also where a never-trained muscle sits.
+    public static let retentionFloor = 0.5
+
+    /// Balance map "hard sets only": a set counts as hard at this RIR or fewer (or when its kind
+    /// is `.failure`/`.amrap`).
+    public static let hardSetMaxRIR = 1
 }

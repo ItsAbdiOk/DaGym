@@ -93,14 +93,16 @@ extension WorkoutStore {
         save()
     }
 
-    /// A fresh exercise entry with three working sets, auto-filled from the previous session the
-    /// same way `startWorkout` fills a routine's planned sets. Used when adding an exercise
-    /// mid-workout, where there's no planned-set template to draw from.
-    func autoFilledEntry(for exercise: ExerciseInfo) -> WorkoutExerciseEntry {
+    /// A fresh exercise entry auto-filled from the previous session the same way `startWorkout`
+    /// fills a routine's planned sets. Used when adding an exercise mid-workout, where there's
+    /// no planned-set template to draw from. The row count is the previous session's completed
+    /// working-set count (`setCount` overrides it); three when the exercise was never logged.
+    func autoFilledEntry(for exercise: ExerciseInfo, setCount: Int? = nil) -> WorkoutExerciseEntry {
         let workingSet = AutoFillSetSpec(
             kind: .working, targetReps: nil, targetWeightKg: nil, targetSeconds: nil
         )
-        let planned = Array(repeating: workingSet, count: 3)
+        let count = setCount ?? previousWorkingSetCount(exerciseID: exercise.id) ?? 3
+        let planned = Array(repeating: workingSet, count: max(1, count))
         let sets = autoFilledSets(
             exerciseID: exercise.id, planned: planned, incrementKg: exercise.incrementKg
         )
@@ -131,7 +133,7 @@ extension WorkoutStore {
     func withHistoryStrip(_ entry: WorkoutExerciseEntry) -> WorkoutExerciseEntry {
         var entry = entry
         entry.lastSessions = lastSessions(exerciseID: entry.exercise.id)
-        entry.sparkline = e1rmSeries(exerciseID: entry.exercise.id).suffix(8).map(\.1)
+        entry.sparkline = sparklineSeries(exerciseID: entry.exercise.id).suffix(8).map(\.1)
         return entry
     }
 
@@ -245,7 +247,8 @@ extension WorkoutStore {
     private func deloadEntry(
         info: ExerciseInfo, plannedSets: [PlannedSetModel], routineExercise: RoutineExerciseModel
     ) -> WorkoutExerciseEntry {
-        let baseline = exerciseHistory(exerciseID: info.id, limit: 1).first?.workingSets.first?.weightKg
+        let baseline = exerciseHistory(exerciseID: info.id).first { !$0.wasPlannedDeload }?
+            .workingSets.first?.weightKg
         let baselineWeight = baseline ?? plannedSets.first?.targetWeightKg ?? 0
         let plan = DeloadDetector.deloadPlan(sets: max(plannedSets.count, 1), load: baselineWeight)
         let equipment = activeEquipment()
@@ -315,33 +318,57 @@ extension WorkoutStore {
 
     /// The most recent finished workout's logged, *completed* sets for this exercise (A6: an
     /// uncompleted "0 × 0" row is not a previous), in position order, plus that session's date
-    /// for `AutoFill`'s "is the plan newer than this?" check.
+    /// for `AutoFill`'s "is the plan newer than this?" check. A session with nothing completed,
+    /// a planned deload, or one logged under an excluded routine slot is skipped — the next
+    /// older one is the previous.
     private func previousSets(exerciseID: UUID) -> (sets: [PreviousSet], date: Date?) {
+        guard let previous = previousLoggedExercise(exerciseID: exerciseID) else { return ([], nil) }
+        let sets = (previous.exercise.sets ?? []).filter(\.isCompleted).sorted { $0.order < $1.order }
+        return (
+            sets.map { setModel in
+                PreviousSet(
+                    kind: setModel.setKind, weightKg: setModel.weightKg, reps: setModel.reps,
+                    durationSeconds: setModel.durationSeconds
+                )
+            },
+            previous.workout.startedAt
+        )
+    }
+
+    /// Completed working-set count from the previous counting session (see `previousSets`);
+    /// nil when the exercise was never logged.
+    private func previousWorkingSetCount(exerciseID: UUID) -> Int? {
+        guard let previous = previousLoggedExercise(exerciseID: exerciseID) else { return nil }
+        return (previous.exercise.sets ?? []).filter { $0.isCompleted && $0.setKind.countsTowardStats }.count
+    }
+
+    private func previousLoggedExercise(
+        exerciseID: UUID
+    ) -> (exercise: WorkoutExerciseModel, workout: WorkoutModel)? {
         for workout in finishedWorkoutModelsNewestFirst() {
-            guard let match = (workout.exercises ?? []).first(where: { $0.exercise?.id == exerciseID }) else {
-                continue
+            let candidates = (workout.exercises ?? []).filter {
+                $0.exercise?.id == exerciseID && !$0.wasPlannedDeload && !$0.excludedFromProgression
+                    && ($0.sets ?? []).contains(where: \.isCompleted)
             }
-            let sets = (match.sets ?? []).filter(\.isCompleted).sorted { $0.order < $1.order }
-            return (
-                sets.map { setModel in
-                    PreviousSet(
-                        kind: setModel.setKind, weightKg: setModel.weightKg, reps: setModel.reps,
-                        durationSeconds: setModel.durationSeconds
-                    )
-                },
-                workout.startedAt
-            )
+            if let match = candidates.min(by: { $0.order < $1.order }) { return (match, workout) }
         }
-        return ([], nil)
+        return nil
     }
 
     // MARK: - Syncing
 
+    /// Stamps `excludedFromProgression` from the routine slot the workout was started from, once,
+    /// when the row is first persisted — so a later edit to the routine flag leaves this
+    /// workout's history as it was logged.
     private func makeWorkoutExercise(
         entry: WorkoutExerciseEntry, workout: WorkoutModel
     ) -> WorkoutExerciseModel {
         let exerciseModel = fetchExerciseModel(id: entry.exercise.id)
-        let model = WorkoutExerciseModel(id: entry.id, exercise: exerciseModel, workout: workout)
+        let excluded = workout.routineID.flatMap(fetchRoutineModel)?.exercises?
+            .contains { $0.exercise?.id == entry.exercise.id && $0.excludeFromProgression } ?? false
+        let model = WorkoutExerciseModel(
+            id: entry.id, excludedFromProgression: excluded, exercise: exerciseModel, workout: workout
+        )
         context.insert(model)
         workout.exercises = (workout.exercises ?? []) + [model]
         return model

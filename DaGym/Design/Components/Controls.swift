@@ -40,11 +40,13 @@ struct DGPrimaryButton: View {
     }
 }
 
-/// Glass pill with an SF Symbol (44 pt floor).
+/// Glass pill with an SF Symbol (44 pt floor). Icon-only, so callers must pass
+/// `accessibilityLabel` describing the action (e.g. "Settings", "Add exercise").
 struct DGIconButton: View {
     var symbol: String
     var size: CGFloat = 44
     var tint: Color = DGColor.ink1
+    var accessibilityLabel: String
     var action: () -> Void
 
     var body: some View {
@@ -56,6 +58,7 @@ struct DGIconButton: View {
                 .dgGlass(.regular, in: Circle())
         }
         .buttonStyle(DGPressStyle())
+        .accessibilityLabel(accessibilityLabel)
     }
 }
 
@@ -254,8 +257,9 @@ struct EmptyState: View {
 }
 
 extension DGFont {
-    /// Condensed bold at an arbitrary size for buttons, chips and badges.
+    /// Condensed bold at an arbitrary size for buttons, chips and badges. Scales with
+    /// Dynamic Type against `.footnote`, the closest built-in style to these sizes.
     static func condensedLabel(_ size: CGFloat) -> Font {
-        Font.custom(Family.condensedBold, size: size)
+        Font.custom(Family.condensedBold, size: size, relativeTo: .footnote)
     }
 }

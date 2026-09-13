@@ -34,6 +34,7 @@ final class Preferences {
         static let trainingGoal = "trainingGoal"
         static let deloadSnoozedUntil = "deloadSnoozedUntil"
         static let deloadDismissedFingerprint = "deloadDismissedFingerprint"
+        static let accent = "accent"
     }
 
     private let defaults: UserDefaults
@@ -177,6 +178,16 @@ final class Preferences {
         }
     }
 
+    /// The accent theme (plan.md Phase 8). Defaults to the shipped brand colour, `.coral`.
+    /// `DGColor.coral`/`coralText` resolve from `DGColor.current`, which this keeps in sync so
+    /// every existing call site re-themes without being touched — see `DGColor.swift`.
+    var accent: DGAccent {
+        didSet {
+            defaults.set(accent.rawValue, forKey: Key.accent)
+            DGColor.current = accent
+        }
+    }
+
     init(suite: UserDefaults = .standard) {
         defaults = suite
         weightUnit = WeightUnit(rawValue: suite.string(forKey: Key.weightUnit) ?? "") ?? .kg
@@ -207,6 +218,8 @@ final class Preferences {
         trainingGoal = suite.string(forKey: Key.trainingGoal) ?? ""
         deloadSnoozedUntil = suite.object(forKey: Key.deloadSnoozedUntil) as? Date
         deloadDismissedFingerprint = suite.string(forKey: Key.deloadDismissedFingerprint)
+        accent = DGAccent(rawValue: suite.string(forKey: Key.accent) ?? "") ?? .coral
+        DGColor.current = accent
     }
 
     /// A canonical kg value, formatted and rounded for the user's unit.

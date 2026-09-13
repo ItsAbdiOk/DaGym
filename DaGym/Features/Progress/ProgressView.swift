@@ -61,7 +61,7 @@ struct ProgressScreen: View {
                 .buttonStyle(.plain)
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.coralText)
-            DGIconButton(symbol: "xmark", size: 36) { dismiss() }
+            DGIconButton(symbol: "xmark", size: 36, accessibilityLabel: "Close") { dismiss() }
         }
     }
 

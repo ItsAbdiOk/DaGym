@@ -82,6 +82,7 @@ private struct RecordRow: View {
             Image(systemName: "star.fill")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(DGColor.prGold)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(record.kindLabel).dgLabel(DGColor.prGoldText)
                 Text(record.line)
@@ -93,6 +94,7 @@ private struct RecordRow: View {
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
         }
+        .accessibilityElement(children: .combine)
         .frame(minHeight: DGTap.min)
     }
 

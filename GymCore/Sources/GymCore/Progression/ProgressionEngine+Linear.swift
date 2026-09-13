@@ -64,9 +64,13 @@ extension ProgressionEngine {
         let baselineDate = context.baseline?.date
         let misses = stall.consecutiveMisses + 1
         if misses >= TrainingConstants.linearMissesBeforeDeload {
-            let deloadTarget = linearDeloadTarget(
+            guard let deloadTarget = linearDeloadTarget(
                 context, baselineWeight: baselineWeight, incrementKg: incrementKg
-            )
+            ) else {
+                return context.lightestLoadPrescribed(
+                    weightKg: baselineWeight, misses: misses, baselineDate: baselineDate
+                )
+            }
             return prescribedResult(
                 context, weightKg: deloadTarget,
                 reason: PrescriptionReason(
@@ -90,15 +94,16 @@ extension ProgressionEngine {
     }
 
     /// 90 % of the stalled weight, rounded down; never above 90 % of e1RM and
-    /// never less than one increment below the stalled weight.
+    /// never less than one increment below the stalled weight — but never below the
+    /// grid's lightest load under the stalled weight either. Nil when there is none.
     static func linearDeloadTarget(
         _ context: RuleContext, baselineWeight: Double, incrementKg: Double
-    ) -> Double {
+    ) -> Double? {
         let fraction = TrainingConstants.linearDeloadFraction
         let byWeight = context.roundedDown(baselineWeight * fraction)
         let byE1RM = bestE1RM(context.baselineWorkingSets).map { context.roundedDown($0 * fraction) }
         let oneStepDown = context.roundedDown(baselineWeight - max(incrementKg, 0))
-        return min(byWeight, byE1RM ?? byWeight, oneStepDown)
+        return context.deloadClamped(min(byWeight, byE1RM ?? byWeight, oneStepDown), below: baselineWeight)
     }
 
     /// A weight change (outside this engine's own repeats/deloads) resets the miss streak.

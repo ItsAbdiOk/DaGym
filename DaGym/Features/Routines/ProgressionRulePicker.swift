@@ -145,6 +145,31 @@ extension RuleState {
     }
 }
 
+extension RuleState {
+    /// A fresh per-exercise override seeded from the routine's rule, with the increment reset to
+    /// the region default: 5 kg for a lower-body lift, 2.5 kg otherwise — and for a lb lifter the
+    /// round 10 lb / 5 lb, so the card reads "+10 lb" rather than "+11 lb".
+    static func exerciseOverride(
+        of rule: ProgressionRule, for exercise: ExerciseInfo, unit: WeightUnit
+    ) -> RuleState {
+        var state = RuleState.from(rule)
+        state.incrementKg = defaultIncrementKg(for: exercise, unit: unit)
+        return state
+    }
+
+    static func defaultIncrementKg(for exercise: ExerciseInfo, unit: WeightUnit) -> Double {
+        let isLowerBody = exercise.primary.contains(where: \.isLowerBody)
+        switch unit {
+        case .kg:
+            return isLowerBody
+                ? TrainingConstants.defaultLowerBodyIncrementKg
+                : TrainingConstants.defaultUpperBodyIncrementKg
+        case .lb:
+            return unit.toKg(isLowerBody ? 10 : 5)
+        }
+    }
+}
+
 /// Step size for the rule picker's increment stepper, pulled out so it's testable without
 /// SwiftUI. A kg lifter keeps the existing half-kg step; a lb lifter steps by a whole pound so
 /// they can land on round numbers like "5 lb" instead of kg's 0.5 step (2.27 kg increments).

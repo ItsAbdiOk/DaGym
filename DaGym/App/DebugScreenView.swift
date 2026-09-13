@@ -64,7 +64,7 @@ struct DebugScreenView: View {
         case .effort:
             sheetHost { EffortPickerSheet(scale: $scale, onPick: { _ in }) }
         case .swap:
-            sheetHost { SwapExerciseSheet(exercise: SampleData.cableFly, onPick: { _ in }) }
+            sheetHost { SwapExerciseSheet(exercise: SampleData.cableFly, onPick: { _, _ in }) }
         case .newExercise:
             sheetHost { NewExerciseSheet(onSave: { _ in }) }
         }

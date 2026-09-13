@@ -87,8 +87,7 @@ extension WorkoutStore {
     /// 2.5 kg for an upper-body lift, 5 kg for a lower-body one (A3) — matches the seeded
     /// `incrementKg` split without needing a new persisted field.
     func trainingMaxIncrementKg(for exerciseInfo: ExerciseInfo) -> Double {
-        let lowerBody: Set<Muscle> = [.quads, .hams, .glutes, .calves]
-        return exerciseInfo.primary.contains(where: lowerBody.contains)
+        return exerciseInfo.primary.contains(where: \.isLowerBody)
             ? TrainingConstants.trainingMaxLowerIncrementKg
             : TrainingConstants.trainingMaxUpperIncrementKg
     }
@@ -124,11 +123,14 @@ extension WorkoutStore {
     }
 
     /// Up to the last 6 finished workouts' sets for this exercise, newest first, as
-    /// `GymCore.ExerciseHistoryEntry` — the shape `ProgressionEngine.prescribe` expects.
+    /// `GymCore.ExerciseHistoryEntry` — the shape `ProgressionEngine.prescribe` expects. A
+    /// session logged under an excluded routine slot (`excludedFromProgression`) is not history
+    /// the engine may build on, so it's left out here rather than flagged.
     func exerciseHistory(exerciseID: UUID, limit: Int = 6) -> [ExerciseHistoryEntry] {
         var result: [ExerciseHistoryEntry] = []
         for workout in finishedWorkoutModelsNewestFirst() {
-            guard let match = matchingExercise(exerciseID: exerciseID, in: workout) else { continue }
+            guard let match = matchingExercise(exerciseID: exerciseID, in: workout),
+                  !match.excludedFromProgression else { continue }
             let sets = completedHistorySets(match)
             guard !sets.isEmpty else { continue }
             result.append(

@@ -9,8 +9,14 @@ import Foundation
 /// `\r\n` into a single `Character`, which would make a plain `case "\r", "\n":` switch miss a
 /// CRLF line ending entirely.
 public enum CSVParser {
-    /// Parses `text` into rows of fields. A trailing blank line produces no extra empty row.
+    /// Parses `text` into rows of fields. A trailing blank line produces no extra empty row. A
+    /// leading UTF-8 BOM (some exports, notably Excel-authored CSVs, write one) is stripped first
+    /// so it never ends up glued to the first header cell.
     public static func parse(_ text: String) -> [[String]] {
+        var text = text
+        if text.hasPrefix("\u{FEFF}") {
+            text.removeFirst()
+        }
         var state = ParserState()
         let scalars = Array(text.unicodeScalars)
         var index = 0

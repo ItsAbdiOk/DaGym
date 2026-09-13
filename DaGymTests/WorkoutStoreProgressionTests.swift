@@ -208,10 +208,14 @@ struct WorkoutStoreProgressionTests {
     func cycleIndexBumpsTrainingMaxOncePerCycle() throws {
         let store = try makeStore()
         let ids = makeRoutine(store, rule: .percentOfTrainingMax(scheme: .classic))
-        let program = store.createProgram(from: .fiveByFive)
+        for name in ["Pull B", "Legs"] {
+            _ = store.saveRoutine(id: nil, name: name, exercises: [])
+        }
+        let program = try #require(store.createProgram(from: .pushPullLegs))
         store.startProgram(id: program.id)
-        // `.fiveByFive` cycles "Push A"/"Legs" — this test's routine is named "Push A" by
-        // `makeRoutine`, matching a starter-program slot so it picks up an active cycle index.
+        // `.pushPullLegs` cycles "Push A"/"Pull B"/"Legs" — this test's routine is named
+        // "Push A" by `makeRoutine`, matching a starter-program slot so it picks up an active
+        // cycle index; the other two slots are empty stand-ins so the program can be built.
         // The TM only initializes once there's a prior session to derive an e1RM from, so it
         // takes two finished sessions before it's first set.
         logSession(store, routineID: ids.routineID, weightKg: 80, reps: 5)

@@ -50,6 +50,9 @@ final class WorkoutSession {
     private var restExerciseName = ""
     private var restSetNumber = 0
     private var restSetCount = 0
+    /// Every set completed at least once this session, so un-ticking a row to fix its reps and
+    /// re-ticking it doesn't restart a rest that's still running.
+    private var everCompletedSetIDs: Set<UUID> = []
 
     // PR banner
     var prBanner: PersonalRecordInfo?
@@ -114,8 +117,10 @@ final class WorkoutSession {
               let si = exercises[ei].sets.firstIndex(where: { $0.id == setID }) else { return }
         exercises[ei].sets[si].isDone = true
         if let effort { exercises[ei].sets[si].effort = effort }
+        let isRecheck = !everCompletedSetIDs.insert(setID).inserted
+        if isRecheck, isResting { return }
         Haptics.setDone()
-        startRest(seconds: exercises[ei].exercise.restSeconds, after: ei, set: si)
+        startRest(seconds: restSeconds(after: ei, set: si), after: ei, set: si)
     }
 
     func uncompleteSet(exerciseID: UUID, setID: UUID) {
@@ -124,6 +129,9 @@ final class WorkoutSession {
         exercises[ei].sets[si].isDone = false
     }
 
+    /// Starts (or, with `seconds == 0`, clears) the rest after `set` of `exercises[exerciseIndex]`
+    /// and works out what comes next: the superset partner still owed a set this round, the next
+    /// round's first set, the exercise after the group, or "Last set done" once nothing is left.
     func startRest(seconds: Int, after exerciseIndex: Int, set setIndex: Int) {
         restTotal = seconds
         restRemaining = seconds
@@ -132,19 +140,23 @@ final class WorkoutSession {
         restNextWeightKg = nil
         restNextReps = nil
         restNextLabel = ""
-        if setIndex + 1 < ex.sets.count {
-            let next = ex.sets[setIndex + 1]
+        let members = supersetMembers(containing: exerciseIndex)
+        if !hasUndoneSets {
+            restNextLabel = "Last set done"
+        } else if let partner = roundPartner(members: members, round: setIndex, excluding: exerciseIndex) {
+            restNextLabel = "Next \(exercises[partner].exercise.name)"
+        } else if let next = nextRoundSet(members: members, round: setIndex + 1) {
             restNextWeightKg = next.weightKg
             restNextReps = next.reps
-        } else if exerciseIndex + 1 < exercises.count {
-            restNextLabel = "Next \(exercises[exerciseIndex + 1].exercise.name)"
+        } else if let last = members.last, last + 1 < exercises.count {
+            restNextLabel = "Next \(exercises[last + 1].exercise.name)"
         } else {
             restNextLabel = "Last set done"
         }
         restExerciseName = ex.exercise.name
         restSetNumber = setIndex + 1
         restSetCount = ex.sets.count
-        onRestStateChange?(restState(isEnded: false, isSkipped: false))
+        onRestStateChange?(restState(isEnded: seconds == 0, isSkipped: seconds == 0))
     }
 
     /// Refreshes `restRemaining` from the wall clock. Safe to call as often as you like — it only

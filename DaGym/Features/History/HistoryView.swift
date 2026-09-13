@@ -141,7 +141,7 @@ struct HistoryView: View {
             .dgGlass(.regular, radius: DGRadius.lg)
         }
         .buttonStyle(DGPressStyle())
-        .padding(.bottom, DGSpace.s4)
+        .padding(.bottom, 96) // clear of the floating tab bar
     }
 
     /// Records bucketed into "This Week", "Last Week" and, when needed,
@@ -206,6 +206,7 @@ private struct RecordCard: View {
                 .foregroundStyle(DGColor.ink3)
         }
         .dgCard()
+        .accessibilityElement(children: .combine)
     }
 
     private var footnote: String {

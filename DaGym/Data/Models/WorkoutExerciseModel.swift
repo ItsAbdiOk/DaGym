@@ -12,6 +12,11 @@ final class WorkoutExerciseModel {
     /// True when this exercise was prescribed as part of a program's planned deload week
     /// (plan.md §6.5). Excluded as the baseline future progression builds from.
     var wasPlannedDeload: Bool = false
+    /// True when the routine exercise this was logged under was flagged
+    /// `RoutineExerciseModel.excludeFromProgression` at the time the workout was built — a
+    /// rehab or accessory session that never becomes a progression baseline or ghost, even
+    /// if the routine flag is edited later.
+    var excludedFromProgression: Bool = false
 
     @Relationship(inverse: \ExerciseModel.workoutExercises)
     var exercise: ExerciseModel?
@@ -23,6 +28,7 @@ final class WorkoutExerciseModel {
     init(
         id: UUID = UUID(), order: Int = 0, supersetGroup: Int? = nil, note: String = "",
         wasSubstitution: Bool = false, wasPlannedDeload: Bool = false,
+        excludedFromProgression: Bool = false,
         exercise: ExerciseModel? = nil, workout: WorkoutModel? = nil
     ) {
         self.id = id
@@ -31,6 +37,7 @@ final class WorkoutExerciseModel {
         self.note = note
         self.wasSubstitution = wasSubstitution
         self.wasPlannedDeload = wasPlannedDeload
+        self.excludedFromProgression = excludedFromProgression
         self.exercise = exercise
         self.workout = workout
     }

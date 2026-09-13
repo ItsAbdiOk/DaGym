@@ -171,7 +171,8 @@ struct StoreHistoryFixTests {
         let second = store.startWorkout(routineID: routineID)
         #expect(second.exercises[0].whyTitle == "+1 set")
         #expect(second.exercises[0].sets.count == 4)
-        #expect(second.exercises[0].sets.allSatisfy { $0.kind == .working && $0.reps == 10 })
+        // The extra set comes with reps back at the plan's base (8), not the ceiling just hit.
+        #expect(second.exercises[0].sets.allSatisfy { $0.kind == .working && $0.reps == 8 })
     }
 
     // MARK: - D8 deleting a workout rebuilds the PR cache

@@ -60,9 +60,12 @@ struct BodyView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Bodyweight").dgLabel()
                     if let latest = series.last {
-                        Text(preferences.formatWeight(kg: latest.kg))
-                            .dgMetric(DGFont.metricL)
-                            .foregroundStyle(DGColor.ink1)
+                        HStack(alignment: .firstTextBaseline, spacing: DGSpace.s1) {
+                            Text(preferences.formatWeight(kg: latest.kg))
+                                .dgMetric(DGFont.metricL)
+                                .foregroundStyle(DGColor.ink1)
+                            Text(preferences.unitSymbol).dgLabel()
+                        }
                     } else {
                         Text("—").dgMetric(DGFont.metricL).foregroundStyle(DGColor.ink3)
                     }
@@ -124,6 +127,17 @@ struct BodyView: View {
             AxisMarks(values: .stride(by: .month)) { AxisValueLabel(format: .dateTime.month(.abbreviated)) }
         }
         .chartYAxis { AxisMarks(position: .leading) }
+        .chartYScale(domain: yDomain)
+    }
+
+    /// A few units either side of the readings (and the goal) rather than a 0-based axis, so a
+    /// 75 → 74 kg move is visible instead of a flat line at the top of the chart.
+    private var yDomain: ClosedRange<Double> {
+        var values = series.map { displayWeight($0.kg) }
+        if let goalKg = preferences.bodyweightGoalKg { values.append(displayWeight(goalKg)) }
+        guard let low = values.min(), let high = values.max() else { return 0...100 }
+        let pad = max(2, (high - low) * 0.25)
+        return (low - pad)...(high + pad)
     }
 
     private var actionsRow: some View {

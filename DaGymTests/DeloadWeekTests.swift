@@ -44,7 +44,7 @@ struct DeloadWeekTests {
     func previousProgramResumes() throws {
         let store = try makeStore()
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
-        let original = store.createProgram(from: .pushPullLegs)
+        let original = try #require(store.createProgram(from: .pushPullLegs))
         store.startProgram(id: original.id)
 
         store.planDeloadWeek()
@@ -65,7 +65,7 @@ struct DeloadWeekTests {
     func deloadStaysActiveDuringItsOwnWeek() throws {
         let store = try makeStore()
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
-        let original = store.createProgram(from: .pushPullLegs)
+        let original = try #require(store.createProgram(from: .pushPullLegs))
         store.startProgram(id: original.id)
 
         store.planDeloadWeek()

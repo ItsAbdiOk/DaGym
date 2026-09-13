@@ -103,30 +103,55 @@ enum WorkoutImportService {
         return ParseContext(unit: .kg, library: candidates)
     }
 
-    private static func matchedExerciseID(_ name: String, context: ParseContext) -> UUID? {
+    /// A match has to clear the floor *and* stand clear of the runner-up
+    /// (`ExerciseMatcher.isConfident`): "Incline Bench Press" against both an incline barbell
+    /// and an incline dumbbell press is a coin toss, so it's left unmatched rather than guessed.
+    static func matchedExerciseID(_ name: String, context: ParseContext) -> UUID? {
         let matches = ExerciseMatcher.match(name, in: context)
         guard let best = matches.first, best.score >= matchThreshold else { return nil }
+        let runnerUp = matches.dropFirst().first?.score ?? 0
+        guard ExerciseMatcher.isConfident(best: best.score, runnerUp: runnerUp) else { return nil }
         return best.id
     }
 
-    /// Resolves `name` to an exercise id, creating a custom exercise the first time an import
-    /// batch sees an unmatched name (subsequent rows with the same name reuse it).
+    /// Resolves an imported exercise to an id, creating a custom exercise the first time an
+    /// import batch sees an unmatched name (subsequent rows with the same name reuse it). The
+    /// new exercise's muscles come from the source's category or the name; its logging style
+    /// from what the file's rows measured.
     static func resolveExercise(
-        _ name: String, store: WorkoutStore, context: ParseContext,
+        _ exercise: ImportedExercise, store: WorkoutStore, context: ParseContext,
         exerciseCache: inout [String: UUID], report: inout WorkoutImportReport
     ) -> UUID {
-        let key = name.lowercased()
+        let key = exercise.name.lowercased()
         if let cached = exerciseCache[key] { return cached }
-        if let matched = matchedExerciseID(name, context: context) {
+        if let matched = matchedExerciseID(exercise.name, context: context) {
             exerciseCache[key] = matched
             return matched
         }
         let created = store.createCustomExercise(
-            name: name, primary: [], equipment: "other", style: .weightReps
+            name: exercise.name,
+            primary: ExerciseHints.primaryMuscles(name: exercise.name, category: exercise.category),
+            equipment: "other", style: inventedStyle(for: exercise)
         )
         exerciseCache[key] = created.id
         report.exercisesCreated += 1
         return created.id
+    }
+
+    private static func inventedStyle(for exercise: ImportedExercise) -> ExerciseInfo.LoggingStyle {
+        let hint = ExerciseHints.loggingStyle(
+            hasReps: exercise.sets.contains { $0.reps > 0 },
+            hasTime: exercise.sets.contains { ($0.durationSeconds ?? 0) > 0 },
+            hasDistance: exercise.sets.contains { ($0.distanceMeters ?? 0) > 0 }
+        )
+        switch hint {
+        case .weightReps: return .weightReps
+        case .bodyweightReps: return .bodyweightReps
+        case .assisted: return .assisted
+        case .weightedBodyweight: return .weightedBodyweight
+        case .timedHold: return .timedHold
+        case .cardio: return .cardio
+        }
     }
 
     // MARK: - Dedupe

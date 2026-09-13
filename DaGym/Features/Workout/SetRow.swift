@@ -51,6 +51,10 @@ struct SetRow: View {
                     .frame(minWidth: 44, alignment: .leading)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Weight")
+            .accessibilityValue(
+                "\(preferences.formatWeight(kg: set.weightKg)) \(preferences.weightUnit.symbol)"
+            )
             Button(action: onTapReps) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(repsText)
@@ -65,12 +69,14 @@ struct SetRow: View {
                 .frame(minWidth: 30, alignment: .leading)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Reps")
+            .accessibilityValue(isPerSide ? "\(repsText) per side" : repsText)
             effortChip
             Spacer(minLength: 0)
             doneButton
         }
         .padding(.horizontal, DGSpace.s3)
-        .frame(height: DGTap.rowHeight)
+        .frame(minHeight: DGTap.rowHeight)
         .background(rowFill, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
@@ -81,25 +87,30 @@ struct SetRow: View {
     private var swipeActions: some View {
         HStack(spacing: 0) {
             swipeButton(
-                symbol: "arrow.triangle.2.circlepath", tint: DGColor.setSuperset, fill: DGColor.surface3
+                symbol: "arrow.triangle.2.circlepath", tint: DGColor.setSuperset, fill: DGColor.surface3,
+                label: "Change set type"
             ) {
                 showKindPicker = true
             }
-            swipeButton(symbol: "trash", tint: .white, fill: DGColor.danger, action: onDelete)
+            swipeButton(
+                symbol: "trash", tint: .white, fill: DGColor.danger, label: "Delete set", action: onDelete
+            )
         }
     }
 
     private func swipeButton(
-        symbol: String, tint: Color, fill: Color, action: @escaping () -> Void
+        symbol: String, tint: Color, fill: Color, label: String, action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(tint)
-                .frame(width: 56, height: DGTap.rowHeight)
+                .frame(width: 56)
+                .frame(minHeight: DGTap.rowHeight)
                 .background(fill)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     /// AMRAP sets show "AMRAP" until a rep count has actually been logged.
@@ -140,6 +151,9 @@ struct SetRow: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(
+            set.effort.map { "Effort, \($0.displayValue(scale: effortScale))" } ?? "Effort, not set"
+        )
     }
 
     private var doneButton: some View {
@@ -155,6 +169,18 @@ struct SetRow: View {
         }
         .buttonStyle(DGPressStyle())
         .accessibilityIdentifier(A11yID.setRowDone(rowIndex))
+        .accessibilityLabel(doneButtonLabel)
+        .accessibilityAddTraits(set.isDone ? .isSelected : [])
+    }
+
+    private var doneButtonLabel: String {
+        SetRowAccessibility.label(
+            kind: set.kind,
+            weight: preferences.formatWeight(kg: set.weightKg),
+            reps: repsText,
+            unit: preferences.weightUnit.symbol,
+            done: set.isDone
+        )
     }
 
     private var weightColor: Color {

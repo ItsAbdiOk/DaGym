@@ -54,10 +54,13 @@ struct WeightKeypadSheet: View {
                     .background(DGColor.surface3, in: Circle())
             }
             .buttonStyle(DGPressStyle())
+            .accessibilityLabel("Decrease by \(formattedStep)")
             Spacer(minLength: DGSpace.s4)
             Text(displayValue)
                 .dgMetric(DGFont.metricXL)
                 .foregroundStyle(DGColor.ink1)
+                .accessibilityLabel("Value")
+                .accessibilityValue(displayValue)
             Spacer(minLength: DGSpace.s4)
             Button {
                 step(by: step)
@@ -69,6 +72,7 @@ struct WeightKeypadSheet: View {
                     .background(DGColor.coral, in: Circle())
             }
             .buttonStyle(DGPressStyle())
+            .accessibilityLabel("Increase by \(formattedStep)")
         }
     }
 
@@ -85,13 +89,18 @@ struct WeightKeypadSheet: View {
         return VStack(spacing: DGSpace.s2) {
             LazyVGrid(columns: columns, spacing: DGSpace.s2) {
                 ForEach(keys, id: \.self) { key in
-                    KeypadKey(label: key, isAccent: isQuickKey(key)) { tap(key) }
-                        .accessibilityIdentifier(digitIdentifier(key) ?? key)
+                    KeypadKey(
+                        label: key, isAccent: isQuickKey(key),
+                        accessibilityLabel: keyAccessibilityLabel(key)
+                    ) {
+                        tap(key)
+                    }
+                    .accessibilityIdentifier(digitIdentifier(key) ?? key)
                 }
-                KeypadKey(label: "⌫", isAccent: false) { backspace() }
+                KeypadKey(label: "⌫", isAccent: false, accessibilityLabel: "Delete") { backspace() }
             }
             HStack(spacing: DGSpace.s2) {
-                KeypadKey(label: ".", isAccent: false) { tap(".") }
+                KeypadKey(label: ".", isAccent: false, accessibilityLabel: "Decimal point") { tap(".") }
                 KeypadKey(label: "0", isAccent: false) { tap("0") }
                     .accessibilityIdentifier(A11yID.keypadKey("0"))
             }
@@ -125,6 +134,13 @@ struct WeightKeypadSheet: View {
     private func quickKeyLabel(positive: Bool) -> String { "\(positive ? "+" : "-")\(quickStepLabel)" }
 
     private func isQuickKey(_ key: String) -> Bool { key.hasPrefix("+") || key.hasPrefix("-") }
+
+    /// Clearer wording than the glyph for the ± quick-jump keys; `nil` (falls back to the
+    /// digit itself) for a plain digit key.
+    private func keyAccessibilityLabel(_ key: String) -> String? {
+        guard isQuickKey(key) else { return nil }
+        return key.hasPrefix("+") ? "Add \(quickStepLabel)" : "Subtract \(quickStepLabel)"
+    }
 
     /// `A11yID.keypadKey(_:)` for a plain digit key, `nil` for the ± keys.
     private func digitIdentifier(_ key: String) -> String? {
@@ -165,6 +181,9 @@ struct WeightKeypadSheet: View {
 private struct KeypadKey: View {
     var label: String
     var isAccent: Bool
+    /// Read by VoiceOver instead of `label` when the glyph itself isn't a clear word
+    /// (e.g. "⌫" or "+2.5"). Defaults to `label`.
+    var accessibilityLabel: String?
     var action: () -> Void
 
     var body: some View {
@@ -177,6 +196,7 @@ private struct KeypadKey: View {
                 .dgGlass(.regular, radius: DGRadius.sm)
         }
         .buttonStyle(DGPressStyle())
+        .accessibilityLabel(accessibilityLabel ?? label)
     }
 }
 

@@ -9,6 +9,7 @@ struct SettingsView: View {
     @Environment(WorkoutStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var showingAcknowledgements = false
+    @State private var showingPrivacyPolicy = false
     @State private var showingHealthSettings = false
     @State private var showingBodyweightSheet = false
     @State private var eventStore: EventStoring = EventKitStore()
@@ -30,7 +31,7 @@ struct SettingsView: View {
                     restTimerCard
                     trainingCard
                     RemindersSettingsSection()
-                    displayCard
+                    DisplaySettingsSection()
                     calendarCard
                     ICloudSettingsSection()
                     DataSettingsSection()
@@ -45,6 +46,7 @@ struct SettingsView: View {
             }
         }
         .sheet(isPresented: $showingAcknowledgements) { AcknowledgementsView() }
+        .sheet(isPresented: $showingPrivacyPolicy) { PrivacyPolicyView() }
         .sheet(isPresented: $showingHealthSettings) { HealthSettingsView() }
         .sheet(isPresented: $showingBodyweightSheet) { BodyweightSheet() }
     }
@@ -78,7 +80,7 @@ struct SettingsView: View {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
-            DGIconButton(symbol: "xmark") { dismiss() }
+            DGIconButton(symbol: "xmark", accessibilityLabel: "Close") { dismiss() }
         }
     }
 
@@ -154,18 +156,6 @@ struct SettingsView: View {
         }
     }
 
-    private var displayCard: some View {
-        SettingsSection(title: "Display") {
-            SettingsRow(label: "Keep screen awake") {
-                Toggle("", isOn: binding(\.keepScreenAwake)).tint(DGColor.coral).labelsHidden()
-            }
-            SettingsDivider()
-            SettingsRow(label: "Lock progress photos") {
-                Toggle("", isOn: binding(\.lockPhotos)).tint(DGColor.coral).labelsHidden()
-            }
-        }
-    }
-
     private var calendarCard: some View {
         SettingsSection(title: "Calendar") {
             SettingsRow(label: "Add my schedule to Calendar") {
@@ -229,6 +219,8 @@ struct SettingsView: View {
                 }
                 SettingsDivider()
                 acknowledgementsRow
+                SettingsDivider()
+                privacyPolicyRow
             }
             .dgCard(padding: 0)
             Text(preferences.iCloudSyncEnabled ? "Synced with your iCloud" : "Data stays on your device")
@@ -240,6 +232,17 @@ struct SettingsView: View {
     private var acknowledgementsRow: some View {
         Button { showingAcknowledgements = true } label: {
             SettingsRow(label: "Acknowledgements") {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(DGColor.ink4)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var privacyPolicyRow: some View {
+        Button { showingPrivacyPolicy = true } label: {
+            SettingsRow(label: "Privacy") {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(DGColor.ink4)

@@ -73,7 +73,7 @@ struct OneRepMaxCalculatorView: View {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
-            DGIconButton(symbol: "xmark", size: 36) { dismiss() }
+            DGIconButton(symbol: "xmark", size: 36, accessibilityLabel: "Close") { dismiss() }
         }
     }
 

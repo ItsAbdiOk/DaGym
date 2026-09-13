@@ -22,7 +22,7 @@ struct WorkoutStoreProgramTests {
         let store = try makeStore()
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
 
-        let program = store.createProgram(from: .pushPullLegs)
+        let program = try #require(store.createProgram(from: .pushPullLegs))
 
         #expect(program.name == "Push/Pull/Legs")
         #expect(program.routineIDs.count == 3)
@@ -33,7 +33,7 @@ struct WorkoutStoreProgramTests {
     func weekComputation() throws {
         let store = try makeStore()
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
-        let created = store.createProgram(from: .pushPullLegs)
+        let created = try #require(store.createProgram(from: .pushPullLegs))
         guard let model = store.programs().first(where: { $0.id == created.id }) else {
             Issue.record("program not found")
             return
@@ -55,7 +55,7 @@ struct WorkoutStoreProgramTests {
     func deloadWeekFlag() throws {
         let store = try makeStore()
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
-        let created = store.createProgram(from: .pushPullLegs)
+        let created = try #require(store.createProgram(from: .pushPullLegs))
         let routineID = try #require(created.routineIDs.first)
         let programModel = try #require(fetchProgram(store, id: created.id))
         // 3 weeks (21 days) back lands in the 4th (deload) week of the cycle.

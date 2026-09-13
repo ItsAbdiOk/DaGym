@@ -76,6 +76,43 @@ struct ProgressionEngineTimedTests {
         #expect(result.stall.lastTargetSeconds == 30)
     }
 
+    @Test("three short holds in a row back the ask off to 90 %, rounded down to 5 s")
+    func thirdMissBacksOff() {
+        var stall = StallState(lastTargetSeconds: 60, lastPlanTargetSeconds: 30)
+        var last: Prescribed?
+        for _ in 0..<3 {
+            last = ProgressionEngine.prescribe(
+                rule: .timed(stepSeconds: 5), planned: planned, history: [entry(durationSeconds: 45)],
+                stall: stall
+            )
+            stall = last?.stall ?? stall
+        }
+        #expect(last?.reason.kind == .deload)
+        #expect(last?.sets.allSatisfy { $0.durationSeconds == 50 } == true)
+        #expect(last?.stall.consecutiveMisses == 0)
+        #expect(last?.stall.lastTargetSeconds == 50)
+    }
+
+    @Test("a back-off never goes under one step")
+    func backoffFlooredAtOneStep() {
+        let result = ProgressionEngine.prescribe(
+            rule: .timed(stepSeconds: 5), planned: planned, history: [entry(durationSeconds: 4)],
+            stall: StallState(consecutiveMisses: 2, lastTargetSeconds: 10, lastPlanTargetSeconds: 30)
+        )
+        #expect(result.reason.kind == .deload)
+        #expect(result.sets.allSatisfy { $0.durationSeconds == 5 })
+    }
+
+    @Test("a hold already at one step repeats instead of backing off")
+    func backoffAtOneStepRepeats() {
+        let result = ProgressionEngine.prescribe(
+            rule: .timed(stepSeconds: 5), planned: planned, history: [entry(durationSeconds: 3)],
+            stall: StallState(consecutiveMisses: 2, lastTargetSeconds: 5, lastPlanTargetSeconds: 30)
+        )
+        #expect(result.reason.kind == .repeat)
+        #expect(result.sets.allSatisfy { $0.durationSeconds == 5 })
+    }
+
     @Test("the engine's remembered hold outranks an unchanged plan target")
     func rememberedHoldOutranksStalePlan() {
         let stall = StallState(lastTargetSeconds: 60, lastPlanTargetSeconds: 30)

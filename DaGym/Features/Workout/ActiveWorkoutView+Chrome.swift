@@ -13,7 +13,7 @@ extension ActiveWorkoutView {
             chromeCollapse = next
             return
         }
-        withAnimation(DGMotion.standard) { chromeCollapse = next }
+        withAnimation(DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion)) { chromeCollapse = next }
     }
 
     /// Single 40pt row: title + elapsed on one line, FINISH shrunk to a 36pt pill.
@@ -73,6 +73,7 @@ extension ActiveWorkoutView {
                     .shadow(color: DGColor.coral.opacity(0.35), radius: 12, y: 6)
             }
             .buttonStyle(DGPressStyle())
+            .accessibilityLabel("Add exercise")
         }
         .padding(.horizontal, DGSpace.s4)
         .padding(.bottom, DGSpace.s2)

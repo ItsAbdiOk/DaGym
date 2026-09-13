@@ -47,7 +47,9 @@ struct BackupRoundTripTests {
         let workout = try #require(store.fetchWorkoutModel(id: workoutID))
         try #require(workout.exercises?.first).wasPlannedDeload = true
 
-        let program = store.createProgram(from: .pushPullLegs)
+        // A starter program needs all three of its routines present; the store is unseeded here.
+        for name in ["Pull B", "Legs"] { _ = store.saveRoutine(id: nil, name: name, exercises: [draft]) }
+        let program = try #require(store.createProgram(from: .pushPullLegs))
         store.startProgram(id: program.id)
         context.insert(AchievementModel(milestoneID: "first-workout", tier: "bronze", workoutID: workout.id))
         try context.save()

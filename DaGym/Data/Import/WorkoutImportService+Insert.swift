@@ -28,7 +28,7 @@ extension WorkoutImportService {
         var exerciseModels: [WorkoutExerciseModel] = []
         for (order, exercise) in imported.exercises.enumerated() {
             let exerciseID = resolveExercise(
-                exercise.name, store: environment.store, context: environment.context,
+                exercise, store: environment.store, context: environment.context,
                 exerciseCache: &exerciseCache, report: &report
             )
             guard let exerciseModel = environment.store.fetchExerciseModel(id: exerciseID) else { continue }

@@ -58,11 +58,17 @@ public struct ImportedSet: Hashable, Sendable {
 public struct ImportedExercise: Hashable, Sendable {
     public var name: String
     public var note: String
+    /// The source app's own category/muscle-group label for this exercise, when the format has
+    /// one (FitNotes' `Category` column). `nil` for sources that don't carry one (Strong, Hevy);
+    /// used as a hint for `ExerciseHints.primaryMuscles` when the name doesn't match anything in
+    /// the library.
+    public var category: String?
     public var sets: [ImportedSet]
 
-    public init(name: String, note: String = "", sets: [ImportedSet]) {
+    public init(name: String, note: String = "", category: String? = nil, sets: [ImportedSet]) {
         self.name = name
         self.note = note
+        self.category = category
         self.sets = sets
     }
 }
@@ -94,11 +100,17 @@ public struct ImportResult: Sendable {
     public var source: ImportSource
     public var workouts: [ImportedWorkout]
     public var problems: [ImportProblem]
+    /// Rows with nothing measured at all (no weight, reps, time or distance) — skipped rather
+    /// than imported as a 0×0 set, and counted here instead of being silently dropped.
+    public var emptyRows: Int
 
-    public init(source: ImportSource, workouts: [ImportedWorkout], problems: [ImportProblem]) {
+    public init(
+        source: ImportSource, workouts: [ImportedWorkout], problems: [ImportProblem], emptyRows: Int = 0
+    ) {
         self.source = source
         self.workouts = workouts
         self.problems = problems
+        self.emptyRows = emptyRows
     }
 }
 

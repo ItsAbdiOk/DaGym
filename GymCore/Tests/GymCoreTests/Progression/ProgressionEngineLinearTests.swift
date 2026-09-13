@@ -64,6 +64,39 @@ struct ProgressionEngineLinearTests {
         #expect(result.stall.lastWeightKg == 70)
     }
 
+    @Test("a deload never lands below the grid's lightest load under the stalled weight")
+    func deloadFlooredAtNextGridStepDown() {
+        let result = ProgressionEngine.prescribe(
+            rule: .linear(incrementKg: 2.5), planned: planned, history: history(reps: 5, weightKg: 4),
+            stall: StallState(consecutiveMisses: 2, lastWeightKg: 4), grid: .step(2)
+        )
+        #expect(result.reason.kind == .deload)
+        #expect(result.sets.allSatisfy { $0.weightKg == 2 })
+    }
+
+    @Test("a stall on the lightest step holds rather than deloading to zero or below")
+    func stallAtLightestStepHolds() {
+        let result = ProgressionEngine.prescribe(
+            rule: .linear(incrementKg: 2.5), planned: planned, history: history(reps: 5, weightKg: 1),
+            stall: StallState(consecutiveMisses: 2, lastWeightKg: 1), grid: .step(1)
+        )
+        #expect(result.reason.kind == .repeat)
+        #expect(result.sets.allSatisfy { $0.weightKg == 1 })
+        #expect(result.reason.title.localizedCaseInsensitiveContains("lightest"))
+        #expect(result.stall.consecutiveMisses == 3)
+    }
+
+    @Test("a stall on the empty bar holds instead of 'deloading' to the same weight")
+    func stallOnEmptyBarHolds() {
+        let result = ProgressionEngine.prescribe(
+            rule: .linear(incrementKg: 2.5), planned: planned, history: history(reps: 5, weightKg: 20),
+            stall: StallState(consecutiveMisses: 2, lastWeightKg: 20),
+            grid: .plates(bar: .olympic, plates: PlateStock.standardKg, collarsKg: 0)
+        )
+        #expect(result.reason.kind == .repeat)
+        #expect(result.sets.allSatisfy { $0.weightKg == 20 })
+    }
+
     @Test("a deload is capped by 90% of e1RM when that's lower than 90% of the weight")
     func deloadCappedByE1RM() {
         // Three singles at 80 kg: e1RM 80 → 90 % = 72 → 70 on the grid; the same as by weight here,

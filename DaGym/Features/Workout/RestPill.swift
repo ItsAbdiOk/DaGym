@@ -25,6 +25,7 @@ struct RestPill: View {
     var body: some View {
         HStack(spacing: DGSpace.s3) {
             RestRing(remaining: remaining, total: total, size: 36)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(WorkoutSession.clock(remaining))
                     .dgMetric(DGFont.metricL)
@@ -32,6 +33,7 @@ struct RestPill: View {
                 Text("Rest · \(resolvedNextLabel)")
                     .dgLabel()
             }
+            .accessibilityElement(children: .combine)
             Spacer(minLength: DGSpace.s2)
             Button(action: onAddThirty) {
                 Text("+30s")
@@ -41,6 +43,7 @@ struct RestPill: View {
                     .dgGlass(.regular, in: Circle())
             }
             .buttonStyle(DGPressStyle())
+            .accessibilityLabel("Add 30 seconds")
             Button("Skip", action: onSkip)
                 .buttonStyle(.plain)
                 .font(DGFont.condensedLabel(13))
@@ -70,6 +73,8 @@ struct RestPillCompact: View {
         }
         .frame(width: 48, height: 48)
         .dgGlass(.thick, in: Circle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Rest, \(WorkoutSession.clock(remaining)) remaining")
     }
 }
 

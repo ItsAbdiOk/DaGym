@@ -41,16 +41,51 @@ struct ColumnMap {
 
 /// Numeric and duration parsing shared by the three importers.
 enum ImportParsing {
-    /// Locale-independent number parsing (the exports always use `.` as the decimal separator).
+    /// Locale-independent number parsing. The exports normally use `.` as the decimal separator;
+    /// a European export (FitNotes/spreadsheets) sometimes writes a bare comma instead ("82,5") —
+    /// accepted only when there's exactly one comma and no dot, since a thousands-grouped value
+    /// like "1,000.5" mixing both is ambiguous and left as a problem row instead of guessed at.
     static func double(_ text: String?) -> Double? {
-        guard let text, let value = Double(text) else { return nil }
-        return value
+        guard let text else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        if let value = Double(trimmed) { return value }
+        guard trimmed.filter({ $0 == "," }).count == 1, !trimmed.contains(".") else { return nil }
+        return Double(trimmed.replacingOccurrences(of: ",", with: "."))
     }
 
     static func int(_ text: String?) -> Int? {
         guard let text else { return nil }
         if let value = Int(text) { return value }
         return double(text).map { Int($0.rounded()) }
+    }
+
+    /// Effort hygiene for an imported RPE column (recommendation 3): blank/non-numeric/≤0 is
+    /// unrated rather than a bogus low effort; anything above the 1–10 scale (Hevy sometimes
+    /// exports 0–100 "difficulty") clamps to the max instead of being stored verbatim.
+    static func rpe(_ text: String?) -> Double? {
+        guard let value = double(text), value > 0 else { return nil }
+        return min(value, 10)
+    }
+
+    /// The unit named by a per-row unit column ("Weight Unit"/"unit"), or `nil` when the text
+    /// names neither kg nor lb (missing column, unrecognised value).
+    static func weightUnit(from text: String?) -> WeightUnit? {
+        guard let text else { return nil }
+        switch text.trimmingCharacters(in: .whitespaces).lowercased() {
+        case "kg", "kgs", "kilogram", "kilograms": return .kg
+        case "lb", "lbs", "pound", "pounds": return .lb
+        default: return nil
+        }
+    }
+
+    /// A weight column's raw text, converted to kg. `columnUnit` is the unit the column header
+    /// itself named (e.g. "Weight (lbs)"); when the header is ambiguous (bare "Weight") a sibling
+    /// per-row unit column decides instead, and a file with neither is assumed to already be kg.
+    static func weightKg(_ text: String, columnUnit: WeightUnit?, perRowUnit: String?) -> Double? {
+        guard let value = double(text) else { return nil }
+        if let columnUnit { return columnUnit.toKg(value) }
+        if let rowUnit = weightUnit(from: perRowUnit) { return rowUnit.toKg(value) }
+        return value
     }
 
     /// "1h 5m", "65m", "45s" (Strong's free-text workout duration) → seconds.
@@ -114,21 +149,48 @@ enum ImportParsing {
 /// Date formatters for the three exports' timestamp formats. `DateFormatter` is not `Sendable`,
 /// so each is built fresh per call — these files parse at most a few thousand rows, so the cost
 /// is negligible.
+///
+/// Each source tries its native format first, then a shared fallback list (recommendation 7) so a
+/// file written by a slightly different app version or locale — an ISO `start_time`, a FitNotes
+/// export with a time suffix — still parses instead of failing every row. Day-first numeric dates
+/// ("07/03/2024") are deliberately never guessed at: a wrong guess would silently rewrite the
+/// date, so that stays a per-row problem.
 enum ImportDateFormat {
     /// Strong: "2024-03-11 18:24:00".
     static func strong(_ text: String) -> Date? {
         formatter(dateFormat: "yyyy-MM-dd HH:mm:ss").date(from: text)
             ?? formatter(dateFormat: "yyyy-MM-dd HH:mm").date(from: text)
+            ?? fallback(text)
     }
 
     /// Hevy: "11 Mar 2024, 18:24".
     static func hevy(_ text: String) -> Date? {
-        formatter(dateFormat: "d MMM yyyy, HH:mm").date(from: text)
+        formatter(dateFormat: "d MMM yyyy, HH:mm").date(from: text) ?? fallback(text)
     }
 
     /// FitNotes: "2024-03-11" (date only).
     static func fitNotes(_ text: String) -> Date? {
-        formatter(dateFormat: "yyyy-MM-dd").date(from: text)
+        formatter(dateFormat: "yyyy-MM-dd").date(from: text) ?? fallback(text)
+    }
+
+    private static let fallbackFormats = [
+        "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm", "yyyy-MM-dd", "yyyy/MM/dd HH:mm:ss",
+        "yyyy/MM/dd HH:mm", "yyyy/MM/dd", "d MMM yyyy, HH:mm", "d MMM yyyy", "MMM d, yyyy"
+    ]
+
+    private static func fallback(_ text: String) -> Date? {
+        if let date = isoDate(text) { return date }
+        for format in fallbackFormats {
+            if let date = formatter(dateFormat: format).date(from: text) { return date }
+        }
+        return nil
+    }
+
+    private static func isoDate(_ text: String) -> Date? {
+        let iso = ISO8601DateFormatter()
+        if let date = iso.date(from: text) { return date }
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return iso.date(from: text)
     }
 
     private static func formatter(dateFormat: String) -> DateFormatter {

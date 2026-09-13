@@ -22,6 +22,7 @@ struct HomeView: View {
     @State private var recoveryMap: [Muscle: Double] = [:]
     @State private var showingSettings = false
     @State private var deloadSuggestion: DeloadSuggestionInfo?
+    @State private var hasSchedule = true
 
     var body: some View {
         ZStack {
@@ -31,8 +32,8 @@ struct HomeView: View {
                     header
                     if let routine {
                         ScheduledCard(
-                            routine: routine, onStart: onStart, onFreestyle: onFreestyle,
-                            onBackfill: onBackfill
+                            routine: routine, isScheduled: hasSchedule, onStart: onStart,
+                            onFreestyle: onFreestyle, onBackfill: onBackfill
                         )
                     } else {
                         RestDayCard(
@@ -74,6 +75,7 @@ struct HomeView: View {
         thisWeekCount = snapshot.thisWeekCount
         recoveryMap = snapshot.recoveryMap
         deloadSuggestion = snapshot.deloadSuggestion
+        hasSchedule = snapshot.hasSchedule
     }
 
     private func planDeload() {
@@ -97,7 +99,7 @@ struct HomeView: View {
                     .foregroundStyle(DGColor.ink1)
             }
             Spacer()
-            DGIconButton(symbol: "gearshape") { showingSettings = true }
+            DGIconButton(symbol: "gearshape", accessibilityLabel: "Settings") { showingSettings = true }
         }
     }
 
@@ -111,6 +113,7 @@ struct HomeView: View {
 /// Coral-outlined card for the day's scheduled routine.
 private struct ScheduledCard: View {
     var routine: RoutineInfo
+    var isScheduled = true
     var onStart: () -> Void
     var onFreestyle: () -> Void
     var onBackfill: () -> Void
@@ -137,9 +140,14 @@ private struct ScheduledCard: View {
             HStack(spacing: DGSpace.s3) {
                 DGPrimaryButton(title: "Start", symbol: "play.fill", action: onStart)
                     .accessibilityIdentifier(A11yID.homeStart)
-                DGIconButton(symbol: "plus", size: 52, action: onFreestyle)
-                    .accessibilityIdentifier(A11yID.homeFreestyle)
-                DGIconButton(symbol: "calendar", size: 52, action: onBackfill)
+                DGIconButton(
+                    symbol: "plus", size: 52,
+                    accessibilityLabel: "Start freestyle workout", action: onFreestyle
+                )
+                .accessibilityIdentifier(A11yID.homeFreestyle)
+                DGIconButton(
+                    symbol: "calendar", size: 52, accessibilityLabel: "Log a past workout", action: onBackfill
+                )
             }
         }
         .padding(DGSpace.s5)
@@ -151,8 +159,9 @@ private struct ScheduledCard: View {
     }
 
     private var scheduledLabel: String {
-        guard let weekLabel = routine.weekLabel, !weekLabel.isEmpty else { return "Scheduled" }
-        return "Scheduled · \(weekLabel)"
+        let base = isScheduled ? "Scheduled" : "Suggested"
+        guard let weekLabel = routine.weekLabel, !weekLabel.isEmpty else { return base }
+        return "\(base) · \(weekLabel)"
     }
 }
 
@@ -175,7 +184,9 @@ private struct RestDayCard: View {
             HStack(spacing: DGSpace.s3) {
                 DGPrimaryButton(title: "Start a Freestyle Workout", symbol: "plus", action: onFreestyle)
                     .accessibilityIdentifier(A11yID.homeStart)
-                DGIconButton(symbol: "calendar", size: 52, action: onBackfill)
+                DGIconButton(
+                    symbol: "calendar", size: 52, accessibilityLabel: "Log a past workout", action: onBackfill
+                )
             }
         }
         .padding(DGSpace.s5)

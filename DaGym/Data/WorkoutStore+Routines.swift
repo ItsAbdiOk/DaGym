@@ -84,6 +84,30 @@ extension WorkoutStore {
         return routineInfo(model)
     }
 
+    /// A deep copy of a routine — exercises, planned sets, rule, per-exercise overrides — under
+    /// a fresh id and the next free "X (Copy)" / "X (Copy 2)" name. The engine's stall memory
+    /// and `importedFromID` are not copied: the copy starts clean and is the user's own. Nil
+    /// when there's no such routine.
+    @discardableResult
+    func duplicateRoutine(id: UUID) -> RoutineInfo? {
+        guard let source = fetchRoutineModel(id: id), let drafts = routineDrafts(id: id)?.drafts else {
+            return nil
+        }
+        let copy = RoutineModel(
+            name: copyName(for: source.name), notes: source.notes,
+            progressionRule: source.progressionRule, repRangeLow: source.repRangeLow,
+            repRangeHigh: source.repRangeHigh, progressionRuleJSON: source.progressionRuleJSON,
+            sortOrder: nextRoutineSortOrder()
+        )
+        context.insert(copy)
+        copy.exercises = drafts.enumerated().map { index, draft in
+            makeRoutineExercise(draft, order: index, routine: copy)
+        }
+        save()
+        WidgetSnapshotWriter.refresh(store: self)
+        return routineInfo(copy)
+    }
+
     func deleteRoutine(id: UUID) {
         guard let model = fetchRoutineModel(id: id) else { return }
         context.delete(model)
@@ -135,6 +159,32 @@ extension WorkoutStore {
         return RoutineInfo(
             model: model, exercises: exercises, setCount: setCount, exerciseSetCounts: exerciseSetCounts
         )
+    }
+
+    /// "Push A" → "Push A (Copy)", then "(Copy 2)", "(Copy 3)"… — counted from the base name,
+    /// so copying a copy doesn't nest "(Copy) (Copy)". Archived routines hold their names too.
+    private func copyName(for name: String) -> String {
+        let base = Self.copyBaseName(name)
+        let taken = Set(((try? context.fetch(FetchDescriptor<RoutineModel>())) ?? []).map(\.name))
+        let first = "\(base) (Copy)"
+        guard taken.contains(first) else { return first }
+        var index = 2
+        while taken.contains("\(base) (Copy \(index))") { index += 1 }
+        return "\(base) (Copy \(index))"
+    }
+
+    private static func copyBaseName(_ name: String) -> String {
+        guard name.hasSuffix(")"), let open = name.range(of: " (Copy", options: .backwards) else {
+            return name
+        }
+        let inner = name[open.upperBound..<name.index(before: name.endIndex)]
+        let isCounted = inner.hasPrefix(" ") && Int(inner.dropFirst()) != nil
+        return inner.isEmpty || isCounted ? String(name[..<open.lowerBound]) : name
+    }
+
+    private func nextRoutineSortOrder() -> Int {
+        let all = (try? context.fetch(FetchDescriptor<RoutineModel>())) ?? []
+        return (all.map(\.sortOrder).max() ?? -1) + 1
     }
 
     private func insertedRoutine() -> RoutineModel {

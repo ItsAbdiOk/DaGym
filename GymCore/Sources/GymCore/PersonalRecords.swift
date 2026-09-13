@@ -9,6 +9,8 @@ public struct PerformedSet: Hashable, Sendable {
     public var assistanceKg: Double?
     public var bodyweightKg: Double?
     public var date: Date
+    /// Rated effort, when the lifter logged one — lets balance views single out hard sets.
+    public var rpe: Double?
 
     public init(
         kind: SetKind,
@@ -17,7 +19,8 @@ public struct PerformedSet: Hashable, Sendable {
         durationSeconds: Int? = nil,
         assistanceKg: Double? = nil,
         bodyweightKg: Double? = nil,
-        date: Date
+        date: Date,
+        rpe: Double? = nil
     ) {
         self.kind = kind
         self.weightKg = weightKg
@@ -26,6 +29,15 @@ public struct PerformedSet: Hashable, Sendable {
         self.assistanceKg = assistanceKg
         self.bodyweightKg = bodyweightKg
         self.date = date
+        self.rpe = rpe
+    }
+
+    /// A "hard" set for the balance map: rated at RIR ≤ `TrainingConstants.hardSetMaxRIR`, or
+    /// taken to failure / as an AMRAP regardless of rating.
+    public var isHard: Bool {
+        if kind == .failure || kind == .amrap { return true }
+        guard let rpe else { return false }
+        return Effort(rpe: rpe).rir <= TrainingConstants.hardSetMaxRIR
     }
 }
 

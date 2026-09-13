@@ -62,10 +62,7 @@ extension ActiveWorkoutView {
     // MARK: Exercise list edits
 
     func addSet(exerciseID: UUID, kind: SetKind) {
-        guard let index = session.exercises.firstIndex(where: { $0.id == exerciseID }) else { return }
-        let template = session.exercises[index].sets.last
-        let newSet = SetEntry(kind: kind, weightKg: template?.weightKg ?? 0, reps: template?.reps ?? 0)
-        session.exercises[index].sets.append(newSet)
+        session.addSet(exerciseID: exerciseID, kind: kind)
         store.sync(session: session)
     }
 
@@ -74,10 +71,15 @@ extension ActiveWorkoutView {
         store.sync(session: session)
     }
 
-    func replaceExercise(entryID: UUID, with candidate: ExerciseInfo) {
-        guard let index = session.exercises.firstIndex(where: { $0.id == entryID }) else { return }
-        session.exercises[index].exercise = candidate
-        session.exercises[index].wasSubstitution = true
+    /// An entry with logged sets keeps them; the candidate is added after it as its own entry.
+    /// One with nothing logged is swapped in place.
+    func replaceExercise(entryID: UUID, with candidate: ExerciseInfo, keepInSuperset: Bool) {
+        if session.hasLoggedSets(entryID: entryID) {
+            let substitute = store.autoFilledEntry(for: candidate)
+            session.insertSubstitute(substitute, after: entryID, keepInSuperset: keepInSuperset)
+        } else {
+            session.replaceInPlace(entryID: entryID, with: candidate)
+        }
         store.sync(session: session)
         Haptics.confirm()
     }
@@ -161,8 +163,11 @@ extension ActiveWorkoutView {
                 logEffort(exerciseID: exerciseID, setID: setID, effort: effort)
             }
         case .swap(let entryID, let exercise):
-            SwapExerciseSheet(exercise: exercise) { candidate in
-                replaceExercise(entryID: entryID, with: candidate)
+            SwapExerciseSheet(
+                exercise: exercise, loggedSetCount: session.doneCount(entryID: entryID),
+                isInSuperset: session.isInSuperset(entryID: entryID)
+            ) { candidate, keepInSuperset in
+                replaceExercise(entryID: entryID, with: candidate, keepInSuperset: keepInSuperset)
             }
         case .addExercise:
             ExercisePickerSheet(onPick: addExercise)

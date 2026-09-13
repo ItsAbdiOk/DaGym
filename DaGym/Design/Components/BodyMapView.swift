@@ -22,6 +22,8 @@ struct BodyMapView: View {
     var intensity: [Muscle: Double] = [:]
     var onTap: ((Muscle) -> Void)?
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private struct Segment {
         let muscle: Muscle
         let rect: CGRect
@@ -79,7 +81,7 @@ struct BodyMapView: View {
                         .onTapGesture { onTap?(seg.muscle) }
                 }
             }
-            .animation(DGMotion.standard, value: intensity)
+            .animation(DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion), value: intensity)
         }
         .aspectRatio(100 / 140, contentMode: .fit)
         .accessibilityLabel(accessibilityDescription)
@@ -99,7 +101,13 @@ struct BodyMapView: View {
         }
     }
 
-    private var accessibilityDescription: String {
+    private var accessibilityDescription: String { BodyMapAccessibility.label(intensity: intensity) }
+}
+
+/// Pure label-building for a body map's `intensity` — shared by the single-side
+/// `BodyMapView` and the two-up `BodyMapPair`, and cheap to unit test.
+enum BodyMapAccessibility {
+    static func label(intensity: [Muscle: Double]) -> String {
         let named = intensity.filter { $0.value > 0 }.keys.map(\.displayName).sorted()
         return named.isEmpty ? "Body map, nothing highlighted" : "Body map: " + named.joined(separator: ", ")
     }
@@ -114,9 +122,13 @@ struct BodyMapPair: View {
     var body: some View {
         HStack(spacing: DGSpace.s1) {
             BodyMapView(side: .front, mode: mode, intensity: intensity)
+                .accessibilityHidden(true)
             BodyMapView(side: .back, mode: mode, intensity: intensity)
+                .accessibilityHidden(true)
         }
         .frame(height: height)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(BodyMapAccessibility.label(intensity: intensity))
     }
 }
 

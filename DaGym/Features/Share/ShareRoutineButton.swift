@@ -25,6 +25,7 @@ struct ShareRoutineButton: View {
                 .foregroundStyle(DGColor.ink2)
                 .frame(width: DGTap.min, height: DGTap.min)
         }
+        .accessibilityLabel("Share \(title)")
     }
 
     private var sanitizedFilename: String {

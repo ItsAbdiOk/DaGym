@@ -123,7 +123,7 @@ struct TimedSetRow: View {
             }
         }
         .padding(.horizontal, DGSpace.s3)
-        .frame(height: DGTap.rowHeight)
+        .frame(minHeight: DGTap.rowHeight)
         .background(rowFill, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)

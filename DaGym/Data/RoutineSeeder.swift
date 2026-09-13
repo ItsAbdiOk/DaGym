@@ -2,8 +2,11 @@ import Foundation
 import GymCore
 import SwiftData
 
-/// Seeds three starter routines ("Push A", "Pull B", "Legs") once per store
-/// (`SeedStateModel.routinesSeeded`). Exercises are looked up by name against
+/// Seeds the starter routines once per store (`SeedStateModel.routinesSeeded`): the
+/// Push/Pull/Legs trio ("Push A", "Pull B", "Legs") plus the routines each starter program
+/// cycles — Upper/Lower A/B, Full Body A/B/C and 5×5 A/B/C (`StarterProgramKind.routineNames`).
+/// A store seeded before the program routines existed gets them on the next launch, as long
+/// as none of them is present yet. Exercises are looked up by name against
 /// the already seeded exercise library, falling back to the first exercise
 /// with the right primary muscle when a specific name isn't present. Each
 /// starter carries a fixed `importedFromID` so a copy seeded by another iCloud
@@ -18,26 +21,64 @@ import SwiftData
 enum RoutineSeeder {
     /// Stable per-starter identities, shared by every install.
     static let starterIDs: [String: UUID] = [
-        "Push A": UUID(uuidString: "6D1A5D4E-0001-4A00-8000-000000000001") ?? UUID(),
-        "Pull B": UUID(uuidString: "6D1A5D4E-0002-4A00-8000-000000000002") ?? UUID(),
-        "Legs": UUID(uuidString: "6D1A5D4E-0003-4A00-8000-000000000003") ?? UUID()
+        "Push A": starterID(1), "Pull B": starterID(2), "Legs": starterID(3),
+        "Upper A": starterID(4), "Lower A": starterID(5), "Upper B": starterID(6), "Lower B": starterID(7),
+        "Full Body A": starterID(8), "Full Body B": starterID(9), "Full Body C": starterID(10),
+        "5×5 A": starterID(11), "5×5 B": starterID(12), "5×5 C": starterID(13)
     ]
+
+    /// The routines behind every non-PPL starter program, in seeding order.
+    static let programRoutineNames = [
+        "Upper A", "Lower A", "Upper B", "Lower B",
+        "Full Body A", "Full Body B", "Full Body C",
+        "5×5 A", "5×5 B", "5×5 C"
+    ]
+
+    private static func starterID(_ index: Int) -> UUID {
+        let group = String(format: "%04X", index)
+        let node = String(format: "%012X", index)
+        return UUID(uuidString: "6D1A5D4E-\(group)-4A00-8000-\(node)") ?? UUID()
+    }
 
     static func seedStarterRoutinesIfNeeded(store: WorkoutStore) {
         let state = SeedState.row(in: store.context)
         defer { store.dedupeRoutines() }
-        guard !state.routinesSeeded else { return }
-        if store.routines().isEmpty {
-            seedPushA(store: store)
-            seedPullB(store: store)
-            seedLegs(store: store)
+        if !state.routinesSeeded {
+            if store.routines().isEmpty {
+                seedPushA(store: store)
+                seedPullB(store: store)
+                seedLegs(store: store)
+                seedProgramRoutines(store: store)
+            }
+            state.routinesSeeded = true
+            state.updatedAt = Date()
+            store.save()
+            return
         }
-        state.routinesSeeded = true
-        state.updatedAt = Date()
+        seedProgramRoutinesIfMissing(store: store)
+    }
+
+    /// Adds the program routines to a store that was seeded before they existed. Only fires when
+    /// the store still has routines but none of these, so deleting one (or all) stays deleted.
+    private static func seedProgramRoutinesIfMissing(store: WorkoutStore) {
+        let programIDs = Set(programRoutineNames.compactMap { starterIDs[$0] })
+        let models = (try? store.context.fetch(FetchDescriptor<RoutineModel>())) ?? []
+        guard !models.isEmpty else { return }
+        let existingNames = Set(models.map(\.name))
+        let alreadyThere = models.contains { $0.importedFromID.map(programIDs.contains) ?? false }
+            || programRoutineNames.contains(where: existingNames.contains)
+        guard !alreadyThere else { return }
+        seedProgramRoutines(store: store)
         store.save()
     }
 
-    private static func stamp(_ routine: RoutineInfo, store: WorkoutStore) {
+    static func seedProgramRoutines(store: WorkoutStore) {
+        for spec in programRoutineSpecs() {
+            seed(spec, store: store)
+        }
+    }
+
+    static func stamp(_ routine: RoutineInfo, store: WorkoutStore) {
         guard let model = store.fetchRoutineModel(id: routine.id) else { return }
         model.importedFromID = starterIDs[routine.name]
     }
@@ -185,8 +226,9 @@ enum RoutineSeeder {
 
     /// The per-exercise rule a starter routine's weight-based rule can't express: bodyweight
     /// reps, timed holds, assisted work, and any lift whose seeded increment isn't the routine's
-    /// (lower-body lifts step 5 kg, dumbbells 2 kg) — those keep the routine's rule shape with
-    /// the exercise's own increment. Nil when the routine's rule already fits.
+    /// (lower-body lifts step `TrainingConstants.defaultLowerBodyIncrementKg`, dumbbells 2 kg) —
+    /// those keep the routine's rule shape with the exercise's own increment. Nil when the
+    /// routine's rule already fits.
     static func starterOverride(
         for exercise: ExerciseInfo, routineRule: ProgressionRule
     ) -> ProgressionRule? {
@@ -204,17 +246,25 @@ enum RoutineSeeder {
         case .cardio:
             return nil
         case .weightReps:
-            guard exercise.incrementKg > 0 else { return nil }
+            let increment = starterIncrementKg(for: exercise)
+            guard increment > 0 else { return nil }
             switch routineRule {
-            case .linear(let incrementKg) where incrementKg != exercise.incrementKg:
-                return .linear(incrementKg: exercise.incrementKg)
-            case .doubleProgression(let low, let high, let incrementKg)
-                where incrementKg != exercise.incrementKg:
-                return .doubleProgression(low: low, high: high, incrementKg: exercise.incrementKg)
+            case .linear(let incrementKg) where incrementKg != increment:
+                return .linear(incrementKg: increment)
+            case .doubleProgression(let low, let high, let incrementKg) where incrementKg != increment:
+                return .doubleProgression(low: low, high: high, incrementKg: increment)
             default:
                 return nil
             }
         }
+    }
+
+    /// A lower-body lift seeds with the lower-body default step (5 kg), whatever its library
+    /// increment says; everything else keeps the library's own increment (dumbbells 2 kg…).
+    static func starterIncrementKg(for exercise: ExerciseInfo) -> Double {
+        exercise.primary.contains(where: \.isLowerBody)
+            ? TrainingConstants.defaultLowerBodyIncrementKg
+            : exercise.incrementKg
     }
 
     // MARK: - Lookup
@@ -222,7 +272,7 @@ enum RoutineSeeder {
     /// Finds an exercise by exact name, falling back to the first search
     /// result for `fallback` (or `name` if no separate fallback is given),
     /// then to the first exercise whose primary muscle matches.
-    private static func lookup(
+    static func lookup(
         _ store: WorkoutStore, _ name: String, fallback: String? = nil, muscle: Muscle
     ) -> ExerciseInfo? {
         let candidates = store.exercises(matching: name)

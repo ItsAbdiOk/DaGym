@@ -6,13 +6,19 @@ import SwiftUI
 /// `WorkoutStore.substitutes(for:reason:)` (plan §6.6, rule-based).
 struct SwapExerciseSheet: View {
     var exercise: ExerciseInfo
-    var onPick: (ExerciseInfo) -> Void
+    /// Sets already ticked on this entry. Above zero the swap keeps them and adds the candidate
+    /// after the entry, so the sheet confirms first (and, in a superset, asks where it goes).
+    var loggedSetCount = 0
+    var isInSuperset = false
+    /// `(candidate, keepInSuperset)` — the flag only matters for a grouped entry with logged sets.
+    var onPick: (ExerciseInfo, Bool) -> Void
 
     @Environment(WorkoutStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var reason = SwapReason.machineTaken
     @State private var suggestions: [SubstitutionSuggestion] = []
     @State private var showingLibrary = false
+    @State private var pendingCandidate: ExerciseInfo?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s5) {
@@ -40,6 +46,28 @@ struct SwapExerciseSheet: View {
         .sheet(isPresented: $showingLibrary) {
             ExercisePickerSheet(onPick: use)
         }
+        .confirmationDialog(
+            "Keep \(loggedSetCount) logged \(loggedSetCount == 1 ? "set" : "sets")?",
+            isPresented: pendingIsPresented, titleVisibility: .visible, presenting: pendingCandidate
+        ) { candidate in
+            if isInSuperset {
+                Button("Add \(candidate.name) to the superset") {
+                    confirm(candidate, keepInSuperset: true)
+                }
+                Button("Add \(candidate.name) after the superset") {
+                    confirm(candidate, keepInSuperset: false)
+                }
+            } else {
+                Button("Add \(candidate.name)") { confirm(candidate, keepInSuperset: false) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { candidate in
+            Text("\(exercise.name) stays with what you've logged; \(candidate.name) is added after it.")
+        }
+    }
+
+    private var pendingIsPresented: Binding<Bool> {
+        Binding(get: { pendingCandidate != nil }, set: { if !$0 { pendingCandidate = nil } })
     }
 
     private var reasonChips: some View {
@@ -76,7 +104,15 @@ struct SwapExerciseSheet: View {
     }
 
     private func use(_ candidate: ExerciseInfo) {
-        onPick(candidate)
+        if loggedSetCount > 0 {
+            pendingCandidate = candidate
+        } else {
+            confirm(candidate, keepInSuperset: false)
+        }
+    }
+
+    private func confirm(_ candidate: ExerciseInfo, keepInSuperset: Bool) {
+        onPick(candidate, keepInSuperset)
         dismiss()
     }
 }
@@ -149,7 +185,7 @@ private struct CandidateRow: View {
         return AnyView(
             Color.clear
                 .sheet(isPresented: .constant(true)) {
-                    SwapExerciseSheet(exercise: SampleData.cableFly, onPick: { _ in })
+                    SwapExerciseSheet(exercise: SampleData.cableFly, onPick: { _, _ in })
                 }
                 .environment(store)
         )

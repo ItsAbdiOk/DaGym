@@ -191,3 +191,104 @@ struct BodySeriesTests {
         #expect(BodySeries.sessionDurations(workouts: []).isEmpty)
     }
 }
+
+@Suite("Balance windows")
+struct BalanceWindowTests {
+    private func calendar(firstWeekday: Int) -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+        calendar.firstWeekday = firstWeekday
+        return calendar
+    }
+
+    private func date(_ iso: String) -> Date {
+        let formatter = ISO8601DateFormatter()
+        return formatter.date(from: iso) ?? Date(timeIntervalSince1970: 0)
+    }
+
+    private func workout(at date: Date, sets: [PerformedSet], muscle: Muscle = .chest) -> BodyWorkout {
+        BodyWorkout(
+            date: date, durationSeconds: 3600,
+            entries: [BodyWorkout.MuscleEntry(primary: [muscle], secondary: [], sets: sets)]
+        )
+    }
+
+    private func set(rpe: Double? = nil, kind: SetKind = .working, date: Date) -> PerformedSet {
+        PerformedSet(kind: kind, weightKg: 60, reps: 8, date: date, rpe: rpe)
+    }
+
+    @Test("this week: Monday-start counts only Wednesday; Sunday-start counts Sunday too")
+    func thisWeekHonoursWeekStart() {
+        // 2024-01-07 is a Sunday, 2024-01-10 a Wednesday.
+        let sunday = date("2024-01-07T10:00:00Z")
+        let wednesday = date("2024-01-10T10:00:00Z")
+        let now = date("2024-01-10T20:00:00Z")
+        let workouts = [
+            workout(at: sunday, sets: [set(date: sunday)]),
+            workout(at: wednesday, sets: [set(date: wednesday)])
+        ]
+        let monday = calendar(firstWeekday: 2)
+        let mondayTotals = BodySeries.setsPerMuscle(
+            workouts: workouts, window: .thisWeek(monday), now: now, calendar: monday
+        )
+        #expect(mondayTotals[.chest] == 1)
+
+        let sundayStart = calendar(firstWeekday: 1)
+        let sundayTotals = BodySeries.setsPerMuscle(
+            workouts: workouts, window: .thisWeek(sundayStart), now: now, calendar: sundayStart
+        )
+        #expect(sundayTotals[.chest] == 2)
+    }
+
+    @Test("hardOnly counts the RIR 0 set, not the four RIR 3 sets")
+    func hardOnlyFilter() {
+        let day = date("2024-01-10T10:00:00Z")
+        let sets = (0..<4).map { _ in set(rpe: 7, date: day) } + [set(rpe: 10, date: day)]
+        let workouts = [workout(at: day, sets: sets)]
+        let calendar = calendar(firstWeekday: 2)
+        let hard = BodySeries.setsPerMuscle(
+            workouts: workouts, window: .days(7), now: day, calendar: calendar, hardOnly: true
+        )
+        #expect(hard[.chest] == 1)
+        let all = BodySeries.setsPerMuscle(workouts: workouts, window: .days(7), now: day, calendar: calendar)
+        #expect(all[.chest] == 5)
+    }
+
+    @Test("failure and AMRAP sets are hard even without a rating; warm-ups never are")
+    func hardKinds() {
+        let day = date("2024-01-10T10:00:00Z")
+        let sets = [
+            set(kind: .failure, date: day), set(kind: .amrap, date: day),
+            set(rpe: 10, kind: .warmup, date: day), set(rpe: 8.5, date: day)
+        ]
+        let hard = BodySeries.setsPerMuscle(
+            workouts: [workout(at: day, sets: sets)], window: .allTime, now: day,
+            calendar: calendar(firstWeekday: 2), hardOnly: true
+        )
+        #expect(hard[.chest] == 2)
+    }
+
+    @Test("allTime over 400 workouts equals the sum of every counting set")
+    func allTimeSumsEverything() {
+        let calendar = calendar(firstWeekday: 2)
+        let now = date("2024-01-10T10:00:00Z")
+        let workouts = (0..<400).map { index -> BodyWorkout in
+            let day = now.addingTimeInterval(-Double(index) * 86_400)
+            let sets = (0..<(index % 5 + 1)).map { _ in set(date: day) } + [set(kind: .warmup, date: day)]
+            return workout(at: day, sets: sets, muscle: index % 2 == 0 ? .chest : .lats)
+        }
+        let totals = BodySeries.setsPerMuscle(
+            workouts: workouts, window: .allTime, now: now, calendar: calendar
+        )
+        let expectedChest = workouts.filter { $0.entries[0].primary == [.chest] }
+            .flatMap(\.entries).flatMap(\.sets).filter { $0.kind.countsTowardStats }.count
+        let expectedLats = workouts.filter { $0.entries[0].primary == [.lats] }
+            .flatMap(\.entries).flatMap(\.sets).filter { $0.kind.countsTowardStats }.count
+        #expect(totals[.chest] == Double(expectedChest))
+        #expect(totals[.lats] == Double(expectedLats))
+        let trailing = BodySeries.setsPerMuscle(
+            workouts: workouts, window: .days(7), now: now, calendar: calendar
+        )
+        #expect((trailing[.chest] ?? 0) + (trailing[.lats] ?? 0) < Double(expectedChest + expectedLats))
+    }
+}

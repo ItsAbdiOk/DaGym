@@ -24,18 +24,142 @@ public struct StimulusEvent: Sendable {
 /// Muscle-fatigue math (§7 of the plan): exponential decay per muscle, mapped to the body map's
 /// recovery display and to plain-language copy.
 public enum Recovery {
-    /// `fatigue_m(now) = Σ effort × share × e^(−Δt/τ_m)` over every event that touched `m`.
+    /// One session's worth of stimulus on a muscle, scored against the lifter's own reference.
+    public struct SessionStimulus: Sendable {
+        /// When the session's last set on this muscle was performed.
+        public var date: Date
+        /// `Σ effort × share` over the session's sets, before any normalisation.
+        public var raw: Double
+        /// The reference (in primary-set-equivalents) this session was scored against.
+        public var reference: Double
+        /// `raw × recoveryFatigueScale / reference` — what `fatigue` decays from.
+        public var normalised: Double
+    }
+
+    /// `fatigue_m(now) = Σ normalised_session × e^(−Δt/τ_m)` over every session that touched
+    /// `m`. Each session is scored against a *causal*, downward-only reference: it starts at
+    /// `TrainingConstants.recoveryFatigueScale` and after each session moves toward that
+    /// session's raw size (EWMA, `recoveryReferenceSmoothing`) only when that is lower — so a
+    /// lifter whose sessions are habitually small feels a normal session as a normal session,
+    /// a first-ever big one as a shock, and deleting a workout can never *raise* fatigue.
     /// Events dated after `now` are ignored rather than contributing negative decay.
     public static func fatigue(events: [StimulusEvent], now: Date) -> [Muscle: Double] {
         var result: [Muscle: Double] = [:]
-        for event in events {
-            let deltaHours = now.timeIntervalSince(event.date) / 3600
-            guard deltaHours >= 0 else { continue }
-            let tau = event.muscle.recoveryTimeConstantHours
-            let decay = exp(-deltaHours / tau)
-            result[event.muscle, default: 0] += event.effort * event.share * decay
+        let byMuscle = Dictionary(grouping: events.filter { $0.date <= now }, by: \.muscle)
+        for (muscle, muscleEvents) in byMuscle {
+            let tau = muscle.recoveryTimeConstantHours
+            var reference = TrainingConstants.recoveryFatigueScale
+            var total = 0.0
+            for session in sessions(muscleEvents) {
+                let raw = session.reduce(0.0) { $0 + $1.effort * $1.share }
+                let factor = TrainingConstants.recoveryFatigueScale / reference
+                for event in session {
+                    let deltaHours = now.timeIntervalSince(event.date) / 3600
+                    total += event.effort * event.share * factor * exp(-deltaHours / tau)
+                }
+                reference = nextReference(after: raw, current: reference)
+            }
+            result[muscle] = total
         }
         return result
+    }
+
+    /// The per-session breakdown behind `fatigue`, oldest session first, for tests and any
+    /// "why is this muscle spent" detail. Events after `now` are ignored.
+    public static func sessionStimuli(events: [StimulusEvent], now: Date) -> [Muscle: [SessionStimulus]] {
+        var result: [Muscle: [SessionStimulus]] = [:]
+        let byMuscle = Dictionary(grouping: events.filter { $0.date <= now }, by: \.muscle)
+        for (muscle, muscleEvents) in byMuscle {
+            var reference = TrainingConstants.recoveryFatigueScale
+            var stimuli: [SessionStimulus] = []
+            for session in sessions(muscleEvents) {
+                let raw = session.reduce(0.0) { $0 + $1.effort * $1.share }
+                let date = session.map(\.date).max() ?? now
+                stimuli.append(SessionStimulus(
+                    date: date, raw: raw, reference: reference,
+                    normalised: raw * TrainingConstants.recoveryFatigueScale / reference
+                ))
+                reference = nextReference(after: raw, current: reference)
+            }
+            result[muscle] = stimuli
+        }
+        return result
+    }
+
+    /// Strength retention per muscle, 1.0 (fully retained) down to `retentionFloor`: full for
+    /// `retentionFullDays` after the last counting set, then halving every
+    /// `retentionHalfLifeDays`. Every muscle appears; one never trained sits at the floor.
+    public static func retention(lastTrained: [Muscle: Date], now: Date) -> [Muscle: Double] {
+        var result: [Muscle: Double] = [:]
+        for muscle in Muscle.allCases {
+            guard let last = lastTrained[muscle] else {
+                result[muscle] = TrainingConstants.retentionFloor
+                continue
+            }
+            let days = max(0, now.timeIntervalSince(last) / 86_400)
+            let idle = days - TrainingConstants.retentionFullDays
+            guard idle > 0 else {
+                result[muscle] = 1
+                continue
+            }
+            let decayed = pow(0.5, idle / TrainingConstants.retentionHalfLifeDays)
+            result[muscle] = max(TrainingConstants.retentionFloor, decayed)
+        }
+        return result
+    }
+
+    /// `retention(lastTrained:now:)` over the last event (with a non-zero share) per muscle.
+    public static func retention(events: [StimulusEvent], now: Date) -> [Muscle: Double] {
+        var lastTrained: [Muscle: Date] = [:]
+        for event in events where event.share > 0 && event.date <= now {
+            if let existing = lastTrained[event.muscle], existing >= event.date { continue }
+            lastTrained[event.muscle] = event.date
+        }
+        return retention(lastTrained: lastTrained, now: now)
+    }
+
+    /// Muscles not fully retained (`retention < 1`), least retained first; ties in body order
+    /// (`Muscle.allCases`). The graded "detraining" list behind the Balance section.
+    public static func detrainedMuscles(
+        retention: [Muscle: Double]
+    ) -> [(muscle: Muscle, retention: Double)] {
+        let bodyOrder = Dictionary(uniqueKeysWithValues: Muscle.allCases.enumerated().map { ($1, $0) })
+        return Muscle.allCases
+            .compactMap { muscle -> (muscle: Muscle, retention: Double)? in
+                guard let value = retention[muscle], value < 1 else { return nil }
+                return (muscle: muscle, retention: value)
+            }
+            .sorted { lhs, rhs in
+                lhs.retention == rhs.retention
+                    ? bodyOrder[lhs.muscle, default: 0] < bodyOrder[rhs.muscle, default: 0]
+                    : lhs.retention < rhs.retention
+            }
+    }
+
+    /// Splits one muscle's events into sessions: sorted by date, a new session starts whenever
+    /// the gap from the previous event exceeds `recoverySessionGapHours`.
+    private static func sessions(_ events: [StimulusEvent]) -> [[StimulusEvent]] {
+        let sorted = events.sorted { $0.date < $1.date }
+        var sessions: [[StimulusEvent]] = []
+        var current: [StimulusEvent] = []
+        let gap = TrainingConstants.recoverySessionGapHours * 3600
+        for event in sorted {
+            if let last = current.last, event.date.timeIntervalSince(last.date) > gap {
+                sessions.append(current)
+                current = []
+            }
+            current.append(event)
+        }
+        if !current.isEmpty { sessions.append(current) }
+        return sessions
+    }
+
+    /// Downward-only EWMA step: the reference never rises above where it already is, and a
+    /// session with no real stimulus (warm-ups only) leaves it alone.
+    private static func nextReference(after raw: Double, current: Double) -> Double {
+        guard raw > 0 else { return current }
+        let alpha = TrainingConstants.recoveryReferenceSmoothing
+        return min(current, alpha * raw + (1 - alpha) * current)
     }
 
     /// Saturating 0…1 "how recovered is it" score, 1 = fully fresh (no fatigue), approaching 0

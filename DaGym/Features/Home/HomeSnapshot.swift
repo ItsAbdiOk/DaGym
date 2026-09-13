@@ -7,6 +7,9 @@ import GymCore
 /// Pure over `(store, preferences, now)`, which is what makes it testable without SwiftUI.
 struct HomeSnapshot {
     var routine: RoutineInfo?
+    /// False when no weekly plan exists yet — `routine` is then the first routine offered as a
+    /// suggestion, not something the user scheduled, and the card should say so.
+    var hasSchedule: Bool = true
     var nextSessionText: String?
     var streakCurrent: Int
     var streakLongest: Int
@@ -29,6 +32,7 @@ struct HomeSnapshot {
         let since = calendar.date(byAdding: .day, value: -7, to: now) ?? now
         return HomeSnapshot(
             routine: store.todaysRoutine(calendar: calendar, now: now),
+            hasSchedule: !store.schedule().days.isEmpty || !store.schedule().overrides.isEmpty,
             nextSessionText: nextSessionText(store.nextSession(calendar: calendar, now: now)),
             streakCurrent: streak.current,
             streakLongest: streak.longest,

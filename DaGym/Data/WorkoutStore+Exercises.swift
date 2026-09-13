@@ -11,10 +11,10 @@ extension WorkoutStore {
         favoritesOnly: Bool = false, customOnly: Bool = false
     ) -> [ExerciseInfo] {
         let all = (try? context.fetch(FetchDescriptor<ExerciseModel>())) ?? []
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let tokens = Self.searchTokens(query)
         let bestByExercise = bestE1RMRecordsByExercise()
         return all
-            .filter { matches($0, trimmed: trimmed, muscle: muscle, equipment: equipment) }
+            .filter { matches($0, tokens: tokens, muscle: muscle, equipment: equipment) }
             .filter { !favoritesOnly || $0.isFavorite }
             .filter { !customOnly || $0.isCustom }
             .sorted(by: sortsBeforeInLibrary)
@@ -28,13 +28,38 @@ extension WorkoutStore {
             }
     }
 
+    /// Every query token must appear somewhere in the exercise's name, muscles, equipment or
+    /// logging style — "chest dumbbell" finds Dumbbell Bench Press, "pullover" finds
+    /// "Dumbbell Pull-Over". Accents and case are ignored; "db"/"bb"/"kb" expand first.
     private func matches(
-        _ model: ExerciseModel, trimmed: String, muscle: Muscle?, equipment: String?
+        _ model: ExerciseModel, tokens: [String], muscle: Muscle?, equipment: String?
     ) -> Bool {
-        let nameMatches = trimmed.isEmpty || model.name.lowercased().contains(trimmed)
+        let nameMatches = tokens.isEmpty || {
+            let haystack = Self.searchHaystack(model)
+            return tokens.allSatisfy { haystack.contains($0) }
+        }()
         let muscleMatches = muscle.map { model.primary.contains($0) || model.secondary.contains($0) } ?? true
         let equipmentMatches = equipment.map { model.equipment == $0 } ?? true
         return nameMatches && muscleMatches && equipmentMatches
+    }
+
+    private static let searchAliases = ["db": "dumbbell", "bb": "barbell", "kb": "kettlebell"]
+
+    static func searchTokens(_ query: String) -> [String] {
+        searchFold(query).split(whereSeparator: \.isWhitespace)
+            .map { searchAliases[String($0)] ?? String($0) }
+    }
+
+    private static func searchHaystack(_ model: ExerciseModel) -> String {
+        let muscles = (model.primary + model.secondary).map(\.displayName)
+        return searchFold(
+            ([model.name, model.equipment, model.style.rawValue] + muscles).joined(separator: " ")
+        )
+    }
+
+    private static func searchFold(_ text: String) -> String {
+        text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+            .replacingOccurrences(of: "-", with: "")
     }
 
     private func sortsBeforeInLibrary(_ lhs: ExerciseModel, _ rhs: ExerciseModel) -> Bool {

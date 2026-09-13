@@ -90,6 +90,7 @@ private struct EffortRow: View {
                     Image(systemName: "checkmark")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(effort.color)
+                        .accessibilityHidden(true)
                 }
             }
             .padding(.horizontal, DGSpace.s4)
@@ -104,6 +105,7 @@ private struct EffortRow: View {
             }
         }
         .buttonStyle(DGPressStyle())
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

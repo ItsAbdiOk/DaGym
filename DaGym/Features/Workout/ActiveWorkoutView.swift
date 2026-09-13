@@ -14,6 +14,7 @@ struct ActiveWorkoutView: View {
     @Environment(Preferences.self) var preferences
     @Environment(\.dismiss) var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     @State var activeSheet: ActiveSheet?
     @State var menuExerciseID: UUID?
     @State var showFinishConfirm = false
@@ -176,34 +177,13 @@ struct ActiveWorkoutView: View {
     // MARK: Exercise list
 
     private var exerciseList: some View {
-        ForEach(groupedIndices, id: \.self) { group in
+        ForEach(session.groupedIndices, id: \.self) { group in
             if group.count > 1 {
                 supersetGroup(indices: group)
             } else if let index = group.first {
                 exerciseCard(at: index)
             }
         }
-    }
-
-    /// Consecutive runs of exercises sharing a non-nil supersetGroup id.
-    private var groupedIndices: [[Int]] {
-        var result: [[Int]] = []
-        var start = 0
-        let exercises = session.exercises
-        while start < exercises.count {
-            let group = exercises[start].supersetGroup
-            var chunk = [start]
-            var next = start + 1
-            if group != nil {
-                while next < exercises.count, exercises[next].supersetGroup == group {
-                    chunk.append(next)
-                    next += 1
-                }
-            }
-            result.append(chunk)
-            start = next
-        }
-        return result
     }
 
     private func supersetGroup(indices: [Int]) -> some View {

@@ -82,7 +82,7 @@ struct LibraryView: View {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
-            DGIconButton(symbol: "plus") { showingNewExercise = true }
+            DGIconButton(symbol: "plus", accessibilityLabel: "New exercise") { showingNewExercise = true }
         }
     }
 
@@ -174,23 +174,26 @@ private struct LibraryRow: View {
 
     var body: some View {
         HStack(spacing: DGSpace.s3) {
-            thumbnail
-            VStack(alignment: .leading, spacing: 2) {
-                Text(exercise.name)
-                    .font(DGFont.title3)
-                    .textCase(.uppercase)
-                    .foregroundStyle(DGColor.ink1)
-                    .lineLimit(1)
-                Text(exercise.muscleLine)
-                    .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.ink3)
-                    .lineLimit(1)
+            HStack(spacing: DGSpace.s3) {
+                thumbnail
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(exercise.name)
+                        .font(DGFont.title3)
+                        .textCase(.uppercase)
+                        .foregroundStyle(DGColor.ink1)
+                        .lineLimit(1)
+                    Text(exercise.muscleLine)
+                        .font(DGFont.footnote)
+                        .foregroundStyle(DGColor.ink3)
+                        .lineLimit(1)
+                }
+                Spacer()
+                accessory
             }
-            Spacer()
-            accessory
+            .accessibilityElement(children: .combine)
             favoriteButton
         }
-        .frame(height: 72)
+        .frame(minHeight: 72)
         .dgCard(radius: 14, padding: 12)
     }
 
@@ -199,6 +202,7 @@ private struct LibraryRow: View {
             .padding(6)
             .frame(width: 44, height: 44)
             .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .accessibilityHidden(true)
     }
 
     /// Every row can be (un)favourited from the list, whether or not it has a lift on record.

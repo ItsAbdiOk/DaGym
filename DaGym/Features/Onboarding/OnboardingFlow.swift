@@ -11,6 +11,7 @@ struct OnboardingFlow: View {
     var onComplete: () -> Void
 
     @State private var step = OnboardingStep.welcome
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let savedStepKey = "onboardingStep"
 
@@ -25,7 +26,7 @@ struct OnboardingFlow: View {
             .padding(.top, DGSpace.s8)
             .padding(.bottom, DGSpace.s5)
         }
-        .animation(DGMotion.standard, value: step)
+        .animation(DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion), value: step)
         .onAppear(perform: restoreStep)
         .onChange(of: step) { UserDefaults.standard.set(step.rawValue, forKey: Self.savedStepKey) }
     }

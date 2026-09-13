@@ -27,7 +27,7 @@ struct HealthSettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    DGIconButton(symbol: "xmark") { dismiss() }
+                    DGIconButton(symbol: "xmark", accessibilityLabel: "Close") { dismiss() }
                 }
             }
         }

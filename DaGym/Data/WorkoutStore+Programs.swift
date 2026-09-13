@@ -21,8 +21,9 @@ struct ProgramInfo: Identifiable, Hashable {
     var programWeeks: [ProgramWeekInfo]
 }
 
-/// Starter program templates built from the seeded routines (`RoutineSeeder`'s "Push A"/"Pull
-/// B"/"Legs"), so a program can be created without an exercise-picking flow.
+/// Starter program templates built from the seeded routines (`RoutineSeeder`'s starters —
+/// "Push A"/"Pull B"/"Legs", Upper/Lower A/B, Full Body A/B/C, 5×5 A/B/C), so a program can be
+/// created without an exercise-picking flow.
 enum StarterProgramKind: String, CaseIterable, Identifiable, Hashable {
     case pushPullLegs = "Push/Pull/Legs"
     case upperLower = "Upper/Lower"
@@ -32,13 +33,13 @@ enum StarterProgramKind: String, CaseIterable, Identifiable, Hashable {
     var id: String { rawValue }
 
     /// Routine names to cycle through, in day order — matched against `WorkoutStore.routines()`
-    /// by name; a name that isn't found is simply skipped.
+    /// by name. Every one must exist for `createProgram(from:)` to build the program.
     var routineNames: [String] {
         switch self {
         case .pushPullLegs: ["Push A", "Pull B", "Legs"]
-        case .upperLower: ["Push A", "Legs"]
-        case .fullBody: ["Push A", "Pull B", "Legs"]
-        case .fiveByFive: ["Push A", "Legs"]
+        case .upperLower: ["Upper A", "Lower A", "Upper B", "Lower B"]
+        case .fullBody: ["Full Body A", "Full Body B", "Full Body C"]
+        case .fiveByFive: ["5×5 A", "5×5 B", "5×5 C"]
         }
     }
 
@@ -61,10 +62,13 @@ extension WorkoutStore {
         return models.map(programInfo)
     }
 
+    /// Builds `kind`'s program from its seeded routines. Nil — and nothing inserted — when any
+    /// of them has been deleted: a program cycling the wrong days is worse than no program.
     @discardableResult
-    func createProgram(from kind: StarterProgramKind) -> ProgramInfo {
+    func createProgram(from kind: StarterProgramKind) -> ProgramInfo? {
         let existing = routines()
         let routineIDs = kind.routineNames.compactMap { name in existing.first { $0.name == name }?.id }
+        guard routineIDs.count == kind.routineNames.count else { return nil }
         let model = ProgramModel(name: kind.rawValue, weeks: kind.weeks)
         model.routineIDs = routineIDs
         context.insert(model)

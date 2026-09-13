@@ -132,6 +132,7 @@ private struct MilestoneCard: View {
             }
         }
         .buttonStyle(DGPressStyle())
+        .accessibilityElement(children: .combine)
     }
 
     private var badge: some View {
@@ -143,6 +144,7 @@ private struct MilestoneCard: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(item.currentTier != nil ? DGColor.inkOnCoral : DGColor.ink3)
             }
+            .accessibilityHidden(true)
     }
 
     private var progressBar: some View {
@@ -157,6 +159,7 @@ private struct MilestoneCard: View {
         }
         .frame(height: 6)
         .padding(.top, 2)
+        .accessibilityHidden(true)
     }
 
     private var lockedSubtitle: String {
