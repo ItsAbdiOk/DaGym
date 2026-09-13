@@ -27,6 +27,7 @@
 		3B917C21F38D41AB3894D378 /* RoutinesTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CD7BD5802D9DBCC633A5B92 /* RoutinesTabView.swift */; };
 		4540906C6BB4F2DF148AF801 /* RoutineSeeder.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECF8AA203AB0AF59C5999D9B /* RoutineSeeder.swift */; };
 		4743FA4F5C393EB36DA43C05 /* RoutineModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0554DBEB43BD81AF3BAA6C5 /* RoutineModel.swift */; };
+		496D0F3B6934CFE6703256FF /* AccessibilityIDs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91C00AE4BD32776D215AE2A1 /* AccessibilityIDs.swift */; };
 		4BE1C6A5BA8AF8E1C36BF9E4 /* ExercisePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B25EDDEF246F3706E22AE7C /* ExercisePickerSheet.swift */; };
 		4CC064E2F4BB223366680B0A /* RoutineExerciseModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F5D706FFFD7DFE212140836 /* RoutineExerciseModel.swift */; };
 		4D0D6CDD48CDFF24FEB4DFAF /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 82BCDE3C6CF02D9AA5857791 /* OFL.txt */; };
@@ -62,6 +63,7 @@
 		9651FBC5AC373BF905FCFA0C /* SwapExerciseSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A73018D54FC410F3EC9EE72A /* SwapExerciseSheet.swift */; };
 		9672238D7D5955E85CFDD760 /* WorkoutStoreRoutineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29BC628AD53FC8CF7E8C961D /* WorkoutStoreRoutineTests.swift */; };
 		9E2D44409522E5E4F6408977 /* WorkoutStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E774BF51229F91063E746C2 /* WorkoutStore.swift */; };
+		A317327221C24168E5A4DF28 /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A122A52F35F2EEEFE8E78CA6 /* SmokeTests.swift */; };
 		A6BF17B2CC97F2A686E4C99A /* WorkoutDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A2677DD0B9E9707BC1B5D15 /* WorkoutDetailView.swift */; };
 		AACE7FE7EFD05A3E15736F56 /* ExerciseSeeder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A358416F32FED3696A51FAE9 /* ExerciseSeeder.swift */; };
 		B3839C96422634F3643CABAF /* WorkoutStoreActiveWorkoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A818C26F5D10890681FC2F /* WorkoutStoreActiveWorkoutTests.swift */; };
@@ -83,6 +85,7 @@
 		DC113E02CB4F6A6F7006C5AD /* RoutineBuilderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 677A54BBB011C822C4127982 /* RoutineBuilderView.swift */; };
 		DCDC7B0021341EDF32D80266 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64DC1A5B8A7BEE57EDCF7FA4 /* HomeView.swift */; };
 		DF759EC1C1A379CEEAA76EAB /* ReorderExercisesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0691DBDE8A15B163E14A634 /* ReorderExercisesSheet.swift */; };
+		E2D86BE029F8EE5E7FC70E35 /* LaunchFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC443E8A09251E5EECE8343A /* LaunchFlags.swift */; };
 		E55CD17FE71968B73FC45F14 /* DebugScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5182F9E2772C02B0E77A628A /* DebugScreenView.swift */; };
 		EE318D2CDA56A53D5E29ED06 /* DaGymTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA759CCC6F79FAA7D158DD99 /* DaGymTests.swift */; };
 		F21D4206F1BD3E031E4DF6D5 /* Barlow-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9C8CC141FAAE481D83886ADA /* Barlow-Bold.ttf */; };
@@ -93,6 +96,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		DB61DC4F776638703E401AFE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F194ECFF5A29CCD2B94E11CB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 47425627A40A2C4C2F78DE64;
+			remoteInfo = DaGym;
+		};
 		E9A64868945CDCE4CD919BC6 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F194ECFF5A29CCD2B94E11CB /* Project object */;
@@ -128,6 +138,7 @@
 		5A65323AA2A8D0AAF962C267 /* DGTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DGTabBar.swift; sourceTree = "<group>"; };
 		60467206A6445CF9C90A6AD0 /* BarlowCondensed-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "BarlowCondensed-Bold.ttf"; sourceTree = "<group>"; };
 		616473E7EB95DA273C5E34A0 /* WorkoutStore+History.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkoutStore+History.swift"; sourceTree = "<group>"; };
+		6350E7C91252C6FE83B40BFF /* DaGymUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = DaGymUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		63E53D41E32894768B328F1C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		641F6C219560B1EE79055A92 /* DGLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DGLayout.swift; sourceTree = "<group>"; };
 		64DC1A5B8A7BEE57EDCF7FA4 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -148,6 +159,7 @@
 		89F6B0F8D11A8D44EDD6F1A7 /* ExerciseSeederTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseSeederTests.swift; sourceTree = "<group>"; };
 		8A2677DD0B9E9707BC1B5D15 /* WorkoutDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutDetailView.swift; sourceTree = "<group>"; };
 		8F5D706FFFD7DFE212140836 /* RoutineExerciseModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutineExerciseModel.swift; sourceTree = "<group>"; };
+		91C00AE4BD32776D215AE2A1 /* AccessibilityIDs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityIDs.swift; sourceTree = "<group>"; };
 		92AF0F1F5C910BD0D8A49B9F /* WorkoutSession+TimedHold.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkoutSession+TimedHold.swift"; sourceTree = "<group>"; };
 		98BF80AF0A9C7BEDF8FC2C99 /* DaGymWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DaGymWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		994D8B02FF5882E0661B736B /* Acknowledgements.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = Acknowledgements.md; sourceTree = "<group>"; };
@@ -155,6 +167,7 @@
 		9C8CC141FAAE481D83886ADA /* Barlow-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Barlow-Bold.ttf"; sourceTree = "<group>"; };
 		9CC8B372F488A463B6688F03 /* WorkoutStore+Workouts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkoutStore+Workouts.swift"; sourceTree = "<group>"; };
 		9E063268B9CA1D9A8852ECC8 /* EffortPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffortPickerSheet.swift; sourceTree = "<group>"; };
+		A122A52F35F2EEEFE8E78CA6 /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
 		A358416F32FED3696A51FAE9 /* ExerciseSeeder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseSeeder.swift; sourceTree = "<group>"; };
 		A5F5264082EE33C78A1AECC2 /* Glass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Glass.swift; sourceTree = "<group>"; };
 		A66BAEB912393A2A3B2744C0 /* DGFont.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DGFont.swift; sourceTree = "<group>"; };
@@ -170,6 +183,7 @@
 		C5A818C26F5D10890681FC2F /* WorkoutStoreActiveWorkoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutStoreActiveWorkoutTests.swift; sourceTree = "<group>"; };
 		CACDF5BC2ABC3661B7260780 /* RestPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestPill.swift; sourceTree = "<group>"; };
 		CAF685AA57AB8FDB563F9AD5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		CC443E8A09251E5EECE8343A /* LaunchFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchFlags.swift; sourceTree = "<group>"; };
 		D0691DBDE8A15B163E14A634 /* ReorderExercisesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReorderExercisesSheet.swift; sourceTree = "<group>"; };
 		D5188FDBBC38087B09BC7B21 /* exercises.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = exercises.json; sourceTree = "<group>"; };
 		D83C359F22BCCAC039782688 /* ActiveWorkoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveWorkoutView.swift; sourceTree = "<group>"; };
@@ -286,6 +300,7 @@
 			children = (
 				322B0B989D0342102B96A59D /* DaGym.app */,
 				BD8384C78B1EC97C53FFD465 /* DaGymTests.xctest */,
+				6350E7C91252C6FE83B40BFF /* DaGymUITests.xctest */,
 				98BF80AF0A9C7BEDF8FC2C99 /* DaGymWatch.app */,
 			);
 			name = Products;
@@ -324,6 +339,14 @@
 				B0057D72DD6F62004DFBE02A /* Info.plist */,
 			);
 			path = DaGym;
+			sourceTree = "<group>";
+		};
+		82378D3E13E3F5E93D7B21B0 /* DaGymUITests */ = {
+			isa = PBXGroup;
+			children = (
+				A122A52F35F2EEEFE8E78CA6 /* SmokeTests.swift */,
+			);
+			path = DaGymUITests;
 			sourceTree = "<group>";
 		};
 		9444B0C11C83DAD20FA82EDE /* DaGymTests */ = {
@@ -375,6 +398,7 @@
 			children = (
 				7B0805A6AC6A9E9FEF72E733 /* DaGym */,
 				9444B0C11C83DAD20FA82EDE /* DaGymTests */,
+				82378D3E13E3F5E93D7B21B0 /* DaGymUITests */,
 				98CB168022C6AF6F7127F9A3 /* DaGymWatch */,
 				C48F85F0F6BA28C94EB68D5B /* Packages */,
 				5B8F97FF1C4811828AB5858B /* Products */,
@@ -436,6 +460,7 @@
 			isa = PBXGroup;
 			children = (
 				E7658B1272CBA1830D645E5D /* Components */,
+				91C00AE4BD32776D215AE2A1 /* AccessibilityIDs.swift */,
 				B9F94746A4C81740E6F1A24A /* DGColor.swift */,
 				A66BAEB912393A2A3B2744C0 /* DGFont.swift */,
 				641F6C219560B1EE79055A92 /* DGLayout.swift */,
@@ -484,6 +509,7 @@
 				8717531770A29F8325F2EB0B /* DaGymApp.swift */,
 				3C0F778F4649F7FCE0C2C113 /* DebugRoute.swift */,
 				5182F9E2772C02B0E77A628A /* DebugScreenView.swift */,
+				CC443E8A09251E5EECE8343A /* LaunchFlags.swift */,
 				EAF4D75924B68BE913338D55 /* RootView.swift */,
 			);
 			path = App;
@@ -492,6 +518,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		3139A560BDAAE6218B9311BF /* DaGymUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 47800FF1643872CCE252E770 /* Build configuration list for PBXNativeTarget "DaGymUITests" */;
+			buildPhases = (
+				33F59DA6610DD14BA1C0D626 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AB982B3A7300E6C392164DB4 /* PBXTargetDependency */,
+			);
+			name = DaGymUITests;
+			packageProductDependencies = (
+			);
+			productName = DaGymUITests;
+			productReference = 6350E7C91252C6FE83B40BFF /* DaGymUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		47425627A40A2C4C2F78DE64 /* DaGym */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 83EAEB6ECB8A34ACC4F3938B /* Build configuration list for PBXNativeTarget "DaGym" */;
@@ -559,6 +603,11 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
+					3139A560BDAAE6218B9311BF = {
+						DevelopmentTeam = 5AF2LBU5A3;
+						ProvisioningStyle = Automatic;
+						TestTargetID = 47425627A40A2C4C2F78DE64;
+					};
 					47425627A40A2C4C2F78DE64 = {
 						DevelopmentTeam = 5AF2LBU5A3;
 						ProvisioningStyle = Automatic;
@@ -592,6 +641,7 @@
 			targets = (
 				47425627A40A2C4C2F78DE64 /* DaGym */,
 				CF2F9148AFBC59FC7FEA76F9 /* DaGymTests */,
+				3139A560BDAAE6218B9311BF /* DaGymUITests */,
 				E7A5CBE51070090C17C18B6E /* DaGymWatch */,
 			);
 		};
@@ -627,6 +677,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		33F59DA6610DD14BA1C0D626 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A317327221C24168E5A4DF28 /* SmokeTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		8FCF9F70974E2A62AF82B984 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -656,6 +714,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				496D0F3B6934CFE6703256FF /* AccessibilityIDs.swift in Sources */,
 				754A7591DAF70A7E2002D314 /* AcknowledgementsView.swift in Sources */,
 				7A318F77DC9D9DC0F3371C75 /* ActiveWorkoutView+Actions.swift in Sources */,
 				9037425EF721D80CFD06877F /* ActiveWorkoutView.swift in Sources */,
@@ -681,6 +740,7 @@
 				143865B3EAF2C0BF84DE73A2 /* HistoryTabView.swift in Sources */,
 				95CD112B98D96C82090519DD /* HistoryView.swift in Sources */,
 				DCDC7B0021341EDF32D80266 /* HomeView.swift in Sources */,
+				E2D86BE029F8EE5E7FC70E35 /* LaunchFlags.swift in Sources */,
 				247E2212B3E685BBF24922C2 /* LibraryView.swift in Sources */,
 				6D9A72191F742E8C82CBA3EA /* Mapping.swift in Sources */,
 				F96472F510F9B9A30C147F7E /* ModelContainer+DaGym.swift in Sources */,
@@ -725,9 +785,31 @@
 			target = 47425627A40A2C4C2F78DE64 /* DaGym */;
 			targetProxy = E9A64868945CDCE4CD919BC6 /* PBXContainerItemProxy */;
 		};
+		AB982B3A7300E6C392164DB4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 47425627A40A2C4C2F78DE64 /* DaGym */;
+			targetProxy = DB61DC4F776638703E401AFE /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		58426BCA043C49B0A54D4BCC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.abdirahmanmohamed.dagym.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = DaGym;
+			};
+			name = Release;
+		};
 		7CDEEEBCCE9592E1933B3C0A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -918,6 +1000,23 @@
 			};
 			name = Debug;
 		};
+		E0E7F2C4D34D522F6163226F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.abdirahmanmohamed.dagym.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = DaGym;
+			};
+			name = Debug;
+		};
 		EC110D5B42B70BB47B0A5BA5 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -976,6 +1075,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		47800FF1643872CCE252E770 /* Build configuration list for PBXNativeTarget "DaGymUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E0E7F2C4D34D522F6163226F /* Debug */,
+				58426BCA043C49B0A54D4BCC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		518A7A3658A2953BCA9F3C89 /* Build configuration list for PBXProject "DaGym" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

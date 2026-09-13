@@ -56,6 +56,17 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "3139A560BDAAE6218B9311BF"
+               BuildableName = "DaGymUITests.xctest"
+               BlueprintName = "DaGymUITests"
+               ReferencedContainer = "container:DaGym.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "GymCoreTests"
                BuildableName = "GymCoreTests"
                BlueprintName = "GymCoreTests"

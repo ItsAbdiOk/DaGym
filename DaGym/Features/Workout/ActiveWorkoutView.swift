@@ -66,6 +66,7 @@ struct ActiveWorkoutView: View {
             }
             DGPrimaryButton(title: "Finish", height: 44) { showFinishConfirm = true }
                 .frame(width: 96)
+                .accessibilityIdentifier(A11yID.workoutFinish)
         }
         .padding(.horizontal, DGSpace.s4)
         .padding(.top, DGSpace.s2)

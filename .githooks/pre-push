@@ -48,17 +48,9 @@ echo "  running GymCore tests..."
     || { grep -E "✘|error:|Expectation failed" /tmp/dagym-core.log | head -25 >&2; fail "GymCore tests failed (log: /tmp/dagym-core.log)"; }
 ok "GymCore tests passed"
 
-# 5. App tests on the simulator. The slow step.
-SIM=$(xcrun simctl list devices available | grep -oE 'iPhone [0-9]+ Pro' | sort -V | tail -1)
-[ -n "$SIM" ] || SIM=$(xcrun simctl list devices available \
-      | grep -oE 'iPhone [^(]*' | head -1 | sed 's/[[:space:]]*$//')
-[ -n "$SIM" ] || fail "no iPhone simulator available to test against"
-
-echo "  running app tests on $SIM (this is the slow bit)..."
-if ! xcodebuild test \
-        -project DaGym.xcodeproj -scheme DaGym \
-        -destination "platform=iOS Simulator,name=$SIM" \
-        >/tmp/dagym-prepush.log 2>&1; then
+# 5. App tests + UI smoke test on the simulator. The slow step.
+echo "  running scripts/verify.sh (this is the slow bit)..."
+if ! ./scripts/verify.sh >/tmp/dagym-prepush.log 2>&1; then
     printf "%spre-push: tests failed%s\n" "$RED" "$OFF" >&2
     grep -E "✘|error:|Expectation failed|Test run with" /tmp/dagym-prepush.log \
         | sed 's/^/  /' | head -25 >&2

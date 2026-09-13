@@ -38,10 +38,14 @@ struct HistoryView: View {
     }
 
     private var list: some View {
-        List {
-            ForEach(weekGroups, id: \.label) { group in
+        let groups = weekGroups
+        let firstLabel = groups.first?.label
+        return List {
+            ForEach(groups, id: \.label) { group in
                 Section {
-                    ForEach(group.records) { record in row(for: record) }
+                    ForEach(Array(group.records.enumerated()), id: \.element.id) { offset, record in
+                        row(for: record, isFirst: group.label == firstLabel && offset == 0)
+                    }
                 } header: {
                     Text(group.label).dgLabel().textCase(nil)
                 }
@@ -51,9 +55,10 @@ struct HistoryView: View {
         .scrollContentBackground(.hidden)
         .environment(\.defaultMinListRowHeight, 0)
         .safeAreaPadding(.bottom, 120)
+        .accessibilityIdentifier(A11yID.historyList)
     }
 
-    private func row(for record: WorkoutRecord) -> some View {
+    private func row(for record: WorkoutRecord, isFirst: Bool) -> some View {
         ZStack {
             RecordCard(record: record)
             NavigationLink(value: record.id) { EmptyView() }.opacity(0)
@@ -68,6 +73,7 @@ struct HistoryView: View {
                 Label("Delete", systemImage: "trash")
             }
         }
+        .accessibilityIdentifier(isFirst ? A11yID.historyRow0 : "")
     }
 
     private var backfillButton: some View {

@@ -114,7 +114,8 @@ private struct OnDeckExerciseCard: View {
         return VStack(spacing: DGSpace.s2) {
             ForEach(Array(entry.sets.enumerated()), id: \.element.id) { index, set in
                 SetRow(
-                    set: set, badgeIndex: workingIndex(upTo: index), isCurrent: set.id == firstOpenID,
+                    set: set, badgeIndex: workingIndex(upTo: index), rowIndex: index,
+                    isCurrent: set.id == firstOpenID,
                     effortScale: effortScale, isPerSide: entry.exercise.isPerSide,
                     onTapWeight: { onTapWeight(set.id) }, onTapReps: { onTapReps(set.id) },
                     onTapEffort: { onTapEffort(set.id) }, onToggleDone: { onToggleDone(set) }

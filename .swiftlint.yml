@@ -4,6 +4,7 @@
 included:
   - DaGym
   - DaGymTests
+  - DaGymUITests
   - DaGymWatch
   - GymCore/Sources
   - GymCore/Tests

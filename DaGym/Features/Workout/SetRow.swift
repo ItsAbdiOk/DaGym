@@ -6,6 +6,9 @@ import SwiftUI
 struct SetRow: View {
     var set: SetEntry
     var badgeIndex: Int
+    /// The set's position within its exercise (0-based). Drives
+    /// `A11yID.setRowDone(_:)` for `DaGymUITests`.
+    var rowIndex: Int
     var isCurrent: Bool
     var effortScale: Effort.Scale
     var isPerSide: Bool = false
@@ -99,6 +102,7 @@ struct SetRow: View {
                 )
         }
         .buttonStyle(DGPressStyle())
+        .accessibilityIdentifier(A11yID.setRowDone(rowIndex))
     }
 
     private var weightColor: Color {
@@ -118,19 +122,19 @@ struct SetRow: View {
     VStack(spacing: DGSpace.s2) {
         SetRow(
             set: SetEntry(kind: .warmup, weightKg: 40, reps: 10, isDone: true, previous: nil),
-            badgeIndex: 0, isCurrent: false, effortScale: .rpe,
+            badgeIndex: 0, rowIndex: 0, isCurrent: false, effortScale: .rpe,
             onTapWeight: {}, onTapReps: {}, onTapEffort: {}, onToggleDone: {}
         )
         SetRow(
             set: SetEntry(
                 weightKg: 82.5, reps: 8, effort: Effort(rpe: 8), isDone: true, previous: "80 × 8"
             ),
-            badgeIndex: 1, isCurrent: false, effortScale: .rpe,
+            badgeIndex: 1, rowIndex: 1, isCurrent: false, effortScale: .rpe,
             onTapWeight: {}, onTapReps: {}, onTapEffort: {}, onToggleDone: {}
         )
         SetRow(
             set: SetEntry(weightKg: 82.5, reps: 8, previous: "80 × 8"),
-            badgeIndex: 2, isCurrent: true, effortScale: .rpe,
+            badgeIndex: 2, rowIndex: 2, isCurrent: true, effortScale: .rpe,
             onTapWeight: {}, onTapReps: {}, onTapEffort: {}, onToggleDone: {}
         )
     }

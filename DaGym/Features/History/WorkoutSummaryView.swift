@@ -51,6 +51,7 @@ struct WorkoutSummaryView: View {
     private var actionRow: some View {
         HStack(spacing: DGSpace.s3) {
             DGPrimaryButton(title: "Done", symbol: "checkmark", action: onDone)
+                .accessibilityIdentifier(A11yID.summaryDone)
             Button(action: onShare) {
                 Image(systemName: "square.and.arrow.up")
                     .font(.system(size: 17, weight: .semibold))

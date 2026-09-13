@@ -27,6 +27,7 @@ struct WeightKeypadSheet: View {
                 onDone()
                 dismiss()
             }
+            .accessibilityIdentifier(A11yID.keypadLog)
         }
         .padding(.horizontal, DGSpace.s5)
         .padding(.top, DGSpace.s8)
@@ -78,17 +79,25 @@ struct WeightKeypadSheet: View {
             LazyVGrid(columns: columns, spacing: DGSpace.s2) {
                 ForEach(["1", "2", "3", "+2.5", "4", "5", "6", "-2.5", "7", "8", "9"], id: \.self) { key in
                     KeypadKey(label: key, isAccent: key.contains("2.5")) { tap(key) }
+                        .accessibilityIdentifier(digitIdentifier(key) ?? key)
                 }
                 KeypadKey(label: "⌫", isAccent: false) { backspace() }
             }
             HStack(spacing: DGSpace.s2) {
                 KeypadKey(label: ".", isAccent: false) { tap(".") }
                 KeypadKey(label: "0", isAccent: false) { tap("0") }
+                    .accessibilityIdentifier(A11yID.keypadKey("0"))
             }
         }
     }
 
     private var displayValue: String { buffer.isEmpty ? WorkoutSession.format(value) : buffer }
+
+    /// `A11yID.keypadKey(_:)` for a plain digit key, `nil` for the ± keys.
+    private func digitIdentifier(_ key: String) -> String? {
+        guard key.count == 1, key.first?.isNumber == true else { return nil }
+        return A11yID.keypadKey(key)
+    }
 
     private func step(by delta: Double) {
         value = max(0, value + delta)

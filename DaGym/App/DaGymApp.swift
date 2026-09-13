@@ -75,8 +75,13 @@ struct AppRootContainer: View {
     }
 
     /// Tries the persistent store first; falls back to an in-memory one so a
-    /// disk or migration failure never crashes the app.
+    /// disk or migration failure never crashes the app. Under `-dgUITest`,
+    /// always uses a fresh in-memory store so every test run starts seeded
+    /// and empty, with no leftover state from a previous run.
     private static func resolveContainer() -> ModelContainer? {
+        if LaunchFlags.isUITesting {
+            return try? ModelContainer.dagym(inMemory: true)
+        }
         if let container = try? ModelContainer.dagym() {
             return container
         }

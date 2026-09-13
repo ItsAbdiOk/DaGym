@@ -89,6 +89,7 @@ struct LibraryView: View {
                 .foregroundStyle(DGColor.ink1)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+                .accessibilityIdentifier(A11yID.librarySearch)
         }
         .padding(.horizontal, DGSpace.s4)
         .frame(height: 48)

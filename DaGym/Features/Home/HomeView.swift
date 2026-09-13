@@ -104,7 +104,9 @@ private struct ScheduledCard: View {
             }
             HStack(spacing: DGSpace.s3) {
                 DGPrimaryButton(title: "Start", symbol: "play.fill", action: onStart)
+                    .accessibilityIdentifier(A11yID.homeStart)
                 DGIconButton(symbol: "plus", size: 52, action: onFreestyle)
+                    .accessibilityIdentifier(A11yID.homeFreestyle)
                 DGIconButton(symbol: "calendar", size: 52, action: onBackfill)
             }
         }
@@ -139,6 +141,7 @@ private struct RestDayCard: View {
                 .foregroundStyle(DGColor.ink3)
             HStack(spacing: DGSpace.s3) {
                 DGPrimaryButton(title: "Start a Freestyle Workout", symbol: "plus", action: onFreestyle)
+                    .accessibilityIdentifier(A11yID.homeStart)
                 DGIconButton(symbol: "calendar", size: 52, action: onBackfill)
             }
         }
