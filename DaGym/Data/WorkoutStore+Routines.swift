@@ -85,7 +85,10 @@ extension WorkoutStore {
         let routineExercises = (model.exercises ?? []).sorted { $0.order < $1.order }
         let exerciseInfos = routineExercises.compactMap { $0.exercise.map(exerciseInfo(for:)) }
         let setCount = routineExercises.reduce(0) { $0 + ($1.plannedSets?.count ?? 0) }
-        let info = RoutineInfo(model: model, exercises: exerciseInfos, setCount: setCount)
+        let exerciseSetCounts = routineExercises.map { $0.plannedSets?.count ?? 0 }
+        let info = RoutineInfo(
+            model: model, exercises: exerciseInfos, setCount: setCount, exerciseSetCounts: exerciseSetCounts
+        )
         let drafts = routineExercises.compactMap { routineExercise -> RoutineExerciseDraft? in
             guard let exerciseID = routineExercise.exercise?.id else { return nil }
             let sets = (routineExercise.plannedSets ?? [])
@@ -112,7 +115,10 @@ extension WorkoutStore {
         let routineExercises = (model.exercises ?? []).sorted { $0.order < $1.order }
         let exercises = routineExercises.compactMap { $0.exercise.map(ExerciseInfo.init(model:)) }
         let setCount = routineExercises.reduce(0) { $0 + ($1.plannedSets?.count ?? 0) }
-        return RoutineInfo(model: model, exercises: exercises, setCount: setCount)
+        let exerciseSetCounts = routineExercises.map { $0.plannedSets?.count ?? 0 }
+        return RoutineInfo(
+            model: model, exercises: exercises, setCount: setCount, exerciseSetCounts: exerciseSetCounts
+        )
     }
 
     private func insertedRoutine() -> RoutineModel {

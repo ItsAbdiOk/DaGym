@@ -157,10 +157,15 @@ struct RoutineInfo: Identifiable, Hashable {
     var progressionRule: String
     var progressionDetail: String
     var weekLabel: String?
+    /// Planned set count per exercise, index-paired with `exercises`. When
+    /// shorter than `exercises` (e.g. sample data), each missing exercise
+    /// falls back to a weight of 1 set in `hitMap`.
+    var exerciseSetCounts: [Int] = []
 
     init(
         id: UUID = UUID(), name: String, exercises: [ExerciseInfo], setCount: Int,
-        estimatedMinutes: Int, progressionRule: String, progressionDetail: String, weekLabel: String? = nil
+        estimatedMinutes: Int, progressionRule: String, progressionDetail: String, weekLabel: String? = nil,
+        exerciseSetCounts: [Int] = []
     ) {
         self.id = id
         self.name = name
@@ -170,16 +175,22 @@ struct RoutineInfo: Identifiable, Hashable {
         self.progressionRule = progressionRule
         self.progressionDetail = progressionDetail
         self.weekLabel = weekLabel
+        self.exerciseSetCounts = exerciseSetCounts
     }
 
+    /// Weighted, normalised "muscles hit" map — see `GymCore.RoutineMuscles.hitMap`.
     var hitMap: [Muscle: Double] {
-        var map: [Muscle: Double] = [:]
-        for exercise in exercises {
-            for muscle in exercise.primary { map[muscle] = max(map[muscle] ?? 0, 1) }
-            for muscle in exercise.secondary { map[muscle] = max(map[muscle] ?? 0, 0.45) }
+        let entries = exercises.enumerated().map { index, exercise in
+            (
+                primary: exercise.primary, secondary: exercise.secondary,
+                setCount: exerciseSetCounts.indices.contains(index) ? exerciseSetCounts[index] : 1
+            )
         }
-        return map
+        return GymCore.RoutineMuscles.hitMap(exercises: entries)
     }
+
+    /// The "HITS" line, e.g. "Chest, front delts, triceps · light on back".
+    var hitSummary: String { GymCore.RoutineMuscles.summary(hitMap: hitMap) }
 }
 
 struct WorkoutRecord: Identifiable, Hashable {

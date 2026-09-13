@@ -29,7 +29,8 @@ struct RoutineBuilderView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: DGSpace.s6) {
                     navRow
-                    NameCard(name: $name)
+                    NameCard(name: $name, hitMap: hitMap, hitSummary: hitSummary)
+                        .animation(DGMotion.standard, value: hitMap)
                     ForEach($items) { $item in
                         BuilderExerciseCard(
                             item: $item, isSuperset: item.supersetGroup != nil,
@@ -69,6 +70,16 @@ struct RoutineBuilderView: View {
                 .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
+
+    /// Live "muscles hit" map, recomputed from the current draft exercises.
+    private var hitMap: [Muscle: Double] {
+        let entries = items.map {
+            (primary: $0.exercise.primary, secondary: $0.exercise.secondary, setCount: $0.sets.count)
+        }
+        return GymCore.RoutineMuscles.hitMap(exercises: entries)
+    }
+
+    private var hitSummary: String { GymCore.RoutineMuscles.summary(hitMap: hitMap) }
 
     // MARK: - Loading
 
@@ -127,18 +138,32 @@ struct RoutineBuilderView: View {
     }
 }
 
-/// "NAME" card: editable title.
+/// "NAME" card: editable title, plus a live body-map thumbnail and "HITS"
+/// summary line that update as exercises are added, removed or swapped.
 private struct NameCard: View {
     @Binding var name: String
+    var hitMap: [Muscle: Double]
+    var hitSummary: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s2) {
-            Text("Name").dgLabel()
-            TextField("Routine name", text: $name)
-                .font(DGFont.title2)
-                .textCase(.uppercase)
-                .foregroundStyle(DGColor.ink1)
-                .textFieldStyle(.plain)
+        VStack(alignment: .leading, spacing: DGSpace.s3) {
+            VStack(alignment: .leading, spacing: DGSpace.s2) {
+                Text("Name").dgLabel()
+                TextField("Routine name", text: $name)
+                    .font(DGFont.title2)
+                    .textCase(.uppercase)
+                    .foregroundStyle(DGColor.ink1)
+                    .textFieldStyle(.plain)
+            }
+            HStack(spacing: DGSpace.s3) {
+                BodyMapPair(intensity: hitMap, height: 36)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Hits").dgLabel()
+                    Text(hitSummary)
+                        .font(DGFont.subhead)
+                        .foregroundStyle(DGColor.ink2)
+                }
+            }
         }
         .dgCard()
     }

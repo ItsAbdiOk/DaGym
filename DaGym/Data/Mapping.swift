@@ -68,12 +68,13 @@ extension WorkoutExerciseEntry {
 }
 
 extension RoutineInfo {
-    init(model: RoutineModel, exercises: [ExerciseInfo], setCount: Int) {
+    init(model: RoutineModel, exercises: [ExerciseInfo], setCount: Int, exerciseSetCounts: [Int] = []) {
         self.init(
             id: model.id, name: model.name, exercises: exercises, setCount: setCount,
             estimatedMinutes: max(20, setCount * 3),
             progressionRule: RoutineInfo.progressionLabel(model),
-            progressionDetail: RoutineInfo.progressionDetailText(model)
+            progressionDetail: RoutineInfo.progressionDetailText(model),
+            exerciseSetCounts: exerciseSetCounts
         )
     }
 
