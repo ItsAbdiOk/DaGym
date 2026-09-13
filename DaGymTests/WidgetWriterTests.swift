@@ -11,7 +11,7 @@ struct WidgetWriterTests {
     /// Counts `reloadTimelines` calls (a reference so the writer's closure can bump it).
     private final class ReloadCounter {
         var count = 0
-        var isEmpty: Bool { count == 0 }
+        var isEmpty: Bool { count < 1 }
     }
 
     private static func calendar() -> Calendar {
