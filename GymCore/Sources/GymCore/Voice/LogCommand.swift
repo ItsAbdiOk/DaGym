@@ -148,8 +148,8 @@ public enum Query: Hashable, Codable, Sendable {
 public enum Unresolved: Hashable, Codable, Sendable {
     case exerciseAmbiguous
     case missingReps
-    case missingWeight
-    case unitUnknown
+    /// "rpe three" / "six in the tank" — the number is outside the 5…10 RPE scale.
+    case effortOutOfRange
 }
 
 /// The parser's output for one utterance: zero or more commands plus how sure it is.
@@ -183,12 +183,15 @@ public struct ParseContext: Sendable {
     public var sessionExercises: [ExerciseCandidate]
     /// The full library (curated + custom).
     public var library: [ExerciseCandidate]
-    /// Curated + learned aliases; exact match short-circuits the matcher at score 1.0.
+    /// Curated + learned aliases, keyed by the normalised phrase (`Tokenizer.words`
+    /// joined with spaces); an exact hit short-circuits the matcher at score 1.0.
     public var aliases: [String: UUID]
-    /// For "plates" / "two plates" phrasing.
+    /// The gym's bar for "two plates" phrasing and for rounding a barbell exercise
+    /// whose candidate carries no grid of its own. `nil` means "no bar known":
+    /// weights then round to the increment grid, so dumbbell and cable loads under
+    /// 20 kg are never snapped up to an empty bar.
     public var bar: Bar?
     public var plateSet: [PlateStock]
-    public var effortScale: Effort.Scale
 
     public init(
         unit: WeightUnit,
@@ -197,9 +200,8 @@ public struct ParseContext: Sendable {
         sessionExercises: [ExerciseCandidate] = [],
         library: [ExerciseCandidate] = [],
         aliases: [String: UUID] = [:],
-        bar: Bar? = .olympic,
-        plateSet: [PlateStock] = PlateStock.standardKg,
-        effortScale: Effort.Scale = .rpe
+        bar: Bar? = nil,
+        plateSet: [PlateStock] = PlateStock.standardKg
     ) {
         self.unit = unit
         self.onDeck = onDeck
@@ -209,41 +211,33 @@ public struct ParseContext: Sendable {
         self.aliases = aliases
         self.bar = bar
         self.plateSet = plateSet
-        self.effortScale = effortScale
     }
 
-    /// How a set logs when no reps/weight/duration is spoken: which fields exist
-    /// and what they're prefilled with.
+    /// The set the session is waiting on: what an utterance with no exercise
+    /// name logs against, and how that exercise rounds and tracks.
     public struct OnDeckSet: Sendable {
         public var exerciseID: UUID
         public var name: String
         public var loggingStyle: LoggingStyle
-        public var isPerSide: Bool
         public var kind: SetKind
-        public var prefilledWeightKg: Double?
-        public var prefilledReps: Int?
-        public var targetSeconds: Int?
+        /// The rounding grid for this exercise's equipment (the store's
+        /// `loadGrid(for:)`); `nil` falls back to `ParseContext.bar` or `incrementKg`.
+        public var grid: LoadGrid?
         public var incrementKg: Double
 
         public init(
             exerciseID: UUID,
             name: String,
             loggingStyle: LoggingStyle,
-            isPerSide: Bool = false,
             kind: SetKind = .working,
-            prefilledWeightKg: Double? = nil,
-            prefilledReps: Int? = nil,
-            targetSeconds: Int? = nil,
-            incrementKg: Double = 2.5
+            grid: LoadGrid? = nil,
+            incrementKg: Double = TrainingConstants.defaultStepKg
         ) {
             self.exerciseID = exerciseID
             self.name = name
             self.loggingStyle = loggingStyle
-            self.isPerSide = isPerSide
             self.kind = kind
-            self.prefilledWeightKg = prefilledWeightKg
-            self.prefilledReps = prefilledReps
-            self.targetSeconds = targetSeconds
+            self.grid = grid
             self.incrementKg = incrementKg
         }
     }
@@ -278,23 +272,31 @@ public struct ParseContext: Sendable {
         }
     }
 
-    /// A library or session exercise the matcher can score against.
+    /// A library or session exercise the matcher can score against, carrying
+    /// enough about its equipment for the validator to round and style-check a
+    /// set logged against it by name.
     public struct ExerciseCandidate: Sendable {
         public var id: UUID
         public var name: String
         public var equipment: String?
         public var isFavorite: Bool
         public var isInSession: Bool
+        /// `nil` when unknown — the validator then skips tracking-style coherence.
+        public var loggingStyle: LoggingStyle?
+        /// `nil` when unknown — the validator then rounds on `ParseContext.bar` or the default step.
+        public var grid: LoadGrid?
 
         public init(
             id: UUID, name: String, equipment: String? = nil, isFavorite: Bool = false,
-            isInSession: Bool = false
+            isInSession: Bool = false, loggingStyle: LoggingStyle? = nil, grid: LoadGrid? = nil
         ) {
             self.id = id
             self.name = name
             self.equipment = equipment
             self.isFavorite = isFavorite
             self.isInSession = isInSession
+            self.loggingStyle = loggingStyle
+            self.grid = grid
         }
     }
 }

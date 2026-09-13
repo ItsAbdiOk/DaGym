@@ -26,12 +26,27 @@ struct ExerciseCard: View {
             OnDeckExerciseCard(
                 entry: entry, effortScale: effortScale,
                 onTapWeight: onTapWeight, onTapReps: onTapReps, onTapEffort: onTapEffort,
-                onToggleDone: onToggleDone, onMore: onMore, onNote: onNote,
+                onToggleDone: onToggleDone, onMore: onMore, onStartTimed: onStartTimed, onNote: onNote,
                 onDeleteSet: onDeleteSet, onChangeSetKind: onChangeSetKind
             )
         } else {
             CollapsedExerciseRow(entry: entry, onStartTimed: onStartTimed)
         }
+    }
+}
+
+/// Which rows the on-deck card lays out: weight × reps `SetRow`s, or one `TimedSetRow` per hold
+/// with Start on the next open one. Pure so it can be asserted without rendering the card.
+enum OnDeckRows: Equatable {
+    case loaded
+    case timed(startSetID: UUID?)
+}
+
+extension WorkoutExerciseEntry {
+    var nextOpenSetID: UUID? { sets.first { !$0.isDone }?.id }
+
+    var onDeckRows: OnDeckRows {
+        isTimed ? .timed(startSetID: nextOpenSetID) : .loaded
     }
 }
 
@@ -44,6 +59,7 @@ private struct OnDeckExerciseCard: View {
     var onTapEffort: (UUID) -> Void
     var onToggleDone: (SetEntry) -> Void
     var onMore: () -> Void
+    var onStartTimed: (UUID) -> Void
     var onNote: () -> Void
     var onDeleteSet: (UUID) -> Void
     var onChangeSetKind: (UUID, SetKind) -> Void
@@ -65,8 +81,14 @@ private struct OnDeckExerciseCard: View {
                 WhyCard(title: whyTitle, message: whyBody, labelColor: whyLabelColor)
                     .padding(.top, DGSpace.s3)
             }
-            columnHeader.padding(.top, DGSpace.s4)
-            setRows.padding(.top, DGSpace.s2)
+            switch entry.onDeckRows {
+            case .loaded:
+                columnHeader.padding(.top, DGSpace.s4)
+                setRows.padding(.top, DGSpace.s2)
+            case .timed(let startSetID):
+                timedColumnHeader.padding(.top, DGSpace.s4)
+                timedRows(startSetID: startSetID).padding(.top, DGSpace.s2)
+            }
         }
         .dgCard()
     }
@@ -126,8 +148,28 @@ private struct OnDeckExerciseCard: View {
         .dgLabel()
     }
 
+    private var timedColumnHeader: some View {
+        HStack(spacing: DGSpace.s3) {
+            Text("Set").frame(width: 28, alignment: .leading)
+            Text("Target").frame(minWidth: 44, alignment: .leading)
+            Text("Held").frame(minWidth: 44, alignment: .leading)
+        }
+        .dgLabel()
+    }
+
+    private func timedRows(startSetID: UUID?) -> some View {
+        VStack(spacing: DGSpace.s2) {
+            ForEach(Array(entry.sets.enumerated()), id: \.element.id) { index, set in
+                TimedSetRow(
+                    set: set, badgeIndex: workingIndex(upTo: index), isCurrent: set.id == startSetID,
+                    onStart: { onStartTimed(set.id) }, onToggleDone: { onToggleDone(set) }
+                )
+            }
+        }
+    }
+
     private var setRows: some View {
-        let firstOpenID = entry.sets.first { !$0.isDone }?.id
+        let firstOpenID = entry.nextOpenSetID
         return VStack(spacing: DGSpace.s2) {
             ForEach(Array(entry.sets.enumerated()), id: \.element.id) { index, set in
                 SetRow(
@@ -155,7 +197,7 @@ private struct CollapsedExerciseRow: View {
 
     @Environment(Preferences.self) private var preferences
 
-    private var firstOpenSetID: UUID? { entry.sets.first { !$0.isDone }?.id ?? entry.sets.first?.id }
+    private var firstOpenSetID: UUID? { entry.nextOpenSetID ?? entry.sets.first?.id }
 
     var body: some View {
         HStack(spacing: DGSpace.s3) {
@@ -199,8 +241,7 @@ private struct CollapsedExerciseRow: View {
             return "\(entry.sets.count) holds · target \(WorkoutSession.clock(target))"
         }
         let weight = preferences.formatWeight(kg: first.weightKg)
-        let suffix = entry.exercise.equipment == "Dumbbell"
-            ? "\(preferences.unitSymbol) per side" : preferences.unitSymbol
+        let suffix = entry.exercise.isPerSide ? "\(preferences.unitSymbol) per side" : preferences.unitSymbol
         return "\(entry.sets.count) × \(first.reps) · \(weight) \(suffix)"
     }
 }
@@ -225,6 +266,10 @@ private struct CompletedExerciseRow: View {
     private var summary: String {
         let name = entry.exercise.name.uppercased()
         guard let first = entry.sets.first else { return name }
+        if entry.isTimed {
+            let best = entry.sets.compactMap(\.durationSeconds).max() ?? 0
+            return "\(name) · \(entry.sets.count) holds · best \(WorkoutSession.clock(best))"
+        }
         let weight = preferences.formatWeight(kg: first.weightKg)
         return "\(name) · \(entry.sets.count) × \(first.reps) · \(weight) \(preferences.unitSymbol)"
     }

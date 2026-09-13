@@ -76,6 +76,28 @@ struct ProgressionEngineTimedTests {
         #expect(result.stall.lastTargetSeconds == 30)
     }
 
+    @Test("the engine's remembered hold outranks an unchanged plan target")
+    func rememberedHoldOutranksStalePlan() {
+        let stall = StallState(lastTargetSeconds: 60, lastPlanTargetSeconds: 30)
+        let result = ProgressionEngine.prescribe(
+            rule: .timed(stepSeconds: 5), planned: planned, history: [entry(durationSeconds: 60)],
+            stall: stall
+        )
+        #expect(result.sets.allSatisfy { $0.durationSeconds == 65 })
+    }
+
+    @Test("a plan edited since the engine last set a hold outranks its memory")
+    func editedPlanOutranksMemory() {
+        let edited = [PlannedSetSpec(kind: .working, targetSeconds: 90)]
+        let stall = StallState(lastTargetSeconds: 60, lastPlanTargetSeconds: 30)
+        let result = ProgressionEngine.prescribe(
+            rule: .timed(stepSeconds: 5), planned: edited, history: [entry(durationSeconds: 60)], stall: stall
+        )
+        #expect(result.sets.allSatisfy { $0.durationSeconds == 90 })
+        #expect(result.reason.kind == .repeat)
+        #expect(result.stall.lastPlanTargetSeconds == 90)
+    }
+
     @Test("a weighted hold keeps its load on the prescription")
     func weightedHoldKeepsLoad() {
         let history = [ExerciseHistoryEntry(date: .now, sets: [

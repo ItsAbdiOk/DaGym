@@ -10,6 +10,9 @@ enum SwapAddRemovePattern {
         if swapTriggers.contains(first) { return swap(words, context: context) }
         if first == "add" { return addExercise(words, context: context) }
         if first == "remove" { return removeExercise(words, context: context) }
+        if first == "drop", words.count > 1, words[1] != "to", NumberWords.parse(words, at: 1) == nil {
+            return removeExercise(words, context: context)
+        }
         return nil
     }
 
@@ -28,7 +31,7 @@ enum SwapAddRemovePattern {
         )
         return ParseResult(
             commands: [.swapExercise(target: target, replacement: replacement)],
-            confidence: 0.85, matchedPattern: "swap"
+            confidence: 0.85, matchedPattern: "swap", unresolved: unresolved([target, replacement])
         )
     }
 
@@ -38,7 +41,8 @@ enum SwapAddRemovePattern {
         let phrase = rest.joined(separator: " ")
         let exercise = ExerciseMatcher.resolve(phrase, in: context)
         return ParseResult(
-            commands: [.addExercise(exercise)], confidence: 0.85, matchedPattern: "addExercise"
+            commands: [.addExercise(exercise)], confidence: 0.85, matchedPattern: "addExercise",
+            unresolved: unresolved([exercise])
         )
     }
 
@@ -49,7 +53,12 @@ enum SwapAddRemovePattern {
         let exercise = ExerciseMatcher.resolve(phrase, in: context)
         return ParseResult(
             commands: [.removeExercise(exercise)], confidence: 0.85,
-            matchedPattern: "removeExercise"
+            matchedPattern: "removeExercise", unresolved: unresolved([exercise])
         )
+    }
+
+    private static func unresolved(_ refs: [ExerciseRef?]) -> [Unresolved] {
+        let anySpoken = refs.contains { if case .spoken = $0 { return true } else { return false } }
+        return anySpoken ? [.exerciseAmbiguous] : []
     }
 }

@@ -1,32 +1,52 @@
 import Foundation
 
-/// "bench eight at a hundred and rows eight at seventy" — two independent
-/// logSet clauses joined by "and". Only accepted when both halves resolve to
-/// a named exercise, so it never fires on delta idioms like "add two and a
-/// half and do eight" (§4.5 pattern 4).
+/// "bench eight at a hundred and rows eight at seventy [and curls ten at
+/// twenty]" — independent logSet clauses joined by "and". Only accepted when
+/// every clause resolves to a named exercise, so it never fires on delta
+/// idioms like "add two and a half and do eight" (§4.5 pattern 4).
 enum CompoundSplitPattern {
     static func match(_ words: [String], context: ParseContext) -> ParseResult? {
-        guard let andIndex = splitIndex(words) else { return nil }
-        let first = Array(words[..<andIndex])
-        let second = Array(words[(andIndex + 1)...])
-        guard let firstResult = clauseLogSet(first, context: context),
-              let secondResult = clauseLogSet(second, context: context),
-              hasExercise(firstResult), hasExercise(secondResult) else { return nil }
+        let clauses = split(words)
+        guard clauses.count >= 2 else { return nil }
+        var commands: [LogCommand] = []
+        var unresolved: [Unresolved] = []
+        var confidence = 1.0
+        for clause in clauses {
+            guard let result = clauseLogSet(clause, context: context), hasExercise(result) else { return nil }
+            commands.append(contentsOf: result.commands)
+            unresolved.append(contentsOf: result.unresolved)
+            confidence = min(confidence, result.confidence)
+        }
         return ParseResult(
-            commands: firstResult.commands + secondResult.commands,
-            confidence: min(firstResult.confidence, secondResult.confidence),
-            matchedPattern: "compound"
+            commands: commands, confidence: confidence, matchedPattern: "compound", unresolved: unresolved
         )
     }
 
-    private static func splitIndex(_ words: [String]) -> Int? {
-        for (index, word) in words.enumerated() where word == "and" {
-            let previous = index > 0 ? words[index - 1] : ""
-            let next = index + 1 < words.count ? words[index + 1] : ""
-            if previous == "a" || previous == "an" || next == "a" || next == "an" { continue }
-            return index
+    /// Splits on every "and" that joins clauses, leaving alone the ones inside a
+    /// number ("a hundred and five", "two and a half").
+    private static func split(_ words: [String]) -> [[String]] {
+        var clauses: [[String]] = []
+        var current: [String] = []
+        for (index, word) in words.enumerated() {
+            if word == "and", !joinsNumber(words, at: index) {
+                clauses.append(current)
+                current = []
+            } else {
+                current.append(word)
+            }
         }
-        return nil
+        clauses.append(current)
+        return clauses
+    }
+
+    private static func joinsNumber(_ words: [String], at index: Int) -> Bool {
+        let previous = index > 0 ? words[index - 1] : ""
+        let next = index + 1 < words.count ? words[index + 1] : ""
+        if previous == "a" || previous == "an" || next == "a" || next == "an" { return true }
+        if previous == "hundred" || previous == "thousand", NumberWords.parse(words, at: index + 1) != nil {
+            return true
+        }
+        return false
     }
 
     private static func clauseLogSet(_ words: [String], context: ParseContext) -> ParseResult? {

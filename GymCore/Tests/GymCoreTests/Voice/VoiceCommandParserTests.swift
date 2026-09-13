@@ -11,50 +11,85 @@ enum VoiceCommandParserFixtures {
     static let plankID = UUID()
     static let rowsID = UUID()
     static let dumbbellBenchID = UUID()
-    static let inclineDumbbellBenchID = UUID()
+    static let inclineDumbbellPressID = UUID()
     static let sideLateralRaiseID = UUID()
     static let pullUpsID = UUID()
     static let assistedPullUpID = UUID()
+    static let squatID = UUID()
+    static let legPressID = UUID()
+    static let curlID = UUID()
+    static let benchDipsID = UUID()
 
+    /// Names as they appear in `DaGym/Resources/Seed/exercises.json`.
     static func library() -> [ParseContext.ExerciseCandidate] {
         [
             ParseContext.ExerciseCandidate(
-                id: benchID, name: "Barbell Bench Press", equipment: "barbell", isInSession: true
+                id: benchID, name: "Barbell Bench Press - Medium Grip", equipment: "barbell",
+                isInSession: true, loggingStyle: .weightReps,
+                grid: .plates(bar: .olympic, plates: PlateStock.standardKg, collarsKg: 0)
             ),
-            ParseContext.ExerciseCandidate(id: plankID, name: "Plank"),
+            ParseContext.ExerciseCandidate(id: plankID, name: "Plank", loggingStyle: .timedHold, grid: .free),
             ParseContext.ExerciseCandidate(
-                id: rowsID, name: "Bent Over Barbell Row", equipment: "barbell", isInSession: true
-            ),
-            ParseContext.ExerciseCandidate(
-                id: dumbbellBenchID, name: "Dumbbell Bench Press", equipment: "dumbbell"
-            ),
-            ParseContext.ExerciseCandidate(
-                id: inclineDumbbellBenchID, name: "Incline Dumbbell Bench Press",
-                equipment: "dumbbell"
+                id: rowsID, name: "Bent Over Barbell Row", equipment: "barbell", isInSession: true,
+                loggingStyle: .weightReps,
+                grid: .plates(bar: .olympic, plates: PlateStock.standardKg, collarsKg: 0)
             ),
             ParseContext.ExerciseCandidate(
-                id: sideLateralRaiseID, name: "Side Lateral Raise", equipment: "dumbbell"
+                id: dumbbellBenchID, name: "Dumbbell Bench Press", equipment: "dumbbell",
+                loggingStyle: .weightReps, grid: .step(2)
             ),
-            ParseContext.ExerciseCandidate(id: pullUpsID, name: "Pull-Ups"),
-            ParseContext.ExerciseCandidate(id: assistedPullUpID, name: "Assisted Pull-Up")
+            ParseContext.ExerciseCandidate(
+                id: inclineDumbbellPressID, name: "Incline Dumbbell Press", equipment: "dumbbell",
+                loggingStyle: .weightReps, grid: .step(2)
+            ),
+            ParseContext.ExerciseCandidate(
+                id: sideLateralRaiseID, name: "Side Lateral Raise", equipment: "dumbbell",
+                loggingStyle: .weightReps, grid: .step(2)
+            ),
+            ParseContext.ExerciseCandidate(
+                id: pullUpsID, name: "Pullups", equipment: "bodyweight", loggingStyle: .bodyweightReps,
+                grid: .free
+            ),
+            ParseContext.ExerciseCandidate(
+                id: assistedPullUpID, name: "Assisted Pull-Up", equipment: "machine",
+                loggingStyle: .assisted, grid: .free
+            ),
+            ParseContext.ExerciseCandidate(
+                id: squatID, name: "Barbell Squat", equipment: "barbell", loggingStyle: .weightReps,
+                grid: .plates(bar: .olympic, plates: PlateStock.standardKg, collarsKg: 0)
+            ),
+            ParseContext.ExerciseCandidate(
+                id: legPressID, name: "Leg Press", equipment: "machine", loggingStyle: .weightReps,
+                grid: .step(5)
+            ),
+            ParseContext.ExerciseCandidate(
+                id: curlID, name: "Barbell Curl", equipment: "barbell", loggingStyle: .weightReps,
+                grid: .plates(bar: .olympic, plates: PlateStock.standardKg, collarsKg: 0)
+            ),
+            ParseContext.ExerciseCandidate(
+                id: benchDipsID, name: "Bench Dips", equipment: "bodyweight", isFavorite: true,
+                isInSession: true, loggingStyle: .bodyweightReps, grid: .free
+            )
         ]
     }
 
+    /// Stands in for the curated alias file; keys are `Tokenizer.words` joined.
     static func aliases() -> [String: UUID] {
         [
             "bench": benchID, "rows": rowsID, "dumbbell press": dumbbellBenchID,
-            "lateral raises": sideLateralRaiseID
+            "lateral raises": sideLateralRaiseID, "pull-ups": pullUpsID,
+            "assisted pull-ups": assistedPullUpID, "squats": squatID, "curls": curlID
         ]
     }
 
-    /// unit kg; on-deck = Barbell Bench Press working set prefilled 100 × 8;
+    /// unit kg; on-deck = Barbell Bench Press - Medium Grip 100 × 8;
     /// last completed = 100 × 8 (no effort); bar 20 kg.
     static func benchContext(unit: WeightUnit = .kg, lastCompleted: Bool = true) -> ParseContext {
         ParseContext(
             unit: unit,
             onDeck: ParseContext.OnDeckSet(
-                exerciseID: benchID, name: "Barbell Bench Press", loggingStyle: .weightReps,
-                prefilledWeightKg: 100, prefilledReps: 8
+                exerciseID: benchID, name: "Barbell Bench Press - Medium Grip", loggingStyle: .weightReps,
+                grid: .plates(bar: .olympic, plates: PlateStock.standardKg, collarsKg: 0)
             ),
             lastCompleted: lastCompleted
                 ? ParseContext.CompletedSetRef(
@@ -63,7 +98,8 @@ enum VoiceCommandParserFixtures {
                 : nil,
             sessionExercises: library().filter(\.isInSession),
             library: library(),
-            aliases: aliases()
+            aliases: aliases(),
+            bar: .olympic
         )
     }
 
@@ -72,17 +108,26 @@ enum VoiceCommandParserFixtures {
         ParseContext(
             unit: .kg,
             onDeck: ParseContext.OnDeckSet(
-                exerciseID: plankID, name: "Plank", loggingStyle: .timedHold
+                exerciseID: plankID, name: "Plank", loggingStyle: .timedHold, grid: .free
             ),
             lastCompleted: ParseContext.CompletedSetRef(
                 exerciseID: plankID, setID: UUID(), durationSeconds: 45
             ),
             sessionExercises: [ParseContext.ExerciseCandidate(
-                id: plankID, name: "Plank", isInSession: true
+                id: plankID, name: "Plank", isInSession: true, loggingStyle: .timedHold, grid: .free
             )],
             library: library(),
             aliases: aliases()
         )
+    }
+
+    /// On-deck Pullups (bodyweight), bench still in the session.
+    static func pullUpsContext() -> ParseContext {
+        var context = benchContext()
+        context.onDeck = ParseContext.OnDeckSet(
+            exerciseID: pullUpsID, name: "Pullups", loggingStyle: .bodyweightReps, grid: .free
+        )
+        return context
     }
 }
 

@@ -296,7 +296,10 @@ struct WorkoutDetail: Identifiable {
             .reduce(0) { $0 + $1.weightKg * Double($1.reps) }
     }
 
-    var setsDone: Int { exercises.reduce(0) { $0 + $1.doneCount } }
+    /// Completed working sets — warm-ups excluded, matching the History row and weekly recap.
+    var setsDone: Int {
+        exercises.flatMap(\.sets).filter { $0.isDone && $0.kind.countsTowardStats }.count
+    }
 }
 
 struct PersonalRecordInfo: Identifiable, Hashable {

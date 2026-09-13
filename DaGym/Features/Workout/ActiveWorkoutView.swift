@@ -13,6 +13,7 @@ struct ActiveWorkoutView: View {
     @Environment(WorkoutStore.self) var store
     @Environment(Preferences.self) var preferences
     @Environment(\.dismiss) var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State var activeSheet: ActiveSheet?
     @State var menuExerciseID: UUID?
     @State var showFinishConfirm = false
@@ -49,14 +50,19 @@ struct ActiveWorkoutView: View {
         .background(DGColor.bgBase)
         .overlay(alignment: .bottom) { bottomChrome }
         .overlay { Color.white.opacity(flashOpacity).ignoresSafeArea().allowsHitTesting(false) }
-        .restLiveActivity(session: session)
+        .restLiveActivity(session: session, onSessionMutation: { store.sync(session: session) })
         .task {
             session.onRestTick = handleRestTick
+            session.restHaptics = preferences.restHaptics
             await runTimers()
         }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { tickTimers() }
+        }
+        .onChange(of: preferences.restHaptics) { _, enabled in session.restHaptics = enabled }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = preferences.keepScreenAwake }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
-        .sheet(item: $activeSheet) { sheet in sheetContent(sheet) }
+        .sheet(item: $activeSheet, onDismiss: { store.sync(session: session) }, content: sheetContent)
         .confirmationDialog("Finish workout", isPresented: $showFinishConfirm, titleVisibility: .visible) {
             Button("Finish workout", action: finishSession)
             Button("Discard workout", role: .destructive, action: discardSession)
@@ -78,12 +84,14 @@ struct ActiveWorkoutView: View {
                     .foregroundStyle(DGColor.ink1)
             }
             Spacer(minLength: DGSpace.s2)
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("Elapsed").dgLabel()
-                TimelineView(.periodic(from: session.startedAt, by: 1)) { context in
-                    Text(WorkoutSession.clock(session.elapsedSeconds(at: context.date)))
-                        .dgMetric(DGFont.metricL)
-                        .foregroundStyle(DGColor.ink1)
+            if !session.isBackfilled {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Elapsed").dgLabel()
+                    TimelineView(.periodic(from: session.startedAt, by: 1)) { context in
+                        Text(WorkoutSession.clock(session.elapsedSeconds(at: context.date)))
+                            .dgMetric(DGFont.metricL)
+                            .foregroundStyle(DGColor.ink1)
+                    }
                 }
             }
             DGPrimaryButton(title: "Finish", height: 44) { showFinishConfirm = true }
@@ -263,13 +271,20 @@ struct ActiveWorkoutView: View {
 
     // MARK: Timers
 
+    /// Once-a-second refresh of the wall-clock-derived rest and hold timers. The sleep only paces
+    /// re-rendering; the timers read `Date()`, so a suspended process lands on the right number
+    /// the moment it wakes (see also the `scenePhase` tick above).
     func runTimers() async {
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled else { return }
-            session.tickRest()
-            session.tickTimedHold()
+            tickTimers()
         }
+    }
+
+    func tickTimers() {
+        session.tickRest()
+        session.tickTimedHold()
     }
 }
 
@@ -336,7 +351,7 @@ private struct PRBanner: View {
 enum ActiveSheet: Identifiable {
     case keypad(exerciseID: UUID, setID: UUID, field: KeypadField)
     case effort(exerciseID: UUID, setID: UUID)
-    case swap(exercise: ExerciseInfo)
+    case swap(entryID: UUID, exercise: ExerciseInfo)
     case addExercise
     case reorder
     case notes(exerciseID: UUID)
@@ -349,8 +364,8 @@ enum ActiveSheet: Identifiable {
             "keypad-\(exerciseID)-\(setID)-\(field.rawValue)"
         case .effort(let exerciseID, let setID):
             "effort-\(exerciseID)-\(setID)"
-        case .swap(let exercise):
-            "swap-\(exercise.id)"
+        case .swap(let entryID, _):
+            "swap-\(entryID)"
         case .addExercise:
             "add-exercise"
         case .reorder:

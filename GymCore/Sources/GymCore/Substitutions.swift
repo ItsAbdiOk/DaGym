@@ -71,8 +71,28 @@ public struct ScoredSubstitute: Identifiable, Hashable, Sendable {
 /// network — just the same-muscle / available-equipment / fatigue rules a
 /// trainer would apply on the spot.
 public enum Substitutions {
-    /// A `recoveryMap` value above this counts as "spent enough to steer away from".
+    /// A `recoveryMap` value above this counts as "spent enough to steer away from" a candidate —
+    /// our own weight, tuned separately from `TrainingConstants.recoveryHeadlineThreshold` (which
+    /// governs when a muscle is named in the recovery headline, not ranked here).
     private static let fatigueThreshold = 0.6
+    /// Baseline score every eligible candidate starts from — our own weight, high enough that the
+    /// adjustments below can't push a candidate negative on their own.
+    private static let baseScore = 10.0
+    /// Score bonus per shared primary muscle — our own weight.
+    private static let sharedPrimaryMuscleWeight = 3.0
+    /// Score bonus per shared secondary muscle — our own weight, half the primary weight.
+    private static let sharedSecondaryMuscleWeight = 1.5
+    /// Score bonus when the candidate shares the same mechanic (compound/isolation) — our own weight.
+    private static let mechanicMatchBonus = 1.0
+    /// `.shortOnTime`: bonus for a compound candidate, penalty for an isolation one — our own weights.
+    private static let shortOnTimeCompoundBonus = 4.0
+    private static let shortOnTimeIsolationPenalty = -1.0
+    /// Pain-related reasons: penalty when the candidate still loads the sore muscle, bonus when it's
+    /// isolation/machine (so it can be worked around it) — our own weights.
+    private static let painMusclePenalty = -6.0
+    private static let painAvoidanceBonus = 2.0
+    /// Fatigue penalty per point of "spent" past `fatigueThreshold` — our own weight.
+    private static let fatiguePenaltyScale = 10.0
 
     /// Up to 3 candidates for `exercise`, best first. Empty when nothing in `library` shares a
     /// primary muscle and available equipment with `exercise`, once `reason`'s equipment
@@ -111,10 +131,12 @@ public enum Substitutions {
         _ candidate: SubstitutionCandidate, exercise: SubstitutionCandidate, reason: SwapReason,
         recoveryMap: [Muscle: Double]
     ) -> Double {
-        var score = 10.0
-        score += Double(Set(candidate.primary).intersection(exercise.primary).count) * 3
-        score += Double(Set(candidate.secondary).intersection(exercise.secondary).count) * 1.5
-        if candidate.mechanic == exercise.mechanic { score += 1 }
+        var score = baseScore
+        score += Double(Set(candidate.primary).intersection(exercise.primary).count)
+            * sharedPrimaryMuscleWeight
+        score += Double(Set(candidate.secondary).intersection(exercise.secondary).count)
+            * sharedSecondaryMuscleWeight
+        if candidate.mechanic == exercise.mechanic { score += mechanicMatchBonus }
         score += reasonAdjustment(candidate, reason: reason)
         score += fatiguePenalty(candidate, recoveryMap: recoveryMap)
         return score
@@ -126,11 +148,13 @@ public enum Substitutions {
     private static func reasonAdjustment(_ candidate: SubstitutionCandidate, reason: SwapReason) -> Double {
         switch reason {
         case .shortOnTime:
-            return candidate.mechanic == "compound" ? 4 : -1
+            return candidate.mechanic == "compound" ? shortOnTimeCompoundBonus : shortOnTimeIsolationPenalty
         case .painArea, .shoulderHurts:
             var adjustment = 0.0
-            if let muscle = reason.painMuscle, touches(candidate, muscle) { adjustment -= 6 }
-            if candidate.mechanic == "isolation" || candidate.equipment == "machine" { adjustment += 2 }
+            if let muscle = reason.painMuscle, touches(candidate, muscle) { adjustment += painMusclePenalty }
+            if candidate.mechanic == "isolation" || candidate.equipment == "machine" {
+                adjustment += painAvoidanceBonus
+            }
             return adjustment
         case .machineTaken, .noBarbell:
             return 0
@@ -144,7 +168,7 @@ public enum Substitutions {
     ) -> Double {
         (candidate.primary + candidate.secondary).reduce(0) { total, muscle in
             guard let spent = recoveryMap[muscle], spent > fatigueThreshold else { return total }
-            return total - (spent - fatigueThreshold) * 10
+            return total - (spent - fatigueThreshold) * fatiguePenaltyScale
         }
     }
 
@@ -156,7 +180,10 @@ public enum Substitutions {
         _ candidate: SubstitutionCandidate, exercise: SubstitutionCandidate, reason: SwapReason
     ) -> String {
         let shared = Set(candidate.primary).intersection(exercise.primary)
-        let muscleName = shared.first?.displayName.lowercased() ?? "muscles"
+        // `shared` is a Set, whose iteration order isn't stable across launches — pick
+        // deterministically by walking the exercise's own (ordered) primary muscles instead of
+        // reading `.first` off the set.
+        let muscleName = exercise.primary.first { shared.contains($0) }?.displayName.lowercased() ?? "muscles"
         switch reason {
         case .painArea, .shoulderHurts:
             let area = reason.painMuscle?.displayName.lowercased() ?? "sore spot"

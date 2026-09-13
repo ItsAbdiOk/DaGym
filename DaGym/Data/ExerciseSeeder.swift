@@ -6,12 +6,11 @@ private let seedLogger = Logger(subsystem: "dev.abdirahmanmohamed.dagym", catego
 
 /// Loads `Resources/Seed/exercises.json` into the store on first launch.
 /// Idempotent: re-running only inserts exercises whose `seedID` is missing.
-/// When the bundled seed's `version` is newer than the last applied version
-/// (persisted in UserDefaults under `seedVersion`), existing rows have their
+/// When the bundled seed's `version` is newer than the version this store last
+/// applied (`SeedStateModel.exerciseSeedVersion`), existing rows have their
 /// instructions/provenance fields refreshed without duplicating rows.
 @MainActor
 enum ExerciseSeeder {
-    static let seedVersionKey = "seedVersion"
 
     struct SeedFile: Decodable {
         var version: Int
@@ -44,21 +43,72 @@ enum ExerciseSeeder {
 
     /// Inserts every seeded exercise not already present, keyed by `seedID`.
     /// Refreshes existing rows' provenance fields when the seed version bumped.
-    static func seedIfNeeded(
-        context: ModelContext, bundle: Bundle = .main, defaults: UserDefaults = .standard
-    ) {
+    static func seedIfNeeded(context: ModelContext, bundle: Bundle = .main) {
         do {
-            let data = try loadSeedData(bundle: bundle)
-            let seed = try JSONDecoder().decode(SeedFile.self, from: data)
+            let seed = try loadSeed(bundle: bundle)
             try insertMissing(seed.exercises, into: context)
-            let appliedVersion = defaults.integer(forKey: seedVersionKey)
-            if seed.version > appliedVersion {
+            let state = SeedState.row(in: context)
+            if seed.version > state.exerciseSeedVersion {
                 try updateExisting(seed.exercises, in: context)
-                defaults.set(seed.version, forKey: seedVersionKey)
+                state.exerciseSeedVersion = seed.version
+                state.updatedAt = Date()
+                try context.save()
             }
+            if dedupe(in: context) > 0 { try context.save() }
         } catch {
             seedLogger.error("Exercise seeding failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// The decoded bundled seed, for callers that need to compare a row against its seeded values
+    /// (`BackupService` decides "is this an override?" this way).
+    nonisolated static func loadSeed(bundle: Bundle = .main) throws -> SeedFile {
+        try JSONDecoder().decode(SeedFile.self, from: loadSeedData(bundle: bundle))
+    }
+
+    /// Folds rows that share a `seedID` (two devices each seeded before the other's rows synced)
+    /// into one survivor — the oldest, by `id` on a tie so every device picks the same one — and
+    /// re-points routine slots, workout entries and PR rows at it. Returns the number removed.
+    @discardableResult
+    static func dedupe(in context: ModelContext) -> Int {
+        let models = (try? context.fetch(FetchDescriptor<ExerciseModel>())) ?? []
+        var bySeedID: [String: [ExerciseModel]] = [:]
+        for model in models {
+            if let seedID = model.seedID { bySeedID[seedID, default: []].append(model) }
+        }
+        var removed = 0
+        for group in bySeedID.values where group.count > 1 {
+            let ordered = group.sorted(by: survivesFirst)
+            let survivor = ordered[0]
+            for duplicate in ordered.dropFirst() {
+                fold(duplicate, into: survivor, context: context)
+                removed += 1
+            }
+        }
+        if removed > 0 {
+            seedLogger.info("Folded \(removed, privacy: .public) duplicate seeded exercises")
+        }
+        return removed
+    }
+
+    static func survivesFirst(_ lhs: ExerciseModel, _ rhs: ExerciseModel) -> Bool {
+        if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
+        return lhs.id.uuidString < rhs.id.uuidString
+    }
+
+    private static func fold(
+        _ duplicate: ExerciseModel, into survivor: ExerciseModel, context: ModelContext
+    ) {
+        for slot in duplicate.routineExercises ?? [] { slot.exercise = survivor }
+        for entry in duplicate.workoutExercises ?? [] { entry.exercise = survivor }
+        let duplicateID = duplicate.id
+        let records = (try? context.fetch(
+            FetchDescriptor<PersonalRecordModel>(predicate: #Predicate { $0.exerciseID == duplicateID })
+        )) ?? []
+        for record in records { record.exerciseID = survivor.id }
+        survivor.isFavorite = survivor.isFavorite || duplicate.isFavorite
+        if survivor.notes.isEmpty { survivor.notes = duplicate.notes }
+        context.delete(duplicate)
     }
 
     private static func insertMissing(_ items: [SeedExercise], into context: ModelContext) throws {
@@ -116,7 +166,7 @@ enum ExerciseSeeder {
     /// The seed JSON lives at `Resources/Seed/exercises.json`. Swift Testing
     /// structs don't have a `Bundle(for:)` peer, so we try the passed-in
     /// bundle, then `Bundle(identifier:)`, then every loaded bundle.
-    private static func loadSeedData(bundle: Bundle) throws -> Data {
+    nonisolated private static func loadSeedData(bundle: Bundle) throws -> Data {
         if let url = seedURL(in: bundle) {
             return try Data(contentsOf: url)
         }
@@ -131,7 +181,7 @@ enum ExerciseSeeder {
         throw SeederError.resourceNotFound
     }
 
-    private static func seedURL(in bundle: Bundle) -> URL? {
+    nonisolated private static func seedURL(in bundle: Bundle) -> URL? {
         bundle.url(forResource: "exercises", withExtension: "json", subdirectory: "Seed")
             ?? bundle.url(forResource: "exercises", withExtension: "json")
     }

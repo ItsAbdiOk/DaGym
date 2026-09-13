@@ -1,6 +1,7 @@
 import Foundation
 
-/// §4.5 pattern 9: "3 sets of 8 at 60", "5 by 5 at 120", "10, 10, 8 at 80".
+/// §4.5 pattern 9: "3 sets of 8 at 60", "5 by 5 at 120", "10, 10, 8 at 80" —
+/// each with an optional spoken exercise ("squats five by five at one forty").
 enum MultiSetPattern {
     static func match(_ words: [String], context: ParseContext) -> ParseResult? {
         if let result = setsOf(words, context: context) { return result }
@@ -31,21 +32,10 @@ enum MultiSetPattern {
             )
         }
 
-        var excluded = NumberScan.consumedIndices(mentions)
-        excluded.insert(setsIndex); excluded.insert(setsIndex + 1)
-        if let atIndex { excluded.insert(atIndex) }
-        let exercisePhrase = reps == nil ? ExercisePhrase.extract(words, excluding: excluded) : nil
-        let exercise = ExercisePhrase.resolve(exercisePhrase, in: context)
-
-        var unresolved: [Unresolved] = []
-        if reps == nil { unresolved.append(.missingReps) }
-        if case .spoken = exercise { unresolved.append(.exerciseAmbiguous) }
-
         let values = LogSetSpec.SetValues(reps: reps, weightKg: weightKg)
-        let spec = LogSetSpec(exercise: exercise, sets: Array(repeating: values, count: setsCount))
-        return ParseResult(
-            commands: [.logSet(spec)], confidence: 0.88, matchedPattern: "multiSetOf",
-            unresolved: unresolved
+        return result(
+            words, sets: Array(repeating: values, count: setsCount),
+            confidence: 0.88, pattern: "multiSetOf", context: context
         )
     }
 
@@ -64,11 +54,9 @@ enum MultiSetPattern {
             )
         }
         let values = LogSetSpec.SetValues(reps: Int(repsMention.value), weightKg: weightKg)
-        let spec = LogSetSpec(
-            sets: Array(repeating: values, count: max(1, Int(setsMention.value)))
-        )
-        return ParseResult(
-            commands: [.logSet(spec)], confidence: 0.88, matchedPattern: "multiSetBy"
+        return result(
+            words, sets: Array(repeating: values, count: max(1, Int(setsMention.value))),
+            confidence: 0.88, pattern: "multiSetBy", context: context
         )
     }
 
@@ -91,9 +79,26 @@ enum MultiSetPattern {
             number: weightMention.value, unit: weightMention.unit, context: context
         )
         let sets = repsRun.map { LogSetSpec.SetValues(reps: Int($0.value), weightKg: weightKg) }
+        return result(words, sets: sets, confidence: 0.85, pattern: "multiSetSequential", context: context)
+    }
+
+    /// Whatever is left once numbers and grammar words are gone names the exercise.
+    private static func result(
+        _ words: [String], sets: [LogSetSpec.SetValues], confidence: Double, pattern: String,
+        context: ParseContext
+    ) -> ParseResult {
+        let numbers = NumberScan.consumedIndices(NumberScan.scan(words))
+        let exercisePhrase = ExercisePhrase.extract(words, excluding: numbers)
+        let (exercise, matchScore) = ExercisePhrase.resolve(exercisePhrase, in: context)
+
+        var unresolved: [Unresolved] = []
+        if sets.first?.reps == nil { unresolved.append(.missingReps) }
+        if case .spoken = exercise { unresolved.append(.exerciseAmbiguous) }
+
+        let spec = LogSetSpec(exercise: exercise, sets: sets)
         return ParseResult(
-            commands: [.logSet(LogSetSpec(sets: sets))], confidence: 0.85,
-            matchedPattern: "multiSetSequential"
+            commands: [.logSet(spec)], confidence: confidence * matchScore, matchedPattern: pattern,
+            unresolved: unresolved
         )
     }
 }

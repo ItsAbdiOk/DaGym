@@ -94,11 +94,14 @@ public enum DeloadDetector {
         return reasons
     }
 
-    /// Any sign the lift has stopped moving up: a miss streak, an e1RM trend that isn't
-    /// rising, or RPE at the same load creeping up by half a point.
+    /// Any sign the lift has stopped moving up: a miss streak, an e1RM trend (of at least
+    /// two sessions) that isn't rising, or RPE at the same load creeping up by half a point.
     private static func isNotProgressing(_ lift: LiftSnapshot) -> Bool {
         if lift.stalls >= 1 { return true }
-        if let first = lift.e1rmTrend.first, let last = lift.e1rmTrend.last, last <= first { return true }
+        if lift.e1rmTrend.count >= 2, let first = lift.e1rmTrend.first, let last = lift.e1rmTrend.last,
+           last <= first {
+            return true
+        }
         if let rise = rpeRise(lift.rpeAtSameLoadTrend), rise >= 0.5 { return true }
         return false
     }

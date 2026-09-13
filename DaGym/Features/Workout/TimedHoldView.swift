@@ -79,11 +79,69 @@ struct TimedHoldCard: View {
     }
 }
 
+/// One hold in the on-deck card: badge · target · logged time · Start (or the done check once
+/// logged). The Start button is what opens `TimedHoldCard`; before this row existed a hold could
+/// only be started while its exercise was still collapsed.
+struct TimedSetRow: View {
+    var set: SetEntry
+    var badgeIndex: Int
+    var isCurrent: Bool
+    var onStart: () -> Void
+    var onToggleDone: () -> Void
+
+    var body: some View {
+        HStack(spacing: DGSpace.s3) {
+            SetKindBadge(kind: set.kind, index: badgeIndex)
+            Text(set.targetSeconds.map(WorkoutSession.clock) ?? "–")
+                .font(DGFont.footnote)
+                .foregroundStyle(DGColor.ink3)
+                .frame(minWidth: 44, alignment: .leading)
+            Text(set.durationSeconds.map(WorkoutSession.clock) ?? "–")
+                .dgMetric(DGFont.metricM)
+                .foregroundStyle(set.isDone ? DGColor.ink1 : DGColor.ink3)
+                .frame(minWidth: 44, alignment: .leading)
+            Spacer(minLength: 0)
+            if set.isDone {
+                Button(action: onToggleDone) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(DGColor.success)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button(action: onStart) {
+                    Text("Start")
+                        .font(DGFont.condensedLabel(12))
+                        .textCase(.uppercase)
+                        .foregroundStyle(isCurrent ? DGColor.inkOnCoral : DGColor.ink1)
+                        .padding(.horizontal, DGSpace.s3)
+                        .frame(height: 36)
+                        .background(isCurrent ? DGColor.coral : DGColor.surface3, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, DGSpace.s3)
+        .frame(height: DGTap.rowHeight)
+        .background(rowFill, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
+                .strokeBorder(DGColor.coral, lineWidth: isCurrent ? 1 : 0)
+        }
+    }
+
+    private var rowFill: Color {
+        if set.isDone { return DGColor.success.opacity(0.16) }
+        return DGColor.surface2
+    }
+}
+
 #Preview {
     TimedHoldCard(
         exerciseName: "Plank",
         hold: WorkoutSession.TimedHoldState(
-            exerciseID: UUID(), setID: UUID(), targetSeconds: 60, leadIn: 0, elapsed: 47, isPaused: false
+            exerciseID: UUID(), setID: UUID(), targetSeconds: 60, startedAt: Date(), leadIn: 0, elapsed: 47
         ),
         onPauseResume: {}, onStop: {}
     )

@@ -117,6 +117,27 @@ struct MilestonesTests {
         #expect(match?.progress == 1)
     }
 
+    @Test("line renders strength and tonnage milestones in the caller's unit")
+    func lineUnitAware() throws {
+        let definition = try #require(Milestones.definitions.first { $0.id == "strength.bench" })
+        let bodyweightState = state(bodyweightKg: 80, bestE1RM: ["bench": 60])
+        let kgLine = Milestones.line(for: definition, tier: .bronze, state: bodyweightState, unit: .kg)
+        let lbLine = Milestones.line(for: definition, tier: .bronze, state: bodyweightState, unit: .lb)
+        #expect(kgLine.contains("kg"))
+        #expect(lbLine.contains("lb"))
+        #expect(!lbLine.contains("kg"))
+    }
+
+    @Test("evaluate threads the unit through to the achievement line")
+    func evaluateUnitAware() {
+        let result = Milestones.evaluate(
+            state: state(lifetimeTonnageKg: 500_000), earned: [], unit: .lb
+        )
+        let match = result.first { $0.id == "lifetimeTonnage" }
+        #expect(match?.line.contains("lb") == true)
+        #expect(match?.line.contains("kg") == false)
+    }
+
     @Test("progress is 0 when a strength milestone has no bodyweight")
     func progressZeroWithoutBodyweight() {
         let result = Milestones.progress(state: state(bestE1RM: ["bench": 60]))

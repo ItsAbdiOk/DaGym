@@ -50,7 +50,7 @@ struct ConsistencyView: View {
     }
 
     private func refresh() {
-        let calendar = Calendar.current
+        let calendar = preferences.trainingCalendar
         let cells = store.consistencyCells(months: 12, calendar: calendar)
         grid = ConsistencyCalendar.monthGrid(cells: cells, calendar: calendar)
         monthLabels = Self.monthLabels(for: grid, calendar: calendar)

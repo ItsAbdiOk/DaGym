@@ -70,9 +70,36 @@ extension WorkoutStore {
         save()
     }
 
+    private static func newestScheduleFirst() -> FetchDescriptor<ScheduleModel> {
+        FetchDescriptor<ScheduleModel>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
+    }
+
+    /// The newest schedule row. CloudKit can merge one per device; the most recently saved wins
+    /// and `dedupeScheduleRows()` removes the rest.
     private func fetchScheduleModel() -> ScheduleModel? {
-        var descriptor = FetchDescriptor<ScheduleModel>()
+        var descriptor = Self.newestScheduleFirst()
         descriptor.fetchLimit = 1
         return (try? context.fetch(descriptor))?.first
+    }
+
+    /// Keeps only the most recently updated schedule row, folding each older row's calendar
+    /// event ids into it so a re-sync can still find events the other device created.
+    @discardableResult
+    func dedupeScheduleRows() -> Int {
+        let rows = (try? context.fetch(Self.newestScheduleFirst())) ?? []
+        guard let survivor = rows.first, rows.count > 1 else { return 0 }
+        var eventIDs = scheduleEventIDs()
+        for extra in rows.dropFirst() {
+            if let data = extra.eventIDsJSON.data(using: .utf8),
+               let theirs = try? JSONDecoder().decode([String: String].self, from: data) {
+                eventIDs.merge(theirs) { mine, _ in mine }
+            }
+            context.delete(extra)
+        }
+        if let data = try? JSONEncoder().encode(eventIDs), let json = String(data: data, encoding: .utf8) {
+            survivor.eventIDsJSON = json
+        }
+        save()
+        return rows.count - 1
     }
 }

@@ -53,7 +53,13 @@ extension PlanShareService {
         importProgram(
             document.program, routineIDMap: routineIDMap, context: context, preview: preview, report: &report
         )
-        if !preview { try? context.save() }
+        if !preview {
+            do {
+                try context.save()
+            } catch {
+                report.problems.append("Saving the import failed: \(error.localizedDescription)")
+            }
+        }
         return report
     }
 
@@ -85,7 +91,6 @@ extension PlanShareService {
     ) {
         for item in items where index.find(seedID: nil, name: item.name) == nil {
             report.exercisesImported += 1
-            guard !preview else { continue }
             let model = ExerciseModel(
                 id: UUID(), name: item.name, primaryMuscles: item.primaryMuscles,
                 secondaryMuscles: item.secondaryMuscles, equipment: item.equipment,
@@ -93,14 +98,17 @@ extension PlanShareService {
                 isCustom: true, barType: item.barType, incrementKg: item.incrementKg,
                 restSeconds: item.restSeconds, instructions: item.instructions, notes: item.notes
             )
-            context.insert(model)
+            // In preview the model is never inserted; it only lets the routine pass below resolve
+            // the slots that use it, so the preview reports the same problems the real import will.
+            if !preview { context.insert(model) }
             index.register(model)
         }
     }
 
-    /// Imports every routine not already present (matched by `importedFromID`). Returns the
-    /// document routine id → local `RoutineModel.id` mapping, for `importProgram` — populated for
-    /// both freshly-created and already-present routines so a program import still resolves them.
+    /// Imports every routine not already present — matched by `importedFromID`, or by `id` when
+    /// the user re-imports a plan they exported themselves. Returns the document routine id →
+    /// local `RoutineModel.id` mapping, for `importProgram` — populated for both freshly-created
+    /// and already-present routines so a program import still resolves them.
     private static func importRoutines(
         _ items: [PlanRoutine], index: ExerciseIndex, context: ModelContext, preview: Bool,
         report: inout PlanImportReport
@@ -108,6 +116,7 @@ extension PlanShareService {
         let existing = (try? context.fetch(FetchDescriptor<RoutineModel>())) ?? []
         var existingByImportID: [UUID: RoutineModel] = [:]
         for model in existing {
+            existingByImportID[model.id] = model
             if let importedFromID = model.importedFromID { existingByImportID[importedFromID] = model }
         }
         var idMap: [UUID: UUID] = [:]
@@ -118,7 +127,13 @@ extension PlanShareService {
                 continue
             }
             report.routinesImported += 1
-            guard !preview else { continue }
+            guard !preview else {
+                for draft in item.exercises
+                where index.find(seedID: draft.exerciseSeedID, name: draft.exerciseName) == nil {
+                    report.problems.append(notFoundProblem(draft.exerciseName, routine: item.name))
+                }
+                continue
+            }
             let routine = RoutineModel(
                 name: item.name, notes: item.notes, progressionRule: item.progressionRule,
                 repRangeLow: item.repRangeLow, repRangeHigh: item.repRangeHigh,
@@ -139,9 +154,7 @@ extension PlanShareService {
         report: inout PlanImportReport
     ) -> RoutineExerciseModel? {
         guard let exercise = index.find(seedID: draft.exerciseSeedID, name: draft.exerciseName) else {
-            report.problems.append(
-                "Skipped \"\(draft.exerciseName)\" in routine \"\(routine.name)\": exercise not found."
-            )
+            report.problems.append(notFoundProblem(draft.exerciseName, routine: routine.name))
             return nil
         }
         let model = RoutineExerciseModel(
@@ -160,6 +173,10 @@ extension PlanShareService {
             return plannedSet
         }
         return model
+    }
+
+    private static func notFoundProblem(_ exerciseName: String, routine: String) -> String {
+        "Skipped \"\(exerciseName)\" in routine \"\(routine)\": exercise not found."
     }
 
     /// Imports the program itself, matched by the document's own `PlanProgram.id` reused as the

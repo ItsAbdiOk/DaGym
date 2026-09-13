@@ -3,28 +3,50 @@ import Foundation
 /// Live work-timer state machine for `entry.isTimed` exercises: a 3-2-1
 /// lead-in, then counts up (or down to the target and keeps counting),
 /// pause/resume, and a stop that logs the duration and starts rest.
+/// Everything is derived from `startedAt` and the pause dates against
+/// `now()`, so a plank keeps counting while the phone is locked.
 /// See mockup 10_01 "Timed hold · live work timer".
 extension WorkoutSession {
+    static let holdLeadInSeconds = 3
+
     func startTimedHold(exerciseID: UUID, setID: UUID, targetSeconds: Int?) {
         timedHold = TimedHoldState(
             exerciseID: exerciseID, setID: setID, targetSeconds: targetSeconds,
-            leadIn: 3, elapsed: 0, isPaused: false
+            startedAt: now(), leadIn: Self.holdLeadInSeconds, elapsed: 0
         )
     }
 
+    /// Refreshes the hold's `leadIn`/`elapsed` cache from the clock. A lead-in tap fires once per
+    /// lead-in second actually crossed, never for the seconds a suspension skipped over.
     func tickTimedHold() {
         guard var hold = timedHold, !hold.isPaused else { return }
-        if hold.leadIn > 0 {
-            hold.leadIn -= 1
-            Haptics.restTick()
-        } else {
-            hold.elapsed += 1
-        }
+        let active = Self.activeSeconds(of: hold, now: now())
+        let leadIn = max(0, Self.holdLeadInSeconds - active)
+        let elapsed = max(0, active - Self.holdLeadInSeconds)
+        guard leadIn != hold.leadIn || elapsed != hold.elapsed else { return }
+        if leadIn < hold.leadIn, leadIn > 0 { Haptics.restTick() }
+        hold.leadIn = leadIn
+        hold.elapsed = elapsed
         timedHold = hold
     }
 
+    /// Whole seconds the hold has been running, excluding time spent paused.
+    static func activeSeconds(of hold: TimedHoldState, now: Date) -> Int {
+        let end = hold.pausedAt ?? now
+        let interval = end.timeIntervalSince(hold.startedAt) - hold.pausedInterval
+        return max(0, Int(interval))
+    }
+
     func pauseResumeTimedHold() {
-        timedHold?.isPaused.toggle()
+        guard var hold = timedHold else { return }
+        let current = now()
+        if let pausedAt = hold.pausedAt {
+            hold.pausedInterval += current.timeIntervalSince(pausedAt)
+            hold.pausedAt = nil
+        } else {
+            hold.pausedAt = current
+        }
+        timedHold = hold
         Haptics.step()
     }
 
@@ -33,6 +55,7 @@ extension WorkoutSession {
     /// stopped during the lead-in, since nothing was logged.
     @discardableResult
     func stopTimedHold() -> Int? {
+        tickTimedHold()
         guard let hold = timedHold, hold.leadIn == 0 else {
             timedHold = nil
             return nil

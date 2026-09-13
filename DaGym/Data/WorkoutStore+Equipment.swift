@@ -114,19 +114,62 @@ extension WorkoutStore {
 }
 
 /// Seeds "Gym" (standard kg plates, every equipment kind) and "Home"
-/// (dumbbell/bodyweight/bands, no plates) the first time the app has no
-/// equipment profiles at all. Idempotent, like `ExerciseSeeder`/`RoutineSeeder`.
+/// (dumbbell/bodyweight/bands, no plates) once per store
+/// (`SeedStateModel.equipmentSeeded`), and only while the store has no
+/// profiles at all. Idempotent, like `ExerciseSeeder`/`RoutineSeeder`.
 @MainActor
 enum EquipmentSeeder {
     static func seedIfNeeded(store: WorkoutStore) {
-        guard store.equipmentProfiles().isEmpty else { return }
-        store.createProfile(
-            name: "Gym", isActive: true, barKg: Bar.olympic.weightKg,
-            availableEquipment: EquipmentOption.allCases.map(\.rawValue), plateStock: PlateStock.standardKg
-        )
-        store.createProfile(
-            name: "Home", isActive: false, barKg: Bar.olympic.weightKg,
-            availableEquipment: ["dumbbell", "bodyweight", "bands"], plateStock: []
-        )
+        let state = SeedState.row(in: store.context)
+        defer { store.dedupeEquipmentProfiles() }
+        guard !state.equipmentSeeded else { return }
+        if store.equipmentProfiles().isEmpty {
+            store.createProfile(
+                name: "Gym", isActive: true, barKg: Bar.olympic.weightKg,
+                availableEquipment: EquipmentOption.allCases.map(\.rawValue),
+                plateStock: PlateStock.standardKg
+            )
+            store.createProfile(
+                name: "Home", isActive: false, barKg: Bar.olympic.weightKg,
+                availableEquipment: ["dumbbell", "bodyweight", "bands"], plateStock: []
+            )
+        }
+        state.equipmentSeeded = true
+        state.updatedAt = Date()
+        store.save()
+    }
+}
+
+extension WorkoutStore {
+    /// Folds profiles that are identical in every field but `id`/`isActive`/`createdAt` — what two
+    /// devices seeding "Gym" and "Home" before syncing produce — into the oldest (by `id` on a
+    /// tie). The survivor is active if any copy was. Returns the number removed.
+    @discardableResult
+    func dedupeEquipmentProfiles() -> Int {
+        let models = (try? context.fetch(FetchDescriptor<EquipmentProfileModel>())) ?? []
+        var groups: [String: [EquipmentProfileModel]] = [:]
+        for model in models {
+            let key = [
+                model.name, "\(model.barKg)", model.availableEquipment.joined(separator: ","),
+                model.plateStockKg.map { "\($0)" }.joined(separator: ","),
+                model.plateCounts.map { "\($0)" }.joined(separator: ","), "\(model.collarsKg)"
+            ].joined(separator: "|")
+            groups[key, default: []].append(model)
+        }
+        var removed = 0
+        for group in groups.values where group.count > 1 {
+            let ordered = group.sorted { lhs, rhs in
+                if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+            let survivor = ordered[0]
+            for duplicate in ordered.dropFirst() {
+                survivor.isActive = survivor.isActive || duplicate.isActive
+                context.delete(duplicate)
+                removed += 1
+            }
+        }
+        if removed > 0 { save() }
+        return removed
     }
 }

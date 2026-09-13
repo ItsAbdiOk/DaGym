@@ -14,12 +14,12 @@ struct ImportEnvironment {
 /// focused on preview/dedupe/matching.
 extension WorkoutImportService {
     /// Inserts one imported workout as a finished, backfilled `WorkoutModel`, resolving each
-    /// exercise name and caching any new personal records. Returns the exercise ids touched, for
-    /// the caller's bookkeeping (none of today's screens need it, but it keeps the return value
-    /// honest about what changed).
+    /// exercise name. Personal records are rebuilt once by `apply` after every workout is in.
+    /// Returns the exercise ids touched, for the caller's bookkeeping (none of today's screens
+    /// need it, but it keeps the return value honest about what changed).
     static func insertWorkout(
         _ imported: ImportedWorkout, environment: ImportEnvironment, exerciseCache: inout [String: UUID],
-        latestDateSoFar: Date?, report: inout WorkoutImportReport
+        report: inout WorkoutImportReport
     ) -> [UUID] {
         let workout = makeWorkoutModel(imported, source: environment.source)
         environment.store.context.insert(workout)
@@ -40,13 +40,6 @@ extension WorkoutImportService {
             exerciseModels.append(entryModel)
         }
         workout.exercises = exerciseModels
-
-        for (exerciseID, exerciseModel) in zip(touchedExerciseIDs, exerciseModels) {
-            cachePersonalRecords(
-                exerciseID: exerciseID, exerciseModel: exerciseModel, workout: workout,
-                store: environment.store, latestDateSoFar: latestDateSoFar
-            )
-        }
         return touchedExerciseIDs
     }
 
@@ -85,61 +78,5 @@ extension WorkoutImportService {
                 isCompleted: true, completedAt: date, workoutExercise: workoutExercise
             )
         }
-    }
-
-    // MARK: - Personal records
-
-    private static func cachePersonalRecords(
-        exerciseID: UUID, exerciseModel: WorkoutExerciseModel, workout: WorkoutModel, store: WorkoutStore,
-        latestDateSoFar: Date?
-    ) {
-        let performed = (exerciseModel.sets ?? [])
-            .filter { $0.isCompleted && $0.setKind.countsTowardStats }
-            .map {
-                PerformedSet(
-                    kind: $0.setKind, weightKg: $0.weightKg, reps: $0.reps,
-                    durationSeconds: $0.durationSeconds, date: workout.startedAt
-                )
-            }
-        guard !performed.isEmpty else { return }
-        let records = PersonalRecords.evaluate(
-            newSets: performed, existing: existingRecords(exerciseID: exerciseID, store: store),
-            workoutDate: workout.startedAt, isBackfilled: true, latestWorkoutDate: latestDateSoFar
-        )
-        for record in records {
-            upsertRecord(record, exerciseID: exerciseID, workoutID: workout.id, store: store)
-        }
-    }
-
-    private static func existingRecords(exerciseID: UUID, store: WorkoutStore) -> [PersonalRecord] {
-        let predicate = #Predicate<PersonalRecordModel> { $0.exerciseID == exerciseID }
-        let models = (try? store.context.fetch(FetchDescriptor(predicate: predicate))) ?? []
-        return models.compactMap { model in
-            guard let kind = PRKind(rawValue: model.kind) else { return nil }
-            return PersonalRecord(
-                kind: kind, value: model.value, weightKg: model.weightKg, reps: model.reps, date: model.date
-            )
-        }
-    }
-
-    /// Mirrors `WorkoutStore.cacheRecord`: one row per exercise/kind, except `maxRepsAtWeight`
-    /// which keeps one row per weight.
-    private static func upsertRecord(
-        _ record: PersonalRecord, exerciseID: UUID, workoutID: UUID, store: WorkoutStore
-    ) {
-        let kind = record.kind.rawValue
-        let weight = record.weightKg
-        let byWeightToo = record.kind == .maxRepsAtWeight
-        let predicate = #Predicate<PersonalRecordModel> {
-            $0.exerciseID == exerciseID && $0.kind == kind && (!byWeightToo || $0.weightKg == weight)
-        }
-        let existing = (try? store.context.fetch(FetchDescriptor(predicate: predicate)))?.first
-        let model = existing ?? PersonalRecordModel(exerciseID: exerciseID, kind: kind)
-        if existing == nil { store.context.insert(model) }
-        model.value = record.value
-        model.weightKg = record.weightKg
-        model.reps = record.reps
-        model.date = record.date
-        model.workoutID = workoutID
     }
 }

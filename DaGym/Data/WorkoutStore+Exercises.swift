@@ -3,19 +3,29 @@ import GymCore
 import SwiftData
 
 extension WorkoutStore {
-    /// Filtered, sorted (favorites first, then name) exercise list for the library screen.
+    /// Filtered, sorted (favorites first, then name) exercise list for the library screen. Best
+    /// e1RM comes from one fetch of the PR cache shared by every row; `sessions` is left at 0 —
+    /// the detail screen fills it in via `exerciseInfo(for:)`, which is the only place it's shown.
     func exercises(
         matching query: String = "", muscle: Muscle? = nil, equipment: String? = nil,
         favoritesOnly: Bool = false, customOnly: Bool = false
     ) -> [ExerciseInfo] {
         let all = (try? context.fetch(FetchDescriptor<ExerciseModel>())) ?? []
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let bestByExercise = bestE1RMRecordsByExercise()
         return all
             .filter { matches($0, trimmed: trimmed, muscle: muscle, equipment: equipment) }
             .filter { !favoritesOnly || $0.isFavorite }
             .filter { !customOnly || $0.isCustom }
             .sorted(by: sortsBeforeInLibrary)
-            .map(exerciseInfo(for:))
+            .map { model in
+                var info = ExerciseInfo(model: model)
+                if let best = bestByExercise[model.id] {
+                    info.bestE1RM = best.value
+                    info.bestSet = Self.bestSetLine(best)
+                }
+                return info
+            }
     }
 
     private func matches(
@@ -37,9 +47,13 @@ extension WorkoutStore {
         var info = ExerciseInfo(model: model)
         let best = bestE1RMRecord(exerciseID: model.id)
         info.bestE1RM = best?.value
-        info.bestSet = best.map { "\(WorkoutSession.format($0.weightKg))×\($0.reps)" }
+        info.bestSet = best.map(Self.bestSetLine)
         info.sessions = sessionCount(exerciseID: model.id)
         return info
+    }
+
+    private static func bestSetLine(_ record: PersonalRecordModel) -> String {
+        "\(WorkoutSession.format(record.weightKg))×\(record.reps)"
     }
 
     @discardableResult
@@ -79,6 +93,19 @@ extension WorkoutStore {
         let predicate = #Predicate<PersonalRecordModel> { $0.exerciseID == exerciseID && $0.kind == "e1rm" }
         let records = (try? context.fetch(FetchDescriptor(predicate: predicate))) ?? []
         return records.max { $0.value < $1.value }
+    }
+
+    /// The best cached e1RM row per exercise, in one fetch, for list screens.
+    private func bestE1RMRecordsByExercise() -> [UUID: PersonalRecordModel] {
+        let predicate = #Predicate<PersonalRecordModel> { $0.kind == "e1rm" }
+        let records = (try? context.fetch(FetchDescriptor(predicate: predicate))) ?? []
+        var best: [UUID: PersonalRecordModel] = [:]
+        for record in records {
+            guard let exerciseID = record.exerciseID else { continue }
+            if let current = best[exerciseID], current.value >= record.value { continue }
+            best[exerciseID] = record
+        }
+        return best
     }
 
     private func sessionCount(exerciseID: UUID) -> Int {

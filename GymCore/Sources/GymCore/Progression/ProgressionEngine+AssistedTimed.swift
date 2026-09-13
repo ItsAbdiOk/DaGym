@@ -56,7 +56,8 @@ extension ProgressionEngine {
     /// Timed rule (plan.md §7): add seconds to the hold once every set hits the
     /// hold it was asked for — `stall.lastTargetSeconds` when the engine set it,
     /// else the plan's target — so a 45 s hold when 60 s was prescribed is a
-    /// miss even though the routine still says 30 s. Past `timedCeilingSeconds`
+    /// miss even though the routine still says 30 s. A plan edited since the
+    /// engine last set a target outranks that memory. Past `timedCeilingSeconds`
     /// the rule stops adding time and suggests load or a harder variation.
     static func prescribeTimed(_ context: RuleContext, stepSeconds: Int) -> Prescribed {
         guard let baseline = context.baseline else { return context.firstTimePrescribed() }
@@ -65,7 +66,10 @@ extension ProgressionEngine {
             return context.firstTimePrescribed()
         }
         let planTarget = context.planned.first { $0.kind.countsTowardStats }?.targetSeconds
-        let askedSeconds = context.stall.lastTargetSeconds ?? planTarget ?? durationSeconds
+        let seenPlanTarget = context.stall.lastPlanTargetSeconds
+        let planEdited = planTarget != nil && seenPlanTarget != nil && planTarget != seenPlanTarget
+        let remembered = planEdited ? nil : context.stall.lastTargetSeconds
+        let askedSeconds = remembered ?? planTarget ?? durationSeconds
         let hit = workingSets.allSatisfy { ($0.durationSeconds ?? 0) >= askedSeconds }
         let ceiling = TrainingConstants.timedCeilingSeconds
         let loadKg = workingSets.first?.weightKg ?? 0
@@ -100,6 +104,7 @@ extension ProgressionEngine {
         }
         var stall = context.stall
         stall.lastTargetSeconds = newDuration
+        stall.lastPlanTargetSeconds = planTarget
         stall.consecutiveMisses = hit ? 0 : stall.consecutiveMisses + 1
         return Prescribed(
             sets: sets, reason: reason, stall: stall, trainingMaxKg: context.trainingMaxKg,

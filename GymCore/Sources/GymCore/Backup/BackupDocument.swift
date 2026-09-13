@@ -22,6 +22,10 @@ public struct BackupDocument: Codable, Sendable {
     public var bodyMeasurements: [BackupBodyMeasurement]
     public var equipmentProfiles: [BackupEquipmentProfile]
     public var preferences: BackupPreferences
+    /// Added after format 1 shipped; optional so older exports still decode.
+    public var programs: [BackupProgram]?
+    public var achievements: [BackupAchievement]?
+    public var schedule: BackupSchedule?
 
     public init(
         formatVersion: Int = BackupDocument.currentFormatVersion,
@@ -32,7 +36,10 @@ public struct BackupDocument: Codable, Sendable {
         workouts: [BackupWorkout] = [],
         bodyMeasurements: [BackupBodyMeasurement] = [],
         equipmentProfiles: [BackupEquipmentProfile] = [],
-        preferences: BackupPreferences
+        preferences: BackupPreferences,
+        programs: [BackupProgram]? = nil,
+        achievements: [BackupAchievement]? = nil,
+        schedule: BackupSchedule? = nil
     ) {
         self.formatVersion = formatVersion
         self.exportedAt = exportedAt
@@ -43,6 +50,9 @@ public struct BackupDocument: Codable, Sendable {
         self.bodyMeasurements = bodyMeasurements
         self.equipmentProfiles = equipmentProfiles
         self.preferences = preferences
+        self.programs = programs
+        self.achievements = achievements
+        self.schedule = schedule
     }
 }
 
@@ -128,11 +138,27 @@ public struct BackupRoutineExercise: Codable, Sendable {
     public var supersetGroup: Int?
     public var restOverrideSeconds: Int?
     public var note: String
+    /// Opaque JSON for a `GymCore.ProgressionRule` override on this exercise; nil defers to the
+    /// routine's rule. Mirrors `DaGym.RoutineExerciseModel.progressionRuleJSON`.
+    public var progressionRuleJSON: String?
+    /// Opaque JSON for the engine's per-exercise memory (`GymCore.StallState`), so a restore
+    /// doesn't reset stall/deload counters; nil (never persisted, or an export from before this
+    /// field existed) means "no memory yet", the same as `DaGym.RoutineExerciseModel.stallJSON`'s
+    /// `"{}"` default. Optional (rather than defaulting to `"{}"` outright) so decoding a backup
+    /// exported before this field existed doesn't fail on a missing key.
+    public var stallJSON: String?
+    /// The rolling training max for `.percentOfTrainingMax`, nil until first set. Mirrors
+    /// `DaGym.RoutineExerciseModel.trainingMaxKg`.
+    public var trainingMaxKg: Double?
+    /// Planned-deload flag on the slot; nil (older export) means false.
+    public var excludeFromProgression: Bool?
     public var plannedSets: [BackupPlannedSet]
 
     public init(
         order: Int, exerciseSeedID: String? = nil, exerciseName: String, supersetGroup: Int? = nil,
-        restOverrideSeconds: Int? = nil, note: String = "", plannedSets: [BackupPlannedSet] = []
+        restOverrideSeconds: Int? = nil, note: String = "", progressionRuleJSON: String? = nil,
+        stallJSON: String? = nil, trainingMaxKg: Double? = nil, excludeFromProgression: Bool? = nil,
+        plannedSets: [BackupPlannedSet] = []
     ) {
         self.order = order
         self.exerciseSeedID = exerciseSeedID
@@ -140,6 +166,10 @@ public struct BackupRoutineExercise: Codable, Sendable {
         self.supersetGroup = supersetGroup
         self.restOverrideSeconds = restOverrideSeconds
         self.note = note
+        self.progressionRuleJSON = progressionRuleJSON
+        self.stallJSON = stallJSON
+        self.trainingMaxKg = trainingMaxKg
+        self.excludeFromProgression = excludeFromProgression
         self.plannedSets = plannedSets
     }
 }
@@ -151,13 +181,22 @@ public struct BackupRoutine: Codable, Sendable, Identifiable {
     public var progressionRule: String
     public var repRangeLow: Int
     public var repRangeHigh: Int
+    /// Opaque JSON for the routine-level `GymCore.ProgressionRule`; nil means the legacy
+    /// `progressionRule` name is authoritative.
+    public var progressionRuleJSON: String?
+    public var createdAt: Date?
+    public var updatedAt: Date?
     public var sortOrder: Int
+    public var isArchived: Bool?
+    /// Stable identity for starter/shared routines so a re-import merges instead of duplicating.
+    public var importedFromID: UUID?
     public var exercises: [BackupRoutineExercise]
 
     public init(
         id: UUID, name: String, notes: String = "", progressionRule: String = "doubleProgression",
-        repRangeLow: Int = 6, repRangeHigh: Int = 8, sortOrder: Int = 0,
-        exercises: [BackupRoutineExercise] = []
+        repRangeLow: Int = 6, repRangeHigh: Int = 8, progressionRuleJSON: String? = nil,
+        createdAt: Date? = nil, updatedAt: Date? = nil, sortOrder: Int = 0, isArchived: Bool? = nil,
+        importedFromID: UUID? = nil, exercises: [BackupRoutineExercise] = []
     ) {
         self.id = id
         self.name = name
@@ -165,7 +204,12 @@ public struct BackupRoutine: Codable, Sendable, Identifiable {
         self.progressionRule = progressionRule
         self.repRangeLow = repRangeLow
         self.repRangeHigh = repRangeHigh
+        self.progressionRuleJSON = progressionRuleJSON
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
         self.sortOrder = sortOrder
+        self.isArchived = isArchived
+        self.importedFromID = importedFromID
         self.exercises = exercises
     }
 }
@@ -211,20 +255,26 @@ public struct BackupWorkoutExercise: Codable, Sendable, Identifiable {
     public var supersetGroup: Int?
     public var note: String
     public var wasSubstitution: Bool
+    /// Whether this exercise was a detector-planned deload rather than a normal session — it must
+    /// stay excluded from progression history after a restore. Optional so decoding a backup
+    /// exported before this field existed doesn't fail on a missing key; nil means "not a planned
+    /// deload", same as `DaGym.WorkoutExerciseModel.wasPlannedDeload`'s `false` default.
+    public var wasPlannedDeload: Bool?
     public var exerciseSeedID: String?
     public var exerciseName: String
     public var sets: [BackupSetLog]
 
     public init(
         id: UUID, order: Int, supersetGroup: Int? = nil, note: String = "",
-        wasSubstitution: Bool = false, exerciseSeedID: String? = nil, exerciseName: String,
-        sets: [BackupSetLog] = []
+        wasSubstitution: Bool = false, wasPlannedDeload: Bool? = nil, exerciseSeedID: String? = nil,
+        exerciseName: String, sets: [BackupSetLog] = []
     ) {
         self.id = id
         self.order = order
         self.supersetGroup = supersetGroup
         self.note = note
         self.wasSubstitution = wasSubstitution
+        self.wasPlannedDeload = wasPlannedDeload
         self.exerciseSeedID = exerciseSeedID
         self.exerciseName = exerciseName
         self.sets = sets
@@ -240,15 +290,19 @@ public struct BackupWorkout: Codable, Sendable, Identifiable {
     public var endedAt: Date?
     public var notes: String
     public var isBackfilled: Bool
+    public var routineID: UUID?
     public var routineName: String
     public var bodyweightKg: Double?
     public var sourceDevice: String
+    /// Apple Health workout identifier, so a restore doesn't write the session to Health twice.
+    public var healthKitID: String?
     public var exercises: [BackupWorkoutExercise]
 
     public init(
         id: UUID, title: String, startedAt: Date, endedAt: Date? = nil, notes: String = "",
-        isBackfilled: Bool = false, routineName: String = "", bodyweightKg: Double? = nil,
-        sourceDevice: String = "iPhone", exercises: [BackupWorkoutExercise] = []
+        isBackfilled: Bool = false, routineID: UUID? = nil, routineName: String = "",
+        bodyweightKg: Double? = nil, sourceDevice: String = "iPhone", healthKitID: String? = nil,
+        exercises: [BackupWorkoutExercise] = []
     ) {
         self.id = id
         self.title = title
@@ -256,9 +310,11 @@ public struct BackupWorkout: Codable, Sendable, Identifiable {
         self.endedAt = endedAt
         self.notes = notes
         self.isBackfilled = isBackfilled
+        self.routineID = routineID
         self.routineName = routineName
         self.bodyweightKg = bodyweightKg
         self.sourceDevice = sourceDevice
+        self.healthKitID = healthKitID
         self.exercises = exercises
     }
 }
@@ -332,5 +388,73 @@ public struct BackupPreferences: Codable, Sendable {
         self.restHaptics = restHaptics
         self.restScreenFlash = restScreenFlash
         self.weekStartsMonday = weekStartsMonday
+    }
+}
+
+public struct BackupProgramWeek: Codable, Sendable, Identifiable {
+    public var id: UUID
+    public var index: Int
+    public var kind: String
+
+    public init(id: UUID, index: Int, kind: String) {
+        self.id = id
+        self.index = index
+        self.kind = kind
+    }
+}
+
+/// A multi-week program and which routines it cycles through.
+public struct BackupProgram: Codable, Sendable, Identifiable {
+    public var id: UUID
+    public var name: String
+    public var weeks: Int
+    public var startedAt: Date?
+    public var completedAt: Date?
+    public var isActive: Bool
+    public var routineIDs: [UUID]
+    public var createdAt: Date
+    public var programWeeks: [BackupProgramWeek]
+
+    public init(
+        id: UUID, name: String, weeks: Int, startedAt: Date? = nil, completedAt: Date? = nil,
+        isActive: Bool = false, routineIDs: [UUID] = [], createdAt: Date = Date(),
+        programWeeks: [BackupProgramWeek] = []
+    ) {
+        self.id = id
+        self.name = name
+        self.weeks = weeks
+        self.startedAt = startedAt
+        self.completedAt = completedAt
+        self.isActive = isActive
+        self.routineIDs = routineIDs
+        self.createdAt = createdAt
+        self.programWeeks = programWeeks
+    }
+}
+
+public struct BackupAchievement: Codable, Sendable, Identifiable {
+    public var id: UUID
+    public var milestoneID: String
+    public var tier: String
+    public var earnedAt: Date
+    public var workoutID: UUID?
+
+    public init(id: UUID, milestoneID: String, tier: String, earnedAt: Date, workoutID: UUID? = nil) {
+        self.id = id
+        self.milestoneID = milestoneID
+        self.tier = tier
+        self.earnedAt = earnedAt
+        self.workoutID = workoutID
+    }
+}
+
+/// The weekly schedule as the app stores it (opaque JSON), newest row only.
+public struct BackupSchedule: Codable, Sendable {
+    public var scheduleJSON: String
+    public var updatedAt: Date
+
+    public init(scheduleJSON: String, updatedAt: Date) {
+        self.scheduleJSON = scheduleJSON
+        self.updatedAt = updatedAt
     }
 }

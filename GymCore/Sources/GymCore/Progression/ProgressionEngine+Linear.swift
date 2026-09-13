@@ -31,7 +31,7 @@ extension ProgressionEngine {
                     body: "You hit \(summary) last session but over your RPE target — hold the weight.",
                     kind: .repeat
                 ),
-                stall: StallState(consecutiveMisses: stall.consecutiveMisses, lastWeightKg: baselineWeight),
+                stall: stall.advancing(misses: stall.consecutiveMisses, weightKg: baselineWeight),
                 baselineDate: baseline.date
             )
         case .hit:
@@ -49,7 +49,7 @@ extension ProgressionEngine {
                     title: context.increaseTitle(from: baselineWeight, to: newWeight),
                     body: "You hit \(summary) last session.", kind: .increase
                 ),
-                stall: StallState(consecutiveMisses: 0, lastWeightKg: newWeight),
+                stall: stall.advancing(misses: 0, weightKg: newWeight),
                 baselineDate: baseline.date
             )
         case .missedReps:
@@ -74,7 +74,7 @@ extension ProgressionEngine {
                     body: "\(misses) sessions in a row missed (last: \(summary)) — time to back off.",
                     kind: .deload
                 ),
-                stall: StallState(consecutiveMisses: 0, lastWeightKg: deloadTarget),
+                stall: stall.advancing(misses: 0, weightKg: deloadTarget),
                 baselineDate: baselineDate
             )
         }
@@ -84,7 +84,7 @@ extension ProgressionEngine {
                 title: "Repeat \(context.formatted(kg: baselineWeight))",
                 body: "You missed (\(summary)) last session — same weight again.", kind: .repeat
             ),
-            stall: StallState(consecutiveMisses: misses, lastWeightKg: baselineWeight),
+            stall: stall.advancing(misses: misses, weightKg: baselineWeight),
             baselineDate: baselineDate
         )
     }
@@ -105,7 +105,7 @@ extension ProgressionEngine {
     static func resetIfWeightChanged(_ stall: StallState, currentWeightKg: Double) -> StallState {
         guard let lastWeightKg = stall.lastWeightKg,
               !StallState.sameWeight(lastWeightKg, currentWeightKg) else { return stall }
-        return StallState(consecutiveMisses: 0, lastWeightKg: currentWeightKg)
+        return stall.advancing(misses: 0, weightKg: currentWeightKg)
     }
 
     enum TargetCheck: Equatable {

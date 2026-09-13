@@ -123,6 +123,26 @@ struct ProgressionEngineLinearTests {
         #expect(result.reason.title == "+2.5 kg")
     }
 
+    @Test("a spell on linear keeps the training-max cycle marker for the TM rule")
+    func keepsTrainingMaxCycle() {
+        let result = ProgressionEngine.prescribe(
+            rule: .linear(incrementKg: 2.5), planned: planned,
+            history: history(reps: 8, weightKg: 80), stall: StallState(trainingMaxCycle: 3)
+        )
+        #expect(result.stall.trainingMaxCycle == 3)
+        #expect(result.stall.lastWeightKg == 82.5)
+    }
+
+    @Test("an unloaded start on a free grid takes the increment as its first load")
+    func unloadedStartIncreases() {
+        let result = ProgressionEngine.prescribe(
+            rule: .linear(incrementKg: 2.5), planned: planned,
+            history: history(reps: 8, weightKg: 0), stall: StallState(), grid: .free
+        )
+        #expect(result.sets.allSatisfy { $0.weightKg == 2.5 })
+        #expect(result.reason.title == "+2.5 kg")
+    }
+
     @Test("RPE above target counts as a miss even when reps are hit")
     func rpeAboveTargetIsAMiss() {
         let entry = ExerciseHistoryEntry(

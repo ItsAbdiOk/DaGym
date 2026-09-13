@@ -1,5 +1,6 @@
 import AppIntents
 import Foundation
+import GymCore
 import SwiftData
 
 /// "Last session for an exercise" Siri Shortcut / App Intent (voice-logging-plan.md §6.1
@@ -21,24 +22,43 @@ struct LastSessionIntent: AppIntent {
         guard let store = IntentStoreAccess.makeStore() else {
             return .result(dialog: IntentDialog(stringLiteral: "DaGym isn't available right now."))
         }
-        let line = store.lastSessions(exerciseID: exercise.id, limit: 1).first
-        let date = Self.lastSessionDate(exerciseID: exercise.id, store: store)
-        let dialog = IntentFormatting.lastSessionDialog(line: line, date: date)
+        let last = Self.lastSession(exerciseID: exercise.id, store: store)
+        let unit = Preferences().weightUnit
+        let line = last.map { Self.line(weightKg: $0.weightKg, reps: $0.reps, unit: unit) }
+        let dialog = IntentFormatting.lastSessionDialog(line: line, date: last?.date)
         return .result(dialog: IntentDialog(stringLiteral: dialog))
     }
 
-    /// `WorkoutStore.lastSessions` returns only the formatted "80 × 8,8,7" line, not the
-    /// workout's date — this repeats just enough of its own newest-first lookup to also grab the
-    /// date `IntentFormatting.lastSessionDialog` needs for "on Tuesday".
+    /// The newest finished workout with a completed, stat-counting set of the exercise — the
+    /// same workout supplies both the numbers and the date Siri speaks.
+    struct LastSession: Equatable {
+        var weightKg: Double
+        var reps: [Int]
+        var date: Date
+    }
+
+    /// "176 lb × 8, 8, 7" — the first counted set's weight in the user's unit, then every rep count.
+    static func line(weightKg: Double, reps: [Int], unit: WeightUnit) -> String {
+        "\(unit.format(kg: weightKg)) \(unit.symbol) × \(reps.map(String.init).joined(separator: ", "))"
+    }
+
     @MainActor
-    private static func lastSessionDate(exerciseID: UUID, store: WorkoutStore) -> Date? {
+    static func lastSession(exerciseID: UUID, store: WorkoutStore) -> LastSession? {
         let predicate = #Predicate<WorkoutModel> { $0.endedAt != nil }
         let descriptor = FetchDescriptor<WorkoutModel>(
             predicate: predicate, sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
         )
         let workouts = (try? store.context.fetch(descriptor)) ?? []
-        return workouts.first { workout in
-            (workout.exercises ?? []).contains { $0.exercise?.id == exerciseID }
-        }?.startedAt
+        for workout in workouts {
+            guard let match = (workout.exercises ?? []).first(where: { $0.exercise?.id == exerciseID }) else {
+                continue
+            }
+            let sets = (match.sets ?? [])
+                .filter { $0.isCompleted && $0.setKind.countsTowardStats }
+                .sorted { $0.order < $1.order }
+            guard let first = sets.first else { continue }
+            return LastSession(weightKg: first.weightKg, reps: sets.map(\.reps), date: workout.startedAt)
+        }
+        return nil
     }
 }

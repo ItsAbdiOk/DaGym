@@ -15,14 +15,16 @@ struct BackupCodecTests {
         )
         let plannedSet = BackupPlannedSet(order: 0, kind: "working", targetReps: 8, targetWeightKg: 60)
         let routineExercise = BackupRoutineExercise(
-            order: 0, exerciseSeedID: nil, exerciseName: "Zercher Squat", plannedSets: [plannedSet]
+            order: 0, exerciseSeedID: nil, exerciseName: "Zercher Squat",
+            progressionRuleJSON: "{\"linear\":{\"incrementKg\":2.5}}", stallJSON: "{\"misses\":1}",
+            trainingMaxKg: 120, plannedSets: [plannedSet]
         )
         let routine = BackupRoutine(id: routineID, name: "Legs", exercises: [routineExercise])
         let setLog = BackupSetLog(
             id: UUID(), order: 0, kind: "working", weightKg: 60, reps: 8, isCompleted: true
         )
         let workoutExercise = BackupWorkoutExercise(
-            id: UUID(), order: 0, exerciseName: "Zercher Squat", sets: [setLog]
+            id: UUID(), order: 0, wasPlannedDeload: true, exerciseName: "Zercher Squat", sets: [setLog]
         )
         let workout = BackupWorkout(
             id: workoutID, title: "Legs", startedAt: Date(timeIntervalSince1970: 1_700_000_000),
@@ -59,6 +61,35 @@ struct BackupCodecTests {
         #expect(decoded.bodyMeasurements.first?.bodyweightKg == 82)
         #expect(decoded.equipmentProfiles.first?.name == "Gym")
         #expect(decoded.preferences.weightUnit == "kg")
+        let decodedRoutineExercise = decoded.routines.first?.exercises.first
+        #expect(decodedRoutineExercise?.progressionRuleJSON == "{\"linear\":{\"incrementKg\":2.5}}")
+        #expect(decodedRoutineExercise?.stallJSON == "{\"misses\":1}")
+        #expect(decodedRoutineExercise?.trainingMaxKg == 120)
+        #expect(decoded.workouts.first?.exercises.first?.wasPlannedDeload == true)
+    }
+
+    @Test("a backup exported before the engine-memory fields existed still decodes")
+    func decodesBackupsFromBeforeEngineMemoryFields() throws {
+        let document = sampleDocument()
+        let data = try BackupCodec.encode(document)
+        var json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        var routines = json?["routines"] as? [[String: Any]]
+        var exercises = routines?[0]["exercises"] as? [[String: Any]]
+        exercises?[0]["progressionRuleJSON"] = nil
+        exercises?[0]["stallJSON"] = nil
+        exercises?[0]["trainingMaxKg"] = nil
+        routines?[0]["exercises"] = exercises
+        json?["routines"] = routines
+        var workouts = json?["workouts"] as? [[String: Any]]
+        var workoutExercises = workouts?[0]["exercises"] as? [[String: Any]]
+        workoutExercises?[0]["wasPlannedDeload"] = nil
+        workouts?[0]["exercises"] = workoutExercises
+        json?["workouts"] = workouts
+        let mutated = try JSONSerialization.data(withJSONObject: json as Any)
+
+        let decoded = try BackupCodec.decode(mutated)
+        #expect(decoded.routines.first?.exercises.first?.stallJSON == nil)
+        #expect(decoded.workouts.first?.exercises.first?.wasPlannedDeload == nil)
     }
 
     @Test("encoded JSON uses sorted keys and ISO 8601 dates")

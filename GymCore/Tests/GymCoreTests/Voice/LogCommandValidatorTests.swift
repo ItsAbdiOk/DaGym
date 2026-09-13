@@ -10,8 +10,7 @@ struct LogCommandValidatorTests {
         ParseContext(
             unit: .kg,
             onDeck: ParseContext.OnDeckSet(
-                exerciseID: benchID, name: "Barbell Bench Press", loggingStyle: .weightReps,
-                prefilledWeightKg: 100, prefilledReps: 8
+                exerciseID: benchID, name: "Barbell Bench Press - Medium Grip", loggingStyle: .weightReps
             ),
             lastCompleted: ParseContext.CompletedSetRef(
                 exerciseID: benchID, setID: UUID(), weightKg: lastWeightKg, reps: lastReps
@@ -21,8 +20,140 @@ struct LogCommandValidatorTests {
         )
     }
 
-    private func logSet(_ values: LogSetSpec.SetValues) -> LogCommand {
-        .logSet(LogSetSpec(sets: [values]))
+    private static let lateralRaiseID = UUID()
+    private static let cableRowID = UUID()
+    private static let pullUpsID = UUID()
+
+    /// Bench on deck; a dumbbell, a cable and a bodyweight exercise in the library.
+    private static func accessoryContext() -> ParseContext {
+        var ctx = context()
+        ctx.library = [
+            ParseContext.ExerciseCandidate(
+                id: lateralRaiseID, name: "Side Lateral Raise", equipment: "dumbbell",
+                loggingStyle: .weightReps, grid: .step(2)
+            ),
+            ParseContext.ExerciseCandidate(
+                id: cableRowID, name: "Seated Cable Row", equipment: "cable",
+                loggingStyle: .weightReps, grid: .step(5)
+            ),
+            ParseContext.ExerciseCandidate(
+                id: pullUpsID, name: "Pullups", equipment: "bodyweight", loggingStyle: .bodyweightReps,
+                grid: .free
+            )
+        ]
+        return ctx
+    }
+
+    private func logSet(_ values: LogSetSpec.SetValues, exercise: ExerciseRef? = nil) -> LogCommand {
+        .logSet(LogSetSpec(exercise: exercise, sets: [values]))
+    }
+
+    private func accepted(_ result: Result<[ValidatedCommand], ValidationError>) -> ValidatedCommand? {
+        guard case .success(let validated) = result else { return nil }
+        return validated.first
+    }
+
+    private func weight(_ validated: ValidatedCommand?) -> Double? {
+        guard case .logSet(let spec) = validated?.command else { return nil }
+        return spec.sets.first?.weightKg
+    }
+
+    @Test(
+        "5–15 kg on a dumbbell exercise is accepted on its own grid",
+        arguments: [5.0, 7.5, 10, 12, 14, 15]
+    )
+    func lightDumbbellWeights(kg: Double) {
+        let command = logSet(.init(reps: 12, weightKg: kg), exercise: .id(Self.lateralRaiseID))
+        let result = LogCommandValidator.validate([command], in: Self.accessoryContext())
+        let first = accepted(result)
+        #expect(first != nil, "\(kg) kg: \(result)")
+        let expected = (kg / 2).rounded() * 2
+        #expect(weight(first) == expected)
+        #expect(first?.flags.contains(.needsConfirmation) == false)
+    }
+
+    @Test("a cable stack rounds to its own step, never up to a bar")
+    func cableStack() {
+        let command = logSet(.init(reps: 10, weightKg: 12), exercise: .id(Self.cableRowID))
+        let first = accepted(LogCommandValidator.validate([command], in: Self.accessoryContext()))
+        #expect(weight(first) == 10)
+        #expect(first?.flags == [.roundedToPlates(from: 12, to: 10)])
+    }
+
+    @Test("unknown equipment with a gym bar: under the bar steps by the smallest plate pair")
+    func lightWeightUnknownEquipment() {
+        let command = logSet(.init(reps: 8, weightKg: 12))
+        let first = accepted(LogCommandValidator.validate([command], in: Self.context()))
+        #expect(weight(first) == 12.5)
+    }
+
+    @Test("a known barbell exercise refuses a weight lighter than the bar")
+    func lightWeightOnBar() {
+        var ctx = Self.context()
+        ctx.onDeck?.grid = .plates(bar: .olympic, plates: PlateStock.standardKg, collarsKg: 0)
+        let result = LogCommandValidator.validate([logSet(.init(reps: 8, weightKg: 12))], in: ctx)
+        switch result {
+        case .failure(.implausibleWeight): break
+        default: Issue.record("expected .implausibleWeight, got \(result)")
+        }
+    }
+
+    @Test("no bar in the context means no plate rounding at all")
+    func noBarNoPlates() {
+        let ctx = ParseContext(
+            unit: .kg,
+            onDeck: ParseContext.OnDeckSet(exerciseID: Self.benchID, name: "Curl", loggingStyle: .weightReps)
+        )
+        let first = accepted(LogCommandValidator.validate([logSet(.init(reps: 12, weightKg: 10))], in: ctx))
+        #expect(weight(first) == 10)
+        #expect(first?.flags.isEmpty == true)
+    }
+
+    @Test("a named exercise keeps its own tracking style, not the on-deck one")
+    func namedExerciseStyle() {
+        var ctx = Self.accessoryContext()
+        ctx.onDeck = ParseContext.OnDeckSet(
+            exerciseID: Self.pullUpsID, name: "Pullups", loggingStyle: .bodyweightReps
+        )
+        let command = logSet(.init(reps: 8, weightKg: 100), exercise: .id(Self.benchID))
+        let first = accepted(LogCommandValidator.validate([command], in: ctx))
+        #expect(weight(first) == 100)
+        if case .logSet(let spec) = first?.command { #expect(spec.sets.first?.isBodyweight == false) }
+        let pullUps = logSet(.init(reps: 8, weightKg: 100), exercise: .id(Self.pullUpsID))
+        if case .logSet(let spec) = accepted(LogCommandValidator.validate([pullUps], in: ctx))?.command {
+            #expect(spec.sets.first?.isBodyweight == true)
+            #expect(spec.sets.first?.weightKg == 0)
+        } else {
+            Issue.record("expected the bodyweight rewrite")
+        }
+    }
+
+    @Test("history only flags a jump on the same exercise")
+    func plausibilityPerExercise() {
+        let other = logSet(.init(reps: 12, weightKg: 200), exercise: .id(Self.cableRowID))
+        let first = accepted(LogCommandValidator.validate([other], in: Self.accessoryContext()))
+        #expect(first?.flags.contains(.needsConfirmation) == false)
+        let same = logSet(.init(reps: 8, weightKg: 200))
+        let flagged = accepted(LogCommandValidator.validate([same], in: Self.accessoryContext()))
+        #expect(flagged?.flags.contains(.needsConfirmation) == true)
+    }
+
+    @Test("an unresolved exercise is refused for add/swap/remove/query too")
+    func spokenRefsGated() {
+        let spoken = ExerciseRef.spoken("easy bar curls", candidates: [
+            ExerciseMatch(id: UUID(), name: "Barbell Curl", score: 0.5)
+        ])
+        for command in [
+            LogCommand.addExercise(spoken), .removeExercise(spoken),
+            .swapExercise(target: .onDeck, replacement: spoken), .query(.personalRecord(spoken))
+        ] {
+            let result = LogCommandValidator.validate([command], in: Self.context())
+            guard case .failure(.needsDisambiguation) = result else {
+                Issue.record("expected .needsDisambiguation for \(command), got \(result)"); return
+            }
+        }
+        let ok = LogCommandValidator.validate([.addExercise(.id(Self.cableRowID))], in: Self.context())
+        #expect(accepted(ok) != nil)
     }
 
     @Test("225 lb rounds to the nearest loadable plate weight and is flagged")

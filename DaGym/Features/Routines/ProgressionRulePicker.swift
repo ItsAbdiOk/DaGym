@@ -72,7 +72,7 @@ struct ProgressionRulePickerView: View {
         VStack(alignment: .leading, spacing: DGSpace.s2) {
             Text(title).dgLabel()
             kindMenu
-            Text(state.rule.explanation)
+            Text(state.rule.explanation())
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
             if usesIncrement {

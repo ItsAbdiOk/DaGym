@@ -61,6 +61,19 @@ struct ProgressionEngineAMRAPTests {
         #expect(result.reason.kind == .increase)
     }
 
+    @Test("no rep target on the AMRAP set holds instead of increasing")
+    func noTargetHolds() {
+        let untargeted = [
+            PlannedSetSpec(kind: .working), PlannedSetSpec(kind: .working), PlannedSetSpec(kind: .amrap)
+        ]
+        let result = ProgressionEngine.prescribe(
+            rule: rule, planned: untargeted, history: [entry(amrapReps: 0)], stall: StallState()
+        )
+        #expect(result.sets.allSatisfy { $0.weightKg == 100 })
+        #expect(result.reason.kind == .repeat)
+        #expect(result.stall.consecutiveMisses == 0)
+    }
+
     @Test("exactly hitting the target adds the normal increment")
     func exactTargetIsNormal() {
         let result = ProgressionEngine.prescribe(

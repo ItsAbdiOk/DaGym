@@ -24,11 +24,16 @@ struct ColumnMap {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    /// The first header column whose name contains every word in `containing` (case-insensitive)
-    /// — used to find a weight/distance column whose exact name carries a unit, e.g.
-    /// "Weight (kg)".
+    /// The header column whose name contains every word in `containing` (case-insensitive) — used
+    /// to find a weight/distance column whose exact name carries a unit, e.g. "Weight (kg)".
+    /// Deterministic: an exact match to the joined words wins outright (so "Weight" beats "Weight
+    /// Unit" when both are present); otherwise the alphabetically first candidate is picked,
+    /// rather than `Dictionary.keys.first`, whose order isn't stable across launches.
     func columnName(containing words: [String]) -> String? {
-        index.keys.first { key in words.allSatisfy { key.contains($0) } }
+        let candidates = index.keys.filter { key in words.allSatisfy { key.contains($0) } }.sorted()
+        let exact = words.joined(separator: " ")
+        if candidates.contains(exact) { return exact }
+        return candidates.first
     }
 
     var isEmpty: Bool { index.isEmpty }

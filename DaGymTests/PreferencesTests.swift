@@ -31,6 +31,20 @@ struct PreferencesTests {
         first.weekStartsMonday = false
         first.hasCompletedOnboarding = true
         first.trainingGoal = "strength"
+        first.healthWriteWorkouts = true
+        first.healthSyncBodyweight = true
+        first.healthReadRecovery = true
+        first.calendarSyncEnabled = true
+        first.scheduledStartHour = 6
+        first.iCloudSyncEnabled = false
+        first.streakRemindersEnabled = false
+        first.weeklyRecapEnabled = false
+        first.reminderHour = 7
+        first.bodyweightGoalKg = 82.5
+        first.syncPhotos = true
+        first.lockPhotos = true
+        first.deloadSnoozedUntil = Date(timeIntervalSince1970: 1_800_000_000)
+        first.deloadDismissedFingerprint = "fp-1"
 
         let second = Preferences(suite: suite)
         #expect(second.weightUnit == .lb)
@@ -44,6 +58,47 @@ struct PreferencesTests {
         #expect(second.weekStartsMonday == false)
         #expect(second.hasCompletedOnboarding == true)
         #expect(second.trainingGoal == "strength")
+        #expect(second.healthWriteWorkouts == true)
+        #expect(second.healthSyncBodyweight == true)
+        #expect(second.healthReadRecovery == true)
+        #expect(second.calendarSyncEnabled == true)
+        #expect(second.scheduledStartHour == 6)
+        #expect(second.iCloudSyncEnabled == false)
+        #expect(second.streakRemindersEnabled == false)
+        #expect(second.weeklyRecapEnabled == false)
+        #expect(second.reminderHour == 7)
+        #expect(second.bodyweightGoalKg == 82.5)
+        #expect(second.syncPhotos == true)
+        #expect(second.lockPhotos == true)
+        #expect(second.deloadSnoozedUntil == Date(timeIntervalSince1970: 1_800_000_000))
+        #expect(second.deloadDismissedFingerprint == "fp-1")
+    }
+
+    @Test("optional properties round-trip nil -> value -> nil, not just value -> value")
+    func optionalPropertiesRoundTripThroughNil() throws {
+        let suite = makeSuite(#function)
+        let first = Preferences(suite: suite)
+        #expect(first.bodyweightGoalKg == nil)
+        #expect(first.deloadSnoozedUntil == nil)
+        #expect(first.deloadDismissedFingerprint == nil)
+
+        first.bodyweightGoalKg = 90
+        first.deloadSnoozedUntil = Date(timeIntervalSince1970: 1_700_000_000)
+        first.deloadDismissedFingerprint = "fp-round-trip"
+
+        let second = Preferences(suite: suite)
+        #expect(second.bodyweightGoalKg == 90)
+        #expect(second.deloadSnoozedUntil == Date(timeIntervalSince1970: 1_700_000_000))
+        #expect(second.deloadDismissedFingerprint == "fp-round-trip")
+
+        second.bodyweightGoalKg = nil
+        second.deloadSnoozedUntil = nil
+        second.deloadDismissedFingerprint = nil
+
+        let third = Preferences(suite: suite)
+        #expect(third.bodyweightGoalKg == nil)
+        #expect(third.deloadSnoozedUntil == nil)
+        #expect(third.deloadDismissedFingerprint == nil)
     }
 
     @Test("an unseeded suite falls back to the documented defaults")

@@ -10,6 +10,11 @@ enum SingleSetPattern {
         var assistanceKg: Double?
         var addedKg: Double?
         var isBodyweightWord: Bool
+
+        var isEmpty: Bool {
+            kind == nil && effort == nil && assistanceKg == nil && addedKg == nil
+                && !isPerSide && !isBodyweightWord
+        }
     }
 
     static func match(_ originalWords: [String], context: ParseContext) -> ParseResult? {
@@ -20,10 +25,8 @@ enum SingleSetPattern {
         let consumed = NumberScan.consumedIndices(mentions)
         let exercisePhrase = ExercisePhrase.extract(words, excluding: consumed)
 
-        let hasModifiers = mods.kind != nil || mods.effort != nil || mods.assistanceKg != nil
-            || mods.addedKg != nil || mods.isPerSide
         guard hasEnoughStructure(
-            mentions: mentions, exercisePhrase: exercisePhrase, hasModifiers: hasModifiers, words: words
+            mentions: mentions, exercisePhrase: exercisePhrase, hasModifiers: !mods.isEmpty, words: words
         ) else { return nil }
 
         var reps: Int?
@@ -32,12 +35,16 @@ enum SingleSetPattern {
             mentions: mentions, words: words, context: context, reps: &reps, weightKg: &weightKg
         )
 
+        let (exercise, matchScore) = ExercisePhrase.resolve(exercisePhrase, in: context)
+        var namedExercise = false
+        if case .id = exercise { namedExercise = true }
+        // A named exercise with reps and no load is bodyweight work; an unresolved
+        // phrase is not evidence of anything, so it never flips the set.
         let autoBodyweight = mods.isBodyweightWord || (
             weightKg == nil && mods.addedKg == nil && mods.assistanceKg == nil && reps != nil
-            && exercisePhrase != nil
+            && namedExercise
         )
 
-        let exercise = ExercisePhrase.resolve(exercisePhrase, in: context)
         var unresolved: [Unresolved] = []
         if case .spoken = exercise { unresolved.append(.exerciseAmbiguous) }
         if reps == nil { unresolved.append(.missingReps) }
@@ -53,7 +60,7 @@ enum SingleSetPattern {
         let confidence = confidenceFor(
             reps: reps, weightKg: weightKg, addedKg: mods.addedKg,
             assistanceKg: mods.assistanceKg, isBodyweight: autoBodyweight
-        )
+        ) * matchScore
         return ParseResult(
             commands: [.logSet(spec)], confidence: confidence, matchedPattern: "singleSet",
             unresolved: unresolved
@@ -64,7 +71,7 @@ enum SingleSetPattern {
         _ words: inout [String], context: ParseContext
     ) -> Modifiers {
         var mods = Modifiers(kind: nil, isPerSide: false, effort: nil, assistanceKg: nil,
-                              addedKg: nil, isBodyweightWord: false)
+                             addedKg: nil, isBodyweightWord: false)
 
         if let (foundKind, index) = SetKindWord.detect(words) {
             mods.kind = foundKind; words.remove(at: index)
@@ -75,25 +82,34 @@ enum SingleSetPattern {
         if let (foundEffort, range) = EffortExtraction.extract(words) {
             mods.effort = foundEffort; words.removeSubrange(range)
         }
-        if let index = words.firstIndex(of: "minus"), index + 1 < words.count,
-           let value = NumberWords.parseSingleWord(words[index + 1]) {
-            mods.assistanceKg = context.unit.toKg(value)
-            words.removeSubrange(index...(index + 1))
+        if let index = words.firstIndex(of: "minus"),
+           let (value, range) = weightAfter(words, index: index, context: context) {
+            mods.assistanceKg = value
+            words.removeSubrange(range)
         }
-        if let index = words.firstIndex(of: "with"), index + 1 < words.count,
-           let (value, consumed) = NumberWords.parse(words, at: index + 1) {
-            var end = index + 1 + consumed
-            var unit: UnitKind?
-            if end < words.count, let attached = Tokenizer.unitKind(for: words[end]) {
-                unit = attached; end += 1
-            }
-            mods.addedKg = UnitParser.weightKg(number: value, unit: unit, context: context)
-            words.removeSubrange(index..<end)
+        if let index = words.firstIndex(of: "with"),
+           let (value, range) = weightAfter(words, index: index, context: context) {
+            mods.addedKg = value
+            words.removeSubrange(range)
         }
         if let index = words.firstIndex(of: "bodyweight") {
             mods.isBodyweightWord = true; words.remove(at: index)
         }
         return mods
+    }
+
+    /// The weight spoken after a trigger word at `index` ("minus twenty five",
+    /// "with ten kilos"), and the trigger-through-unit range it occupies.
+    private static func weightAfter(
+        _ words: [String], index: Int, context: ParseContext
+    ) -> (Double, Range<Int>)? {
+        guard let (value, consumed) = NumberWords.parseBeforeReps(words, at: index + 1) else { return nil }
+        var end = index + 1 + consumed
+        var unit: UnitKind?
+        if end < words.count, let attached = Tokenizer.unitKind(for: words[end]) {
+            unit = attached; end += 1
+        }
+        return (UnitParser.weightKg(number: value, unit: unit, context: context), index..<end)
     }
 
     private static func hasEnoughStructure(
@@ -104,9 +120,7 @@ enum SingleSetPattern {
         if exercisePhrase != nil || hasModifiers { return true }
         guard let mention = mentions.first else { return false }
         if mention.unit != nil { return true }
-        let followsReps = mention.range.upperBound < words.count
-            && ["reps", "rep"].contains(words[mention.range.upperBound])
-        return followsReps
+        return NumberWords.repsFollows(words, at: mention.range.upperBound)
     }
 
     private static func assignSlots(
@@ -118,11 +132,10 @@ enum SingleSetPattern {
         }
         guard mentions.count >= 2 else {
             guard let mention = mentions.first else { return }
-            let followsReps = mention.range.upperBound < words.count
-                && ["reps", "rep"].contains(words[mention.range.upperBound])
+            let followsReps = NumberWords.repsFollows(words, at: mention.range.upperBound)
             if mention.unit != nil {
                 weightKg = weight(mention)
-            } else if followsReps || mention.value <= 50 {
+            } else if followsReps || mention.value <= VoiceGrammar.repsWeightCutoff {
                 reps = Int(mention.value)
             } else {
                 weightKg = context.unit.toKg(mention.value)
@@ -130,10 +143,8 @@ enum SingleSetPattern {
             return
         }
         let first = mentions[0], second = mentions[1]
-        let secondFollowsReps = second.range.upperBound < words.count
-            && ["reps", "rep"].contains(words[second.range.upperBound])
-        let firstFollowsReps = first.range.upperBound < words.count
-            && ["reps", "rep"].contains(words[first.range.upperBound])
+        let secondFollowsReps = NumberWords.repsFollows(words, at: second.range.upperBound)
+        let firstFollowsReps = NumberWords.repsFollows(words, at: first.range.upperBound)
         let between = first.range.upperBound < second.range.lowerBound
             ? words[first.range.upperBound..<second.range.lowerBound] : ArraySlice<String>()
 

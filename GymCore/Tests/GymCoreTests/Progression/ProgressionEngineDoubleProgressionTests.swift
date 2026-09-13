@@ -5,7 +5,7 @@ import Testing
 @Suite("Progression engine — double progression")
 struct ProgressionEngineDoubleProgressionTests {
     private let rule = ProgressionRule.doubleProgression(low: 8, high: 12, incrementKg: 2.5)
-    private let planned = [PlannedSetSpec(kind: .working, targetReps: 12)]
+    private let planned = (0..<3).map { _ in PlannedSetSpec(kind: .working, targetReps: 12) }
 
     private func entry(reps: [Int], weightKg: Double) -> ExerciseHistoryEntry {
         let sets = reps.map { HistorySet(kind: .working, weightKg: weightKg, reps: $0) }
@@ -38,6 +38,18 @@ struct ProgressionEngineDoubleProgressionTests {
             rule: rule, planned: planned, history: history, stall: StallState()
         )
         #expect(result.sets.allSatisfy { $0.reps == 12 })
+    }
+
+    @Test("one set of 12 out of three planned is a hold, not the top of the range")
+    func partialSessionHolds() {
+        let history = [entry(reps: [12], weightKg: 50)]
+        let result = ProgressionEngine.prescribe(
+            rule: rule, planned: planned, history: history, stall: StallState()
+        )
+        #expect(result.sets.count == 3)
+        #expect(result.sets.allSatisfy { $0.weightKg == 50 })
+        #expect(result.reason.kind == .repeat)
+        #expect(result.stall.consecutiveMisses == 0)
     }
 
     @Test("no history prescribes a first-time entry")

@@ -34,21 +34,22 @@ command -v swiftlint >/dev/null 2>&1 || fail "swiftlint is not installed. Run: b
 swiftlint lint --strict --quiet || fail "lint failed"
 ok "lint clean"
 
-# 3. project.yml is the source of truth; the committed .xcodeproj must match.
+# 3. project.yml is the source of truth; the committed .xcodeproj AND the generated Info.plists
+# / entitlements it also writes must match (T10 — App Review reads the plists/entitlements, not
+# the .xcodeproj; Xcode Cloud regenerates on every build, so a stale commit here is invisible
+# until a reviewer diffs the repo).
 command -v xcodegen >/dev/null 2>&1 || fail "xcodegen is not installed. Run: brew install xcodegen"
 xcodegen generate --quiet 2>/dev/null || xcodegen generate >/dev/null 2>&1
-if ! git diff --quiet -- DaGym.xcodeproj; then
-    fail "DaGym.xcodeproj is out of sync with project.yml. Commit the regenerated project."
+GENERATED_PATHS="DaGym.xcodeproj DaGym/Info.plist DaGym/DaGym.entitlements \
+    DaGymWidgets/Info.plist DaGymWidgets/DaGymWidgets.entitlements DaGymWatch/Info.plist"
+if ! git diff --quiet -- $GENERATED_PATHS; then
+    fail "a file xcodegen generates from project.yml is out of sync. Commit the regenerated files."
 fi
 ok "project in sync"
 
-# 4. GymCore tests: fast, no simulator.
-echo "  running GymCore tests..."
-(cd GymCore && swift test --quiet) >/tmp/dagym-core.log 2>&1 \
-    || { grep -E "✘|error:|Expectation failed" /tmp/dagym-core.log | head -25 >&2; fail "GymCore tests failed (log: /tmp/dagym-core.log)"; }
-ok "GymCore tests passed"
-
-# 5. App tests + UI smoke test on the simulator. The slow step.
+# 4. App tests + UI smoke test on the simulator (this also runs the GymCore suite — see
+# verify.sh:12 — so it isn't repeated here; that used to double the ~300-test GymCore run on
+# every push for no benefit). The slow step.
 echo "  running scripts/verify.sh (this is the slow bit)..."
 if ! ./scripts/verify.sh >/tmp/dagym-prepush.log 2>&1; then
     printf "%spre-push: tests failed%s\n" "$RED" "$OFF" >&2

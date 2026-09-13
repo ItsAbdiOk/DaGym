@@ -71,6 +71,12 @@ struct DeloadDetectorTests {
         #expect(DeloadDetector.evaluate(lifts: lifts, hardWeeks: 4) == nil)
     }
 
+    @Test("a lift with a single session is not a hard-weeks co-signal")
+    func singleSessionIsNotStalling() {
+        let lifts = [LiftSnapshot(name: "Curl", stalls: 0, e1rmTrend: [40])]
+        #expect(DeloadDetector.evaluate(lifts: lifts, hardWeeks: 6) == nil)
+    }
+
     @Test("the deload plan is ~60% of sets at ~90% of load")
     func deloadPlan() {
         let plan = DeloadDetector.deloadPlan(sets: 5, load: 100)

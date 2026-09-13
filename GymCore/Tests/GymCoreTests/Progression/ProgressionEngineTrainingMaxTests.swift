@@ -29,6 +29,15 @@ struct ProgressionEngineTrainingMaxTests {
         #expect(week4.sets.map(\.reps) == [5, 5, 5])
     }
 
+    @Test("a light week on a barbell never lands below the empty bar")
+    func lightWeekFloorsAtTheBar() {
+        let week4 = ProgressionEngine.prescribe(
+            rule: rule, planned: [], history: [], stall: StallState(), trainingMaxKg: 40, weekInCycle: 4,
+            grid: .plates(bar: .olympic, plates: PlateStock.standardKg, collarsKg: 0)
+        )
+        #expect(week4.sets.map(\.weightKg) == [20, 20, 25])
+    }
+
     @Test("a new cycle bumps the TM before computing the wave")
     func newCycleBumpsTrainingMax() {
         // Cycle 2's week 1 is computed off the bumped TM: 100 + 2.5 = 102.5.

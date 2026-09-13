@@ -14,11 +14,11 @@ struct AchievementInfo: Identifiable, Hashable {
 
 extension WorkoutStore {
     /// Gathers the lifter's current numbers for `GymCore.Milestones.evaluate`/`progress`.
-    /// `weeklyGoal` comes from `Preferences.weeklyGoal` — the store itself doesn't read
-    /// preferences, so every caller passes it explicitly.
-    func milestoneState(weeklyGoal: Int) -> MilestoneState {
+    /// `weeklyGoal` comes from `Preferences.weeklyGoal` and `calendar` from
+    /// `Preferences.trainingCalendar` — the store itself doesn't read preferences, so every
+    /// caller passes both explicitly.
+    func milestoneState(weeklyGoal: Int, calendar: Calendar = .current) -> MilestoneState {
         let dates = workoutDates()
-        let calendar = Calendar.current
         let streak = Streaks.weekly(
             workoutDates: dates, weeklyGoal: weeklyGoal, calendar: calendar, now: Date()
         )
@@ -34,8 +34,10 @@ extension WorkoutStore {
     /// re-celebrated. Backfilled/past-dated workouts still earn milestones (per plan.md §7); it's
     /// only the celebration animation that's gated separately, by `Milestones.isCelebrationWorthy`.
     @discardableResult
-    func evaluateMilestones(for workout: WorkoutModel, weeklyGoal: Int) -> [AchievementInfo] {
-        let state = milestoneState(weeklyGoal: weeklyGoal)
+    func evaluateMilestones(
+        for workout: WorkoutModel, weeklyGoal: Int, calendar: Calendar = .current
+    ) -> [AchievementInfo] {
+        let state = milestoneState(weeklyGoal: weeklyGoal, calendar: calendar)
         let earned = earnedTiers()
         let newlyEarned = Milestones.evaluate(
             state: state, earned: earned.map { (id: $0.key, tier: $0.value) }
@@ -70,8 +72,8 @@ extension WorkoutStore {
     }
 
     /// Every milestone's current standing, earned or not, for `MilestonesView`'s grid.
-    func milestoneProgress(weeklyGoal: Int) -> [MilestoneProgress] {
-        Milestones.progress(state: milestoneState(weeklyGoal: weeklyGoal))
+    func milestoneProgress(weeklyGoal: Int, calendar: Calendar = .current) -> [MilestoneProgress] {
+        Milestones.progress(state: milestoneState(weeklyGoal: weeklyGoal, calendar: calendar))
     }
 
     // MARK: - Helpers

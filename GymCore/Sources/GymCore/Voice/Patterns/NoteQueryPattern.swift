@@ -2,7 +2,7 @@ import Foundation
 
 /// §4.5 patterns 7–8: freeform notes and read-only training queries.
 enum NoteQueryPattern {
-    static func matchNote(_ words: [String], rawText: String) -> ParseResult? {
+    static func matchNote(_ words: [String]) -> ParseResult? {
         guard words.first == "note" else { return nil }
         let text = words.dropFirst().joined(separator: " ")
         guard !text.isEmpty else { return nil }
@@ -29,7 +29,7 @@ enum NoteQueryPattern {
     }
 
     private static func queryExercise(_ words: [String], context: ParseContext) -> ExerciseRef {
-        let stop = ExercisePhrase.stopWords.union(["do", "lift", "bench"])
+        let stop = ExercisePhrase.stopWords.union(["do", "lift", "bench", "my", "best", "is", "was"])
         let leftover = words.filter { !stop.contains($0) }
         guard !leftover.isEmpty else { return .onDeck }
         return ExerciseMatcher.resolve(leftover.joined(separator: " "), in: context)

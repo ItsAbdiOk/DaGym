@@ -63,16 +63,19 @@ public enum ProgressionRule: Codable, Hashable, Sendable {
         }
     }
 
-    /// One sentence for the routine-builder card.
-    public var explanation: String {
+    /// One sentence for the routine-builder card. `unit` controls how weight numbers are
+    /// formatted; defaults to kg for callers that haven't gone through unit-aware display yet.
+    public func explanation(unit: WeightUnit = .kg) -> String {
         switch self {
         case .linear(let incrementKg):
-            return "Adds \(WeightFormat.kg(incrementKg)) kg once every working set hits its target."
+            return "Adds \(unit.format(kg: incrementKg)) \(unit.symbol) once every working set hits its "
+                + "target."
         case .doubleProgression(let low, let high, let incrementKg):
-            return "Climbs reps from \(low) to \(high), then adds \(WeightFormat.kg(incrementKg)) kg " +
-                "and drops back to \(low) reps."
+            return "Climbs reps from \(low) to \(high), then adds \(unit.format(kg: incrementKg)) "
+                + "\(unit.symbol) and drops back to \(low) reps."
         case .linearAMRAP(let incrementKg):
-            return "Adds \(WeightFormat.kg(incrementKg)) kg (double if the last set crushes its target reps)."
+            return "Adds \(unit.format(kg: incrementKg)) \(unit.symbol) "
+                + "(double if the last set crushes its target reps)."
         case .rpeBased(let targetRPE):
             return "Recalculates load each session to hit your target reps at RPE \(rpeText(targetRPE))."
         case .percentOfTrainingMax:
@@ -81,7 +84,7 @@ public enum ProgressionRule: Codable, Hashable, Sendable {
         case .bodyweight(let repCeiling, let maxSets):
             return "Adds reps up to \(repCeiling), then a set (up to \(maxSets)), then suggests going harder."
         case .assisted(let stepKg):
-            return "Removes \(WeightFormat.kg(stepKg)) kg of assistance once every rep is hit."
+            return "Removes \(unit.format(kg: stepKg)) \(unit.symbol) of assistance once every rep is hit."
         case .timed(let stepSeconds):
             return "Adds \(stepSeconds) s to the hold once every set hits its target."
         }

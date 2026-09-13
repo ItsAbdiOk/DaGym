@@ -32,7 +32,7 @@ enum MetaCorrectionRate {
         _ mention: NumberMention, to overrides: inout LogSetSpec.Overrides,
         context: ParseContext
     ) {
-        if mention.unit != nil || mention.value > 50 {
+        if mention.unit != nil || mention.value > VoiceGrammar.repsWeightCutoff {
             overrides.weightKg = UnitParser.weightKg(
                 number: mention.value, unit: mention.unit, context: context
             )
@@ -41,7 +41,17 @@ enum MetaCorrectionRate {
         }
     }
 
+    /// An utterance that starts by changing the session is never a rating, even
+    /// when a phrase-table word appears later ("add easy bar curls").
+    private static let sessionEditTriggers: Set<String> = [
+        "add", "swap", "switch", "replace", "change", "remove", "drop", "note"
+    ]
+
     static func matchRateLastSet(_ words: [String]) -> ParseResult? {
+        if let first = words.first, sessionEditTriggers.contains(first) { return nil }
+        if EffortExtraction.hasOutOfRangeNumber(words) {
+            return ParseResult(matchedPattern: "rateLastSet", unresolved: [.effortOutOfRange])
+        }
         guard let (effort, range) = EffortExtraction.extract(words) else { return nil }
         var remaining = words
         remaining.removeSubrange(range)

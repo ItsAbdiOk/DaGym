@@ -31,8 +31,16 @@ extension ProgressionEngine {
             )
         }
 
-        let target = context.planned.last(where: { $0.kind == .amrap })?.targetReps
-            ?? context.planned.last(where: { $0.kind.countsTowardStats })?.targetReps ?? 0
+        let plannedTarget = context.planned.last(where: { $0.kind == .amrap })?.targetReps
+            ?? context.planned.last(where: { $0.kind.countsTowardStats })?.targetReps
+        guard let target = plannedTarget, target > 0 else {
+            return context.holdPrescribed(
+                weightKg: weightKg, title: "Repeat \(context.formatted(kg: weightKg))",
+                body: "No rep target is set for the AMRAP set, so the rule can't judge last session " +
+                    "— add target reps to progress automatically.",
+                baselineDate: baseline.date
+            )
+        }
         let amrapReps = lastSet.reps
         let summary = "\(amrapReps) reps on the AMRAP set (target \(target))"
         switch amrapOutcome(amrapReps: amrapReps, target: target) {
@@ -40,10 +48,10 @@ extension ProgressionEngine {
             let newWeight = context.increased(
                 weightKg, by: incrementKg * TrainingConstants.amrapDoubleIncrementMultiple
             )
-            return amrapIncrease(context, from: weightKg, to: newWeight, summary: summary)
+            return amrapIncrease(context, from: weightKg, to: newWeight, summary: summary, stall: stall)
         case .normal:
             let newWeight = context.increased(weightKg, by: incrementKg)
-            return amrapIncrease(context, from: weightKg, to: newWeight, summary: summary)
+            return amrapIncrease(context, from: weightKg, to: newWeight, summary: summary, stall: stall)
         case .miss:
             return linearMissForAMRAP(
                 context, weightKg: weightKg, incrementKg: incrementKg, stall: stall,
@@ -53,7 +61,8 @@ extension ProgressionEngine {
     }
 
     private static func amrapIncrease(
-        _ context: RuleContext, from weightKg: Double, to newWeight: Double, summary: String
+        _ context: RuleContext, from weightKg: Double, to newWeight: Double, summary: String,
+        stall: StallState
     ) -> Prescribed {
         prescribedResult(
             context, weightKg: newWeight,
@@ -61,7 +70,7 @@ extension ProgressionEngine {
                 title: context.increaseTitle(from: weightKg, to: newWeight),
                 body: "You got \(summary) last session.", kind: .increase
             ),
-            stall: StallState(consecutiveMisses: 0, lastWeightKg: newWeight),
+            stall: stall.advancing(misses: 0, weightKg: newWeight),
             baselineDate: context.baseline?.date
         )
     }
@@ -79,7 +88,7 @@ extension ProgressionEngine {
                 reason: PrescriptionReason(
                     title: "Repeat \(context.formatted(kg: weightKg))", body: body, kind: .repeat
                 ),
-                stall: StallState(consecutiveMisses: misses, lastWeightKg: weightKg),
+                stall: stall.advancing(misses: misses, weightKg: weightKg),
                 baselineDate: baselineDate
             )
         }
@@ -91,7 +100,7 @@ extension ProgressionEngine {
                 title: "Back off to \(context.formatted(kg: newWeight))",
                 body: "\(misses) sessions in a row missed — dropping 10% to rebuild.", kind: .deload
             ),
-            stall: StallState(consecutiveMisses: 0, lastWeightKg: newWeight), baselineDate: baselineDate
+            stall: stall.advancing(misses: 0, weightKg: newWeight), baselineDate: baselineDate
         )
     }
 
@@ -101,7 +110,7 @@ extension ProgressionEngine {
 
     private static func amrapOutcome(amrapReps: Int, target: Int) -> AMRAPOutcome {
         let doubleTarget = Double(target) * TrainingConstants.amrapDoubleIncrementMultiple
-        if target > 0 && Double(amrapReps) >= doubleTarget {
+        if Double(amrapReps) >= doubleTarget {
             return .double
         }
         if amrapReps < target {

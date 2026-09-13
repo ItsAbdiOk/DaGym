@@ -131,10 +131,11 @@ struct HistoryView: View {
     }
 
     /// Records bucketed into "This Week", "Last Week" and, when needed,
-    /// month labels for anything older. Week boundaries follow the user's
-    /// `Calendar.current.firstWeekday`.
+    /// month labels for anything older. Week boundaries follow
+    /// `Preferences.trainingCalendar` (X1/D11/S2) so "This Week" agrees with Home's streak and
+    /// the Progress charts.
     private var weekGroups: [(label: String, records: [WorkoutRecord])] {
-        let calendar = Calendar.current
+        let calendar = preferences.trainingCalendar
         let now = Date()
         var buckets: [String: [WorkoutRecord]] = [:]
         var order: [String] = []

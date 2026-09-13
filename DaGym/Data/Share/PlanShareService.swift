@@ -2,13 +2,6 @@ import Foundation
 import GymCore
 import SwiftData
 
-/// Below this, a seeded exercise's rest/increment is exported without needing an override —
-/// mirrors `BackupService`'s constants so both features agree on "default".
-enum PlanShareDefaults {
-    static let restSeconds = 150
-    static let incrementKg = 2.5
-}
-
 /// Builds `.gymplan` files from the store (a single routine, or a whole program with all of its
 /// routines) and merges a decoded file back in (plan.md §6.8). Only plans travel — never
 /// workouts, weigh-ins or photos. See `PlanShareService+Import.swift` for the merge side.

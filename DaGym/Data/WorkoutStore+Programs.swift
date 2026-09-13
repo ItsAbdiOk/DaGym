@@ -126,8 +126,29 @@ extension WorkoutStore {
     }
 
     func activeProgramModel() -> ProgramModel? {
+        resumeProgramIfDeloadExpired()
         let descriptor = FetchDescriptor<ProgramModel>(predicate: #Predicate { $0.isActive })
         return (try? context.fetch(descriptor))?.first
+    }
+
+    /// A planned deload week (`planDeloadWeek()`) is a 2-week program — week 1 deload, week 2
+    /// normal — so that a lifter who never reopens the app isn't stuck on deload load forever.
+    /// Once its own week index moves past week 1, this deactivates it and reactivates whichever
+    /// program was active before it (persisted by `planDeloadWeek()`), so progression on the
+    /// user's real program resumes without them having to do anything.
+    private func resumeProgramIfDeloadExpired() {
+        let descriptor = FetchDescriptor<ProgramModel>(predicate: #Predicate { $0.isActive })
+        guard let active = (try? context.fetch(descriptor))?.first,
+              active.name == WorkoutStore.deloadProgramName, currentWeek(for: active) > 1 else { return }
+        active.isActive = false
+        active.completedAt = Date()
+        let defaults = UserDefaults.standard
+        if let idString = defaults.string(forKey: WorkoutStore.deloadPreviousProgramIDKey),
+           let id = UUID(uuidString: idString), let resumed = fetchProgramModel(id: id) {
+            resumed.isActive = true
+        }
+        defaults.removeObject(forKey: WorkoutStore.deloadPreviousProgramIDKey)
+        save()
     }
 
     private func fetchProgramModel(id: UUID) -> ProgramModel? {

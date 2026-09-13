@@ -232,11 +232,14 @@ struct EngineScenarioTests {
 
     @Test("F13: the suggestion fingerprint is stable for the same evidence and differs for new evidence")
     func fingerprintIsStable() {
-        let first = DeloadSuggestion(reason: "Bench's e1RM is down 7% over its last 3 sessions")
-        let same = DeloadSuggestion(reason: "Bench's e1RM is down 7% over its last 3 sessions")
-        let other = DeloadSuggestion(reason: "Bench's e1RM is down 8% over its last 3 sessions")
-        #expect(first.fingerprint == same.fingerprint)
-        #expect(first.fingerprint != other.fingerprint)
+        let declining = LiftSnapshot(name: "Bench", stalls: 0, e1rmTrend: [100, 96, 92])
+        let first = DeloadDetector.evaluate(lifts: [declining], hardWeeks: 0)
+        let same = DeloadDetector.evaluate(lifts: [declining], hardWeeks: 0)
+        let worse = LiftSnapshot(name: "Bench", stalls: 0, e1rmTrend: [100, 95, 88])
+        let other = DeloadDetector.evaluate(lifts: [worse], hardWeeks: 0)
+        #expect(first != nil && other != nil)
+        #expect(first?.fingerprint == same?.fingerprint)
+        #expect(first?.fingerprint != other?.fingerprint)
     }
 
     // MARK: F18 — assisted at the floor

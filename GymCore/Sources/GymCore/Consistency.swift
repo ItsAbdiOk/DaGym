@@ -132,7 +132,11 @@ public enum ConsistencyCalendar {
               let firstWeekStart = calendar.dateInterval(of: .weekOfYear, for: first)?.start else {
             return []
         }
-        let byDay = Dictionary(uniqueKeysWithValues: cells.map { (calendar.startOfDay(for: $0.date), $0) })
+        // `uniquingKeysWith:` rather than `uniqueKeysWithValues:` — this is a public API and a
+        // caller could pass two cells for the same day; keep the later one instead of trapping.
+        let byDay = Dictionary(
+            cells.map { (calendar.startOfDay(for: $0.date), $0) }, uniquingKeysWith: { _, later in later }
+        )
 
         var weeks: [[DayCell?]] = []
         var weekStart = firstWeekStart
@@ -199,7 +203,13 @@ public enum ConsistencyCalendar {
         components.hour = hour
         components.minute = 0
         components.second = 0
-        return calendar.date(from: components)
+        guard let reminderDate = calendar.date(from: components), reminderDate > now else {
+            // It's Saturday and `hour` has already passed today — nothing left to schedule for
+            // this week. Callers otherwise have to guard this themselves (plan.md's own caller
+            // does exactly that against `Date()`); do it once here instead.
+            return nil
+        }
+        return reminderDate
     }
 
     /// Walks the 7 days of `interval` looking for the one whose Gregorian weekday is Saturday (7)

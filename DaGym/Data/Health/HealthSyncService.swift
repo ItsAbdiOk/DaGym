@@ -60,14 +60,18 @@ final class HealthSyncService {
         let sets = (workout.exercises ?? []).flatMap { $0.sets ?? [] }
             .filter { $0.isCompleted && $0.setKind.countsTowardStats }
         let volumeKg = sets.reduce(0.0) { $0 + $1.weightKg * Double($1.reps) }
+        let workoutID = workout.id
         let input = HealthWorkoutInput(
             start: workout.startedAt, end: endedAt, title: workout.title,
-            routineName: workout.routineName, workoutID: workout.id.uuidString,
+            routineName: workout.routineName, workoutID: workoutID.uuidString,
             setCount: sets.count, volumeKg: volumeKg
         )
         do {
             let hkID = try await healthStore.saveWorkout(input)
-            workout.healthKitID = hkID
+            // Re-fetch: the user may have deleted the workout during the HealthKit round-trip,
+            // and writing to a deleted model traps.
+            guard let saved = workoutStore.fetchWorkoutModel(id: workoutID) else { return }
+            saved.healthKitID = hkID
             workoutStore.save()
             lastSyncDate = Date()
         } catch {

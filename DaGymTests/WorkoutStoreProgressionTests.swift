@@ -98,7 +98,12 @@ struct WorkoutStoreProgressionTests {
         let next = store.startWorkout(routineID: ids.routineID)
         let entry = try #require(next.exercises.first)
         #expect(entry.whyTitle?.contains("Deload") == true)
-        #expect((entry.sets.first?.weightKg ?? 0) < 80)
+        // Pin the deload to GymCore's actual fraction (engine-review F1 pins this in GymCore
+        // itself; this app-wiring test previously only checked `< 80`, which a broken cut to
+        // 79.9 kg — or an absurd one to 20 kg — would both satisfy).
+        let weight = try #require(entry.sets.first?.weightKg)
+        #expect(weight <= 80 * TrainingConstants.linearDeloadFraction, "expected roughly a 10% deload")
+        #expect(weight >= 40, "expected a sane deload, not a near-zero prescription")
         store.discard(session: next)
     }
 

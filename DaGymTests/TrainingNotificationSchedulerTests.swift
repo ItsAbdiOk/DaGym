@@ -55,18 +55,25 @@ struct TrainingNotificationSchedulerTests {
 
     // MARK: - Streak reminder
 
-    @Test("goal at risk and reachable: schedules the streak reminder for Saturday")
+    @Test("goal at risk and reachable: schedules the streak reminder for Saturday at the configured hour")
     func schedulesStreakReminderWhenAtRisk() throws {
         let store = try makeStore()
         let preferences = Preferences(suite: makeSuite(#function))
+        preferences.streakRemindersEnabled = true
         preferences.weeklyGoal = 1 // already reachable with zero workouts logged
+        preferences.reminderHour = 19
         let center = FakeNotificationCenter()
         let scheduler = TrainingNotificationScheduler(center: center, calendar: calendar)
 
         scheduler.rescheduleAll(store: store, preferences: preferences, now: wednesday)
 
-        let streakRequest = center.addedRequests.first { $0.identifier == "streak-reminder" }
-        #expect(streakRequest != nil)
+        let streakRequest = try #require(center.addedRequests.first { $0.identifier == "streak-reminder" })
+        let trigger = try #require(streakRequest.trigger as? UNTimeIntervalNotificationTrigger)
+        let fireDate = wednesday.addingTimeInterval(trigger.timeInterval)
+        #expect(fireDate > wednesday)
+        #expect(calendar.component(.weekday, from: fireDate) == 7) // Saturday
+        #expect(calendar.component(.hour, from: fireDate) == 19)
+        #expect(streakRequest.content.body.contains("1 more"))
     }
 
     @Test("goal already met: does not schedule a streak reminder")
@@ -103,6 +110,7 @@ struct TrainingNotificationSchedulerTests {
     func schedulesWeeklyRecap() throws {
         let store = try makeStore()
         let preferences = Preferences(suite: makeSuite(#function))
+        preferences.weeklyRecapEnabled = true
         preferences.reminderHour = 18
         let center = FakeNotificationCenter()
         let scheduler = TrainingNotificationScheduler(center: center, calendar: calendar)
@@ -136,6 +144,8 @@ struct TrainingNotificationSchedulerTests {
     func reschedulingCancelsFirst() throws {
         let store = try makeStore()
         let preferences = Preferences(suite: makeSuite(#function))
+        preferences.streakRemindersEnabled = true
+        preferences.weeklyRecapEnabled = true
         preferences.weeklyGoal = 1
         let center = FakeNotificationCenter()
         let scheduler = TrainingNotificationScheduler(center: center, calendar: calendar)

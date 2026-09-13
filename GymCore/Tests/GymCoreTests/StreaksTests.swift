@@ -82,4 +82,36 @@ struct StreaksTests {
         #expect(result.current == 0)
         #expect(result.longest == 1)
     }
+
+    @Test("a streak spanning the Europe/London spring-forward DST boundary stays intact")
+    func streakAcrossDSTBoundary() {
+        var london = Calendar(identifier: .gregorian)
+        london.firstWeekday = 2 // Monday
+        london.timeZone = TimeZone(identifier: "Europe/London") ?? .current
+
+        // 2026's clocks spring forward on the last Sunday of March (the 29th). "now" is the
+        // Monday after, so the week ending just before it straddles the transition and the one
+        // before that sits entirely ahead of it.
+        var components = DateComponents(year: 2026, month: 4, day: 6, hour: 12) // Monday after DST
+        components.timeZone = london.timeZone
+        let now = london.date(from: components) ?? Date()
+
+        func mondayStart(weeksAgo: Int) -> Date {
+            let thisWeekStart = london.dateInterval(of: .weekOfYear, for: now)?.start ?? now
+            return london.date(byAdding: .weekOfYear, value: -weeksAgo, to: thisWeekStart) ?? now
+        }
+        func weekDates(weeksAgo: Int, count: Int) -> [Date] {
+            let start = mondayStart(weeksAgo: weeksAgo)
+            return (0..<count).compactMap { london.date(byAdding: .day, value: $0, to: start) }
+        }
+
+        var workouts: [Date] = []
+        workouts += weekDates(weeksAgo: 2, count: 4) // week of Mon 23 Mar, before DST
+        workouts += weekDates(weeksAgo: 1, count: 4) // week of Mon 30 Mar, spans the spring-forward
+
+        let result = Streaks.weekly(workoutDates: workouts, weeklyGoal: 4, calendar: london, now: now)
+        // Both weeks count and are consecutive, even though a DST transition falls between them.
+        #expect(result.longest == 2)
+        #expect(result.current == 2)
+    }
 }

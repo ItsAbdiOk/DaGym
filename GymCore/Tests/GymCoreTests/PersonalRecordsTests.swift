@@ -169,6 +169,45 @@ struct PersonalRecordsTests {
         #expect(maxWeights.first?.value == 110)
     }
 
+    @Test("a 0 kg first set earns no maxWeight/volume PR but does earn a bodyweight rep PR")
+    func zeroWeightFirstSetSkipsMaxWeightAndVolume() throws {
+        let prs = PersonalRecords.evaluate(
+            newSets: [set(weight: 0, reps: 10)], existing: [],
+            workoutDate: Self.day1, isBackfilled: false, latestWorkoutDate: nil
+        )
+        #expect(!prs.contains { $0.kind == .maxWeight })
+        #expect(!prs.contains { $0.kind == .volume })
+        let repsPR = try #require(prs.first { $0.kind == .maxRepsAtWeight })
+        #expect(repsPR.reps == 10)
+        #expect(PersonalRecords.formatLine(repsPR) == "10 reps bodyweight")
+    }
+
+    @Test("a heavier real weight still beats a stale 0 kg maxWeight record")
+    func realWeightBeatsZeroBaseline() {
+        let existing = [PersonalRecord(kind: .maxWeight, value: 0, weightKg: 0, reps: 0, date: Self.day1)]
+        let prs = PersonalRecords.evaluate(
+            newSets: [set(weight: 20, reps: 5)], existing: existing,
+            workoutDate: Self.day2, isBackfilled: false, latestWorkoutDate: Self.day1
+        )
+        #expect(prs.first { $0.kind == .maxWeight }?.value == 20)
+    }
+
+    @Test("duplicate cache rows in the same 0.25 kg bucket: reps beat the best of them, not the first")
+    func maxRepsAtWeightBeatsTheBestDuplicateRow() {
+        // Pre-F17 row at 60.0004 kg with 9 reps sits beside a post-fix row at 60.0 kg with 7 reps —
+        // both key to the same 0.25 kg bucket. An 8-rep set should not "beat" the 7-rep row while
+        // the 9-rep row still stands.
+        let existing = [
+            PersonalRecord(kind: .maxRepsAtWeight, value: 7, weightKg: 60.0, reps: 7, date: Self.day1),
+            PersonalRecord(kind: .maxRepsAtWeight, value: 9, weightKg: 60.0004, reps: 9, date: Self.day1)
+        ]
+        let prs = PersonalRecords.evaluate(
+            newSets: [set(weight: 60.0, reps: 8)], existing: existing,
+            workoutDate: Self.day2, isBackfilled: false, latestWorkoutDate: Self.day1
+        )
+        #expect(!prs.contains { $0.kind == .maxRepsAtWeight })
+    }
+
     @Test("format line for each PR kind")
     func formatLines() {
         let e1rm = PersonalRecord(kind: .e1rm, value: 102.5, weightKg: 82.5, reps: 8, date: Self.day1)
@@ -191,5 +230,15 @@ struct PersonalRecordsTests {
             kind: .leastAssistance, value: 15, weightKg: 0, reps: 0, date: Self.day1
         )
         #expect(PersonalRecords.formatLine(assistance) == "Assistance down to 15 kg")
+    }
+
+    @Test("format line renders in the caller's unit")
+    func formatLineUnitAware() {
+        // 61.235 kg -> 135.006 lb, rounds to the nearest half pound and drops the trailing .0.
+        let maxWeight = PersonalRecord(
+            kind: .maxWeight, value: 61.235, weightKg: 61.235, reps: 1, date: Self.day1
+        )
+        #expect(PersonalRecords.formatLine(maxWeight, unit: .lb) == "Heaviest 135 lb")
+        #expect(PersonalRecords.formatLine(maxWeight, unit: .kg) == "Heaviest 61.25 kg")
     }
 }

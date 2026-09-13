@@ -5,14 +5,30 @@ import UserNotifications
 /// and a rest timer is the first moment DaGym has anything worth notifying about.
 @MainActor
 enum NotificationPermission {
-    private static var didRequest = false
+    private static var request: Task<Void, Never>?
 
     static func requestIfNeeded(center: UNUserNotificationCenter = .current()) {
-        guard !didRequest else { return }
-        didRequest = true
+        guard request == nil else { return }
         center.delegate = RestNotificationDelegate.shared
-        Task { _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge]) }
+        request = Task { _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge]) }
     }
+
+    /// Requests if needed, then waits for the system prompt to resolve — so the very first rest's
+    /// "Rest over" alert is scheduled after the user has answered, not before.
+    static func awaitRequest(center: UNUserNotificationCenter = .current()) async {
+        requestIfNeeded(center: center)
+        await request?.value
+    }
+}
+
+/// The permission gate `RestActivityController` waits on before scheduling; a protocol so tests
+/// can resolve it instantly without touching the real, prompt-showing notification center.
+protocol RestNotificationAuthorizing: Sendable {
+    func awaitAuthorization() async
+}
+
+struct SystemNotificationAuthorizer: RestNotificationAuthorizing {
+    func awaitAuthorization() async { await NotificationPermission.awaitRequest() }
 }
 
 /// Suppresses the system banner while DaGym is in the foreground: during a workout the rest-end

@@ -54,9 +54,7 @@ struct ProgressChartsSection: View {
     }
 
     private func refresh() {
-        var calendar = Calendar.current
-        calendar.firstWeekday = preferences.weekStartsMonday ? 2 : 1
-        bundle = store.bodySeries(weeks: 8, calendar: calendar)
+        bundle = store.bodySeries(weeks: 8, calendar: preferences.trainingCalendar)
     }
 }
 
@@ -141,7 +139,8 @@ struct WeeklyVolumeCard: View {
                 if let delta { Text(delta).font(DGFont.footnote).foregroundStyle(deltaColor) }
             }
             Chart(Array(weeks.enumerated()), id: \.offset) { index, week in
-                BarMark(x: .value("Week", Self.weekLabel(week.weekStart)), y: .value("Volume", week.volumeKg))
+                let label = Self.weekLabel(week.weekStart, calendar: preferences.trainingCalendar)
+                BarMark(x: .value("Week", label), y: .value("Volume", week.volumeKg))
                     .foregroundStyle(index == weeks.count - 1 ? DGColor.coral : DGColor.coral.opacity(0.55))
                     .cornerRadius(4)
             }
@@ -167,8 +166,13 @@ struct WeeklyVolumeCard: View {
 
     private var deltaColor: Color { (delta ?? "").hasPrefix("-") ? DGColor.danger : DGColor.success }
 
-    private static func weekLabel(_ date: Date) -> String {
+    /// S16: the label must use the same `weekStartsMonday` calendar as the bars themselves
+    /// (`WorkoutStore.bodySeries`/`weeklyRecap`), not `DateFormatter`'s implicit
+    /// `Calendar.current` — otherwise a locale/preference mismatch can print "W37" under a bar
+    /// the data already grouped into week 38.
+    private static func weekLabel(_ date: Date, calendar: Calendar) -> String {
         let formatter = DateFormatter()
+        formatter.calendar = calendar
         formatter.dateFormat = "'W'w"
         return formatter.string(from: date)
     }

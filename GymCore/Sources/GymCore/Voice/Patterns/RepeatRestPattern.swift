@@ -22,18 +22,33 @@ enum RepeatPattern {
             return nil
         }
 
-        let rest = Array(words[next...])
-        if let repsIndex = rest.firstIndex(where: { $0 == "do" || $0 == "but" }),
-           repsIndex + 1 < rest.count, let (value, _) = NumberWords.parse(rest, at: repsIndex + 1) {
-            overrides.reps = Int(value)
-        } else if rest.count <= 2, let (value, consumed) = NumberWords.parse(rest, at: 0),
-                  consumed == rest.count {
-            overrides.reps = Int(value)
-        }
+        assignOverrides(Array(words[next...]), to: &overrides, context: context)
         return ParseResult(
             commands: [.repeatPrevious(overrides: overrides)], confidence: 0.9,
             matchedPattern: "repeat"
         )
+    }
+
+    /// "but seven reps" / "but at ninety" / "with ninety kilos" / "nine": a number
+    /// after the trigger is a weight when it carries a unit, follows "at"/"with",
+    /// or is too big to be reps; otherwise it is the rep count.
+    private static func assignOverrides(
+        _ rest: [String], to overrides: inout LogSetSpec.Overrides, context: ParseContext
+    ) {
+        for mention in NumberScan.scan(rest) {
+            let precededByAt = mention.range.lowerBound > 0
+                && ["at", "with"].contains(rest[mention.range.lowerBound - 1])
+            let followsReps = NumberWords.repsFollows(rest, at: mention.range.upperBound)
+            let isWeight = !followsReps
+                && (mention.unit != nil || precededByAt || mention.value > VoiceGrammar.repsWeightCutoff)
+            if isWeight, overrides.weightKg == nil {
+                overrides.weightKg = UnitParser.weightKg(
+                    number: mention.value, unit: mention.unit, context: context
+                )
+            } else if !isWeight, overrides.reps == nil {
+                overrides.reps = Int(mention.value)
+            }
+        }
     }
 
     /// Bails out when the number is actually a rest-timer duration ("add thirty seconds").
@@ -60,8 +75,9 @@ enum RestPattern {
             guard unitIndex < words.count,
                   ["seconds", "second", "minutes", "minute"].contains(words[unitIndex])
             else { return nil }
-            let seconds = words[unitIndex] == "minutes" || words[unitIndex] == "minute"
-                ? Int(value * 60) : Int(value)
+            let seconds = UnitParser.durationSeconds(
+                number: value, unit: Tokenizer.unitKind(for: words[unitIndex])
+            )
             return ParseResult(
                 commands: [.rest(.adjust(deltaSeconds: seconds))], confidence: 0.9,
                 matchedPattern: "restAdjust"

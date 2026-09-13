@@ -12,29 +12,82 @@ extension WorkoutStore {
         guard let workoutID = session.workoutID, let workout = fetchWorkoutModel(id: workoutID) else {
             return WorkoutSummary(durationSeconds: 0, volumeKg: 0, setsDone: 0, prs: [], musclesHit: [:])
         }
+        // A live session is finished exactly once: a second call (double-tap, re-entrant sheet)
+        // would otherwise re-run progression with this session now inside its own baseline and
+        // burn a second stall. Backfills carry their end date from `startBackfill`, so they are
+        // recognised by `isBackfilled` rather than by a nil `endedAt`.
+        if workout.endedAt != nil, !workout.isBackfilled {
+            return summary(for: workout, session: session, prs: [], achievements: [])
+        }
         // Computed with this session still excluded from `exerciseHistory` (its own `endedAt`
         // isn't stamped until after this) — the exact same baseline/stall `startWorkout` used to
         // prescribe this session, so this simply commits that already-shown result. Persisting
         // here rather than at start means abandoning a workout (never finishing) never burns a
         // stall (plan.md §6.5).
         persistProgression(session: session)
-        let endedAt = Date()
+        let now = Date()
+        // A backfilled workout keeps the `date + duration` end it was started with; only a live
+        // session ends now.
+        let endedAt = workout.isBackfilled ? (workout.endedAt ?? now) : now
         workout.endedAt = endedAt
         let prs = evaluatePRs(session: session, workout: workout)
         let earnedAchievements = evaluateMilestones(for: workout, weeklyGoal: weeklyGoal)
         // Backfilled/past-dated workouts still earn milestones (persisted above) but never
         // celebrate — the summary card only shows the ones worth celebrating right now.
-        let achievements = Milestones.isCelebrationWorthy(workoutDate: workout.startedAt, now: endedAt)
+        let achievements = Milestones.isCelebrationWorthy(workoutDate: workout.startedAt, now: now)
             ? earnedAchievements : []
         save()
         onWorkoutFinished?(workout)
         workoutFinishedObservers.forEach { $0(workout) }
         WidgetSnapshotWriter.refresh(store: self)
+        return summary(for: workout, session: session, prs: prs, achievements: achievements)
+    }
+
+    private func summary(
+        for workout: WorkoutModel, session: WorkoutSession, prs: [PersonalRecordInfo],
+        achievements: [AchievementInfo]
+    ) -> WorkoutSummary {
+        let endedAt = workout.endedAt ?? Date()
+        // Working sets only, the same count the History row and the weekly recap show.
+        let setsDone = session.exercises.flatMap(\.sets)
+            .filter { $0.isDone && $0.kind.countsTowardStats }.count
         return WorkoutSummary(
             durationSeconds: max(0, Int(endedAt.timeIntervalSince(workout.startedAt))),
-            volumeKg: session.volumeKg, setsDone: session.setsDone, prs: prs, musclesHit: session.musclesHit,
+            volumeKg: session.volumeKg, setsDone: setsDone, prs: prs, musclesHit: session.musclesHit,
             achievements: achievements
         )
+    }
+
+    /// In-progress (never finished, never discarded) workouts, newest first — what a crash or
+    /// force-quit mid-session leaves behind. The launch flow offers to resume the newest via
+    /// `resumeSession(for:)` and purges the rest with `purgeUnfinished(olderThan:)`.
+    func unfinishedWorkouts() -> [WorkoutModel] {
+        let predicate = #Predicate<WorkoutModel> { $0.endedAt == nil }
+        let descriptor = FetchDescriptor<WorkoutModel>(
+            predicate: predicate, sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
+        )
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    /// Deletes every unfinished workout started before `date` (and, by cascade, its sets).
+    /// Returns how many were removed.
+    @discardableResult
+    func purgeUnfinished(olderThan date: Date) -> Int {
+        let stale = unfinishedWorkouts().filter { $0.startedAt < date }
+        guard !stale.isEmpty else { return 0 }
+        stale.forEach(context.delete)
+        save()
+        return stale.count
+    }
+
+    /// Re-opens an unfinished workout as a live `WorkoutSession` (its sets, done flags, notes and
+    /// per-exercise history strip restored) so `ActiveWorkoutView` can carry on where it stopped.
+    /// Nil once the workout has been finished or deleted.
+    func resumeSession(for workoutID: UUID) -> WorkoutSession? {
+        guard let model = fetchWorkoutModel(id: workoutID), model.endedAt == nil else { return nil }
+        let session = WorkoutSession(model: model, exerciseInfo: exerciseInfo(for:))
+        session.exercises = session.exercises.map(withHistoryStrip)
+        return session
     }
 
     func history() -> [WorkoutRecord] {
@@ -50,10 +103,14 @@ extension WorkoutStore {
         fetchWorkoutModel(id: id)
     }
 
+    /// Deletes a workout and its sets, then rebuilds the PR cache and event log from what
+    /// remains — so a mis-typed record dies with the workout that set it.
     func deleteWorkout(id: UUID) {
         guard let model = fetchWorkoutModel(id: id) else { return }
+        let wasFinished = model.endedAt != nil
         context.delete(model)
         save()
+        if wasFinished { rebuildPersonalRecords() }
     }
 
     /// Total finished-workout count and lifetime volume, for the History header.
@@ -185,90 +242,5 @@ extension WorkoutStore {
 
     private func matchingExercise(exerciseID: UUID, in workout: WorkoutModel) -> WorkoutExerciseModel? {
         (workout.exercises ?? []).first { $0.exercise?.id == exerciseID }
-    }
-
-    /// Headline records only (e1RM) — the count the user sees; other kinds are cached silently.
-    private func prCount(for workoutID: UUID) -> Int {
-        let headline = PRKind.e1rm.rawValue
-        let predicate = #Predicate<PersonalRecordModel> { $0.workoutID == workoutID && $0.kind == headline }
-        return (try? context.fetchCount(FetchDescriptor(predicate: predicate))) ?? 0
-    }
-
-    // MARK: - Personal records (GymCore.PersonalRecords)
-
-    /// Evaluates every `PRKind` per exercise and caches all of them (`PersonalRecordModel`), but
-    /// the summary/banner still surfaces only the e1RM kind per exercise — matching the existing
-    /// "one PR line per exercise" UI. The other kinds (maxWeight, volume, maxRepsAtWeight, …) are
-    /// cached for `exerciseInfo(for:)`-style lookups and future screens without changing what the
-    /// Finish summary shows.
-    private func evaluatePRs(session: WorkoutSession, workout: WorkoutModel) -> [PersonalRecordInfo] {
-        let latestDate = latestFinishedWorkoutDate(excluding: workout.id)
-        return session.exercises.compactMap { entry -> PersonalRecordInfo? in
-            let performed = performedSets(in: entry, date: workout.startedAt)
-            guard !performed.isEmpty else { return nil }
-            let records = PersonalRecords.evaluate(
-                newSets: performed, existing: existingRecords(exerciseID: entry.exercise.id),
-                workoutDate: workout.startedAt, isBackfilled: workout.isBackfilled,
-                latestWorkoutDate: latestDate
-            )
-            for record in records {
-                cacheRecord(record, exerciseID: entry.exercise.id, workoutID: workout.id)
-            }
-            guard let e1rm = records.first(where: { $0.kind == .e1rm }) else { return nil }
-            return PersonalRecordInfo(
-                exerciseName: entry.exercise.name, line: PersonalRecords.formatLine(e1rm)
-            )
-        }
-    }
-
-    /// The other finished workout's `startedAt` closest to now (excluding this one), used so a
-    /// backfilled workout can't claim a PR against a session that happened later.
-    private func latestFinishedWorkoutDate(excluding workoutID: UUID) -> Date? {
-        finishedWorkoutsNewestFirst().first { $0.id != workoutID }?.startedAt
-    }
-
-    private func performedSets(in entry: WorkoutExerciseEntry, date: Date) -> [PerformedSet] {
-        let isBodyweightStyle = entry.exercise.loggingStyle == .bodyweightReps
-            || entry.exercise.loggingStyle == .assisted || entry.exercise.loggingStyle == .weightedBodyweight
-        let bodyweightKg = isBodyweightStyle ? latestBodyMeasurement(asOf: date)?.bodyweightKg : nil
-        return entry.sets.filter { $0.isDone && $0.kind.countsTowardStats }.map { setEntry in
-            PerformedSet(
-                kind: setEntry.kind, weightKg: setEntry.weightKg, reps: setEntry.reps,
-                durationSeconds: setEntry.durationSeconds, assistanceKg: setEntry.assistanceKg,
-                bodyweightKg: bodyweightKg, date: date
-            )
-        }
-    }
-
-    /// Every cached record for this exercise, across all kinds — the `existing` bests that
-    /// `PersonalRecords.evaluate` checks each new set against.
-    private func existingRecords(exerciseID: UUID) -> [PersonalRecord] {
-        let predicate = #Predicate<PersonalRecordModel> { $0.exerciseID == exerciseID }
-        let models = (try? context.fetch(FetchDescriptor(predicate: predicate))) ?? []
-        return models.compactMap { model in
-            guard let kind = PRKind(rawValue: model.kind) else { return nil }
-            return PersonalRecord(
-                kind: kind, value: model.value, weightKg: model.weightKg, reps: model.reps, date: model.date
-            )
-        }
-    }
-
-    /// Upserts one PR into the cache. `maxRepsAtWeight` keeps one row per weight (a lifter can
-    /// hold separate rep records at 60 kg and 80 kg); every other kind keeps a single best row.
-    private func cacheRecord(_ record: PersonalRecord, exerciseID: UUID, workoutID: UUID) {
-        let kind = record.kind.rawValue
-        let weight = record.weightKg
-        let byWeightToo = record.kind == .maxRepsAtWeight
-        let predicate = #Predicate<PersonalRecordModel> {
-            $0.exerciseID == exerciseID && $0.kind == kind && (!byWeightToo || $0.weightKg == weight)
-        }
-        let existing = (try? context.fetch(FetchDescriptor(predicate: predicate)))?.first
-        let model = existing ?? PersonalRecordModel(exerciseID: exerciseID, kind: kind)
-        if existing == nil { context.insert(model) }
-        model.value = record.value
-        model.weightKg = record.weightKg
-        model.reps = record.reps
-        model.date = record.date
-        model.workoutID = workoutID
     }
 }

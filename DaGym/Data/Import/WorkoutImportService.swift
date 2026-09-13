@@ -66,8 +66,9 @@ enum WorkoutImportService {
         )
     }
 
-    /// Imports `preview.workouts`, oldest first so the PR cache builds up exactly as it would
-    /// have if the user had logged these sessions live. Re-running on the same file is a no-op:
+    /// Imports `preview.workouts`, then rebuilds the PR cache from history so records land
+    /// exactly as they would have if the user had logged these sessions live. Re-running on the
+    /// same file is a no-op:
     /// a workout already present (same `startedAt` + `title`) is skipped, never duplicated.
     static func apply(preview: ImportPreview, store: WorkoutStore) -> WorkoutImportReport {
         var report = WorkoutImportReport()
@@ -77,7 +78,6 @@ enum WorkoutImportService {
             store: store, context: matchContext(store: store), source: preview.source
         )
         let existingKeys = existingWorkoutKeys(store: store)
-        var latestDateSoFar = latestFinishedWorkoutDate(store: store)
 
         for imported in preview.workouts.sorted(by: { $0.startedAt < $1.startedAt }) {
             guard !existingKeys.contains(workoutKey(imported)) else {
@@ -85,13 +85,12 @@ enum WorkoutImportService {
                 continue
             }
             _ = insertWorkout(
-                imported, environment: environment, exerciseCache: &exerciseCache,
-                latestDateSoFar: latestDateSoFar, report: &report
+                imported, environment: environment, exerciseCache: &exerciseCache, report: &report
             )
-            latestDateSoFar = max(latestDateSoFar ?? imported.startedAt, imported.startedAt)
             report.workoutsImported += 1
         }
         store.save()
+        if report.workoutsImported > 0 { store.rebuildPersonalRecords() }
         return report
     }
 
@@ -139,14 +138,5 @@ enum WorkoutImportService {
     private static func existingWorkoutKeys(store: WorkoutStore) -> Set<String> {
         let models = (try? store.context.fetch(FetchDescriptor<WorkoutModel>())) ?? []
         return Set(models.map { "\($0.startedAt.timeIntervalSinceReferenceDate)|\($0.title)" })
-    }
-
-    private static func latestFinishedWorkoutDate(store: WorkoutStore) -> Date? {
-        let predicate = #Predicate<WorkoutModel> { $0.endedAt != nil }
-        var descriptor = FetchDescriptor<WorkoutModel>(
-            predicate: predicate, sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
-        )
-        descriptor.fetchLimit = 1
-        return (try? store.context.fetch(descriptor))?.first?.startedAt
     }
 }

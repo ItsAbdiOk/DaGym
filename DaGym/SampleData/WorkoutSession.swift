@@ -20,7 +20,14 @@ final class WorkoutSession {
     /// Free-text note for the whole session, persisted to `WorkoutModel.notes`.
     var notes: String = ""
 
+    /// Wall clock every timer derives from, so a test can jump time and the app survives being
+    /// suspended: rest and hold state store dates, never accumulated ticks.
+    @ObservationIgnored var now: () -> Date = Date.init
+
     // Rest timer
+    /// When the current rest ends; nil when not resting. `restRemaining` is a cache of
+    /// `endDate - now`, refreshed by `tickRest()` so views re-render once a second.
+    var restEndDate: Date?
     var restRemaining: Int = 0
     var restTotal: Int = 0
     /// "Next <exercise name>" / "Last set done" — set whenever the next step isn't a plain
@@ -37,6 +44,9 @@ final class WorkoutSession {
     /// Activity + lock screen notification (`Features/LiveActivity`) can mirror it without this
     /// UI-free model knowing about ActivityKit. Set by `ActiveWorkoutView+LiveActivity.swift`.
     var onRestStateChange: ((RestState) -> Void)?
+    /// Mirrors `Preferences.restHaptics`; set by `ActiveWorkoutView` so the 3-2-1 and end taps
+    /// honour the Settings toggle. Defaults on, like the preference.
+    var restHaptics = true
     private var restExerciseName = ""
     private var restSetNumber = 0
     private var restSetCount = 0
@@ -58,13 +68,21 @@ final class WorkoutSession {
     /// Timed-hold live timer, or nil when no hold is in progress.
     var timedHold: TimedHoldState?
 
+    /// Dates are the source of truth (`startedAt`, pauses); `leadIn`/`elapsed` are the
+    /// whole-second cache `tickTimedHold()` refreshes for the card. See `WorkoutSession+TimedHold`.
     struct TimedHoldState {
         var exerciseID: UUID
         var setID: UUID
         var targetSeconds: Int?
+        /// When the 3-2-1 lead-in began.
+        var startedAt: Date
+        /// Set while paused; the clock stops here until resume.
+        var pausedAt: Date?
+        /// Total time spent paused before the current pause, if any.
+        var pausedInterval: TimeInterval = 0
         var leadIn: Int
         var elapsed: Int
-        var isPaused: Bool
+        var isPaused: Bool { pausedAt != nil }
     }
 
     var volumeKg: Double {
@@ -109,6 +127,7 @@ final class WorkoutSession {
     func startRest(seconds: Int, after exerciseIndex: Int, set setIndex: Int) {
         restTotal = seconds
         restRemaining = seconds
+        restEndDate = seconds > 0 ? now().addingTimeInterval(TimeInterval(seconds)) : nil
         let ex = exercises[exerciseIndex]
         restNextWeightKg = nil
         restNextReps = nil
@@ -128,33 +147,58 @@ final class WorkoutSession {
         onRestStateChange?(restState(isEnded: false, isSkipped: false))
     }
 
+    /// Refreshes `restRemaining` from the wall clock. Safe to call as often as you like — it only
+    /// reacts (haptics, hooks) when the whole-second value actually changes, so a tick after the
+    /// phone was locked for two minutes lands straight on the right number.
     func tickRest() {
-        guard restRemaining > 0 else { return }
-        restRemaining -= 1
-        if restRemaining <= 3, restRemaining > 0 { Haptics.restTick() }
-        if restRemaining == 0 {
-            Haptics.restEnd()
+        guard let restEndDate, restRemaining > 0 else { return }
+        let remaining = Self.secondsRemaining(until: restEndDate, now: now())
+        guard remaining != restRemaining else { return }
+        restRemaining = remaining
+        if remaining <= 3, remaining > 0, restHaptics { Haptics.restTick() }
+        if remaining == 0 {
+            if restHaptics { Haptics.restEnd() }
             onRestStateChange?(restState(isEnded: true, isSkipped: false))
+            self.restEndDate = nil
         }
-        onRestTick?(restRemaining)
+        onRestTick?(remaining)
+    }
+
+    /// Whole seconds from `now` to `endDate`, never negative. Rounded, not truncated, so a tick
+    /// that lands a few milliseconds late still reads the second it was aimed at.
+    static func secondsRemaining(until endDate: Date, now: Date) -> Int {
+        max(0, Int(endDate.timeIntervalSince(now).rounded()))
     }
 
     /// Snapshot for the Live Activity / notification hook — see `RestState`.
     private func restState(isEnded: Bool, isSkipped: Bool) -> RestState {
         RestState(
-            remaining: restRemaining, total: restTotal, workoutTitle: title, exerciseName: restExerciseName,
+            remaining: restRemaining, total: restTotal,
+            endDate: restEndDate ?? now(), workoutTitle: title, exerciseName: restExerciseName,
             setNumber: restSetNumber, setCount: restSetCount, nextWeightKg: restNextWeightKg,
             nextReps: restNextReps, fallbackNextLabel: restNextLabel, isEnded: isEnded, isSkipped: isSkipped
         )
     }
 
-    /// Removes a set, keeping at least one set per exercise (the delete swipe action).
+    /// Removes a set, keeping at least one set per exercise (the delete swipe action). Refusing
+    /// the last set buzzes `invalid` so the swipe isn't a silent no-op.
     func removeSet(exerciseID: UUID, setID: UUID) {
         guard let ei = exercises.firstIndex(where: { $0.id == exerciseID }),
-              exercises[ei].sets.count > 1,
               let si = exercises[ei].sets.firstIndex(where: { $0.id == setID }) else { return }
+        guard exercises[ei].sets.count > 1 else {
+            Haptics.invalid()
+            return
+        }
         exercises[ei].sets.remove(at: si)
         Haptics.confirm()
+    }
+
+    /// Edits the effort on a set that's already logged, without re-completing it (no second
+    /// "set done" haptic, no fresh rest timer).
+    func setEffort(exerciseID: UUID, setID: UUID, effort: Effort) {
+        guard let ei = exercises.firstIndex(where: { $0.id == exerciseID }),
+              let si = exercises[ei].sets.firstIndex(where: { $0.id == setID }) else { return }
+        exercises[ei].sets[si].effort = effort
     }
 
     /// Changes a set's kind (e.g. working → drop set) without touching weight or reps.
@@ -183,14 +227,19 @@ final class WorkoutSession {
     }
 
     func adjustRest(by delta: Int) {
-        restRemaining = max(0, restRemaining + delta)
-        restTotal = max(restTotal, restRemaining)
+        guard let restEndDate else { return }
+        let current = now()
+        let remaining = max(0, Self.secondsRemaining(until: restEndDate, now: current) + delta)
+        restRemaining = remaining
+        restTotal = max(restTotal, remaining)
+        self.restEndDate = remaining > 0 ? current.addingTimeInterval(TimeInterval(remaining)) : nil
         Haptics.step()
-        onRestStateChange?(restState(isEnded: restRemaining == 0, isSkipped: false))
+        onRestStateChange?(restState(isEnded: remaining == 0, isSkipped: false))
     }
 
     func skipRest() {
         restRemaining = 0
+        restEndDate = nil
         Haptics.confirm()
         onRestStateChange?(restState(isEnded: true, isSkipped: true))
     }

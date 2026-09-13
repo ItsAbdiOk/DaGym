@@ -28,28 +28,44 @@ struct ExerciseSeederTests {
         }
     }
 
-    @Test("a bumped seed version refreshes existing rows without duplicating them")
+    @Test("a bumped seed version refreshes an existing row's stale instructions and provenance")
     func bumpedVersionUpdatesExistingRows() throws {
         let container = try ModelContainer.dagym(inMemory: true)
         let context = ModelContext(container)
-        let defaults = UserDefaults(suiteName: #function) ?? .standard
-        defaults.removePersistentDomain(forName: #function)
+        // Seed once at version 0 (nothing applied yet), then hand-corrupt one row the way an
+        // older seed version would have left it — stale instructions and a placeholder source —
+        // so the update pass this test actually exercises has something to fix.
+        ExerciseSeeder.seedIfNeeded(context: context)
+        let seededCount = try context.fetch(FetchDescriptor<ExerciseModel>()).count
+        let staleBenchPress = try #require(
+            try context.fetch(FetchDescriptor<ExerciseModel>()).first {
+                $0.seedID == "Barbell_Bench_Press_-_Medium_Grip"
+            }
+        )
+        staleBenchPress.instructions = "stale placeholder instructions"
+        staleBenchPress.dataSource = "stale-source"
+        SeedState.row(in: context).exerciseSeedVersion = 0
+        try context.save()
 
-        ExerciseSeeder.seedIfNeeded(context: context, defaults: defaults)
-        #expect(defaults.integer(forKey: ExerciseSeeder.seedVersionKey) == 3)
+        // Now seed again as if the bundled seed bumped to version 3 (its real value) — this must
+        // refresh the stale row in place, not skip it because `insertMissing` already saw the ID.
+        ExerciseSeeder.seedIfNeeded(context: context)
+        #expect(SeedState.row(in: context).exerciseSeedVersion == 3)
 
         let benchPress = try #require(
             try context.fetch(FetchDescriptor<ExerciseModel>()).first {
                 $0.seedID == "Barbell_Bench_Press_-_Medium_Grip"
             }
         )
+        #expect(benchPress.instructions != "stale placeholder instructions")
         #expect(!benchPress.instructions.isEmpty)
         #expect(benchPress.dataSource == "wger")
 
         // Re-running with the same stored version must not duplicate rows or
         // re-run the (no-op) update pass.
-        ExerciseSeeder.seedIfNeeded(context: context, defaults: defaults)
+        ExerciseSeeder.seedIfNeeded(context: context)
         let count = try context.fetch(FetchDescriptor<ExerciseModel>()).count
+        #expect(count == seededCount)
         #expect(count == 1466)
     }
 

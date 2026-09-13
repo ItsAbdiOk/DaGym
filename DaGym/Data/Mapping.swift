@@ -93,7 +93,7 @@ extension RoutineInfo {
     }
 
     private static func progressionDetailText(_ model: RoutineModel) -> String {
-        if let rule = model.progressionRuleValue { return rule.explanation }
+        if let rule = model.progressionRuleValue { return rule.explanation() }
         switch model.progressionRule {
         case "linear": return "Hit every rep and the weight goes up next time."
         default: return "Hit the top of the rep range on every set and the weight goes up one increment."
@@ -221,9 +221,34 @@ extension WorkoutRecord {
         } else {
             minutes = 0
         }
+        // Warm-ups are excluded here for the same reason the weekly recap, week stats and the
+        // Health write exclude them — one definition of "sets" everywhere.
+        let setsDone = sets.filter { $0.isCompleted && $0.setKind.countsTowardStats }.count
         self.init(
             id: model.id, title: model.title, date: model.startedAt, durationMinutes: minutes,
-            volumeKg: volume, sets: sets.filter(\.isCompleted).count, prCount: prCount
+            volumeKg: volume, sets: setsDone, prCount: prCount
         )
+    }
+}
+
+extension WorkoutSession {
+    /// Re-opens a persisted, unfinished workout as a live session — the inverse of
+    /// `WorkoutStore.sync(session:)`. `exerciseInfo` resolves each `ExerciseModel`; the plain
+    /// mapping is the default, `WorkoutStore.resumeSession(for:)` passes the store's richer
+    /// `exerciseInfo(for:)`.
+    convenience init(
+        model: WorkoutModel, exerciseInfo: (ExerciseModel) -> ExerciseInfo = ExerciseInfo.init(model:)
+    ) {
+        let entries = (model.exercises ?? []).sorted { $0.order < $1.order }.map { exerciseModel in
+            let info = exerciseModel.exercise.map(exerciseInfo)
+                ?? ExerciseInfo(name: "Deleted exercise", primary: [], equipment: "other")
+            return WorkoutExerciseEntry(model: exerciseModel, exercise: info)
+        }
+        self.init(
+            title: model.title, subtitle: model.routineName,
+            startedAt: model.startedAt, exercises: entries, isBackfilled: model.isBackfilled
+        )
+        workoutID = model.id
+        notes = model.notes
     }
 }

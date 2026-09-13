@@ -1,10 +1,13 @@
 import Foundation
 import GymCore
+import SwiftData
 
-/// Seeds three starter routines ("Push A", "Pull B", "Legs") the first time
-/// the app has none. Exercises are looked up by name against the already
-/// seeded exercise library, falling back to the first exercise with the
-/// right primary muscle when a specific name isn't present.
+/// Seeds three starter routines ("Push A", "Pull B", "Legs") once per store
+/// (`SeedStateModel.routinesSeeded`). Exercises are looked up by name against
+/// the already seeded exercise library, falling back to the first exercise
+/// with the right primary muscle when a specific name isn't present. Each
+/// starter carries a fixed `importedFromID` so a copy seeded by another iCloud
+/// device folds into this one (`WorkoutStore.dedupeRoutines()`).
 ///
 /// Every starter routine carries an explicit progression rule (plan.md §6.5) so the engine
 /// prescribes from the first session on — a routine saved without a rule is pre-filled by
@@ -13,11 +16,30 @@ import GymCore
 /// (`starterOverride`): lower-body lifts step 5 kg, bodyweight work goes by reps, holds by seconds.
 @MainActor
 enum RoutineSeeder {
+    /// Stable per-starter identities, shared by every install.
+    static let starterIDs: [String: UUID] = [
+        "Push A": UUID(uuidString: "6D1A5D4E-0001-4A00-8000-000000000001") ?? UUID(),
+        "Pull B": UUID(uuidString: "6D1A5D4E-0002-4A00-8000-000000000002") ?? UUID(),
+        "Legs": UUID(uuidString: "6D1A5D4E-0003-4A00-8000-000000000003") ?? UUID()
+    ]
+
     static func seedStarterRoutinesIfNeeded(store: WorkoutStore) {
-        guard store.routines().isEmpty else { return }
-        seedPushA(store: store)
-        seedPullB(store: store)
-        seedLegs(store: store)
+        let state = SeedState.row(in: store.context)
+        defer { store.dedupeRoutines() }
+        guard !state.routinesSeeded else { return }
+        if store.routines().isEmpty {
+            seedPushA(store: store)
+            seedPullB(store: store)
+            seedLegs(store: store)
+        }
+        state.routinesSeeded = true
+        state.updatedAt = Date()
+        store.save()
+    }
+
+    private static func stamp(_ routine: RoutineInfo, store: WorkoutStore) {
+        guard let model = store.fetchRoutineModel(id: routine.id) else { return }
+        model.importedFromID = starterIDs[routine.name]
     }
 
     // MARK: - Push A
@@ -70,10 +92,11 @@ enum RoutineSeeder {
                 overrideRule: starterOverride(for: pushdown, routineRule: rule)
             )
         ]
-        store.saveRoutine(
+        let routine = store.saveRoutine(
             id: nil, name: "Push A", progressionRule: "doubleProgression", repRangeLow: 6, repRangeHigh: 8,
             rule: rule, exercises: exercises
         )
+        stamp(routine, store: store)
     }
 
     // MARK: - Pull B
@@ -110,9 +133,10 @@ enum RoutineSeeder {
                 overrideRule: starterOverride(for: curl, routineRule: rule)
             )
         ]
-        store.saveRoutine(
+        let routine = store.saveRoutine(
             id: nil, name: "Pull B", progressionRule: "linear", rule: rule, exercises: exercises
         )
+        stamp(routine, store: store)
     }
 
     // MARK: - Legs
@@ -151,7 +175,10 @@ enum RoutineSeeder {
                 overrideRule: starterOverride(for: plank, routineRule: rule)
             )
         ]
-        store.saveRoutine(id: nil, name: "Legs", progressionRule: "linear", rule: rule, exercises: exercises)
+        let routine = store.saveRoutine(
+            id: nil, name: "Legs", progressionRule: "linear", rule: rule, exercises: exercises
+        )
+        stamp(routine, store: store)
     }
 
     // MARK: - Overrides
@@ -208,5 +235,66 @@ enum RoutineSeeder {
             if let first = fallbackCandidates.first { return first }
         }
         return store.exercises(muscle: muscle).first { $0.primary.contains(muscle) }
+    }
+}
+
+extension WorkoutStore {
+    /// Folds routines that share an `importedFromID` — starter routines seeded by two devices, or
+    /// the same shared plan imported twice — into the most recently edited one (by `id` on a tie,
+    /// so every device agrees). Workouts, programs and the schedule that named a removed copy are
+    /// re-pointed at the survivor. Returns the number removed.
+    @discardableResult
+    func dedupeRoutines() -> Int {
+        let models = (try? context.fetch(FetchDescriptor<RoutineModel>())) ?? []
+        var byImportID: [UUID: [RoutineModel]] = [:]
+        for model in models {
+            if let importedFromID = model.importedFromID {
+                byImportID[importedFromID, default: []].append(model)
+            }
+        }
+        var replacements: [UUID: UUID] = [:]
+        for group in byImportID.values where group.count > 1 {
+            let ordered = group.sorted { lhs, rhs in
+                if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+            let survivor = ordered[0]
+            for duplicate in ordered.dropFirst() {
+                replacements[duplicate.id] = survivor.id
+                context.delete(duplicate)
+            }
+        }
+        guard !replacements.isEmpty else { return 0 }
+        repointRoutineReferences(replacements)
+        save()
+        return replacements.count
+    }
+
+    private func repointRoutineReferences(_ replacements: [UUID: UUID]) {
+        let workouts = (try? context.fetch(FetchDescriptor<WorkoutModel>())) ?? []
+        for workout in workouts {
+            if let routineID = workout.routineID, let survivor = replacements[routineID] {
+                workout.routineID = survivor
+            }
+        }
+        let programs = (try? context.fetch(FetchDescriptor<ProgramModel>())) ?? []
+        for program in programs where program.routineIDs.contains(where: { replacements[$0] != nil }) {
+            program.routineIDs = program.routineIDs.map { replacements[$0] ?? $0 }
+        }
+        var schedule = schedule()
+        var changed = false
+        for (day, routineID) in schedule.days {
+            if let survivor = replacements[routineID] {
+                schedule.days[day] = survivor
+                changed = true
+            }
+        }
+        for (key, routineID) in schedule.overrides {
+            if let routineID, let survivor = replacements[routineID] {
+                schedule.overrides[key] = survivor
+                changed = true
+            }
+        }
+        if changed { saveSchedule(schedule) }
     }
 }

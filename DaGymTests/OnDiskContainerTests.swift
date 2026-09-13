@@ -13,11 +13,20 @@ struct OnDiskContainerTests {
     func twoStoresRoundTrip() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("dagym-ondisk-\(UUID().uuidString)", isDirectory: true)
+        let legacyDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("dagym-ondisk-legacy-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: legacyDirectory, withIntermediateDirectories: true)
         StoreMigration.containerDirectoryOverride = directory
+        // Without this, `dagym(cloudKitEnabled:false)`'s legacy-migration check falls back to the
+        // test host's real Application Support directory (T7) — on a simulator that ever ran a
+        // pre-App-Group build, this test would move (then delete) the developer's actual store.
+        StoreMigration.legacyDirectoryOverride = legacyDirectory
         defer {
             StoreMigration.containerDirectoryOverride = nil
+            StoreMigration.legacyDirectoryOverride = nil
             try? FileManager.default.removeItem(at: directory)
+            try? FileManager.default.removeItem(at: legacyDirectory)
         }
 
         do {

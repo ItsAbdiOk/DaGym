@@ -14,12 +14,14 @@ enum DaGymSchema {
         SetLogModel.self,
         BodyMeasurementModel.self,
         PersonalRecordModel.self,
+        PersonalRecordEventModel.self,
         EquipmentProfileModel.self,
         ScheduleModel.self,
         AchievementModel.self,
         ProgressPhotoModel.self,
         ProgramModel.self,
-        ProgramWeekModel.self
+        ProgramWeekModel.self,
+        SeedStateModel.self
     ]
 
     /// Models that live in the separate, always-local photo store (see
@@ -112,7 +114,8 @@ enum StoreMigration {
         legacyDirectory: URL? = nil, destinationDirectory: URL? = nil
     ) {
         let legacyURL = defaultConfiguration(schema: schema).url
-        let legacyDirectory = legacyDirectory ?? legacyURL.deletingLastPathComponent()
+        let legacyDirectory = legacyDirectory
+            ?? legacyDirectoryOverride ?? legacyURL.deletingLastPathComponent()
         let destinationDirectory = destinationDirectory ?? containerDirectory()
         let fileName = legacyURL.lastPathComponent
         let legacyStore = legacyDirectory.appendingPathComponent(fileName)
@@ -137,7 +140,11 @@ enum StoreMigration {
         }
     }
 
-    private static let sidecarSuffixes = ["", "-wal", "-shm"]
+    // WAL/-shm first, main store file last: if a crash lands between copies, the destination
+    // store file (checked by the "already migrated" guard above) only appears once every sidecar
+    // that held committed-but-uncheckpointed transactions is already in place, so a retry either
+    // starts clean (nothing copied yet) or never leaves a store without its WAL.
+    private static let sidecarSuffixes = ["-wal", "-shm", ""]
 
     private static func copyIfExists(
         fileName: String, from sourceDirectory: URL, to destinationDirectory: URL, fileManager: FileManager
@@ -160,6 +167,12 @@ enum StoreMigration {
 
     /// Tests point the on-disk stores at a temporary directory so the real App Group is untouched.
     nonisolated(unsafe) static var containerDirectoryOverride: URL?
+
+    /// Tests point the *legacy* (pre-App-Group) store location at a temporary directory too, so a
+    /// migration test never touches the test host's real Application Support directory — where a
+    /// pre-App-Group `default.store` may genuinely exist on a simulator that once ran an old
+    /// build, and get moved (then deleted) by the act of running the test.
+    nonisolated(unsafe) static var legacyDirectoryOverride: URL?
 
     private static func containerDirectory() -> URL {
         if let containerDirectoryOverride { return containerDirectoryOverride }

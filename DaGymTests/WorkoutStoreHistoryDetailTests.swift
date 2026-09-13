@@ -75,7 +75,7 @@ struct WorkoutStoreHistoryDetailTests {
 
         #expect(detail.exercises.map(\.exercise.name) == ["Deadlift"])
         #expect(detail.exercises.first?.sets.count == 2)
-        #expect(detail.setsDone == 2)
+        #expect(detail.setsDone == 1) // the warm-up doesn't count, matching the recap and Health
         #expect(detail.volumeKg == 120 * 5)
         #expect(detail.prCount == summary.prs.count)
         #expect(detail.isBackfilled == false)

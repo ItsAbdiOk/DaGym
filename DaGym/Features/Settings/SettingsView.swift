@@ -12,6 +12,11 @@ struct SettingsView: View {
     @State private var showingHealthSettings = false
     @State private var showingBodyweightSheet = false
     @State private var eventStore: EventStoring = EventKitStore()
+    /// The weekly-goal stepper needs its own reschedule (S14/F14): `RemindersSettingsSection`'s
+    /// three bindings reschedule on change, but the notification body embeds
+    /// `weeklyGoal - thisWeekCount` at schedule time, so a goal edit here must reschedule too or
+    /// Saturday's push keeps saying the old number.
+    private let notificationScheduler = TrainingNotificationScheduler()
 
     var body: some View {
         ZStack {
@@ -131,7 +136,7 @@ struct SettingsView: View {
     private var trainingCard: some View {
         SettingsSection(title: "Training") {
             SettingsRow(label: "Weekly goal") {
-                Stepper(value: binding(\.weeklyGoal), in: 1...7) {
+                Stepper(value: weeklyGoalBinding, in: 1...7) {
                     Text("\(preferences.weeklyGoal)").font(DGFont.subhead).foregroundStyle(DGColor.ink3)
                 }
             }
@@ -245,6 +250,16 @@ struct SettingsView: View {
 
     private func binding<T>(_ keyPath: ReferenceWritableKeyPath<Preferences, T>) -> Binding<T> {
         Binding(get: { preferences[keyPath: keyPath] }, set: { preferences[keyPath: keyPath] = $0 })
+    }
+
+    private var weeklyGoalBinding: Binding<Int> {
+        Binding(
+            get: { preferences.weeklyGoal },
+            set: {
+                preferences.weeklyGoal = $0
+                notificationScheduler.rescheduleAll(store: store, preferences: preferences)
+            }
+        )
     }
 }
 

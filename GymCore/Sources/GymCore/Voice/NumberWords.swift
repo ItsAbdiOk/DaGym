@@ -1,8 +1,7 @@
 import Foundation
 
 /// Collapses English number words (and speech-recogniser digit strings) into
-/// `Double` values. Used by `Tokenizer` to fold a run of words like
-/// "one hundred and two and a half" into a single numeric token.
+/// `Double` values: "one hundred and two and a half" → 102.5.
 public enum NumberWords {
     private static let units: [String: Int] = [
         "zero": 0, "oh": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
@@ -15,11 +14,12 @@ public enum NumberWords {
         "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90
     ]
 
-    /// True for any word that can take part in a number phrase.
-    public static func isNumberWord(_ word: String) -> Bool {
-        units[word] != nil || tens[word] != nil || word == "hundred" || word == "thousand"
-            || word == "a" || word == "an" || word == "point" || word == "half" || word == "quarter"
-            || word == "and" || Double(word) != nil
+    /// "ninety-five" → ["ninety", "five"]; `nil` unless every part is a number word.
+    static func hyphenatedNumberWords(_ word: String) -> [String]? {
+        guard word.contains("-") else { return nil }
+        let parts = word.split(separator: "-").map(String.init)
+        guard parts.count > 1, parts.allSatisfy(isBareNumberWord) else { return nil }
+        return parts
     }
 
     /// Parses the longest number phrase starting at `words[index]`.
@@ -33,9 +33,7 @@ public enum NumberWords {
         return wordNumber(words, index)
     }
 
-    /// Parses exactly one word as a number, with no compounding — used where a
-    /// trailing word could otherwise be swallowed into a bigger number
-    /// (e.g. "minus twenty eight reps": the assistance is 20, not 28).
+    /// Parses exactly one word as a number, with no compounding.
     public static func parseSingleWord(_ word: String) -> Double? {
         if let literal = literalDigits(word) { return literal }
         if let unitValue = units[word] { return Double(unitValue) }
@@ -44,18 +42,60 @@ public enum NumberWords {
         return nil
     }
 
+    /// Parses a number phrase but gives back its last 1–9 units word when
+    /// "reps" follows: "twenty five eight reps" → 25 (2 words), "twenty eight
+    /// reps" → 20 (1 word), "twenty five reps" → 20 (1 word).
+    public static func parseBeforeReps(_ words: [String], at index: Int) -> (value: Double, consumed: Int)? {
+        guard let (value, consumed) = parse(words, at: index) else { return nil }
+        let last = index + consumed - 1
+        guard consumed > 1, repsFollows(words, at: index + consumed), unitsWord(words, at: last) != nil,
+              let shorter = parse(Array(words[index..<last]), at: 0), shorter.consumed == consumed - 1
+        else { return (value, consumed) }
+        return (shorter.value, consumed - 1)
+    }
+
+    /// True when `words[index]` is "reps"/"rep": the number before it is a rep count,
+    /// so a compound must not swallow it ("minus twenty eight reps" → 20, then 8 reps).
+    static func repsFollows(_ words: [String], at index: Int) -> Bool {
+        index < words.count && (words[index] == "reps" || words[index] == "rep")
+    }
+
+    /// "and a half" / "and a quarter" starting at `words[index]`: the fraction and words consumed.
+    public static func andAFraction(_ words: [String], at index: Int) -> (fraction: Double, consumed: Int)? {
+        guard index + 2 < words.count, words[index] == "and",
+              words[index + 1] == "a" || words[index + 1] == "an" else { return nil }
+        if words[index + 2] == "half" { return (0.5, 3) }
+        if words[index + 2] == "quarter" { return (0.25, 3) }
+        return nil
+    }
+
     private static func literalDigits(_ word: String) -> Double? {
         guard let value = Double(word), word.rangeOfCharacter(from: .letters) == nil else { return nil }
         return value
     }
 
-    /// "one twenty" → 120: a lone unit digit immediately followed by a tens/teen word
-    /// is read as a hundred-group, not added.
+    private static func unitsWord(_ words: [String], at index: Int) -> Int? {
+        guard index < words.count, let value = units[words[index]], value >= 1, value <= 9 else { return nil }
+        return value
+    }
+
+    /// "one twenty" → 120, "two twenty five" → 225: a lone unit digit immediately
+    /// followed by a tens/teen word is read as a hundred-group, not added. The
+    /// units word after the tens is absorbed unless "reps" follows it — "one
+    /// twenty eight reps" is 120 for 8.
     private static func compoundDigitTens(_ words: [String], _ index: Int) -> (Double, Int)? {
         guard let digit = units[words[index]], digit >= 1, digit <= 9, index + 1 < words.count
         else { return nil }
         let next = words[index + 1]
-        if let tensValue = tens[next] { return (Double(digit * 100 + tensValue), 2) }
+        if let tensValue = tens[next] {
+            var value = digit * 100 + tensValue
+            var consumed = 2
+            if let unitsValue = unitsWord(words, at: index + 2), !repsFollows(words, at: index + 3) {
+                value += unitsValue
+                consumed = 3
+            }
+            return (Double(value), consumed)
+        }
         if let teenValue = units[next], teenValue >= 10 { return (Double(digit * 100 + teenValue), 2) }
         return nil
     }
@@ -122,8 +162,8 @@ public enum NumberWords {
         }
         total += current
         guard sawAny else { return nil }
-        if let (bonus, consumed) = andAFractionSuffix(words, cursor) {
-            return (total + bonus, consumed - index)
+        if let (bonus, consumed) = andAFraction(words, at: cursor) {
+            return (total + bonus, cursor + consumed - index)
         }
         return (total, cursor - index)
     }
@@ -157,7 +197,7 @@ public enum NumberWords {
         if current == 0, let tensValue = tens[word] {
             current = Double(tensValue)
             var next = cursor + 1
-            if next < words.count, let nextUnit = units[words[next]], nextUnit >= 1, nextUnit <= 9 {
+            if let nextUnit = unitsWord(words, at: next) {
                 current += Double(nextUnit)
                 next += 1
             }
@@ -177,14 +217,6 @@ public enum NumberWords {
         guard cursor < words.count, words[cursor] == "point",
               let (fraction, used) = decimalTail(words, cursor + 1) else { return nil }
         return (fraction, cursor + 1 + used)
-    }
-
-    private static func andAFractionSuffix(_ words: [String], _ cursor: Int) -> (Double, Int)? {
-        guard cursor + 2 < words.count, words[cursor] == "and",
-              words[cursor + 1] == "a" || words[cursor + 1] == "an" else { return nil }
-        if words[cursor + 2] == "half" { return (0.5, cursor + 3) }
-        if words[cursor + 2] == "quarter" { return (0.25, cursor + 3) }
-        return nil
     }
 
     private static func isBareNumberWord(_ word: String) -> Bool {

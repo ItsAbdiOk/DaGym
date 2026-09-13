@@ -117,6 +117,9 @@ public struct BodyWorkout: Sendable {
 
 /// Body-wide chart series (plan.md §6.4): weekly volume, sets per muscle, session durations.
 public enum BodySeries {
+    /// A secondary mover counts at this fraction of a primary mover — our own weight, the same
+    /// convention `SessionStats.musclesHit` uses.
+    private static let secondaryMuscleShare = 0.5
     /// Total volume per calendar week, bucketed by `calendar.dateInterval(of: .weekOfYear:)` —
     /// honours the caller's `calendar.firstWeekday`. Only weeks with at least one workout appear,
     /// sorted oldest first.
@@ -145,7 +148,7 @@ public enum BodySeries {
                 let count = Double(entry.countingSetCount)
                 guard count > 0 else { continue }
                 for muscle in entry.primary { totals[muscle, default: 0] += count }
-                for muscle in entry.secondary { totals[muscle, default: 0] += count * 0.5 }
+                for muscle in entry.secondary { totals[muscle, default: 0] += count * secondaryMuscleShare }
             }
         }
         return totals

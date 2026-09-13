@@ -103,7 +103,7 @@ extension WorkoutStore {
         let sets = autoFilledSets(
             exerciseID: exercise.id, planned: planned, incrementKg: exercise.incrementKg
         )
-        return WorkoutExerciseEntry(exercise: exercise, sets: sets)
+        return withHistoryStrip(WorkoutExerciseEntry(exercise: exercise, sets: sets))
     }
 
     // MARK: - Building a session from a routine
@@ -121,8 +121,17 @@ extension WorkoutStore {
         let routineExercises = (routine.exercises ?? []).sorted { $0.order < $1.order }
         let weekKind = currentWeekKind(forRoutineID: routine.id)
         return routineExercises.compactMap {
-            buildEntry(routine: routine, routineExercise: $0, weekKind: weekKind)
+            buildEntry(routine: routine, routineExercise: $0, weekKind: weekKind).map(withHistoryStrip)
         }
+    }
+
+    /// Fills the card's "last sessions" strip and e1RM sparkline from finished history — the
+    /// two fields every store-built entry shows on `ExerciseCard`.
+    func withHistoryStrip(_ entry: WorkoutExerciseEntry) -> WorkoutExerciseEntry {
+        var entry = entry
+        entry.lastSessions = lastSessions(exerciseID: entry.exercise.id)
+        entry.sparkline = e1rmSeries(exerciseID: entry.exercise.id).suffix(8).map(\.1)
+        return entry
     }
 
     private func buildEntry(
@@ -144,10 +153,14 @@ extension WorkoutStore {
         return autoFillEntry(info: info, plannedSets: plannedSets, routineExercise: routineExercise)
     }
 
-    /// Prescribed by `ProgressionEngine`: the engine's numbers, the previous session's raw values
-    /// as the ghost (matched the same way `AutoFill` matches them), and the reason as the "why".
-    /// A `.firstTime` prescription (no baseline session yet) carries no numbers of its own, so the
-    /// plan's targets fill the row instead of 0 kg — the why card still says it's the first time.
+    /// Prescribed by `ProgressionEngine`: the engine's numbers for the working sets, the
+    /// previous session's raw values as the ghost (matched the same way `AutoFill` matches them),
+    /// and the reason as the "why". Warm-ups are never the engine's business — they take the
+    /// plan/previous auto-fill so a 40 kg ramp-up set stays 40 kg when the working weight is 80.
+    /// A `.firstTime` prescription (no baseline session yet) carries no numbers of its own, so
+    /// the plan's targets fill the row instead of 0 kg — the why card still says it's the first
+    /// time. The engine may also prescribe more working sets than the plan (bodyweight "+1 set");
+    /// the extras are appended, templated on the last planned working set.
     private func prescribedEntry(
         info: ExerciseInfo, plannedSets: [PlannedSetModel], prescribed: Prescribed,
         routineExercise: RoutineExerciseModel
@@ -158,23 +171,70 @@ extension WorkoutStore {
             planned: planned, previous: previous, incrementKg: info.incrementKg,
             planUpdatedAt: routineExercise.routine?.updatedAt, previousDate: previousDate
         )
-        let isFirstTime = prescribed.reason.kind == .firstTime
-        let sets = zip(plannedSets, zip(prescribed.sets, ghosts)).map { plannedSet, pair -> SetEntry in
-            let (rx, ghost) = pair
-            let numbers = isFirstTime ? ghost : rx
-            return SetEntry(
-                kind: plannedSet.setKind, weightKg: numbers.weightKg, reps: numbers.reps,
-                previousWeightKg: ghost.previous != nil ? ghost.weightKg : nil,
-                previousReps: ghost.previous != nil ? ghost.reps : nil,
-                durationSeconds: numbers.durationSeconds ?? plannedSet.targetSeconds,
-                prescriptionReason: prescribed.reason.title, assistanceKg: rx.assistanceKg
+        let useGhost = prescribed.reason.kind == .firstTime
+        let (rxByPlannedIndex, perPlannedSet) = Self.workingPrescriptions(
+            prescribed.sets, plannedSets: plannedSets
+        )
+        var sets = zip(plannedSets, ghosts).enumerated().map { index, pair -> SetEntry in
+            let (plannedSet, ghost) = pair
+            let rx = useGhost ? nil : rxByPlannedIndex[index]
+            return Self.prescribedSet(
+                kind: plannedSet.setKind, rx: rx, ghost: ghost, targetSeconds: plannedSet.targetSeconds,
+                reason: prescribed.reason.title
             )
+        }
+        let workingCount = plannedSets.filter { $0.setKind.countsTowardStats }.count
+        if !useGhost, !perPlannedSet, prescribed.sets.count > workingCount,
+           let templateIndex = plannedSets.lastIndex(where: { $0.setKind.countsTowardStats }),
+           ghosts.indices.contains(templateIndex) {
+            let template = plannedSets[templateIndex]
+            let ghost = ghosts[templateIndex]
+            for rx in prescribed.sets.dropFirst(workingCount) {
+                sets.append(Self.prescribedSet(
+                    kind: template.setKind, rx: rx, ghost: ghost, targetSeconds: template.targetSeconds,
+                    reason: prescribed.reason.title
+                ))
+            }
         }
         return WorkoutExerciseEntry(
             exercise: info, sets: sets, supersetGroup: routineExercise.supersetGroup,
             note: routineExercise.note.isEmpty ? nil : routineExercise.note,
             whyTitle: prescribed.reason.title, whyBody: prescribed.reason.body,
             whyKind: prescribed.reason.kind
+        )
+    }
+
+    /// The engine's prescription for each planned-set index, nil for warm-ups. Rules that size
+    /// from the working sets alone emit one prescription per working set; older ones emit one
+    /// per planned set (warm-ups included) — told apart by count, and paired accordingly. The
+    /// flag says which shape was seen, so the caller doesn't mistake warm-up rows for extra sets.
+    private static func workingPrescriptions(
+        _ prescriptions: [Prescription], plannedSets: [PlannedSetModel]
+    ) -> (byPlannedIndex: [Prescription?], perPlannedSet: Bool) {
+        let workingIndices = plannedSets.indices.filter { plannedSets[$0].setKind.countsTowardStats }
+        let perPlannedSet = prescriptions.count == plannedSets.count
+            && workingIndices.count != plannedSets.count
+        var result = [Prescription?](repeating: nil, count: plannedSets.count)
+        for (position, plannedIndex) in workingIndices.enumerated() {
+            let rxIndex = perPlannedSet ? plannedIndex : position
+            result[plannedIndex] = prescriptions.indices.contains(rxIndex) ? prescriptions[rxIndex] : nil
+        }
+        return (result, perPlannedSet)
+    }
+
+    /// One row: the engine's numbers when it has them for this set, otherwise the auto-fill
+    /// (plan target, or the previous session's matching set); the ghost always comes from the
+    /// previous session.
+    private static func prescribedSet(
+        kind: SetKind, rx: Prescription?, ghost: Prescription, targetSeconds: Int?, reason: String
+    ) -> SetEntry {
+        let numbers = rx ?? ghost
+        return SetEntry(
+            kind: kind, weightKg: numbers.weightKg, reps: numbers.reps,
+            previousWeightKg: ghost.previous != nil ? ghost.weightKg : nil,
+            previousReps: ghost.previous != nil ? ghost.reps : nil,
+            durationSeconds: numbers.durationSeconds ?? targetSeconds,
+            prescriptionReason: reason, assistanceKg: rx?.assistanceKg
         )
     }
 

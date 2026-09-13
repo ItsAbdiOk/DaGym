@@ -68,6 +68,31 @@ struct WorkoutStoreDeloadTests {
         #expect(store.deloadSuggestion(snoozedUntil: past) != nil)
     }
 
+    @Test("a genuine e1RM decline (no planned deload) does fire the trend reason")
+    func genuineDeclineTriggersTrend() throws {
+        let store = try makeStore()
+        let exercise = store.createCustomExercise(
+            name: "Bench Press", primary: [.chest], equipment: "Barbell", style: .weightReps
+        )
+        let draft = RoutineExerciseDraft(
+            exerciseID: exercise.id,
+            sets: [PlannedSetDraft(kind: .working, targetReps: 5, targetWeightKg: 100)]
+        )
+        let routine = store.saveRoutine(
+            id: nil, name: "Bench Press", rule: .linear(incrementKg: 2.5), exercises: [draft]
+        )
+
+        // Same two-step decline as `plannedDeloadSessionExcludedFromTrend` below, but nothing is
+        // flagged as a planned deload — this must be the positive case the exclusion test is
+        // actually excluding, or a broken `mainLiftKey` match would make both tests pass vacuously.
+        logDeloadable(store, routineID: routine.id, weightKg: 110, reps: 5, wasPlannedDeload: false)
+        logDeloadable(store, routineID: routine.id, weightKg: 100, reps: 5, wasPlannedDeload: false)
+        logDeloadable(store, routineID: routine.id, weightKg: 85, reps: 5, wasPlannedDeload: false)
+
+        let suggestion = try #require(store.deloadSuggestion(snoozedUntil: nil))
+        #expect(suggestion.reason.contains("e1RM is down"))
+    }
+
     @Test("a planned deload session's lower numbers never read as an e1RM decline")
     func plannedDeloadSessionExcludedFromTrend() throws {
         let store = try makeStore()
@@ -83,7 +108,8 @@ struct WorkoutStoreDeloadTests {
         )
 
         // A genuine two-step decline (110 → 100 → 85) that would otherwise fire the trend
-        // reason — but the last point is a planned deload at -15%, which must never count.
+        // reason (proven by `genuineDeclineTriggersTrend` above) — but the last point is a
+        // planned deload at -15%, which must never count.
         logDeloadable(store, routineID: routine.id, weightKg: 110, reps: 5, wasPlannedDeload: false)
         logDeloadable(store, routineID: routine.id, weightKg: 100, reps: 5, wasPlannedDeload: false)
         logDeloadable(store, routineID: routine.id, weightKg: 85, reps: 5, wasPlannedDeload: true)

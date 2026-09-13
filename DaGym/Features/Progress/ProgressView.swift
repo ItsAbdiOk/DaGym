@@ -97,9 +97,7 @@ struct ProgressScreen: View {
     }
 
     private func refreshBodyWide() {
-        var calendar = Calendar.current
-        calendar.firstWeekday = preferences.weekStartsMonday ? 2 : 1
-        bundle = store.bodySeries(weeks: 8, calendar: calendar)
+        bundle = store.bodySeries(weeks: 8, calendar: preferences.trainingCalendar)
     }
 
     private func pickDefaultExercise() {

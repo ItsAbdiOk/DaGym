@@ -92,7 +92,7 @@ struct VoiceCommandParserTests2 {
         #expect(r.confidence >= 0.85)
         #expect(r.commands == [.swapExercise(
             target: .id(Fixtures.benchID),
-            replacement: .id(Fixtures.inclineDumbbellBenchID)
+            replacement: .id(Fixtures.inclineDumbbellPressID)
         )])
     }
 

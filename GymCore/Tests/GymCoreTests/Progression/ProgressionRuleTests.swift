@@ -31,8 +31,16 @@ struct ProgressionRuleTests {
             .timed(stepSeconds: 5)
         ]
         for rule in rules {
-            #expect(!rule.explanation.isEmpty)
+            #expect(!rule.explanation().isEmpty)
         }
+    }
+
+    @Test("explanation formats increments in the caller's unit")
+    func explanationUnitAware() {
+        let rule = ProgressionRule.linear(incrementKg: 2.5)
+        #expect(rule.explanation(unit: .kg).contains("2.5 kg"))
+        #expect(rule.explanation(unit: .lb).contains("lb"))
+        #expect(!rule.explanation(unit: .lb).contains("kg"))
     }
 
     @Test("rules round-trip through Codable")

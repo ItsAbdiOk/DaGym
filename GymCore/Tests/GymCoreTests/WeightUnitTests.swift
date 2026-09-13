@@ -25,7 +25,9 @@ struct WeightUnitTests {
         let unit = WeightUnit.kg
         #expect(unit.format(kg: 82.5) == "82.5")
         #expect(unit.format(kg: 100) == "100")
-        #expect(["80.25", "80.2", "80.3"].contains(unit.format(kg: 80.25)))
+        // 80.25 kg isn't on the half-kg grid, so it needs two decimals to round correctly —
+        // one decimal truncates it to "80.2" (binary floating point isn't exact at .25).
+        #expect(unit.format(kg: 80.25) == "80.25")
     }
 
     @Test("lb formatting rounds the display value to the nearest half pound")

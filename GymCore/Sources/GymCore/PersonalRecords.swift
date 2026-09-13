@@ -71,10 +71,14 @@ public enum PersonalRecords {
 
         var records: [PersonalRecord] = []
         records += bestSimple(.e1rm, sets: sets, date: workoutDate, existing: existing, value: e1rmValue)
-        records += bestSimple(.maxWeight, sets: sets, date: workoutDate, existing: existing) { $0.weightKg }
-        records += bestSimple(.volume, sets: sets, date: workoutDate, existing: existing) {
-            $0.weightKg * Double($0.reps)
-        }
+        // A 0 kg set (bodyweight push-ups, planks) shouldn't bank a "Heaviest 0 kg" or
+        // "Best set … (0 kg)" record — those are only meaningful once real load is involved.
+        records += bestSimple(
+            .maxWeight, sets: sets, date: workoutDate, existing: existing, minValue: 0
+        ) { $0.weightKg }
+        records += bestSimple(
+            .volume, sets: sets, date: workoutDate, existing: existing, minValue: 0
+        ) { $0.weightKg * Double($0.reps) }
         records += bestSimple(.longestHold, sets: sets, date: workoutDate, existing: existing) {
             $0.durationSeconds.map(Double.init)
         }
@@ -83,21 +87,26 @@ public enum PersonalRecords {
         return records
     }
 
-    /// Human-readable line for a record, as shown on the PR banner and history.
-    public static func formatLine(_ pr: PersonalRecord) -> String {
+    /// Human-readable line for a record, as shown on the PR banner and history. `unit` controls
+    /// how the weight numbers are formatted; defaults to kg for callers that haven't gone
+    /// through unit-aware display yet.
+    public static func formatLine(_ pr: PersonalRecord, unit: WeightUnit = .kg) -> String {
         switch pr.kind {
         case .e1rm:
-            return "\(WeightFormat.kg(pr.weightKg)) × \(pr.reps) (e1RM \(WeightFormat.kg(pr.value)))"
+            return "\(unit.format(kg: pr.weightKg)) × \(pr.reps) (e1RM \(unit.format(kg: pr.value)))"
         case .maxWeight:
-            return "Heaviest \(WeightFormat.kg(pr.value)) kg"
+            return "Heaviest \(unit.format(kg: pr.value)) \(unit.symbol)"
         case .maxRepsAtWeight:
-            return "\(pr.reps) reps at \(WeightFormat.kg(pr.weightKg)) kg"
+            // A rep PR at 0 kg is a bodyweight PR — "at 0 kg" would be nonsense to a lifter.
+            guard pr.weightKg > 0 else { return "\(pr.reps) reps bodyweight" }
+            return "\(pr.reps) reps at \(unit.format(kg: pr.weightKg)) \(unit.symbol)"
         case .volume:
-            return "Best set \(WeightFormat.kg(pr.weightKg)) × \(pr.reps) (\(WeightFormat.kg(pr.value)) kg)"
+            return "Best set \(unit.format(kg: pr.weightKg)) × \(pr.reps) "
+                + "(\(unit.format(kg: pr.value)) \(unit.symbol))"
         case .longestHold:
             return "Hold \(clock(Int(pr.value)))"
         case .leastAssistance:
-            return "Assistance down to \(WeightFormat.kg(pr.value)) kg"
+            return "Assistance down to \(unit.format(kg: pr.value)) \(unit.symbol)"
         }
     }
 
@@ -124,11 +133,12 @@ public enum PersonalRecords {
         sets: [PerformedSet],
         date: Date,
         existing: [PersonalRecord],
+        minValue: Double = -.infinity,
         value: (PerformedSet) -> Double?
     ) -> [PersonalRecord] {
         let best = sets.compactMap { set in value(set).map { (set: set, value: $0) } }
             .max { $0.value < $1.value }
-        guard let best else { return [] }
+        guard let best, best.value > minValue else { return [] }
         let currentBest = existing.first { $0.kind == kind }?.value ?? -.infinity
         guard best.value > currentBest else { return [] }
         return [
@@ -177,9 +187,12 @@ public enum PersonalRecords {
         }
         var records: [PersonalRecord] = []
         for (weight, reps) in bestRepsByWeight.sorted(by: { $0.key < $1.key }) {
-            let currentBest = existing.first {
-                $0.kind == .maxRepsAtWeight && weightKey($0.weightKg) == weight
-            }?.reps
+            // `existing` can hold more than one row in the same 0.25 kg bucket (e.g. a pre-rounding
+            // 60.0004 kg row beside a 60.0 kg one) — beat the best of them, not just the first match.
+            let currentBest = existing
+                .filter { $0.kind == .maxRepsAtWeight && weightKey($0.weightKg) == weight }
+                .map(\.reps)
+                .max()
             if let currentBest, reps <= currentBest { continue }
             records.append(
                 PersonalRecord(

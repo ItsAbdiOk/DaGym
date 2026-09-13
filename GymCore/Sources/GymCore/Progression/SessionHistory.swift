@@ -62,19 +62,33 @@ public struct StallState: Hashable, Codable, Sendable {
     /// Timed rule: the hold the lifter was actually asked for last session — the
     /// number a miss is judged against, since the routine's target never moves.
     public var lastTargetSeconds: Int?
+    /// Timed rule: the plan's target when `lastTargetSeconds` was set. A plan that has
+    /// since been edited outranks the engine's memory.
+    public var lastPlanTargetSeconds: Int?
     /// Percent/TM rule: the `cycleIndex` the training max was last bumped in, so a
     /// bump happens once per cycle rather than on every week-1 call.
     public var trainingMaxCycle: Int?
 
     public init(
         consecutiveMisses: Int = 0, lastWeightKg: Double? = nil, lastWeakestReps: Int? = nil,
-        lastTargetSeconds: Int? = nil, trainingMaxCycle: Int? = nil
+        lastTargetSeconds: Int? = nil, lastPlanTargetSeconds: Int? = nil, trainingMaxCycle: Int? = nil
     ) {
         self.consecutiveMisses = consecutiveMisses
         self.lastWeightKg = lastWeightKg
         self.lastWeakestReps = lastWeakestReps
         self.lastTargetSeconds = lastTargetSeconds
+        self.lastPlanTargetSeconds = lastPlanTargetSeconds
         self.trainingMaxCycle = trainingMaxCycle
+    }
+
+    /// The weight-based rules' update: a new miss streak and weight, keeping what the
+    /// other rules remember (a spell on linear must not cost the TM its cycle marker).
+    func advancing(misses: Int, weightKg: Double?, weakestReps: Int? = nil) -> StallState {
+        var next = self
+        next.consecutiveMisses = misses
+        next.lastWeightKg = weightKg
+        next.lastWeakestReps = weakestReps
+        return next
     }
 
     /// Two stored weights are "the same" within a display round-trip (lb → kg → lb).

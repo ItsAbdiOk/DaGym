@@ -123,7 +123,7 @@ struct ProgressionScenarioTests {
         #expect(result.sets[0].weightKg == 50)
     }
 
-    @Test("F3: without a grid, a load lighter than the bar is never snapped up to the bar")
+    @Test("F3: with unknown equipment, a load lighter than the bar is never snapped up to the bar")
     func underBarDefaultNeverSnapsToBar() {
         let planned = (0..<3).map { _ in PlannedSetSpec(kind: .working, targetReps: 10) }
         let result = ProgressionEngine.prescribe(
@@ -144,6 +144,20 @@ struct ProgressionScenarioTests {
         let bar = LoadGrid.plates(bar: .olympic, plates: PlateStock.standardKg, collarsKg: 0)
         #expect(bar.nearestAbove(80) == 82.5)
         #expect(bar.nearestAbove(81) == 82.5)
+    }
+
+    @Test("F3: a barbell grid never prescribes less than the empty bar")
+    func barbellFloorsAtTheBar() {
+        let bar = LoadGrid.plates(bar: .olympic, plates: PlateStock.standardKg, collarsKg: 0)
+        #expect(bar.nearest(16) == 20)
+        #expect(bar.nearestBelow(18) == 20)
+        #expect(bar.nearestAbove(12) == 20)
+        let planned = (0..<3).map { _ in PlannedSetSpec(kind: .working, targetReps: 5) }
+        let result = ProgressionEngine.prescribe(
+            rule: .linear(incrementKg: 2.5), planned: planned, history: [entry([3, 3, 3], at: 20)],
+            stall: StallState(consecutiveMisses: 2, lastWeightKg: 20), grid: bar
+        )
+        #expect(result.sets[0].weightKg == 20)
     }
 
     // MARK: F4 / F5 — RPE rule

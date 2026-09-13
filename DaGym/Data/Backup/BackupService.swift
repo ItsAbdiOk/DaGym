@@ -43,30 +43,62 @@ enum ImportMode {
 /// file twice produces no duplicates (plan.md §6.3, §6.8).
 @MainActor
 enum BackupService {
-    /// Below this, a seeded exercise is exported without an override row.
-    static let defaultRestSeconds = 150
-    static let defaultIncrementKg = 2.5
+    /// What a seeded exercise looked like before the user touched it. A seeded row is exported
+    /// (and, on import, applied) as an override only where it differs from this, so a backup
+    /// carries the user's edits and nothing else. Falls back to the library defaults for a
+    /// `seedID` the bundled seed no longer knows.
+    struct SeedBaseline {
+        struct Values {
+            var restSeconds: Int
+            var incrementKg: Double
+            var barType: String?
+        }
+
+        private let bySeedID: [String: Values]
+        private let fallback = Values(restSeconds: 150, incrementKg: 2.5, barType: nil)
+
+        init(bundle: Bundle = .main) {
+            let seed = try? ExerciseSeeder.loadSeed(bundle: bundle)
+            bySeedID = Dictionary(
+                (seed?.exercises ?? []).map {
+                    ($0.id, Values(restSeconds: $0.restSeconds, incrementKg: $0.incrementKg, barType: $0.bar))
+                },
+                uniquingKeysWith: { first, _ in first }
+            )
+        }
+
+        func values(for seedID: String?) -> Values {
+            seedID.flatMap { bySeedID[$0] } ?? fallback
+        }
+
+        func isOverridden(_ model: ExerciseModel) -> Bool {
+            let seeded = values(for: model.seedID)
+            return model.isFavorite || !model.notes.isEmpty || model.restSeconds != seeded.restSeconds
+                || model.incrementKg != seeded.incrementKg || model.barType != seeded.barType
+        }
+    }
 
     // MARK: - Export
 
-    static func export(context: ModelContext) -> BackupDocument {
+    static func export(context: ModelContext, baseline: SeedBaseline = SeedBaseline()) -> BackupDocument {
         BackupDocument(
             exportedAt: Date(), appVersion: currentAppVersion(),
-            exercises: exportExercises(context: context),
+            exercises: exportExercises(context: context, baseline: baseline),
             routines: exportRoutines(context: context),
             workouts: exportWorkouts(context: context),
             bodyMeasurements: exportBodyMeasurements(context: context),
             equipmentProfiles: exportEquipmentProfiles(context: context),
-            preferences: exportPreferences()
+            preferences: exportPreferences(),
+            programs: exportPrograms(context: context),
+            achievements: exportAchievements(context: context),
+            schedule: exportSchedule(context: context)
         )
     }
 
-    private static func exportExercises(context: ModelContext) -> [BackupExercise] {
+    private static func exportExercises(context: ModelContext, baseline: SeedBaseline) -> [BackupExercise] {
         let models = (try? context.fetch(FetchDescriptor<ExerciseModel>())) ?? []
         return models.compactMap { model -> BackupExercise? in
-            let isOverride = model.isFavorite
-                || model.restSeconds != defaultRestSeconds || model.incrementKg != defaultIncrementKg
-            guard model.isCustom || isOverride else { return nil }
+            guard model.isCustom || baseline.isOverridden(model) else { return nil }
             return BackupExercise(
                 id: model.id, seedID: model.seedID, name: model.name,
                 primaryMuscles: model.primaryMuscles, secondaryMuscles: model.secondaryMuscles,
@@ -87,7 +119,9 @@ enum BackupService {
             return BackupRoutine(
                 id: model.id, name: model.name, notes: model.notes,
                 progressionRule: model.progressionRule, repRangeLow: model.repRangeLow,
-                repRangeHigh: model.repRangeHigh, sortOrder: model.sortOrder, exercises: exercises
+                repRangeHigh: model.repRangeHigh, progressionRuleJSON: model.progressionRuleJSON,
+                createdAt: model.createdAt, updatedAt: model.updatedAt, sortOrder: model.sortOrder,
+                isArchived: model.isArchived, importedFromID: model.importedFromID, exercises: exercises
             )
         }
     }
@@ -98,7 +132,9 @@ enum BackupService {
         return BackupRoutineExercise(
             order: model.order, exerciseSeedID: exercise.seedID, exerciseName: exercise.name,
             supersetGroup: model.supersetGroup, restOverrideSeconds: model.restOverrideSeconds,
-            note: model.note, plannedSets: sets
+            note: model.note, progressionRuleJSON: model.progressionRuleJSON, stallJSON: model.stallJSON,
+            trainingMaxKg: model.trainingMaxKg, excludeFromProgression: model.excludeFromProgression,
+            plannedSets: sets
         )
     }
 
@@ -117,8 +153,9 @@ enum BackupService {
             let exercises = workoutExercises.compactMap(backupWorkoutExercise)
             return BackupWorkout(
                 id: model.id, title: model.title, startedAt: model.startedAt, endedAt: model.endedAt,
-                notes: model.notes, isBackfilled: model.isBackfilled, routineName: model.routineName,
-                bodyweightKg: model.bodyweightKg, sourceDevice: model.sourceDevice, exercises: exercises
+                notes: model.notes, isBackfilled: model.isBackfilled, routineID: model.routineID,
+                routineName: model.routineName, bodyweightKg: model.bodyweightKg,
+                sourceDevice: model.sourceDevice, healthKitID: model.healthKitID, exercises: exercises
             )
         }
     }
@@ -128,8 +165,8 @@ enum BackupService {
         let sets = (model.sets ?? []).sorted { $0.order < $1.order }.map(backupSetLog)
         return BackupWorkoutExercise(
             id: model.id, order: model.order, supersetGroup: model.supersetGroup, note: model.note,
-            wasSubstitution: model.wasSubstitution, exerciseSeedID: exercise.seedID,
-            exerciseName: exercise.name, sets: sets
+            wasSubstitution: model.wasSubstitution, wasPlannedDeload: model.wasPlannedDeload,
+            exerciseSeedID: exercise.seedID, exerciseName: exercise.name, sets: sets
         )
     }
 
@@ -159,6 +196,39 @@ enum BackupService {
                 plateCounts: $0.plateCounts, collarsKg: $0.collarsKg, createdAt: $0.createdAt
             )
         }
+    }
+
+    private static func exportPrograms(context: ModelContext) -> [BackupProgram] {
+        let models = (try? context.fetch(FetchDescriptor<ProgramModel>())) ?? []
+        return models.map { model in
+            let weeks = (model.programWeeks ?? []).sorted { $0.index < $1.index }.map {
+                BackupProgramWeek(id: $0.id, index: $0.index, kind: $0.kind)
+            }
+            return BackupProgram(
+                id: model.id, name: model.name, weeks: model.weeks, startedAt: model.startedAt,
+                completedAt: model.completedAt, isActive: model.isActive, routineIDs: model.routineIDs,
+                createdAt: model.createdAt, programWeeks: weeks
+            )
+        }
+    }
+
+    private static func exportAchievements(context: ModelContext) -> [BackupAchievement] {
+        let models = (try? context.fetch(FetchDescriptor<AchievementModel>())) ?? []
+        return models.map {
+            BackupAchievement(
+                id: $0.id, milestoneID: $0.milestoneID, tier: $0.tier, earnedAt: $0.earnedAt,
+                workoutID: $0.workoutID
+            )
+        }
+    }
+
+    private static func exportSchedule(context: ModelContext) -> BackupSchedule? {
+        var descriptor = FetchDescriptor<ScheduleModel>(
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+        guard let model = (try? context.fetch(descriptor))?.first else { return nil }
+        return BackupSchedule(scheduleJSON: model.scheduleJSON, updatedAt: model.updatedAt)
     }
 
     private static func exportPreferences() -> BackupPreferences {

@@ -65,6 +65,16 @@ final class Preferences {
     var weekStartsMonday: Bool {
         didSet { defaults.set(weekStartsMonday, forKey: Key.weekStartsMonday) }
     }
+    /// The single definition of "this week" for the whole app — every weekly computation
+    /// (streak, milestone, consistency heat-map, History's "This Week" bucket, the goal-at-risk
+    /// and weekly-recap notifications, the Progress charts) must read `firstWeekday` from this
+    /// calendar instead of `Calendar.current`, so a Sunday session lands in the same week on
+    /// every screen regardless of device locale.
+    var trainingCalendar: Calendar {
+        var calendar = Calendar.current
+        calendar.firstWeekday = weekStartsMonday ? 2 : 1
+        return calendar
+    }
     /// Writes every finished workout to Apple Health as an `HKWorkout`. Off until the user turns
     /// it on in the Apple Health settings screen (plan.md §6.8).
     var healthWriteWorkouts: Bool {
@@ -93,11 +103,13 @@ final class Preferences {
     var iCloudSyncEnabled: Bool {
         didSet { defaults.set(iCloudSyncEnabled, forKey: Key.iCloudSyncEnabled) }
     }
-    /// The Saturday-evening "goal at risk" notification (plan.md §6.4). On by default.
+    /// The Saturday-evening "goal at risk" notification (plan.md §6.4). Off by default — see
+    /// S13(a): the onboarding step promises no nagging until the user opts in.
     var streakRemindersEnabled: Bool {
         didSet { defaults.set(streakRemindersEnabled, forKey: Key.streakRemindersEnabled) }
     }
-    /// The Sunday 18:00 weekly-recap notification. On by default.
+    /// The Sunday 18:00 weekly-recap notification. Off by default (S13(a)), same reasoning as
+    /// `streakRemindersEnabled`.
     var weeklyRecapEnabled: Bool {
         didSet { defaults.set(weeklyRecapEnabled, forKey: Key.weeklyRecapEnabled) }
     }
@@ -182,8 +194,11 @@ final class Preferences {
         calendarSyncEnabled = Self.boolValue(suite, Key.calendarSyncEnabled, default: false)
         scheduledStartHour = Self.intValue(suite, Key.scheduledStartHour, default: 18)
         iCloudSyncEnabled = Self.boolValue(suite, Key.iCloudSyncEnabled, default: true)
-        streakRemindersEnabled = Self.boolValue(suite, Key.streakRemindersEnabled, default: true)
-        weeklyRecapEnabled = Self.boolValue(suite, Key.weeklyRecapEnabled, default: true)
+        // S13(a): the onboarding notifications step promises "Rest timer only, never nagging" —
+        // defaulting these two weekly nudges on would send them the moment permission is
+        // granted, before the user ever visits Settings to opt in.
+        streakRemindersEnabled = Self.boolValue(suite, Key.streakRemindersEnabled, default: false)
+        weeklyRecapEnabled = Self.boolValue(suite, Key.weeklyRecapEnabled, default: false)
         reminderHour = Self.intValue(suite, Key.reminderHour, default: 18)
         bodyweightGoalKg = suite.object(forKey: Key.bodyweightGoalKg) as? Double
         syncPhotos = Self.boolValue(suite, Key.syncPhotos, default: false)

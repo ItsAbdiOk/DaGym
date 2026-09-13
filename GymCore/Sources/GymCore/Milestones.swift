@@ -159,7 +159,7 @@ public enum Milestones {
     /// crossed since `earned`. A milestone already at its highest already-earned tier, or whose
     /// metric can't be evaluated (e.g. a strength ratio with no bodyweight on file), is skipped.
     public static func evaluate(
-        state: MilestoneState, earned: [(id: String, tier: Tier)]
+        state: MilestoneState, earned: [(id: String, tier: Tier)], unit: WeightUnit = .kg
     ) -> [Achievement] {
         let earnedTiers = Dictionary(earned.map { ($0.id, $0.tier) }, uniquingKeysWith: { max($0, $1) })
         return definitions.compactMap { definition -> Achievement? in
@@ -167,7 +167,7 @@ public enum Milestones {
             if let previous = earnedTiers[definition.id], achieved <= previous { return nil }
             return Achievement(
                 id: definition.id, tier: achieved, title: definition.title,
-                line: line(for: definition, tier: achieved, state: state)
+                line: line(for: definition, tier: achieved, state: state, unit: unit)
             )
         }
     }
@@ -236,21 +236,24 @@ public enum Milestones {
         }
     }
 
-    private static func line(
-        for definition: MilestoneDefinition, tier: Tier, state: MilestoneState
+    /// The achievement copy for one definition/tier, unit-aware for the metrics that carry a
+    /// weight. Defaults to kg for callers that haven't gone through unit-aware display yet.
+    public static func line(
+        for definition: MilestoneDefinition, tier: Tier, state: MilestoneState, unit: WeightUnit = .kg
     ) -> String {
         switch definition.metric {
         case .strengthRatio(let exerciseKey):
             let e1rm = state.bestE1RM[exerciseKey] ?? 0
             let bodyweightKg = state.bodyweightKg ?? 0
-            return "\(tier.displayName) · e1RM \(WeightFormat.kg(e1rm)) kg with bodyweight "
-                + "\(WeightFormat.kg(bodyweightKg)) kg"
+            return "\(tier.displayName) · e1RM \(unit.format(kg: e1rm)) \(unit.symbol) with bodyweight "
+                + "\(unit.format(kg: bodyweightKg)) \(unit.symbol)"
         case .workoutCount:
             return "\(tier.displayName) · \(state.workoutCount) workouts logged"
         case .streakWeeks:
             return "\(tier.displayName) · \(state.streakWeeks)-week streak"
         case .lifetimeTonnageKg:
-            return "\(tier.displayName) · \(WeightFormat.kg(state.lifetimeTonnageKg)) kg lifted lifetime"
+            return "\(tier.displayName) · \(unit.format(kg: state.lifetimeTonnageKg)) \(unit.symbol) "
+                + "lifted lifetime"
         case .consistencyWeeks:
             return "\(tier.displayName) · \(state.consistentWeeks) weeks hitting your goal"
         }

@@ -16,31 +16,48 @@ extension WorkoutStore {
     /// one, the user snoozed it (`snoozedUntil` is `Preferences.deloadSnoozedUntil`), or its
     /// evidence exactly matches `dismissedFingerprint` (`Preferences.deloadDismissedFingerprint`).
     func deloadSuggestion(
-        snoozedUntil: Date?, dismissedFingerprint: String? = nil, weeklyGoal: Int = 4
+        snoozedUntil: Date?, dismissedFingerprint: String? = nil, weeklyGoal: Int = 4,
+        calendar: Calendar = .current
     ) -> DeloadSuggestionInfo? {
         if let snoozedUntil, snoozedUntil > Date() { return nil }
         let suggestion = DeloadDetector.evaluate(
-            lifts: mainLiftSnapshots(), hardWeeks: hardWeekStreak(weeklyGoal: weeklyGoal)
+            lifts: mainLiftSnapshots(), hardWeeks: hardWeekStreak(weeklyGoal: weeklyGoal, calendar: calendar)
         )
         guard let suggestion else { return nil }
         guard suggestion.fingerprint != dismissedFingerprint else { return nil }
         return DeloadSuggestionInfo(reason: suggestion.reason, fingerprint: suggestion.fingerprint)
     }
 
-    /// "Plan a deload week": creates and immediately starts a one-week program that flags every
-    /// current routine's next session as a planned deload (plan.md §6.5's primary action).
+    /// "Plan a deload week": creates and immediately starts a two-week program — week 1 deload,
+    /// week 2 normal — that flags every current routine's next session as a planned deload
+    /// (plan.md §6.5's primary action). Unlike a `weeks: 1` program (whose week index is always
+    /// `(days / 7 % 1) + 1 == 1`, so it never leaves the deload week), this expires after one
+    /// week and, once it does, `activeProgramModel()` hands control back to whichever program was
+    /// active before — see `resumeProgramIfDeloadExpired()`.
     func planDeloadWeek() {
+        let previous = activeProgramModel()
         for other in (try? context.fetch(FetchDescriptor<ProgramModel>())) ?? [] { other.isActive = false }
-        let model = ProgramModel(name: "Deload Week", weeks: 1, startedAt: Date(), isActive: true)
+        if let previous, previous.name != Self.deloadProgramName {
+            UserDefaults.standard.set(previous.id.uuidString, forKey: Self.deloadPreviousProgramIDKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.deloadPreviousProgramIDKey)
+        }
+        let model = ProgramModel(name: Self.deloadProgramName, weeks: 2, startedAt: Date(), isActive: true)
         model.routineIDs = routines().map(\.id)
         context.insert(model)
-        let week = ProgramWeekModel(index: 1, kind: ProgramWeekKind.deload.rawValue, program: model)
-        context.insert(week)
-        model.programWeeks = [week]
+        let deloadWeek = ProgramWeekModel(index: 1, kind: ProgramWeekKind.deload.rawValue, program: model)
+        let normalWeek = ProgramWeekModel(index: 2, kind: ProgramWeekKind.normal.rawValue, program: model)
+        context.insert(deloadWeek)
+        context.insert(normalWeek)
+        model.programWeeks = [deloadWeek, normalWeek]
         save()
     }
 
     // MARK: - Helpers
+
+    /// Shared with `WorkoutStore+Programs.swift`'s `resumeProgramIfDeloadExpired()`.
+    static let deloadProgramName = "Deload Week"
+    static let deloadPreviousProgramIDKey = "deloadPreviousProgramID"
 
     /// The main lifts in a fixed order. The suggestion's reason string (and so its dismissable
     /// `fingerprint`) lists lifts in snapshot order, so this must not depend on dictionary or
@@ -89,8 +106,7 @@ extension WorkoutStore {
     /// without a lighter week" (A4b: a deload week breaks the streak even if it also hit the
     /// workout count, and the count is the user's actual `Preferences.weeklyGoal`, not a
     /// hard-coded 3).
-    private func hardWeekStreak(weeklyGoal: Int) -> Int {
-        let calendar = Calendar.current
+    private func hardWeekStreak(weeklyGoal: Int, calendar: Calendar = .current) -> Int {
         var weekCounts: [Date: Int] = [:]
         var weeksWithDeload: Set<Date> = []
         for workout in finishedWorkoutModelsNewestFirst() {

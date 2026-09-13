@@ -35,23 +35,24 @@ final class WorkoutStore {
     var workoutFinishedObservers: [(WorkoutModel) -> Void] = []
 
     /// Progress photos live in their own local-only container (see `ModelContainer.dagymPhotos`).
-    /// Defaults to an in-memory photo store so tests and previews need no extra setup.
-    let photoContext: ModelContext
+    /// `nil` when that container failed to open: photo features then read as empty and refuse
+    /// writes, rather than inserting `ProgressPhotoModel` into the main context (whose schema
+    /// doesn't contain it — a trap, not an error).
+    let photoContext: ModelContext?
 
-    init(context: ModelContext, photoContext: ModelContext? = nil) {
+    init(context: ModelContext, photoContext: ModelContext?) {
         self.context = context
-        if let photoContext {
-            self.photoContext = photoContext
-        } else {
-            // Tests/previews: keep photos in memory; the app passes a real photo context.
-            let fallback = (try? ModelContainer.dagymPhotos(inMemory: true))
-                .map(ModelContext.init) ?? context
-            self.photoContext = fallback
-        }
+        self.photoContext = photoContext
+    }
+
+    /// Tests and previews: photos in an in-memory store, no extra setup.
+    convenience init(context: ModelContext) {
+        let photos = (try? ModelContainer.dagymPhotos(inMemory: true)).map(ModelContext.init)
+        self.init(context: context, photoContext: photos)
     }
 
     func savePhotos() {
-        guard photoContext.hasChanges else { return }
+        guard let photoContext, photoContext.hasChanges else { return }
         do {
             try photoContext.save()
         } catch {

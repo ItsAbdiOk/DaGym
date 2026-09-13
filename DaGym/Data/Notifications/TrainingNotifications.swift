@@ -12,11 +12,19 @@ final class TrainingNotificationScheduler {
     private static let recapIdentifier = "weekly-recap"
 
     private let center: RestNotificationCenter
-    private let calendar: Calendar
+    /// Explicit override for tests; nil in production so every call reads
+    /// `preferences.trainingCalendar` fresh — the goal-at-risk and recap notifications must
+    /// agree with whatever week the user's `weekStartsMonday` preference currently defines, not
+    /// whatever the device locale said the moment this scheduler was constructed.
+    private let calendarOverride: Calendar?
 
-    init(center: RestNotificationCenter = UNUserNotificationCenter.current(), calendar: Calendar = .current) {
+    init(center: RestNotificationCenter = UNUserNotificationCenter.current(), calendar: Calendar? = nil) {
         self.center = center
-        self.calendar = calendar
+        self.calendarOverride = calendar
+    }
+
+    private func calendar(for preferences: Preferences) -> Calendar {
+        calendarOverride ?? preferences.trainingCalendar
     }
 
     /// Cancels both of our identifiers, then reschedules whichever are enabled in `preferences`.
@@ -47,6 +55,7 @@ final class TrainingNotificationScheduler {
     }
 
     private func scheduleStreakReminder(store: WorkoutStore, preferences: Preferences, now: Date) {
+        let calendar = calendar(for: preferences)
         let streak = Streaks.weekly(
             workoutDates: store.workoutDates(), weeklyGoal: preferences.weeklyGoal,
             calendar: calendar, now: now
@@ -65,13 +74,14 @@ final class TrainingNotificationScheduler {
     }
 
     private func scheduleWeeklyRecap(store: WorkoutStore, preferences: Preferences, now: Date) {
+        let calendar = calendar(for: preferences)
         guard let fireDate = Self.nextSundayEvening(
             after: now, hour: preferences.reminderHour, calendar: calendar
         ) else { return }
         let recap = store.weeklyRecap(for: now, weeklyGoal: preferences.weeklyGoal, calendar: calendar)
         let content = UNMutableNotificationContent()
         content.title = "Weekly recap"
-        content.body = Self.recapBody(recap)
+        content.body = Self.recapBody(recap, unit: preferences.weightUnit)
         content.sound = .default
         add(content: content, identifier: Self.recapIdentifier, fireDate: fireDate, now: now)
     }
@@ -116,11 +126,13 @@ final class TrainingNotificationScheduler {
         return calendar.date(from: components)
     }
 
-    /// "This week: 3 workouts · 21 420 kg · 2 PRs (+12% vs last week)".
-    static func recapBody(_ recap: WeeklyRecap) -> String {
+    /// "This week: 3 workouts · 21 420 kg · 2 PRs (+12% vs last week)" — in the user's display
+    /// unit (X2: a weight string built below the UI layer must still take `unit:`, not assume kg).
+    static func recapBody(_ recap: WeeklyRecap, unit: WeightUnit = .kg) -> String {
         let workoutsPart = "\(recap.workouts) \(recap.workouts == 1 ? "workout" : "workouts")"
         let prsPart = "\(recap.prs) \(recap.prs == 1 ? "PR" : "PRs")"
-        var line = "\(workoutsPart) · \(formattedVolume(recap.volumeKg)) kg · \(prsPart)"
+        let volumePart = "\(formattedVolume(recap.volumeKg, unit: unit)) \(unit.symbol)"
+        var line = "\(workoutsPart) · \(volumePart) · \(prsPart)"
         if let percent = recap.volumeDeltaPercent {
             let sign = percent >= 0 ? "+" : ""
             line += " (\(sign)\(Int(percent.rounded()))% vs last week)"
@@ -128,11 +140,11 @@ final class TrainingNotificationScheduler {
         return "This week: \(line)"
     }
 
-    private static func formattedVolume(_ kg: Double) -> String {
+    private static func formattedVolume(_ kg: Double, unit: WeightUnit) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.groupingSeparator = "\u{2009}"
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: kg)) ?? "\(Int(kg))"
+        return formatter.string(from: NSNumber(value: unit.display(kg: kg))) ?? "\(Int(unit.display(kg: kg)))"
     }
 }

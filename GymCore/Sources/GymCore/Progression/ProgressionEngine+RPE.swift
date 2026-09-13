@@ -54,7 +54,7 @@ extension ProgressionEngine {
                     "(working e1RM \(context.formatted(kg: top.e1RM))).",
                 kind: kind
             ),
-            stall: StallState(consecutiveMisses: 0, lastWeightKg: roundedWeight),
+            stall: context.stall.advancing(misses: 0, weightKg: roundedWeight),
             trainingMaxKg: context.trainingMaxKg, previousDate: baseline.date
         )
     }

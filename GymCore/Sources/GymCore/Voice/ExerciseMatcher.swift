@@ -8,6 +8,15 @@ public enum ExerciseMatcher {
     public static let threshold = 0.82
     /// Minimum lead over the runner-up for a single best match to auto-resolve.
     public static let margin = 0.06
+    /// The most session/favourite boosts may add when the phrase is a strict
+    /// subset of the name ("bench" → "Bench Dips"): a one-word shorthand needs
+    /// an alias, not a lucky prefix, to auto-resolve.
+    private static let subsetBoostCap = 0.05
+
+    /// The one auto-resolve rule, shared with the validator's gate on `.spoken`.
+    public static func isConfident(best: Double, runnerUp: Double) -> Bool {
+        best >= 1.0 || (best >= threshold && (best - runnerUp) >= margin)
+    }
 
     private static let equipmentWords: Set<String> = ["dumbbell", "barbell", "cable", "machine", "band"]
     private static let qualifierWords: Set<String> = [
@@ -37,16 +46,23 @@ public enum ExerciseMatcher {
     /// A single `.id` when the best match clears threshold and margin over the
     /// runner-up; otherwise `.spoken` with the top 3 candidates for disambiguation.
     public static func resolve(_ phrase: String, in context: ParseContext) -> ExerciseRef {
+        resolveScored(phrase, in: context).ref
+    }
+
+    /// `resolve` plus the best match's score, which the parser folds into
+    /// `ParseResult.confidence` (§4.7) so a fuzzy `.id` never looks as sure as an alias hit.
+    public static func resolveScored(
+        _ phrase: String, in context: ParseContext
+    ) -> (ref: ExerciseRef, score: Double) {
         let matches = match(phrase, in: context)
         guard let best = matches.first, best.score > 0 else {
-            return .spoken(phrase, candidates: Array(matches.prefix(3)))
+            return (.spoken(phrase, candidates: Array(matches.prefix(3))), 0)
         }
-        if best.score >= 1.0 { return .id(best.id) }
         let runnerUp = matches.count > 1 ? matches[1].score : 0
-        if best.score >= threshold && (best.score - runnerUp) >= margin {
-            return .id(best.id)
+        if isConfident(best: best.score, runnerUp: runnerUp) {
+            return (.id(best.id), best.score)
         }
-        return .spoken(phrase, candidates: Array(matches.prefix(3)))
+        return (.spoken(phrase, candidates: Array(matches.prefix(3))), best.score)
     }
 
     static func score(phrase: String, candidate: ParseContext.ExerciseCandidate) -> Double {
@@ -54,8 +70,11 @@ public enum ExerciseMatcher {
         let nameTokens = tokens(candidate.name)
         let normalizedName = normalize(candidate.name)
         var value = 0.6 * tokenSetRatio(phraseTokens, nameTokens) + 0.4 * jaroWinkler(phrase, normalizedName)
-        if candidate.isInSession { value += 0.10 }
-        if candidate.isFavorite { value += 0.05 }
+        var boost = 0.0
+        if candidate.isInSession { boost += 0.10 }
+        if candidate.isFavorite { boost += 0.05 }
+        if Set(phraseTokens).isStrictSubset(of: Set(nameTokens)) { boost = min(boost, subsetBoostCap) }
+        value += boost
         let phraseHasEquipment = !equipmentWords.isDisjoint(with: Set(phraseTokens))
         let nameHasEquipment = !equipmentWords.isDisjoint(with: Set(nameTokens))
         if let equipment = candidate.equipment?.lowercased(), phraseTokens.contains(equipment) {

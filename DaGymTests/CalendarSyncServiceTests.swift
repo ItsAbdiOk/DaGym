@@ -9,6 +9,8 @@ private struct StoredEvent {
     var title: String
     var start: Date
     var end: Date
+    var notes: String
+    var url: URL?
 }
 
 /// Records every call so tests can assert on it without touching EventKit.
@@ -36,7 +38,9 @@ private final class FakeEventStore: EventStoring, @unchecked Sendable {
             nextEventNumber += 1
             return "event-\(nextEventNumber)"
         }()
-        events[eventID] = StoredEvent(title: draft.title, start: draft.start, end: draft.end)
+        events[eventID] = StoredEvent(
+            title: draft.title, start: draft.start, end: draft.end, notes: draft.notes, url: draft.url
+        )
         return eventID
     }
 
@@ -68,9 +72,12 @@ struct CalendarSyncServiceTests {
         return calendar().date(from: components) ?? Date()
     }
 
-    private func routine(name: String) -> RoutineInfo {
-        RoutineInfo(
-            name: name, exercises: [], setCount: 0, estimatedMinutes: 50, progressionRule: "linear",
+    private func routine(name: String, exerciseNames: [String] = []) -> RoutineInfo {
+        let exercises = exerciseNames.map { exerciseName in
+            ExerciseInfo(id: UUID(), name: exerciseName, primary: [], secondary: [], equipment: "barbell")
+        }
+        return RoutineInfo(
+            name: name, exercises: exercises, setCount: 0, estimatedMinutes: 50, progressionRule: "linear",
             progressionDetail: ""
         )
     }
@@ -84,11 +91,11 @@ struct CalendarSyncServiceTests {
         )
     }
 
-    @Test("first sync creates one event per planned session")
+    @Test("first sync creates one event per planned session, with its notes and deep link")
     func firstSyncCreatesEvents() async throws {
         let fake = FakeEventStore()
         let service = CalendarSyncService(eventStore: fake)
-        let pushA = routine(name: "Push A")
+        let pushA = routine(name: "Push A", exerciseNames: ["Bench Press", "Overhead Press"])
         let legs = routine(name: "Legs")
         var schedule = WeeklySchedule()
         schedule.days[.monday] = pushA.id
@@ -99,6 +106,14 @@ struct CalendarSyncServiceTests {
         #expect(eventIDs.count == 2)
         #expect(fake.events.count == 2)
         #expect(fake.createCalendarCount == 1)
+
+        // The notes and deep-link URL `RootView.handleOpenURL` relies on to start the right
+        // routine from a calendar tap — dropped by a fake that only kept title/start/end.
+        let mondayKey = DateKey.string(for: Self.monday(), calendar: Self.calendar())
+        let pushAEventID = try #require(eventIDs[mondayKey])
+        let pushAEvent = try #require(fake.events[pushAEventID])
+        #expect(pushAEvent.notes == "Bench Press\nOverhead Press")
+        #expect(pushAEvent.url == URL(string: "dagym://start?routine=\(pushA.id.uuidString)"))
     }
 
     @Test("re-syncing an unchanged schedule creates no new events")

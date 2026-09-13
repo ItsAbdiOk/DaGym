@@ -73,11 +73,12 @@ public enum ProgressionEngine {
     /// - Parameters:
     ///   - history: newest first. A planned deload is excluded as the baseline
     ///     future progression builds from, though it still appears in the list.
-    ///   - bar/plates/collarsKg: the barbell grid, used only when `grid` is nil.
-    ///   - grid: the equipment's rounding grid. Pass `.step(2)` for dumbbells,
-    ///     `.step(5)` for a machine stack, `.free` for bodyweight/assisted work.
-    ///     When nil the bar/plates grid is used, with loads lighter than the bar
-    ///     stepped by the smallest plate pair rather than snapped up to the bar.
+    ///   - bar/plates/collarsKg: the barbell inventory, used only when `grid` is nil.
+    ///   - grid: the equipment's rounding grid. Pass `.plates` for a barbell,
+    ///     `.step(2)` for dumbbells, `.step(5)` for a machine stack, `.free` for
+    ///     bodyweight/assisted work. When nil the equipment is unknown: the bar
+    ///     inventory is used at or above the bar, and loads lighter than the bar
+    ///     are stepped by the smallest plate pair rather than snapped up to it.
     ///   - cycleIndex: for `.percentOfTrainingMax`, which cycle of the wave this
     ///     is (1-based, increments every time week 4 rolls to week 1). The TM is
     ///     bumped only when this is greater than `stall.trainingMaxCycle`; nil
@@ -109,7 +110,7 @@ public enum ProgressionEngine {
             trainingMaxKg: trainingMaxKg,
             weekInCycle: weekInCycle ?? 1,
             unit: unit,
-            grid: grid ?? .plates(bar: bar, plates: plates, collarsKg: collarsKg),
+            grid: grid ?? .unknown(bar: bar, plates: plates, collarsKg: collarsKg),
             cycleIndex: cycleIndex,
             trainingMaxIncrementKg: trainingMaxIncrementKg ?? TrainingConstants.trainingMaxUpperIncrementKg
         )
@@ -157,11 +158,13 @@ struct RuleContext {
     /// `current + incrementKg` on the grid, guaranteed to land above `current`
     /// (an increment smaller than the grid step still moves one grid step) and
     /// capped at `maxSessionIncreaseFraction` — the grid's single step always wins,
-    /// so a 12 kg dumbbell can still go to 14.
+    /// so a 12 kg dumbbell can still go to 14. An unloaded (0 kg) start has no
+    /// fraction to cap by, so the first load is the increment itself.
     func increased(_ current: Double, by incrementKg: Double) -> Double {
         let oneStep = grid.nearestAbove(current)
         let candidate = rounded(current + incrementKg)
         let raised = candidate > current + 0.001 ? candidate : oneStep
+        guard current > 0.001 else { return raised }
         let cap = roundedDown(current * (1 + TrainingConstants.maxSessionIncreaseFraction))
         return min(raised, max(oneStep, cap))
     }

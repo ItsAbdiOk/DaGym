@@ -8,19 +8,36 @@ extension BackupService {
     /// Merges a decoded document into `context`. Never overwrites: matched
     /// by id, then (for exercises/routines) by name. Existing workouts with
     /// the same id are always skipped, so re-importing the same file twice
-    /// never duplicates anything.
+    /// never duplicates anything. The PR cache is rebuilt from history at the
+    /// end, so Records and Milestones reflect the imported workouts.
     @discardableResult
     static func `import`(
-        document: BackupDocument, context: ModelContext, mode: ImportMode = .merge
+        document: BackupDocument, context: ModelContext, mode: ImportMode = .merge,
+        baseline: SeedBaseline = SeedBaseline()
     ) -> ImportReport {
         var report = ImportReport()
         let exerciseIndex = ExerciseIndex(context: context)
-        importExercises(document.exercises, index: exerciseIndex, context: context, report: &report)
+        importExercises(
+            document.exercises, index: exerciseIndex, baseline: baseline, context: context, report: &report
+        )
         importRoutines(document.routines, index: exerciseIndex, context: context, report: &report)
-        importWorkouts(document.workouts, index: exerciseIndex, context: context, report: &report)
+        let importedWorkouts = importWorkouts(
+            document.workouts, index: exerciseIndex, context: context, report: &report
+        )
         importBodyMeasurements(document.bodyMeasurements, context: context, report: &report)
         importEquipmentProfiles(document.equipmentProfiles, context: context, report: &report)
-        try? context.save()
+        importPrograms(document.programs ?? [], context: context)
+        importAchievements(document.achievements ?? [], context: context)
+        importSchedule(document.schedule, context: context)
+        do {
+            try context.save()
+        } catch {
+            report.problems.append("Saving the import failed: \(error.localizedDescription)")
+            return report
+        }
+        if importedWorkouts > 0 {
+            WorkoutStore(context: context, photoContext: nil).rebuildPersonalRecords()
+        }
         return report
     }
 
@@ -51,11 +68,12 @@ extension BackupService {
     }
 
     private static func importExercises(
-        _ items: [BackupExercise], index: ExerciseIndex, context: ModelContext, report: inout ImportReport
+        _ items: [BackupExercise], index: ExerciseIndex, baseline: SeedBaseline, context: ModelContext,
+        report: inout ImportReport
     ) {
         for item in items {
             if let existing = index.find(seedID: item.seedID, id: item.id, name: item.name) {
-                applyOverride(item, to: existing)
+                applyOverride(item, to: existing, baseline: baseline)
                 continue
             }
             guard item.seedID == nil else {
@@ -76,13 +94,18 @@ extension BackupService {
         }
     }
 
-    /// Applies favourite/rest/increment/bar overrides onto an already-known
-    /// exercise (seeded or custom) without touching anything else.
-    private static func applyOverride(_ item: BackupExercise, to model: ExerciseModel) {
+    /// Applies favourite/rest/increment/bar/notes overrides onto an already-known exercise
+    /// (seeded or custom) — only where the backup differs from the seeded value, so a row the
+    /// user never touched on the exporting device can't undo an edit made on this one.
+    private static func applyOverride(
+        _ item: BackupExercise, to model: ExerciseModel, baseline: SeedBaseline
+    ) {
+        let seeded = baseline.values(for: item.seedID)
         if item.isFavorite { model.isFavorite = true }
-        if item.restSeconds != defaultRestSeconds { model.restSeconds = item.restSeconds }
-        if item.incrementKg != defaultIncrementKg { model.incrementKg = item.incrementKg }
-        if let barType = item.barType { model.barType = barType }
+        if item.restSeconds != seeded.restSeconds { model.restSeconds = item.restSeconds }
+        if item.incrementKg != seeded.incrementKg { model.incrementKg = item.incrementKg }
+        if item.barType != seeded.barType { model.barType = item.barType }
+        if model.notes.isEmpty { model.notes = item.notes }
     }
 
     private static func importRoutines(
@@ -95,7 +118,11 @@ extension BackupService {
         for item in items where existingByID[item.id] == nil {
             let routine = RoutineModel(
                 id: item.id, name: item.name, notes: item.notes, progressionRule: item.progressionRule,
-                repRangeLow: item.repRangeLow, repRangeHigh: item.repRangeHigh, sortOrder: item.sortOrder
+                repRangeLow: item.repRangeLow, repRangeHigh: item.repRangeHigh,
+                progressionRuleJSON: item.progressionRuleJSON ?? "", createdAt: item.createdAt ?? Date(),
+                updatedAt: item.updatedAt ?? Date(), sortOrder: item.sortOrder,
+                isArchived: item.isArchived ?? false,
+                importedFromID: item.importedFromID
             )
             context.insert(routine)
             routine.exercises = item.exercises.compactMap { draft in
@@ -118,8 +145,10 @@ extension BackupService {
         }
         let model = RoutineExerciseModel(
             order: draft.order, supersetGroup: draft.supersetGroup,
-            restOverrideSeconds: draft.restOverrideSeconds, note: draft.note, exercise: exercise,
-            routine: routine
+            restOverrideSeconds: draft.restOverrideSeconds, note: draft.note,
+            progressionRuleJSON: draft.progressionRuleJSON, stallJSON: draft.stallJSON ?? "{}",
+            trainingMaxKg: draft.trainingMaxKg, excludeFromProgression: draft.excludeFromProgression ?? false,
+            exercise: exercise, routine: routine
         )
         context.insert(model)
         model.plannedSets = draft.plannedSets.map { set in
@@ -134,12 +163,14 @@ extension BackupService {
         return model
     }
 
+    /// Returns how many workouts were inserted, so the caller knows whether a PR rebuild is due.
     private static func importWorkouts(
         _ items: [BackupWorkout], index: ExerciseIndex, context: ModelContext, report: inout ImportReport
-    ) {
+    ) -> Int {
         let existingIDs = Set(
             ((try? context.fetch(FetchDescriptor<WorkoutModel>())) ?? []).map(\.id)
         )
+        var inserted = 0
         for item in items {
             guard !existingIDs.contains(item.id) else {
                 report.workoutsSkipped += 1
@@ -147,15 +178,18 @@ extension BackupService {
             }
             let workout = WorkoutModel(
                 id: item.id, title: item.title, startedAt: item.startedAt, endedAt: item.endedAt,
-                notes: item.notes, isBackfilled: item.isBackfilled, routineName: item.routineName,
-                bodyweightKg: item.bodyweightKg, sourceDevice: item.sourceDevice
+                notes: item.notes, isBackfilled: item.isBackfilled, routineID: item.routineID,
+                routineName: item.routineName, bodyweightKg: item.bodyweightKg,
+                sourceDevice: item.sourceDevice, healthKitID: item.healthKitID
             )
             context.insert(workout)
             workout.exercises = item.exercises.compactMap { draft in
                 makeWorkoutExercise(draft, index: index, workout: workout, context: context, report: &report)
             }
             report.workoutsImported += 1
+            inserted += 1
         }
+        return inserted
     }
 
     private static func makeWorkoutExercise(
@@ -171,7 +205,8 @@ extension BackupService {
         }
         let model = WorkoutExerciseModel(
             id: draft.id, order: draft.order, supersetGroup: draft.supersetGroup, note: draft.note,
-            wasSubstitution: draft.wasSubstitution, exercise: exercise, workout: workout
+            wasSubstitution: draft.wasSubstitution, wasPlannedDeload: draft.wasPlannedDeload ?? false,
+            exercise: exercise, workout: workout
         )
         context.insert(model)
         model.sets = draft.sets.map { set in
@@ -219,5 +254,51 @@ extension BackupService {
             context.insert(model)
             report.equipmentProfilesImported += 1
         }
+    }
+
+    private static func importPrograms(_ items: [BackupProgram], context: ModelContext) {
+        let existingIDs = Set(((try? context.fetch(FetchDescriptor<ProgramModel>())) ?? []).map(\.id))
+        let existing = (try? context.fetch(FetchDescriptor<ProgramModel>())) ?? []
+        let hasActive = existing.contains(where: \.isActive)
+        for item in items where !existingIDs.contains(item.id) {
+            // A restore onto an empty store brings the active program back; a merge into a store
+            // that already has one never steals its place.
+            let model = ProgramModel(
+                id: item.id, name: item.name, weeks: item.weeks, startedAt: item.startedAt,
+                completedAt: item.completedAt, isActive: item.isActive && !hasActive,
+                createdAt: item.createdAt
+            )
+            model.routineIDs = item.routineIDs
+            context.insert(model)
+            model.programWeeks = item.programWeeks.map { week in
+                let weekModel = ProgramWeekModel(
+                    id: week.id, index: week.index, kind: week.kind, program: model
+                )
+                context.insert(weekModel)
+                return weekModel
+            }
+        }
+    }
+
+    private static func importAchievements(_ items: [BackupAchievement], context: ModelContext) {
+        let existing = (try? context.fetch(FetchDescriptor<AchievementModel>())) ?? []
+        let existingIDs = Set(existing.map(\.id))
+        let existingKeys = Set(existing.map { "\($0.milestoneID)|\($0.tier)" })
+        for item in items
+        where !existingIDs.contains(item.id) && !existingKeys.contains("\(item.milestoneID)|\(item.tier)") {
+            context.insert(
+                AchievementModel(
+                    id: item.id, milestoneID: item.milestoneID, tier: item.tier, earnedAt: item.earnedAt,
+                    workoutID: item.workoutID
+                )
+            )
+        }
+    }
+
+    /// Only fills an empty schedule — an existing one is the user's current plan on this device.
+    private static func importSchedule(_ item: BackupSchedule?, context: ModelContext) {
+        let existing = (try? context.fetchCount(FetchDescriptor<ScheduleModel>())) ?? 0
+        guard let item, existing == 0 else { return }
+        context.insert(ScheduleModel(scheduleJSON: item.scheduleJSON, updatedAt: item.updatedAt))
     }
 }

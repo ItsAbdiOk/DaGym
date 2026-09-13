@@ -72,7 +72,7 @@ struct HistoryTabView: View {
         recoveryHeadline = Recovery.headline(map: store.recoverySnapshot().map).title
         currentStreakWeeks = Streaks.weekly(
             workoutDates: store.workoutDates(), weeklyGoal: preferences.weeklyGoal,
-            calendar: Calendar.current, now: Date()
+            calendar: preferences.trainingCalendar, now: Date()
         ).current
     }
 

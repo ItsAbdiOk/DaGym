@@ -15,7 +15,6 @@ struct RestActivityAttributes: ActivityAttributes {
         var nextSetLabel: String
         /// "Set 3 of 5".
         var setLabel: String
-        var isPaused: Bool
 
         var startDate: Date { endDate.addingTimeInterval(-Double(totalSeconds)) }
     }

@@ -23,9 +23,19 @@ struct WorkoutStorePhotoTests {
         return try #require(image.jpegData(compressionQuality: 0.9))
     }
 
-    @Test("the container builds with both the main and the local-only photo configuration")
+    @Test("both the main container and the separate local-only photo container build and accept inserts")
     func containerBuildsWithBothConfigurations() throws {
-        _ = try ModelContainer.dagym(inMemory: true)
+        let mainContainer = try ModelContainer.dagym(inMemory: true)
+        let mainContext = ModelContext(mainContainer)
+        mainContext.insert(ExerciseModel(name: "Bench Press", primaryMuscles: ["chest"]))
+        try mainContext.save()
+        #expect(try mainContext.fetchCount(FetchDescriptor<ExerciseModel>()) == 1)
+
+        let photoContainer = try ModelContainer.dagymPhotos(inMemory: true)
+        let photoContext = ModelContext(photoContainer)
+        photoContext.insert(ProgressPhotoModel(pose: "front"))
+        try photoContext.save()
+        #expect(try photoContext.fetchCount(FetchDescriptor<ProgressPhotoModel>()) == 1)
     }
 
     @Test("addPhoto persists a downscaled photo, listable by pose")

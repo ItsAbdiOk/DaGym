@@ -49,7 +49,12 @@ public enum WeightUnit: String, CaseIterable, Codable, Sendable {
         if abs(rounded - rounded.rounded()) < 0.001 {
             return String(Int(rounded.rounded()))
         }
-        return String(format: "%.\(decimals)f", rounded)
+        // A value on the half-unit grid (82.5, 220.5) prints cleanly at `decimals`. One that
+        // isn't — kg's own quarter-step (61.25) — isn't exactly representable in binary
+        // floating point, so `decimals == 1` truncates it to "61.2"; two decimals round it right.
+        let onHalfGrid = abs((rounded / 0.5).rounded() * 0.5 - rounded) < 0.001
+        let effectiveDecimals = onHalfGrid ? decimals : max(decimals, 2)
+        return String(format: "%.\(effectiveDecimals)f", rounded)
     }
 
     /// The bar/dumbbell increment a set is usually adjusted by in this unit,

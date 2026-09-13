@@ -8,11 +8,13 @@ extension ActiveWorkoutView {
     // MARK: Finish / discard
 
     func finishSession() {
+        RestActivityController.shared.endNow()
         let summary = store.finish(session: session, weeklyGoal: preferences.weeklyGoal)
         onFinish(summary)
     }
 
     func discardSession() {
+        RestActivityController.shared.endNow()
         store.discard(session: session)
         dismiss()
     }
@@ -24,6 +26,19 @@ extension ActiveWorkoutView {
             session.uncompleteSet(exerciseID: exerciseID, setID: set.id)
         } else {
             session.completeSet(exerciseID: exerciseID, setID: set.id)
+        }
+        store.sync(session: session)
+    }
+
+    /// The effort chip completes an open set; on a set that's already done it just edits the
+    /// effort, so re-tapping the chip never restarts rest.
+    func logEffort(exerciseID: UUID, setID: UUID, effort: Effort) {
+        let entry = session.exercises.first(where: { $0.id == exerciseID })
+        let isDone = entry?.sets.first(where: { $0.id == setID })?.isDone ?? false
+        if isDone {
+            session.setEffort(exerciseID: exerciseID, setID: setID, effort: effort)
+        } else {
+            session.completeSet(exerciseID: exerciseID, setID: setID, effort: effort)
         }
         store.sync(session: session)
     }
@@ -56,10 +71,8 @@ extension ActiveWorkoutView {
         store.sync(session: session)
     }
 
-    func replaceExercise(originalID: UUID, with candidate: ExerciseInfo) {
-        guard let index = session.exercises.firstIndex(where: { $0.exercise.id == originalID }) else {
-            return
-        }
+    func replaceExercise(entryID: UUID, with candidate: ExerciseInfo) {
+        guard let index = session.exercises.firstIndex(where: { $0.id == entryID }) else { return }
         session.exercises[index].exercise = candidate
         session.exercises[index].wasSubstitution = true
         store.sync(session: session)
@@ -96,15 +109,14 @@ extension ActiveWorkoutView {
 
     // MARK: Rest alerts
 
-    /// Preference-gated sound + screen flash at 3-2-1-0, honoring the same UserDefaults keys
-    /// `Preferences` will use. Haptics stay unconditional inside `WorkoutSession.tickRest`.
+    /// Preference-gated sound + screen flash at 3-2-1-0. Haptics are gated the same way inside
+    /// `WorkoutSession.tickRest` via `session.restHaptics`.
     func handleRestTick(_ remaining: Int) {
         guard remaining <= 3 else { return }
-        let prefs = RestAlertPreferences.current()
-        if prefs.sound {
+        if preferences.restSound {
             restAlertPlayer.bleep(longer: remaining == 0)
         }
-        if prefs.screenFlash, remaining == 0 {
+        if preferences.restScreenFlash, remaining == 0 {
             triggerRestFlash()
         }
     }
@@ -126,7 +138,7 @@ extension ActiveWorkoutView {
     @ViewBuilder
     var exerciseMenuButtons: some View {
         if let id = menuExerciseID, let entry = session.exercises.first(where: { $0.id == id }) {
-            Button("Swap exercise") { activeSheet = .swap(exercise: entry.exercise) }
+            Button("Swap exercise") { activeSheet = .swap(entryID: id, exercise: entry.exercise) }
             Button("Remove exercise", role: .destructive) { removeExercise(id: id) }
             Button("Add set") { addSet(exerciseID: id, kind: .working) }
             Button("Add warm-up set") { addSet(exerciseID: id, kind: .warmup) }
@@ -143,12 +155,11 @@ extension ActiveWorkoutView {
             keypadSheet(exerciseID: exerciseID, setID: setID, field: field)
         case .effort(let exerciseID, let setID):
             EffortPickerSheet(scale: effortScaleBinding) { effort in
-                session.completeSet(exerciseID: exerciseID, setID: setID, effort: effort)
-                store.sync(session: session)
+                logEffort(exerciseID: exerciseID, setID: setID, effort: effort)
             }
-        case .swap(let exercise):
+        case .swap(let entryID, let exercise):
             SwapExerciseSheet(exercise: exercise) { candidate in
-                replaceExercise(originalID: exercise.id, with: candidate)
+                replaceExercise(entryID: entryID, with: candidate)
             }
         case .addExercise:
             ExercisePickerSheet(onPick: addExercise)
