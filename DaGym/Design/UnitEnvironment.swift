@@ -1,5 +1,6 @@
 import Foundation
 import GymCore
+import SwiftUI
 
 /// User preferences: unit, effort scale, rest defaults and small display
 /// toggles. Persisted to `UserDefaults` and shared through the environment
@@ -35,6 +36,17 @@ final class Preferences {
         static let deloadSnoozedUntil = "deloadSnoozedUntil"
         static let deloadDismissedFingerprint = "deloadDismissedFingerprint"
         static let accent = "accent"
+        static let compactWorkoutLayout = "compactWorkoutLayout"
+        static let showSetSteppers = "showSetSteppers"
+        static let restPauseSeconds = "restPauseSeconds"
+        static let workoutDayReminderEnabled = "workoutDayReminderEnabled"
+        static let workoutDayReminderHour = "workoutDayReminderHour"
+        static let effortTrackingEnabled = "effortTrackingEnabled"
+        static let appearance = "appearance"
+        static let bodyFigure = "bodyFigure"
+        static let playRestSoundOnSilent = "playRestSoundOnSilent"
+        static let weighInBeforeWorkout = "weighInBeforeWorkout"
+        static let sampleDataMode = "sampleDataMode"
     }
 
     private let defaults: UserDefaults
@@ -188,8 +200,79 @@ final class Preferences {
         }
     }
 
+    /// Active workout: hide the last-3 strip, chips and plate line (OpenGym parity, features 24).
+    var compactWorkoutLayout: Bool {
+        didSet { defaults.set(compactWorkoutLayout, forKey: Key.compactWorkoutLayout) }
+    }
+    /// ± buttons around weight/reps on a set row, stepping by the exercise increment.
+    var showSetSteppers: Bool {
+        didSet { defaults.set(showSetSteppers, forKey: Key.showSetSteppers) }
+    }
+    /// The short rest a rest-pause burst starts instead of the exercise's full rest.
+    var restPauseSeconds: Int {
+        didSet { defaults.set(restPauseSeconds, forKey: Key.restPauseSeconds) }
+    }
+    /// "Workout day" reminder on each scheduled day at `workoutDayReminderHour`. Off by default,
+    /// same no-nagging promise as the streak reminder.
+    var workoutDayReminderEnabled: Bool {
+        didSet { defaults.set(workoutDayReminderEnabled, forKey: Key.workoutDayReminderEnabled) }
+    }
+    var workoutDayReminderHour: Int {
+        didSet { defaults.set(workoutDayReminderHour, forKey: Key.workoutDayReminderHour) }
+    }
+    /// False hides the effort (RPE/RIR) column everywhere; the engine treats unrated sets as
+    /// "no effort data", never as RPE 10.
+    var effortTrackingEnabled: Bool {
+        didSet { defaults.set(effortTrackingEnabled, forKey: Key.effortTrackingEnabled) }
+    }
+    var appearance: Appearance {
+        didSet { defaults.set(appearance.rawValue, forKey: Key.appearance) }
+    }
+    var bodyFigure: BodyFigure {
+        didSet { defaults.set(bodyFigure.rawValue, forKey: Key.bodyFigure) }
+    }
+    /// Rest-end sound plays through the playback session even with the ringer switch on silent
+    /// (it pauses other audio, so it's opt-in).
+    var playRestSoundOnSilent: Bool {
+        didSet { defaults.set(playRestSoundOnSilent, forKey: Key.playRestSoundOnSilent) }
+    }
+    /// Show the bodyweight sheet before every workout starts (skippable).
+    var weighInBeforeWorkout: Bool {
+        didSet { defaults.set(weighInBeforeWorkout, forKey: Key.weighInBeforeWorkout) }
+    }
+    /// The store is filled with sample data the user chose to explore; a banner offers one-tap wipe.
+    var sampleDataMode: Bool {
+        didSet { defaults.set(sampleDataMode, forKey: Key.sampleDataMode) }
+    }
+
+    enum Appearance: String, CaseIterable, Codable {
+        case system, light, dark
+        var colorScheme: ColorScheme? {
+            switch self {
+            case .system: nil
+            case .light: .light
+            case .dark: .dark
+            }
+        }
+    }
+
+    enum BodyFigure: String, CaseIterable, Codable {
+        case neutral, male, female
+    }
+
     init(suite: UserDefaults = .standard) {
         defaults = suite
+        compactWorkoutLayout = Self.boolValue(suite, Key.compactWorkoutLayout, default: false)
+        showSetSteppers = Self.boolValue(suite, Key.showSetSteppers, default: false)
+        restPauseSeconds = Self.intValue(suite, Key.restPauseSeconds, default: 20)
+        workoutDayReminderEnabled = Self.boolValue(suite, Key.workoutDayReminderEnabled, default: false)
+        workoutDayReminderHour = Self.intValue(suite, Key.workoutDayReminderHour, default: 8)
+        effortTrackingEnabled = Self.boolValue(suite, Key.effortTrackingEnabled, default: true)
+        appearance = Appearance(rawValue: suite.string(forKey: Key.appearance) ?? "") ?? .system
+        bodyFigure = BodyFigure(rawValue: suite.string(forKey: Key.bodyFigure) ?? "") ?? .neutral
+        playRestSoundOnSilent = Self.boolValue(suite, Key.playRestSoundOnSilent, default: false)
+        weighInBeforeWorkout = Self.boolValue(suite, Key.weighInBeforeWorkout, default: false)
+        sampleDataMode = Self.boolValue(suite, Key.sampleDataMode, default: false)
         weightUnit = WeightUnit(rawValue: suite.string(forKey: Key.weightUnit) ?? "") ?? .kg
         effortScale = Effort.Scale(rawValue: suite.string(forKey: Key.effortScale) ?? "") ?? .rpe
         defaultRestSeconds = Self.intValue(suite, Key.defaultRestSeconds, default: 150)
