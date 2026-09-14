@@ -41,6 +41,15 @@ targets:
     platform: iOS
     sources:
       - path: DaGym
+        # The photographs come in as ONE folder reference below, not as ~1,400 individual file
+        # references, so they are copied into the bundle verbatim under ExercisePhotos/ and
+        # loaded by path (DaGym/Design/Components/ExercisePhotoView.swift). Deliberately not an
+        # .xcassets catalogue: catalogue membership makes Xcode rasterise every member at
+        # several scales, which is how 516 SVGs once turned a 28 KB Assets.car into 52 MB.
+        excludes:
+          - Resources/ExercisePhotos
+      - path: DaGym/Resources/ExercisePhotos
+        type: folder
     dependencies:
       - package: GymCore
         product: GymCore

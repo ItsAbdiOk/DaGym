@@ -57,10 +57,7 @@ struct ExerciseDetailView: View {
                         tint: DGColor.ink1
                     )
                     ExerciseNotesCard(notes: notes, onDelete: deleteNote)
-                    ExerciseTextCard(
-                        title: "How To Do It", lines: instructionLines, emptyText: "Instructions coming soon",
-                        tint: DGColor.ink2
-                    )
+                    ExerciseInstructionsCard(steps: instructionSteps)
                     settingsCard
                     ExerciseActionsCard(
                         isCustom: exercise.isCustom, onAddToRoutine: { showingAddToRoutine = true },

@@ -146,16 +146,46 @@ private final class BodyMapRegionCache {
 
     private init() {}
 
+    /// One merged region per muscle, plus one for everything inert — never one per SVG part.
+    ///
+    /// Upstream draws a region *and* its sub-regions (chest over upper/lower chest, quads over
+    /// inner/outer quad and hip flexors, knees over quads), and several of those collapse onto
+    /// the same one of our 14 muscles. Filled separately at `bodyMapInert`'s 10% alpha, each
+    /// overlap compounded — two layers read as 19%, three as 27% — which is what put dark
+    /// blotches on the chest, abs, knees and inner thighs of an otherwise flat silhouette.
+    /// Appending the subpaths into one `Path` and filling it once makes an overlap invisible
+    /// (non-zero winding fills it exactly once), and incidentally cuts the figure from ~60
+    /// filled shapes to at most 15.
     func regions(gender: BodyGender, side: BodySide) -> [BodyMapView.Region] {
         let key = Key(gender: gender, side: side)
         if let cached = storage[key] { return cached }
-        let built = BodyPathProvider.paths(gender: gender, side: side).flatMap { part in
-            part.allPaths.map { svgPath in
-                BodyMapView.Region(
-                    muscle: BodyMapMuscleMapping.muscle(for: part.slug),
-                    path: PathBuilder.buildPath(from: svgPath, scale: 1, offsetX: 0, offsetY: 0)
-                )
+
+        // A muscle that isn't addressable on this side (hamstrings seen from the front) draws
+        // in the inert colour too, so it has to join the inert path rather than sit on top of
+        // it — otherwise it stacks exactly the same way the sub-regions did.
+        let viewSide: BodyMapView.Side = side == .front ? .front : .back
+        var inert = Path()
+        var byMuscle: [Muscle: Path] = [:]
+        for part in BodyPathProvider.paths(gender: gender, side: side) {
+            let mapped = BodyMapMuscleMapping.muscle(for: part.slug)
+            let muscle = mapped.flatMap {
+                BodyMapMuscleMapping.isAddressable($0, on: viewSide) ? $0 : nil
             }
+            for svgPath in part.allPaths {
+                let path = PathBuilder.buildPath(from: svgPath, scale: 1, offsetX: 0, offsetY: 0)
+                if let muscle {
+                    byMuscle[muscle, default: Path()].addPath(path)
+                } else {
+                    inert.addPath(path)
+                }
+            }
+        }
+
+        // Inert first so tinted muscles sit on top of it, and muscles in a stable order so the
+        // drawing does not reshuffle between renders.
+        var built = [BodyMapView.Region(muscle: nil, path: inert)]
+        built += byMuscle.keys.sorted { $0.rawValue < $1.rawValue }.map {
+            BodyMapView.Region(muscle: $0, path: byMuscle[$0] ?? Path())
         }
         storage[key] = built
         return built

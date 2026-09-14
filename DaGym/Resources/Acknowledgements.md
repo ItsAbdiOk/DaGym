@@ -12,11 +12,14 @@ stored alongside the data. Licence: https://creativecommons.org/licenses/by-sa/4
 > Exercise data from wger.de (wger Workout Manager), licensed under CC-BY-SA 3.0/4.0 —
 > https://wger.de. Per-exercise author credit in the app's exercise data.
 
-**free-exercise-db** — exercise names, muscles, and equipment metadata are adapted from
+**free-exercise-db** — exercise names, muscles, and equipment metadata, *and* the start/end
+position photographs shown on the Exercise Detail screen, are adapted from
 [yuhonas/free-exercise-db](https://github.com/yuhonas/free-exercise-db), released under the
-**Unlicense** (public domain dedication).
+**Unlicense** (public domain dedication). The photographs are re-encoded to HEIC and downscaled
+for the app; no attribution is legally required and none is shown in-app, but the credit is
+recorded here.
 
-> Exercise metadata adapted from yuhonas/free-exercise-db
+> Exercise metadata and exercise photographs adapted from yuhonas/free-exercise-db
 > (https://github.com/yuhonas/free-exercise-db), released under the Unlicense.
 
 **Everkinetic** — some exercise illustrations surfaced via wger's image data are credited to

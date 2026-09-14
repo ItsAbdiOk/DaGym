@@ -24,7 +24,7 @@ enum BodyMapMuscleMapping {
     /// | `.biceps`     | biceps                                                          |
     /// | `.forearms`   | forearm                                                         |
     /// | `.quads`      | quadriceps, innerQuad, outerQuad, hipFlexors                    |
-    /// | `.calves`     | calves, tibialis (no separate shin region in our 14, folded into calves) |
+    /// | `.calves`     | calves (the shin, `.tibialis`, is left inert — see the table below) |
     /// | `.lats`       | upperBack — upstream has no dedicated "lats"/"latissimus" region; |
     /// |               | `upperBack` is the broad region drawn in that anatomical spot on the back |
     /// | `.triceps`    | triceps                                                         |
@@ -62,7 +62,9 @@ enum BodyMapMuscleMapping {
         .hipFlexors: .quads,
 
         .calves: .calves,
-        .tibialis: .calves,
+        // `.tibialis` is deliberately NOT folded into `.calves`. It is the shin — the front of
+        // the lower leg — and tinting it for calf involvement made a kettlebell clean look like
+        // it trained the shins. Calves are only visible from behind, so they only light there.
 
         .upperBack: .lats,
 
@@ -83,13 +85,20 @@ enum BodyMapMuscleMapping {
     /// Muscles drawn on *both* front and back (their region is visible from either
     /// side of the body), matching the old rectangle map's behaviour. Every other
     /// muscle only renders — and only tints/hit-tests — on the side `Muscle.isFront` says.
-    static let sharedAcrossSides: Set<Muscle> = [.traps, .delts, .forearms, .calves]
+    static let sharedAcrossSides: Set<Muscle> = [.traps, .delts, .forearms]
+
+    /// Muscles whose region is only visible from behind, overriding `Muscle.isFront`.
+    /// `GymCore.Muscle` calls calves a front muscle because it groups the whole lower leg for
+    /// programme purposes; anatomically the calf is the back of it, and the front is the shin,
+    /// which we leave inert. Drawing calves on the front view lit the shins instead.
+    static let backOnly: Set<Muscle> = [.calves]
 
     /// Whether `muscle`'s region should be addressable (tintable + tappable) when drawing
     /// the given `side`. Matches the previous rectangle-based `BodyMapView`: e.g. `.triceps`
     /// is back-only even though the vendored front paths happen to sketch a sliver of it.
     static func isAddressable(_ muscle: Muscle, on side: BodyMapView.Side) -> Bool {
         if sharedAcrossSides.contains(muscle) { return true }
+        if backOnly.contains(muscle) { return side == .back }
         return muscle.isFront == (side == .front)
     }
 }
