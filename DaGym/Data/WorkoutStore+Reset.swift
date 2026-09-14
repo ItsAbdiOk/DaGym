@@ -3,7 +3,8 @@ import SwiftData
 
 extension WorkoutStore {
     /// Deletes every persisted model — routines, workouts, exercises, schedule, equipment
-    /// profiles, achievements, programs, progress photos, everything in `DaGymSchema.models` —
+    /// profiles, achievements, programs, progress photos, imported Apple Health sessions,
+    /// everything in `DaGymSchema.models` —
     /// and resets `preferences` back to its shipped defaults. Used by the Settings "Reset
     /// everything" destructive row, which only calls this after a typed "DELETE" confirmation.
     func wipeAllData(preferences: Preferences) {
@@ -12,6 +13,11 @@ extension WorkoutStore {
         if let photoContext {
             try? photoContext.delete(model: ProgressPhotoModel.self, includeSubclasses: true)
             savePhotos()
+        }
+        if let healthContext {
+            try? healthContext.delete(model: ImportedHealthWorkoutModel.self, includeSubclasses: true)
+            try? healthContext.delete(model: IgnoredHealthWorkoutModel.self, includeSubclasses: true)
+            saveHealth()
         }
         Self.resetToDefaults(preferences)
     }
@@ -60,6 +66,7 @@ extension WorkoutStore {
         preferences.healthReadRecovery = false
         preferences.healthReadBodyComposition = false
         preferences.healthImportWorkouts = false
+        preferences.healthAutoImportWorkouts = false
         preferences.healthEstimateCalories = false
         preferences.calendarSyncEnabled = false
         preferences.scheduledStartHour = 18

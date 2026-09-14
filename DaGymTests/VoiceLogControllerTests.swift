@@ -38,10 +38,11 @@ struct VoiceLogControllerTests {
         return WorkoutStore(context: ModelContext(container))
     }
 
-    private func makePreferences(unit: WeightUnit = .lb) -> Preferences {
+    private func makePreferences(unit: WeightUnit = .lb, autoLog: Bool = false) -> Preferences {
         let suite = UserDefaults(suiteName: "VoiceLogControllerTests-\(UUID().uuidString)") ?? .standard
         let preferences = Preferences(suite: suite)
         preferences.weightUnit = unit
+        preferences.voiceAutoLogEnabled = autoLog
         return preferences
     }
 
@@ -51,15 +52,18 @@ struct VoiceLogControllerTests {
     func autoLogsAndUndoes() async throws {
         let session = session(weightKg: 0, reps: 0)
         let store = try makeStore()
-        let preferences = makePreferences(unit: .lb)
+        // Auto-log is opt-in and off by default, so a test about auto-logging has to turn it on.
+        let preferences = makePreferences(unit: .lb, autoLog: true)
         let recognizer = FakeSpeechRecognizer()
-        recognizer.scriptedEvents = [.final("8 reps at 225 pounds")]
+        recognizer.scriptedEvents = [.final(SpeechTranscript("8 reps at 225 pounds", confidence: 0.96))]
         let controller = VoiceLogController(recognizer: recognizer, speaker: FakeVoiceSpeechSynthesizer())
 
         controller.startHolding()
         await controller.waitForListening()
         var loggedUndo: UndoAction?
-        controller.stopHolding(session: session, store: store, preferences: preferences) { loggedUndo = $0 }
+        await controller.stopHolding(session: session, store: store, preferences: preferences) {
+            loggedUndo = $0
+        }
 
         guard case .autoLogged = controller.state else {
             Issue.record("expected .autoLogged, got \(controller.state)")
@@ -85,12 +89,14 @@ struct VoiceLogControllerTests {
         let store = try makeStore()
         let preferences = makePreferences(unit: .kg)
         let recognizer = FakeSpeechRecognizer()
-        recognizer.scriptedEvents = [.final("three sets of eight at sixty")]
+        recognizer.scriptedEvents = [
+            .final(SpeechTranscript("three sets of eight at sixty", confidence: 0.97))
+        ]
         let controller = VoiceLogController(recognizer: recognizer, speaker: FakeVoiceSpeechSynthesizer())
 
         controller.startHolding()
         await controller.waitForListening()
-        controller.stopHolding(session: session, store: store, preferences: preferences) { _ in
+        await controller.stopHolding(session: session, store: store, preferences: preferences) { _ in
             Issue.record("a multi-set command must never auto-log")
         }
 
@@ -100,6 +106,9 @@ struct VoiceLogControllerTests {
         }
         #expect(card.weightKg == 60)
         #expect(card.reps == 8)
+        // The card has to say it's about three sets — it used to show one set's fields and log
+        // exactly one, with nothing on screen admitting the other two were dropped.
+        #expect(card.setCount == 3)
         // Nothing was written until the card is confirmed.
         #expect(session.exercises[0].sets[0].isDone == false)
     }
@@ -112,12 +121,12 @@ struct VoiceLogControllerTests {
         let store = try makeStore()
         let preferences = makePreferences(unit: .kg)
         let recognizer = FakeSpeechRecognizer()
-        recognizer.scriptedEvents = [.final("twelve pull ups")]
+        recognizer.scriptedEvents = [.final(SpeechTranscript("twelve pull ups", confidence: 0.95))]
         let controller = VoiceLogController(recognizer: recognizer, speaker: FakeVoiceSpeechSynthesizer())
 
         controller.startHolding()
         await controller.waitForListening()
-        controller.stopHolding(session: session, store: store, preferences: preferences) { _ in
+        await controller.stopHolding(session: session, store: store, preferences: preferences) { _ in
             Issue.record("an unresolved exercise must never auto-log")
         }
 
@@ -157,12 +166,12 @@ struct VoiceLogControllerTests {
         let recognizer = FakeSpeechRecognizer(
             authorizationStatus: .notDetermined, authorizationToGrant: .authorized
         )
-        recognizer.scriptedEvents = [.final("done")]
+        recognizer.scriptedEvents = [.final(SpeechTranscript("done", confidence: 0.95))]
         let controller = VoiceLogController(recognizer: recognizer, speaker: FakeVoiceSpeechSynthesizer())
 
         controller.startHolding()
         await controller.waitForListening()
-        controller.stopHolding(session: session, store: store, preferences: preferences) { _ in }
+        await controller.stopHolding(session: session, store: store, preferences: preferences) { _ in }
 
         #expect(recognizer.authorizationStatus == .authorized)
         #expect(recognizer.startListeningCallCount == 1)

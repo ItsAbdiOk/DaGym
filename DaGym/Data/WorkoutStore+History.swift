@@ -156,13 +156,19 @@ extension WorkoutStore {
         return session
     }
 
+    /// Everything finished, newest first: the main store's own workouts plus whatever was
+    /// imported from Apple Health, which lives in the separate always-local Health store (see
+    /// `WorkoutStore+HealthImport.swift`). Merged here so History stays one list and no caller
+    /// has to know where a row came from.
     func history() -> [WorkoutRecord] {
         let predicate = #Predicate<WorkoutModel> { $0.endedAt != nil }
         let descriptor = FetchDescriptor<WorkoutModel>(
             predicate: predicate, sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
         )
         let models = (try? context.fetch(descriptor)) ?? []
-        return models.map { WorkoutRecord(model: $0, prCount: prCount(for: $0.id)) }
+        let own = models.map { WorkoutRecord(model: $0, prCount: prCount(for: $0.id)) }
+        let imported = importedHealthWorkouts().map(Self.record(imported:))
+        return (own + imported).sorted { $0.date > $1.date }
     }
 
     func workout(id: UUID) -> WorkoutModel? {
@@ -174,9 +180,17 @@ extension WorkoutStore {
     /// that `restoreWorkout(_:)` re-inserts with the same ids, for an undo toast.
     @discardableResult
     func deleteWorkout(id: UUID) -> DeletedWorkout? {
-        guard let model = fetchWorkoutModel(id: id) else { return nil }
+        guard let model = fetchWorkoutModel(id: id) else {
+            // Not in the main store: it may be an Apple Health import, which lives in the local
+            // Health store and leaves a tombstone behind so it is never re-imported.
+            return deleteImportedHealthWorkout(id: id).map(DeletedWorkout.init(imported:))
+        }
         let snapshot = DeletedWorkout(model: model)
         let wasFinished = model.endedAt != nil
+        // A workout DaGym wrote to Apple Health should not outlive itself there.
+        if let healthKitID = model.healthKitID {
+            onWorkoutDeletedFromHealth?(healthKitID)
+        }
         context.delete(model)
         save()
         if wasFinished { rebuildPersonalRecords() }
@@ -186,13 +200,20 @@ extension WorkoutStore {
     /// Puts a deleted workout back exactly as it was (same ids, sets and flags) and rebuilds
     /// the PR cache. A no-op if a workout with that id already exists again.
     func restoreWorkout(_ snapshot: DeletedWorkout) {
+        if let imported = snapshot.importedHealthWorkout {
+            restoreImportedHealthWorkout(imported)
+            return
+        }
         guard fetchWorkoutModel(id: snapshot.id) == nil else { return }
         let workout = WorkoutModel(
             id: snapshot.id, title: snapshot.title, startedAt: snapshot.startedAt,
             endedAt: snapshot.endedAt, notes: snapshot.notes, isBackfilled: snapshot.isBackfilled,
             routineID: snapshot.routineID, routineName: snapshot.routineName,
             bodyweightKg: snapshot.bodyweightKg, sourceDevice: snapshot.sourceDevice,
-            healthKitID: snapshot.healthKitID
+            // Deliberately not `snapshot.healthKitID`: deleting the workout also deleted the
+            // `HKWorkout` DaGym had written for it, so the restored workout has nothing in Health
+            // yet. Clearing it lets the finished-workout hook below write a fresh one.
+            healthKitID: nil
         )
         context.insert(workout)
         // Children are linked through the `workout:`/`workoutExercise:` inverses only — assigning
@@ -220,6 +241,11 @@ extension WorkoutStore {
         }
         save()
         if snapshot.endedAt != nil { rebuildPersonalRecords() }
+        // Re-write it to Apple Health if it had been written before (and the toggle is still on):
+        // the delete above removed our own `HKWorkout`, so undo has to put that back too.
+        if snapshot.healthKitID != nil, snapshot.endedAt != nil {
+            onWorkoutFinished?(workout)
+        }
     }
 
     /// Total finished-workout count and lifetime volume, for the History header.
@@ -228,13 +254,21 @@ extension WorkoutStore {
         let volume = finished.reduce(0.0) { total, workout in
             total + workoutVolume(workout)
         }
-        return (finished.count, volume)
+        // Imported Apple Health sessions count as workouts done; they carry no volume.
+        return (finished.count + importedHealthWorkouts().count, volume)
     }
 
     /// Full read-only detail for a finished workout, for `WorkoutDetailView`.
     /// Returns an empty placeholder if the workout can't be found.
     func workoutDetail(id: UUID) -> WorkoutDetail {
         guard let model = fetchWorkoutModel(id: id) else {
+            // Imported Apple Health sessions live in the local Health store and carry no sets.
+            if let imported = importedHealthWorkout(id: id) {
+                return WorkoutDetail(
+                    id: imported.id, title: imported.title, startedAt: imported.startedAt,
+                    endedAt: imported.endedAt, isBackfilled: true
+                )
+            }
             return WorkoutDetail(title: "", startedAt: Date())
         }
         let entries = (model.exercises ?? []).sorted { $0.order < $1.order }.map { exerciseModel in
@@ -303,9 +337,11 @@ extension WorkoutStore {
         }
     }
 
-    /// Every finished workout's start date, for `Streaks.weekly`.
+    /// Every finished workout's start date, for `Streaks.weekly` — imported Apple Health
+    /// sessions included, since a session logged on the Watch still broke the rest day.
     func workoutDates() -> [Date] {
         finishedWorkoutModelsNewestFirst().map(\.startedAt)
+            + importedHealthWorkouts().map(\.startedAt)
     }
 
     /// Recovery stimulus events (`GymCore.Recovery`) from completed, non-warm-up sets of
@@ -435,8 +471,12 @@ struct DeletedWorkout: Sendable {
     var sourceDevice: String
     var healthKitID: String?
     var exercises: [Exercise]
+    /// Set only when the deleted row was an Apple Health import (which lives in the local Health
+    /// store, not the main one) — `restoreWorkout(_:)` routes on it.
+    var importedHealthWorkout: ImportedHealthWorkoutSnapshot?
 
     init(model: WorkoutModel) {
+        importedHealthWorkout = nil
         id = model.id
         title = model.title
         startedAt = model.startedAt

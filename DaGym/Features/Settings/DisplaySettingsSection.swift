@@ -134,7 +134,6 @@ private struct AccentSwatch: View {
                 }
         }
         .buttonStyle(.dgControl)
-        .dgTapTarget()
         .accessibilityLabel(accent.displayName)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }

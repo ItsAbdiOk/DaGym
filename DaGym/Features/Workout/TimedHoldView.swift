@@ -120,7 +120,6 @@ struct TimedSetRow: View {
                         .background(isCurrent ? DGColor.coral : DGColor.surface3, in: Capsule())
                 }
                 .buttonStyle(.dgControl)
-                .dgTapTarget()
             }
         }
         .padding(.horizontal, DGSpace.s3)

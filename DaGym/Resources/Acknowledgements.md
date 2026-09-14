@@ -29,22 +29,60 @@ Everkinetic (https://github.com/everkinetic/data), licensed under **CC-BY-SA 4.0
 **Bryl Lim** — the animated 3-frame exercise illustrations shown throughout the app are by
 [Bryl Lim](https://bryllim.com), derived from Everkinetic (https://github.com/everkinetic/data),
 licensed under **Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)**.
-Licence: https://creativecommons.org/licenses/by-sa/4.0/deed.en. DaGym does not ship the
-source SVGs — each frame's vector path data is extracted and rendered as a native shape,
-recoloured/tinted to match the app's palette; no other changes were made to the linework.
-Full attribution notice: `ATTRIBUTION-ExerciseArt.txt` in the app bundle.
+Licence: https://creativecommons.org/licenses/by-sa/4.0/deed.en
+
+DaGym does not ship the source SVGs. Each frame's vector path data is extracted and rendered
+as a native shape. **Three changes were made to the licensed material:**
+
+1. **Coordinate precision** — every decimal coordinate in the path data is rounded to 1 decimal
+place, against the artwork's 512×512 coordinate space.
+
+2. **Elliptical arcs are flattened** — the renderer DaGym uses draws every SVG elliptical-arc
+command as a straight line to the arc's end point, so all 9,031 arcs across the 516 shipped
+frames are drawn as straight chords rather than curves. Curved details are subtly flattened.
+
+3. **Colour** — each frame is filled with a single solid colour (near-black in light appearance,
+near-white in dark appearance), replacing the artwork's original fill. It does not follow the
+accent colour.
+
+No other changes were made to the linework.
+
+These changes make the shipped path data an adaptation, so the artwork stays under CC BY-SA 4.0:
+redistributing it, inside DaGym or on its own, means carrying this same attribution and offering
+the artwork under CC BY-SA 4.0. That applies to the **artwork and its path data only** — DaGym's
+own source code is MIT-licensed and is not relicensed by shipping this artwork alongside it.
 
 > Exercise illustrations by Bryl Lim (https://bryllim.com), derived from Everkinetic
-> (https://github.com/everkinetic/data), licensed under CC-BY-SA 4.0. Recoloured/tinted by
-> DaGym for display.
+> (https://github.com/everkinetic/data), licensed under CC-BY-SA 4.0. Modified by DaGym:
+> coordinates rounded to 1 decimal place, elliptical arcs drawn as straight chords, and
+> recoloured to a single solid tint.
 
 ## Muscle diagrams
 
 **MuscleMap** — the body map's anatomical figure and muscle-region outlines are adapted from
 [MuscleMap](https://github.com/melihcolpan/MuscleMap) by Melih Colpan, licensed under the
-**MIT License**. Vendored source and licence text: `DaGym/Vendor/MuscleMap`.
+**MIT License**. DaGym vendors part of the package's source (the SVG path data, its parser, and
+its path builder); the `Muscle` enum was renamed to `MMMuscle` to avoid a name collision, and a
+few members that depend on SwiftPM's `Bundle.module` were removed. Its full licence notice:
 
-> Body map by MuscleMap (https://github.com/melihcolpan/MuscleMap), © Melih Colpan, MIT licence.
+MIT License
+
+Copyright (c) 2026 Melih Colpan
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+and associated documentation files (the "Software"), to deal in the Software without
+restriction, including without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or
+substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## Typography
 
@@ -56,6 +94,10 @@ the **SIL Open Font License 1.1**. Full licence text: https://openfontlicense.or
 
 ## Licence notes
 
-CC-BY-SA and the Unlicense apply to the data and fonts listed above, not to DaGym's own source
-code. See `docs/exercise-data-sources.md` in the project repository for the full research and
-share-alike rationale behind these choices.
+CC-BY-SA, the Unlicense, the MIT terms above and the SIL Open Font License apply to the data,
+artwork, vendored code and fonts listed here — not to DaGym's own source code, which is
+MIT-licensed. DaGym is a collection that includes the CC BY-SA artwork; it is not an adaptation
+of it, so bundling that artwork does not place the app's own code under CC BY-SA.
+
+The project repository (public, MIT) carries a THIRD-PARTY.md with the same breakdown, plus
+docs/exercise-data-sources.md for the full research and share-alike rationale.

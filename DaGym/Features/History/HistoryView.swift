@@ -50,7 +50,6 @@ struct HistoryView: View {
                     symbol: "calendar", size: 36, tint: DGColor.coralText,
                     accessibilityLabel: "Month calendar", action: onCalendar
                 )
-                .dgTapTarget()
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

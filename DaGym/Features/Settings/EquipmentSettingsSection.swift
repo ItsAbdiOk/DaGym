@@ -55,7 +55,6 @@ struct EquipmentSettingsSection: View {
                     .foregroundStyle(DGColor.coral)
             }
             .buttonStyle(.dgControl)
-            .dgTapTarget()
         }
     }
 
@@ -67,7 +66,6 @@ struct EquipmentSettingsSection: View {
                     .foregroundStyle(profile.isActive ? DGColor.coral : DGColor.ink4)
             }
             .buttonStyle(.dgControl)
-            .dgTapTarget()
             Text(profile.name).font(DGFont.body).foregroundStyle(DGColor.ink1)
             Spacer()
             Button {
@@ -79,7 +77,6 @@ struct EquipmentSettingsSection: View {
                     .foregroundStyle(DGColor.ink4)
             }
             .buttonStyle(.dgControl)
-            .dgTapTarget()
         }
         .padding(.horizontal, DGSpace.s5)
         .frame(minHeight: 52)

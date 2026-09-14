@@ -61,9 +61,12 @@ extension WorkoutStore {
     /// Builds `RecoverySnapshot` from `recoveryEvents(since:)` (last 14 days) plus a direct
     /// query for which exercises contributed to each muscle. Warm-ups never contribute —
     /// `recoveryEvents` and the contributor lookup both skip them the same way.
-    func recoverySnapshot(now: Date = Date()) -> RecoverySnapshot {
-        let since = Calendar.current.date(byAdding: .day, value: -Self.recoveryScanDays, to: now) ?? now
-        let untrainedSince = Calendar.current.date(byAdding: .day, value: -Self.untrainedWindowDays, to: now)
+    /// `calendar` is passed in rather than read: the coach adapter feeds this straight into
+    /// `CoachInput.recoveryMap`, and a helper that reaches for `Calendar.current` behind a
+    /// caller-supplied one makes the "pure over (store, now, calendar)" promise false.
+    func recoverySnapshot(now: Date = Date(), calendar: Calendar = .current) -> RecoverySnapshot {
+        let since = calendar.date(byAdding: .day, value: -Self.recoveryScanDays, to: now) ?? now
+        let untrainedSince = calendar.date(byAdding: .day, value: -Self.untrainedWindowDays, to: now)
         let events = recoveryEvents(since: since)
         let fatigueByMuscle = Recovery.fatigue(events: events, now: now)
         let spentByMuscle = Recovery.map(events: events, now: now)

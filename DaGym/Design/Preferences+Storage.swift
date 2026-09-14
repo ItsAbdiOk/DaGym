@@ -19,6 +19,7 @@ extension Preferences {
         static let healthReadRecovery = "healthReadRecovery"
         static let healthReadBodyComposition = "healthReadBodyComposition"
         static let healthImportWorkouts = "healthImportWorkouts"
+        static let healthAutoImportWorkouts = "healthAutoImportWorkouts"
         static let healthEstimateCalories = "healthEstimateCalories"
         static let calendarSyncEnabled = "calendarSyncEnabled"
         static let scheduledStartHour = "scheduledStartHour"
@@ -46,6 +47,7 @@ extension Preferences {
         static let weighInBeforeWorkout = "weighInBeforeWorkout"
         static let sampleDataMode = "sampleDataMode"
         static let voiceSpeakBackOnHeadphones = "voiceSpeakBackOnHeadphones"
+        static let voiceAutoLogEnabled = "voiceAutoLogEnabled"
     }
 
     static func intValue(_ suite: UserDefaults, _ key: String, default value: Int) -> Int {

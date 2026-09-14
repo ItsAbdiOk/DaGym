@@ -247,7 +247,17 @@ extension WorkoutStore {
             planned: planned, previous: previous, incrementKg: info.incrementKg,
             planUpdatedAt: routineExercise.routine?.updatedAt, previousDate: previousDate
         )
-        let useGhost = prescribed.reason.kind == .firstTime
+        // A plan target set *after* the session the engine built its baseline from outranks the
+        // engine. `AutoFill` already resolves this precedence for the non-engine path ("from your
+        // updated plan"); without the same rule here, editing a routine's target weight — or
+        // approving the Coach's deload card, which is an automated version of that edit — changed
+        // nothing, because the engine reads history and never the plan.
+        let planIsNewer = Self.planOverridesPrescription(
+            plannedSets: plannedSets, planUpdatedAt: routineExercise.routine?.updatedAt,
+            baselineDate: prescribed.previousDate ?? previousDate
+        )
+        let useGhost = prescribed.reason.kind == .firstTime || planIsNewer
+        let reason = planIsNewer ? Self.updatedPlanReason : prescribed.reason
         let (rxByPlannedIndex, perPlannedSet) = Self.workingPrescriptions(
             prescribed.sets, plannedSets: plannedSets
         )
@@ -256,7 +266,7 @@ extension WorkoutStore {
             let rx = useGhost ? nil : rxByPlannedIndex[index]
             return Self.prescribedSet(
                 kind: plannedSet.setKind, rx: rx, ghost: ghost, targetSeconds: plannedSet.targetSeconds,
-                reason: prescribed.reason.title
+                reason: reason.title
             )
         }
         let workingCount = plannedSets.filter { $0.setKind.countsTowardStats }.count
@@ -268,16 +278,33 @@ extension WorkoutStore {
             for rx in prescribed.sets.dropFirst(workingCount) {
                 sets.append(Self.prescribedSet(
                     kind: template.setKind, rx: rx, ghost: ghost, targetSeconds: template.targetSeconds,
-                    reason: prescribed.reason.title
+                    reason: reason.title
                 ))
             }
         }
         return WorkoutExerciseEntry(
             exercise: info, sets: sets, supersetGroup: routineExercise.supersetGroup,
             note: routineExercise.note.isEmpty ? nil : routineExercise.note,
-            whyTitle: prescribed.reason.title, whyBody: prescribed.reason.body,
-            whyKind: prescribed.reason.kind
+            whyTitle: reason.title, whyBody: reason.body, whyKind: reason.kind
         )
+    }
+
+    /// The "why" shown when the plan outranks the engine for this session.
+    private static let updatedPlanReason = PrescriptionReason(
+        title: "From your updated plan",
+        body: "Your plan's target weight changed after your last session, so this session uses the "
+            + "plan. Progression picks up from what you log today.",
+        kind: .plan
+    )
+
+    /// True when the routine was edited after the session the engine's baseline came from *and*
+    /// the plan actually names a working weight to use — an edit that only renamed the routine
+    /// must not blank the engine's numbers.
+    private static func planOverridesPrescription(
+        plannedSets: [PlannedSetModel], planUpdatedAt: Date?, baselineDate: Date?
+    ) -> Bool {
+        guard let planUpdatedAt, let baselineDate, planUpdatedAt > baselineDate else { return false }
+        return plannedSets.contains { $0.setKind.countsTowardStats && $0.targetWeightKg != nil }
     }
 
     /// The engine's prescription for each planned-set index, nil for warm-ups. Rules that size

@@ -292,7 +292,6 @@ private struct BuilderExerciseCard: View {
                     .foregroundStyle(isSuperset ? DGColor.aiVioletText : DGColor.ink3)
             }
             .buttonStyle(.dgControl)
-            .dgTapTarget()
             .accessibilityLabel(isSuperset ? "Remove from superset" : "Link into superset")
             Menu {
                 Button("Move Up", systemImage: "arrow.up", action: onMoveUp)

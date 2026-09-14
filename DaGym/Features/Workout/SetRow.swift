@@ -65,7 +65,6 @@ struct SetRow: View {
                     .frame(minWidth: 44, alignment: .leading)
             }
             .buttonStyle(.dgControl)
-            .dgTapTarget()
             .accessibilityLabel("Weight")
             .accessibilityValue(
                 "\(preferences.formatWeight(kg: set.weightKg)) \(preferences.weightUnit.symbol)"
@@ -88,7 +87,6 @@ struct SetRow: View {
                 .frame(minWidth: 30, alignment: .leading)
             }
             .buttonStyle(.dgControl)
-            .dgTapTarget()
             .accessibilityLabel("Reps")
             .accessibilityValue(isPerSide ? "\(repsText) per side" : repsText)
             if showsSteppers { stepper(symbol: "plus", label: "Increase reps") { onAdjustReps(1) } }
@@ -142,7 +140,6 @@ struct SetRow: View {
                 .background(DGColor.surface3, in: Circle())
         }
         .buttonStyle(.dgControl)
-        .dgTapTarget()
         .accessibilityLabel(label)
     }
 
@@ -199,7 +196,6 @@ struct SetRow: View {
             }
         }
         .buttonStyle(.dgControl)
-        .dgTapTarget()
         .accessibilityLabel(
             set.effort.map { "Effort, \($0.displayValue(scale: effortScale))" } ?? "Effort, not set"
         )

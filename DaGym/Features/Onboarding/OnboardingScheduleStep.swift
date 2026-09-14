@@ -52,6 +52,7 @@ struct OnboardingScheduleStep: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .dgCard()
     }
 

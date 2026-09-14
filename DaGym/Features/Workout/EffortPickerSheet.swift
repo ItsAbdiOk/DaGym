@@ -62,7 +62,6 @@ struct EffortPickerSheet: View {
                         .background { if on { Capsule().fill(DGColor.coral) } }
                 }
                 .buttonStyle(.dgControl)
-                .dgTapTarget()
             }
         }
         .padding(4)

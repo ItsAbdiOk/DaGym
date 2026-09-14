@@ -35,9 +35,27 @@ extension BodyView {
                 compositionTrend(composition)
             }
             .dgCard()
+        } else if healthInsights.shouldOfferPermissionCheck(
+            toggleOn: preferences.healthReadBodyComposition, hasData: false
+        ) {
+            // The toggle is on and Health has already been asked, yet nothing came back. HealthKit
+            // never says whether a read was denied — a refused read and an empty one look
+            // identical — so say what the user can actually do about it instead of vanishing.
+            healthPermissionCheckLine
         } else if !preferences.healthReadBodyComposition, healthInsights.isAvailable {
             healthDiscoveryLine
         }
+    }
+
+    /// Shown when a Health-backed card is empty despite its toggle being on: the likeliest cause
+    /// is read access turned off in the Health app, which only the Health app can change.
+    var healthPermissionCheckLine: some View {
+        Text(
+            "Nothing from Apple Health yet \u{2014} check Health \u{203A} Sharing \u{203A} Apps."
+        )
+            .font(DGFont.footnote)
+            .foregroundStyle(DGColor.ink4)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private func compositionTile(value: String, label: String, date: Date) -> some View {
@@ -72,10 +90,9 @@ extension BodyView {
         case .kg:
             return "\(Int((meters * 100).rounded())) cm"
         case .lb:
-            let totalInches = meters * 39.3701
-            let feet = Int(totalInches / 12)
-            let inches = Int(totalInches.truncatingRemainder(dividingBy: 12).rounded())
-            return "\(feet)'\(inches)\""
+            // Rounding first, then splitting, is what stops 5'11.6" printing as 5'12".
+            let totalInches = Int((meters * 39.3701).rounded())
+            return "\(totalInches / 12)'\(totalInches % 12)\""
         }
     }
 

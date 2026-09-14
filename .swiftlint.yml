@@ -14,8 +14,10 @@ excluded:
   - DaGym.xcodeproj
   - .build
   - GymCore/.build
-  # Vendored third-party code (see DaGym/Vendor/MuscleMap/LICENSE) — kept verbatim from
-  # upstream, not reformatted to our rules.
+  # Vendored third-party code (see DaGym/Vendor/MuscleMap/LICENSE, and THIRD-PARTY.md for
+  # the vendoring changes) — kept close to upstream and not reformatted to our rules. The
+  # only edits are a `Muscle` -> `MMMuscle` rename and the removal of the `Bundle.module`-
+  # backed members; each file's header records them.
   - DaGym/Vendor
 
 opt_in_rules:

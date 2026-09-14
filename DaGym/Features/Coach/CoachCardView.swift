@@ -58,10 +58,11 @@ struct CoachCardView: View {
                 .font(DGFont.condensedLabel(12))
                 .tracking(1.0)
                 .textCase(.uppercase)
-                .foregroundStyle(DGColor.aiVioletText)
+                // Not `aiVioletText`: that violet is the app's AI accent, and this screen's own
+                // header says these checks are rule-based and nothing is sent anywhere.
+                .foregroundStyle(DGColor.ink3)
             }
             .buttonStyle(.dgControl)
-            .dgTapTarget()
             .accessibilityLabel(isExpanded ? "Hide evidence" : "Show evidence")
 
             if isExpanded {
@@ -99,11 +100,18 @@ struct CoachCardView: View {
         }
     }
 
+    /// Informational cards (`.none`) get one button, not two. An "Approve" that did nothing but
+    /// record agreement sat next to "Dismiss" looking like a choice with consequences and wasn't
+    /// one; "Got it" says what the tap does.
+    private var hasApprovableAction: Bool {
+        if case .none = card.suggestedAction { return false }
+        return true
+    }
+
     private var actions: some View {
         HStack(spacing: DGSpace.s2) {
-            Button("Dismiss") { onDismiss() }
+            Button(hasApprovableAction ? "Dismiss" : "Got it") { onDismiss() }
                 .buttonStyle(.dgControl)
-                .dgTapTarget()
                 .font(DGFont.condensedLabel(13))
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink2)
@@ -111,27 +119,32 @@ struct CoachCardView: View {
                 .frame(height: 36)
                 .background(DGColor.surface3, in: Capsule())
                 .accessibilityLabel("Dismiss, \(card.title)")
-            Button("Approve") { onApprove() }
-                .buttonStyle(.dgControl)
-                .dgTapTarget()
-                .font(DGFont.condensedLabel(13))
-                .textCase(.uppercase)
-                .foregroundStyle(DGColor.inkOnCoral)
-                .padding(.horizontal, DGSpace.s3)
-                .frame(height: 36)
-                .background(DGColor.coral, in: Capsule())
-                .accessibilityLabel("Approve, \(card.title)")
+            if hasApprovableAction {
+                Button("Approve") { onApprove() }
+                    .buttonStyle(.dgControl)
+                    .font(DGFont.condensedLabel(13))
+                    .textCase(.uppercase)
+                    .foregroundStyle(DGColor.inkOnCoral)
+                    .padding(.horizontal, DGSpace.s3)
+                    .frame(height: 36)
+                    .background(DGColor.coral, in: Capsule())
+                    .accessibilityLabel("Approve, \(card.title)")
+            }
             Spacer()
         }
     }
 
     private func actionNoteText(for action: CoachSuggestedAction) -> String? {
         switch action {
-        case .deloadExercise(_, let toWeightKg, let sets):
-            return "Approve applies this: your plan updates to \(sets) sets at \(formatWeight(toWeightKg))."
+        case .deloadExercise(let exerciseName, _, let toWeightKg):
+            // Says exactly what is written, and nothing that isn't: the target weight changes,
+            // the set count doesn't, and it takes effect the next time this lift comes up.
+            return "Approve sets \(exerciseName)'s target weight to \(formatWeight(toWeightKg)) in "
+                + "your plan, so that's what your next session starts from. Your set count and "
+                + "rep targets don't change, and you can undo it."
         case .substituteExercise(_, _, let candidateName):
-            return "Approve just records your decision — swap in \(candidateName) from the set's "
-                + "swap button next time you train it."
+            return "Approve just records your decision — to make the swap, tap the set's swap "
+                + "button next time you train it and pick \(candidateName)."
         case .addSession(let weekday):
             return "Approve just records your decision — add \(weekday.displayName) from Schedule."
         case .restMuscle(let muscle):

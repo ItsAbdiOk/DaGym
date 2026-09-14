@@ -250,7 +250,8 @@ extension BackupService {
             let model = EquipmentProfileModel(
                 id: item.id, name: item.name, isActive: false, barKg: item.barKg,
                 availableEquipment: item.availableEquipment, plateStockKg: item.plateStockKg,
-                plateCounts: item.plateCounts, collarsKg: item.collarsKg, createdAt: item.createdAt
+                plateCounts: item.plateCounts, collarsKg: item.collarsKg, createdAt: item.createdAt,
+                seedKey: item.seedKey
             )
             context.insert(model)
             report.equipmentProfilesImported += 1

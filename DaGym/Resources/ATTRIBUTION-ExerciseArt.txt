@@ -5,25 +5,51 @@ The 3-frame animated exercise illustrations shown in DaGym are by Bryl Lim
 and are licensed under Creative Commons Attribution-ShareAlike 4.0 International
 (CC BY-SA 4.0).
 
-License text:      https://creativecommons.org/licenses/by-sa/4.0/legalcode
+License text:           https://creativecommons.org/licenses/by-sa/4.0/legalcode
 Human-readable summary: https://creativecommons.org/licenses/by-sa/4.0/
-Source repository: https://github.com/everkinetic/data
-Artist:             Bryl Lim, https://bryllim.com
+Source repository:      https://github.com/everkinetic/data
+Artist:                 Bryl Lim, https://bryllim.com
 
-Changes made by DaGym: DaGym does not ship the source SVG files. Instead, each frame's
-single vector path (the `d="..."` attribute) is extracted, its coordinates rounded to
-1 decimal place, and the result is packed into one zlib-compressed data file
-(ExerciseArtPaths.zlib, see scripts/import-exercise-art.swift). At display time DaGym
-parses that path data into a native SwiftUI shape and fills it with a solid tint that
-follows the app's colour palette (light/dark mode and the user's chosen accent colour) —
-this replaces the artwork's original white fill but changes no other aspect of the
-linework. This is still an adaptation of the licensed artwork, so it remains subject to
-the ShareAlike term: any redistribution of DaGym (or of ExerciseArtPaths.zlib on its own)
-must carry this same attribution and be offered under CC BY-SA 4.0.
+Changes made by DaGym
+---------------------
+DaGym does not ship the source SVG files. Instead, each frame's single vector path
+(the `d="..."` attribute) is extracted and packed into one zlib-compressed data file
+(ExerciseArtPaths.zlib, see scripts/import-exercise-art.swift). Three changes were made
+to the licensed material:
 
+1. Coordinate precision. Every decimal coordinate in the path data is rounded to 1
+   decimal place, against the artwork's 512x512 viewBox.
+
+2. Elliptical arcs are flattened. At display time the path data is drawn by the
+   vendored MuscleMap renderer (DaGym/Vendor/MuscleMap/Core/PathBuilder.swift), which
+   draws every SVG elliptical-arc command ("A"/"a") as a straight line to the arc's
+   end point. All 9,031 arcs across the 516 shipped frames are therefore rendered as
+   straight chords rather than curves, so curved details are subtly flattened.
+
+3. Colour. Each frame is filled with a single solid colour (DGColor.ink2 — near-black
+   in light appearance, near-white in dark appearance), replacing the artwork's
+   original fill. The fill does not follow the user's accent colour.
+
+No other changes were made to the linework.
+
+Licensing scope
+---------------
+These changes make the shipped path data an adaptation of the licensed artwork, so the
+artwork remains subject to the ShareAlike term: ExerciseArtPaths.zlib and the artwork it
+encodes — whether redistributed inside DaGym or on their own — must carry this same
+attribution and be offered under CC BY-SA 4.0.
+
+This applies to the artwork and its path data only. DaGym's own source code is licensed
+under the MIT License (see the LICENSE file in the project repository) and is not
+relicensed by shipping this artwork alongside it: the app is a collection that includes
+the artwork, not an adaptation of it.
+
+Scope of use
+------------
 Only the illustrated artwork and its accompanying exercise metadata (names, slugs,
 frame ordering) from Bryl Lim's "workout-guide" package are used. None of that
 package's source code is used anywhere in DaGym.
 
 This notice satisfies the CC BY-SA 4.0 requirement to give appropriate credit,
 provide a link to the license, and indicate changes made to the licensed material.
+The same notice is reproduced in the app's Acknowledgements screen.

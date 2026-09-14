@@ -4,8 +4,13 @@ import Foundation
 /// compared against the baseline window right before them — no new math, just an average over
 /// `CoachSessionSummary`, which the app layer already builds from the routine plan + the logged
 /// workout.
+///
+/// Two kinds of session carry no signal and are skipped rather than averaged in: one with no
+/// plan behind it (a freestyle session, `plannedSetCount == 0`) has no set ratio, and one longer
+/// than `TrainingConstants.coachDriftMaxSessionSeconds` was left open rather than trained long,
+/// so its duration would inflate whichever window it lands in.
 extension CoachRules {
-    static func sessionDriftCards(input: CoachInput, now: Date) -> [CoachCard] {
+    static func sessionDriftCards(input: CoachInput, now: Date, calendar: Calendar) -> [CoachCard] {
         let sessions = input.recentSessions.sorted { $0.date < $1.date }
         let recentCount = TrainingConstants.coachDriftRecentSessions
         let baselineCount = TrainingConstants.coachDriftBaselineSessions
@@ -19,11 +24,12 @@ extension CoachRules {
         let baselineSetRatio = averageSetRatio(baseline)
         let recentDuration = averageDuration(recent)
         let baselineDuration = averageDuration(baseline)
-        guard baselineSetRatio > 0, baselineDuration > 0 else { return [] }
 
-        let setDrop = (baselineSetRatio - recentSetRatio) / baselineSetRatio
-        let durationDrop = (baselineDuration - recentDuration) / baselineDuration
         let threshold = TrainingConstants.coachDriftDropFraction
+        let setDrop = baselineSetRatio > 0 ? (baselineSetRatio - recentSetRatio) / baselineSetRatio : 0
+        let durationDrop = baselineDuration > 0 && recentDuration > 0
+            ? (baselineDuration - recentDuration) / baselineDuration
+            : 0
         guard setDrop >= threshold || durationDrop >= threshold else { return [] }
 
         let evidence: [CoachEvidenceItem] = [
@@ -37,8 +43,16 @@ extension CoachRules {
             body: "Your last \(recentCount) sessions are completing fewer sets or running shorter "
                 + "than your usual \(baselineCount)-session baseline.",
             evidence: evidence, suggestedAction: .none,
-            distinguishingKey: dateKey(mostRecent.date), firedDate: now
+            distinguishingKey: weekKey(mostRecent.date, calendar: calendar), firedDate: now
         )]
+    }
+
+    /// The week the newest session falls in, not the session's own timestamp. Drift is a
+    /// weeks-long shape; keying on the exact date meant every new session minted a new
+    /// fingerprint and a dismissed card returned the next time the lifter trained.
+    private static func weekKey(_ date: Date, calendar: Calendar) -> String {
+        let start = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+        return DateKey.string(for: start, calendar: calendar)
     }
 
     private static func averageSetRatio(_ sessions: [CoachSessionSummary]) -> Double {
@@ -51,7 +65,10 @@ extension CoachRules {
     }
 
     private static func averageDuration(_ sessions: [CoachSessionSummary]) -> Double {
-        guard !sessions.isEmpty else { return 0 }
-        return Double(sessions.reduce(0) { $0 + $1.durationSeconds }) / Double(sessions.count)
+        let durations = sessions
+            .map(\.durationSeconds)
+            .filter { $0 > 0 && $0 <= TrainingConstants.coachDriftMaxSessionSeconds }
+        guard !durations.isEmpty else { return 0 }
+        return Double(durations.reduce(0, +)) / Double(durations.count)
     }
 }

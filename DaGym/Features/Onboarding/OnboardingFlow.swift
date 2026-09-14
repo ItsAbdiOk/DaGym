@@ -87,7 +87,6 @@ struct OnboardingFlow: View {
                         .foregroundStyle(DGColor.ink2)
                         .frame(width: 36, height: 36)
                         .dgGlass(.thin, in: Circle())
-                        .dgTapTarget()
                 }
                 .buttonStyle(.dgControl)
                 progressDots

@@ -25,6 +25,8 @@ struct OnboardingBodyweightStep: View {
             VStack(spacing: DGSpace.s3) {
                 DGPrimaryButton(title: "Save & Continue", action: save)
                     .accessibilityIdentifier(A11yID.onboardingNext)
+                    .disabled(!isValid)
+                    .opacity(isValid ? 1 : 0.4)
                 Button("Skip", action: onSkip)
                     .buttonStyle(.dgControl)
                     .font(DGFont.condensedLabel(13))
@@ -36,9 +38,11 @@ struct OnboardingBodyweightStep: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .task { kg = store.latestBodyMeasurement()?.bodyweightKg ?? kg }
         .sheet(isPresented: $showKeypad) {
+            // Same fine step as the +/- buttons outside (0.25 kg / 0.5 lb), and the bodyweight
+            // purpose so the sheet drops the barbell plate line and the "Log set" wording.
             WeightKeypadSheet(
-                title: "Weight", value: $kg, step: preferences.weightUnit.defaultIncrementKg,
-                bar: nil, last: nil, unit: preferences.weightUnit, onDone: {}
+                title: "Weight", value: $kg, step: fineStepKg, bar: nil, last: nil,
+                unit: preferences.weightUnit, purpose: .bodyweight, onDone: {}
             )
         }
     }
@@ -93,7 +97,16 @@ struct OnboardingBodyweightStep: View {
         Haptics.step()
     }
 
+    /// A plausible human bodyweight. The keypad can be backspaced to empty, which leaves `kg`
+    /// at 0 — logging that would put a 0 kg point on the bodyweight chart and write it to
+    /// Health, so Save stays disabled until the value is real. Skip is always available.
+    private var isValid: Bool { kg >= Self.minimumKg && kg <= Self.maximumKg }
+
+    private static let minimumKg: Double = 20
+    private static let maximumKg: Double = 500
+
     private func save() {
+        guard isValid else { return }
         store.logBodyweight(kg: kg)
         onNext()
     }

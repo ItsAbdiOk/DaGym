@@ -150,7 +150,6 @@ struct MonthCalendarSheet: View {
             DGIconButton(symbol: "chevron.left", size: 36, accessibilityLabel: "Previous month") {
                 shift(by: -1)
             }
-            .dgTapTarget()
             Spacer()
             Text(Self.monthLabel(month))
                 .font(DGFont.title3)
@@ -160,7 +159,6 @@ struct MonthCalendarSheet: View {
             DGIconButton(symbol: "chevron.right", size: 36, accessibilityLabel: "Next month") {
                 shift(by: 1)
             }
-            .dgTapTarget()
         }
     }
 

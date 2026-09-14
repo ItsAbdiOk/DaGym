@@ -39,9 +39,26 @@ extension RecoveryMapView {
                     .foregroundStyle(DGColor.ink4)
             }
             .dgCard()
+        } else if healthInsights.shouldOfferPermissionCheck(
+            toggleOn: preferences.healthReadRecovery, hasData: false
+        ) {
+            // Toggle on, HealthKit already asked, nothing back. A denied read is indistinguishable
+            // from no data, so point at the one place the user can check.
+            healthPermissionCheckLine
         } else if !preferences.healthReadRecovery, healthInsights.isAvailable {
             healthDiscoveryLine
         }
+    }
+
+    /// Same wording as the Body screen's: an empty Health card with its toggle on is almost
+    /// always read access switched off in the Health app.
+    var healthPermissionCheckLine: some View {
+        Text(
+            "Nothing from Apple Health yet \u{2014} check Health \u{203A} Sharing \u{203A} Apps."
+        )
+            .font(DGFont.footnote)
+            .foregroundStyle(DGColor.ink4)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private func healthRow(title: String, value: String, date: Date, trend: String?) -> some View {

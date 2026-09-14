@@ -1,8 +1,9 @@
 // Vendored from MuscleMap (https://github.com/melihcolpan/MuscleMap) by Melih Colpan,
 // MIT-licensed (full text at DaGym/Vendor/MuscleMap/LICENSE). This file is not authored
 // here — do not hand-edit; DaGym/Vendor is excluded from SwiftLint (see .swiftlint.yml).
-// Renamed `Muscle` -> `MMMuscle` here (only change from upstream) to avoid colliding with
-// GymCore's own `Muscle` enum, which this target also imports.
+// Two changes from upstream, both recorded below: `Muscle` was renamed to `MMMuscle` to avoid
+// colliding with GymCore's own `Muscle` enum (which this target also imports), and the
+// `Bundle.module`-backed members were removed.
 
 //
 //  Muscle.swift

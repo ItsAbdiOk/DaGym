@@ -2,12 +2,16 @@ import Foundation
 import GymCore
 import SwiftData
 
-/// Assembles `GymCore.CoachInput` from SwiftData and applies the coach's approvable actions back
-/// onto the store — the only place SwiftData meets `CoachEngine` (see `Coach/CoachInput.swift`,
-/// `Coach/CoachEngine.swift`). Every rule's own math stays in `GymCore/Coach`; this file only
-/// gathers the numbers each field's doc comment on `CoachInput` already says it needs, reusing
-/// existing store accessors (`schedule()`, `bodySeries`, `recoverySnapshot()`, `exerciseHistory`,
-/// `substitutionCandidates()`, `hardWeekStreak`) rather than writing new queries.
+/// Assembles `GymCore.CoachInput` from SwiftData — the only place SwiftData meets `CoachEngine`
+/// (see `Coach/CoachInput.swift`, `Coach/CoachEngine.swift`). Every rule's own math stays in
+/// `GymCore/Coach`; this file only gathers the numbers each field's doc comment on `CoachInput`
+/// already says it needs, reusing existing store accessors (`schedule()`, `bodySeries`,
+/// `recoverySnapshot()`, `exerciseHistory`, `substitutionCandidates()`, `hardWeekStreak`) rather
+/// than writing new queries. Applying an approved card lives in `WorkoutStore+CoachActions.swift`.
+///
+/// `now` and `calendar` are threaded all the way down. The engine is pure by construction; this
+/// adapter has to be pure over `(store, now, calendar)` too, or a test that pins `now` still gets
+/// a different answer tomorrow.
 extension WorkoutStore {
     /// How many finished workouts back the session-drift and per-lift windows look. Covers
     /// `coachDriftRecentSessions + coachDriftBaselineSessions` (12) with headroom, and is generous
@@ -43,11 +47,11 @@ extension WorkoutStore {
             trackedMuscles: trackedMuscles(),
             lifts: coachLiftSnapshots(finishedWorkouts: finishedWorkouts),
             hardWeeksInARow: hardWeekStreak(
-                weeklyGoal: weeklyGoal, calendar: calendar, finishedWorkouts: finishedWorkouts
+                weeklyGoal: weeklyGoal, calendar: calendar, now: now, finishedWorkouts: finishedWorkouts
             ),
             substitutionLibrary: substitutionCandidates(),
             availableEquipment: Set(activeProfile()?.availableEquipment ?? []),
-            recoveryMap: recoverySnapshot(now: now).map,
+            recoveryMap: recoverySnapshot(now: now, calendar: calendar).map,
             recentPRs: recentPRHighlights(now: now),
             recentAchievements: recentAchievementHighlights(now: now),
             lastWorkoutDate: finishedWorkouts.first?.startedAt,
@@ -58,7 +62,8 @@ extension WorkoutStore {
     // MARK: - Interactions (persisted dismissals/approvals)
 
     /// Every persisted Approve/Dismiss, for `CoachInput.interactions` — `CoachEngine` does its own
-    /// cooldown-window filtering against this list.
+    /// cooldown-window filtering against this list. Home's "Why a deload?" card reads and writes
+    /// the same rows (`WorkoutStore+Deload.swift`), so a dismissal in one place holds in both.
     func coachInteractions() -> [CoachInteraction] {
         let models = (try? context.fetch(FetchDescriptor<CoachInteractionModel>())) ?? []
         return models.compactMap { model in
@@ -71,7 +76,7 @@ extension WorkoutStore {
     }
 
     /// Records one Approve/Dismiss, returning the inserted model's id so the caller (the Coach
-    /// screen's Undo toast) can remove exactly this row if the lifter undoes a dismissal.
+    /// screen's Undo toast) can remove exactly this row if the lifter undoes it.
     @discardableResult
     func recordCoachInteraction(
         rule: CoachRule, fingerprint: String, outcome: CoachInteraction.Outcome, date: Date = Date()
@@ -93,33 +98,6 @@ extension WorkoutStore {
         save()
     }
 
-    // MARK: - Approvable actions
-
-    /// Applying a `.deloadExercise` suggested action (the only one this adapter can carry out on
-    /// its own, with no active workout to hand it to): lowers every routine's planned working-set
-    /// weight for this exercise to the suggestion's load and resets its stall state there, so the
-    /// next time it's trained it starts from the lighter number instead of resuming the stall.
-    /// Returns whether a matching exercise was found. `CoachView` calls this from Approve; every
-    /// other suggested action is recorded but not auto-applied (see its doc comment on
-    /// `CoachSuggestedAction`) — there is no active session or screen this adapter can safely act
-    /// through on its own.
-    @discardableResult
-    func applyCoachDeload(exerciseName: String, toWeightKg: Double) -> Bool {
-        let routineExercises = (try? context.fetch(FetchDescriptor<RoutineExerciseModel>())) ?? []
-        let matches = routineExercises.filter { $0.exercise?.name == exerciseName }
-        guard !matches.isEmpty else { return false }
-        for routineExercise in matches {
-            for plannedSet in routineExercise.plannedSets ?? [] where plannedSet.setKind.countsTowardStats {
-                plannedSet.targetWeightKg = toWeightKg
-            }
-            routineExercise.stallStateValue = routineExercise.stallStateValue.advancing(
-                misses: 0, weightKg: toWeightKg
-            )
-        }
-        save()
-        return true
-    }
-
     // MARK: - CoachInput assembly helpers
 
     private func recentSessions(from workouts: [WorkoutModel]) -> [CoachSessionSummary] {
@@ -137,33 +115,56 @@ extension WorkoutStore {
 
     /// The routine's *current* plan for the exercises this session actually logged — an
     /// approximation (the plan may have changed since), the same trade-off `exerciseHistory`'s
-    /// progression baseline already accepts. Falls back to the completed count itself (a 1.0
-    /// ratio, no drift signal either way) for a freestyle session or a since-deleted routine, so
-    /// the session's duration signal isn't lost to a zero denominator.
+    /// progression baseline already accepts.
+    ///
+    /// Zero for a freestyle session or a since-deleted routine, which is how
+    /// `CoachRules.sessionDriftCards` is told "no set signal here, skip me". It used to fall back
+    /// to the completed count, which is a perfect 1.0 ratio — so every freestyle session quietly
+    /// raised the baseline that the lifter's planned sessions were then judged against.
     private func plannedSetCount(for workout: WorkoutModel) -> Int {
-        let completedCount = (workout.exercises ?? []).flatMap { exercise in
-            (exercise.sets ?? []).filter { $0.isCompleted && $0.setKind.countsTowardStats }
-        }.count
         guard let routineID = workout.routineID, let routine = fetchRoutineModel(id: routineID) else {
-            return completedCount
+            return 0
         }
         let exerciseIDs = Set((workout.exercises ?? []).compactMap { $0.exercise?.id })
-        let planned = (routine.exercises ?? [])
+        return (routine.exercises ?? [])
             .filter { $0.exercise.map { exerciseIDs.contains($0.id) } ?? false }
             .reduce(0) { $0 + ($1.plannedSets?.filter { $0.setKind.countsTowardStats }.count ?? 0) }
-        return planned > 0 ? planned : completedCount
     }
 
-    /// Every muscle actually programmed by a non-archived routine right now — deliberately not
-    /// `Muscle.allCases` (per `CoachInput.trackedMuscles`'s contract): a muscle this lifter has
-    /// never trained shouldn't read as a coverage gap.
-    private func trackedMuscles() -> [Muscle] {
+    /// The routines the lifter is actually running: the active program's, or failing that the
+    /// scheduled ones, or failing that every non-archived routine. Nil means "no filter".
+    /// A routine that is neither programmed nor scheduled is a draft or a leftover, and the
+    /// coverage rule must not report a gap in training the lifter never intended to do.
+    private func programmeRoutineIDs() -> Set<UUID>? {
+        if let program = activeProgramModel(), !program.routineIDs.isEmpty {
+            return Set(program.routineIDs)
+        }
+        let plan = schedule()
+        let scheduled = Set(plan.dayRoutines.values.flatMap { $0 } + plan.dateOverrides.values.flatMap { $0 })
+        return scheduled.isEmpty ? nil : scheduled
+    }
+
+    /// Every routine-exercise slot in the running programme, non-archived routines only.
+    private func programmeRoutineExercises() -> [RoutineExerciseModel] {
         let models = (try? context.fetch(FetchDescriptor<RoutineExerciseModel>())) ?? []
+        let allowed = programmeRoutineIDs()
+        return models.filter { model in
+            guard let routine = model.routine, !routine.isArchived else { return false }
+            return allowed.map { $0.contains(routine.id) } ?? true
+        }
+    }
+
+    /// Every muscle the running programme trains as a **primary** mover — deliberately not
+    /// `Muscle.allCases` (per `CoachInput.trackedMuscles`'s contract), and deliberately not
+    /// secondary movers either: `BodySeries.setsPerMuscle` weights a secondary mover at 0.5, so
+    /// a muscle that only ever gets incidental work sits at 1.5 sets against a floor of 4 forever
+    /// and would report a permanent "gap" in a plan that is going exactly as written.
+    private func trackedMuscles() -> [Muscle] {
         var seen = Set<Muscle>()
         var ordered: [Muscle] = []
-        for model in models {
-            guard let exercise = model.exercise, model.routine?.isArchived != true else { continue }
-            for muscle in exercise.primary + exercise.secondary where !seen.contains(muscle) {
+        for model in programmeRoutineExercises() {
+            guard let exercise = model.exercise else { continue }
+            for muscle in exercise.primary where !seen.contains(muscle) {
                 seen.insert(muscle)
                 ordered.append(muscle)
             }
@@ -171,27 +172,33 @@ extension WorkoutStore {
         return ordered
     }
 
-    /// One `CoachLiftSnapshot` per distinct exercise across every non-archived routine, deduped by
+    /// One `CoachLiftSnapshot` per distinct exercise in the running programme, deduped by
     /// exercise id (a lift shared by two routines is one lift to the coach, not two).
-    private func coachLiftSnapshots(finishedWorkouts: [WorkoutModel]) -> [CoachLiftSnapshot] {
-        let routineExercises = (try? context.fetch(FetchDescriptor<RoutineExerciseModel>())) ?? []
+    /// Not private: `deloadSuggestion` builds Home's card from exactly these snapshots, so both
+    /// screens name the same lifts (`WorkoutStore+Deload.swift`).
+    func coachLiftSnapshots(finishedWorkouts: [WorkoutModel]) -> [CoachLiftSnapshot] {
         var byExerciseID: [UUID: RoutineExerciseModel] = [:]
-        for routineExercise in routineExercises {
-            guard let exercise = routineExercise.exercise, routineExercise.routine?.isArchived != true else {
-                continue
-            }
+        for routineExercise in programmeRoutineExercises() {
+            guard let exercise = routineExercise.exercise else { continue }
             // Prefer an entry that actually has planned sets, in case the same exercise sits in
             // two routines and one is still mid-edit.
             if let existing = byExerciseID[exercise.id], !(existing.plannedSets ?? []).isEmpty { continue }
             byExerciseID[exercise.id] = routineExercise
         }
+        // Resolved once for the whole set rather than per lift — it's a store query.
+        let equipment = activeEquipment()
         return byExerciseID.values
-            .compactMap { liftSnapshot(routineExercise: $0, finishedWorkouts: finishedWorkouts) }
+            .compactMap {
+                liftSnapshot(
+                    routineExercise: $0, finishedWorkouts: finishedWorkouts, equipment: equipment
+                )
+            }
             .sorted { $0.name < $1.name }
     }
 
     private func liftSnapshot(
-        routineExercise: RoutineExerciseModel, finishedWorkouts: [WorkoutModel]
+        routineExercise: RoutineExerciseModel, finishedWorkouts: [WorkoutModel],
+        equipment: ProgressionEquipment
     ) -> CoachLiftSnapshot? {
         guard let exerciseModel = routineExercise.exercise else { return nil }
         let history = exerciseHistory(
@@ -199,19 +206,24 @@ extension WorkoutStore {
         )
         // Oldest first for the trend arrays, and never a planned deload's lower numbers — the
         // documented contract `CoachLiftSnapshot.e1rmTrend` shares with
-        // `DeloadDetector.LiftSnapshot.e1rmTrend` (see `WorkoutStore+Deload.swift`'s
-        // `liftSnapshot`, which this mirrors).
+        // `DeloadDetector.LiftSnapshot.e1rmTrend`. Trimmed to the window the rules are specified
+        // over: `DeloadDetector.isNotProgressing` compares the first point against the last, so a
+        // 16-session array turned "you were stronger four months ago" into "not progressing".
+        let window = TrainingConstants.coachE1rmDowntrendSessions
         let nonDeload = history.filter { !$0.wasPlannedDeload }.reversed()
         let e1rms = nonDeload.compactMap { entry in
             entry.workingSets.compactMap { OneRepMax.estimate(weight: $0.weightKg, reps: $0.reps) }.max()
         }
         let rpes = nonDeload.compactMap { $0.workingSets.first?.effort?.rpe }
         let lastWorking = history.first?.workingSets ?? []
+        let info = exerciseInfo(for: exerciseModel)
         return CoachLiftSnapshot(
             name: exerciseModel.name,
+            exerciseID: exerciseModel.id,
             stallState: routineExercise.stallStateValue,
-            e1rmTrend: e1rms,
-            rpeAtSameLoadTrend: rpes.isEmpty ? nil : rpes,
+            e1rmTrend: Array(e1rms.suffix(window)),
+            rpeAtSameLoadTrend: rpes.isEmpty ? nil : Array(rpes.suffix(window)),
+            loadGrid: loadGrid(for: info, equipment: equipment),
             lastWorkingWeightKg: lastWorking.first?.weightKg,
             lastWorkingSetCount: lastWorking.isEmpty ? nil : lastWorking.count,
             consecutiveFailedSessions: consecutiveFailedSessions(
@@ -221,21 +233,31 @@ extension WorkoutStore {
         )
     }
 
-    /// Sessions in a row (most recent first, stopping at the first clean one) where this lift was
-    /// either skipped, logged a `.failure`-kind set, or came up short of its own current planned
-    /// rep target — an app-layer approximation of "struggling", since `HistorySet` doesn't carry
-    /// the target it was judged against (only `StallState.consecutiveMisses`, which tracks a
-    /// narrower "same weight, no progress" signal the stalled-lift rule already reads separately).
+    /// Sessions in a row (most recent first, stopping at the first clean one) where every logged
+    /// working set came up short of this lift's own current rep target.
+    ///
+    /// Deliberately narrower than it was, because three of its old inputs weren't evidence:
+    ///  * `SetKind.failure` is the "to failure" *technique*, not a failed set. Anyone programming
+    ///    one was flagged every single week. Those sets are now excluded from the judgement.
+    ///  * A timed hold logs `reps == 0`, so "reps under target" was permanently true for it. A
+    ///    plan with any timed target isn't judged at all — there is no rep target to judge.
+    ///  * A session where the lift simply wasn't logged never reaches `history`, so a genuinely
+    ///    skipped session is invisible here. The card's copy says "short of its target"
+    ///    accordingly, not "missed or skipped".
+    ///
+    /// The target is the *low* end of the plan's rep range (`targetReps`; `targetRepsHigh` is the
+    /// top of the range, not the bar to clear), taken as the minimum across working sets so a
+    /// heavier top set isn't judged against a back-off set's easier target.
     private func consecutiveFailedSessions(
         history: [ExerciseHistoryEntry], plannedSets: [PlannedSetModel]
     ) -> Int {
-        let targetReps = plannedSets.first { $0.setKind.countsTowardStats }?.targetReps
+        let working = plannedSets.filter { $0.setKind.countsTowardStats }
+        guard working.allSatisfy({ $0.targetSeconds == nil }),
+              let target = working.compactMap(\.targetReps).min(), target > 0 else { return 0 }
         var streak = 0
         for entry in history {
-            let working = entry.workingSets
-            let failed = working.contains { $0.kind == .failure }
-            let missedTarget = targetReps.map { target in (working.map(\.reps).max() ?? 0) < target } ?? false
-            guard failed || working.isEmpty || missedTarget else { break }
+            let judged = entry.workingSets.filter { $0.kind != .failure }
+            guard !judged.isEmpty, (judged.map(\.reps).max() ?? 0) < target else { break }
             streak += 1
         }
         return streak
@@ -285,14 +307,14 @@ extension WorkoutStore {
         }
     }
 
-    private static func outcomeString(_ outcome: CoachInteraction.Outcome) -> String {
+    static func outcomeString(_ outcome: CoachInteraction.Outcome) -> String {
         switch outcome {
         case .dismissed: return "dismissed"
         case .approved: return "approved"
         }
     }
 
-    private static func outcome(from raw: String) -> CoachInteraction.Outcome? {
+    static func outcome(from raw: String) -> CoachInteraction.Outcome? {
         switch raw {
         case "dismissed": return .dismissed
         case "approved": return .approved

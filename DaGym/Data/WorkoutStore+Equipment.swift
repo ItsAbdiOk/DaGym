@@ -147,6 +147,10 @@ extension RoutineInfo {
 /// (dumbbell/bodyweight/bands, no plates) once per store
 /// (`SeedStateModel.equipmentSeeded`), and only while the store has no
 /// profiles at all. Idempotent, like `ExerciseSeeder`/`RoutineSeeder`.
+///
+/// What goes into each profile lives on `SeededEquipmentProfile`, not here, so
+/// `dedupeEquipmentProfiles()` can compare a row against the exact values that
+/// were seeded and never mistake a user's own "Gym" for one of these.
 @MainActor
 enum EquipmentSeeder {
     static func seedIfNeeded(store: WorkoutStore) {
@@ -154,90 +158,16 @@ enum EquipmentSeeder {
         defer { store.dedupeEquipmentProfiles() }
         guard !state.equipmentSeeded else { return }
         if store.equipmentProfiles().isEmpty {
-            store.createProfile(
-                name: "Gym", isActive: true, barKg: Bar.olympic.weightKg,
-                availableEquipment: EquipmentOption.allCases.map(\.rawValue),
-                plateStock: PlateStock.standardKg, seedKey: "gym"
-            )
-            store.createProfile(
-                name: "Home", isActive: false, barKg: Bar.olympic.weightKg,
-                availableEquipment: ["dumbbell", "bodyweight", "bands"], plateStock: [], seedKey: "home"
-            )
+            for seed in SeededEquipmentProfile.allCases {
+                store.createProfile(
+                    name: seed.name, isActive: seed.isActiveWhenSeeded, barKg: seed.barKg,
+                    availableEquipment: seed.availableEquipment, plateStock: seed.plateStock,
+                    collarsKg: seed.collarsKg, seedKey: seed.key
+                )
+            }
         }
         state.equipmentSeeded = true
         state.updatedAt = Date()
         store.save()
-    }
-}
-
-extension WorkoutStore {
-    /// Folds duplicate equipment profiles two devices can each produce by seeding "Gym"/"Home"
-    /// before the other's rows synced down — the same class of race `ExerciseSeeder.dedupe(in:)`
-    /// handles for exercises. Seeded profiles fold on `seedKey` (stable even after the user edits
-    /// one copy's name or plates, unlike a fields-equality match); profiles predating `seedKey`
-    /// (and any user-created profile that happens to be named "Gym"/"Home") get backfilled first
-    /// so existing installs' pre-existing duplicates clean up the same way. Anything left over —
-    /// genuinely custom, unkeyed profiles — still folds if every field matches, the original
-    /// safety net. The survivor is the oldest (by `id` on a tie) and active if any copy was.
-    /// Returns the number removed.
-    @discardableResult
-    func dedupeEquipmentProfiles() -> Int {
-        let models = (try? context.fetch(FetchDescriptor<EquipmentProfileModel>())) ?? []
-        backfillLegacyEquipmentSeedKeys(models)
-        var removed = foldEquipmentProfiles(groupedBySeedKey: models)
-        removed += foldEquipmentProfiles(groupedByFieldsEquality: models.filter { $0.seedKey == nil })
-        if removed > 0 { save() }
-        return removed
-    }
-
-    /// A profile seeded before `seedKey` existed has none; match it back to its seed identity by
-    /// name so it folds with any newer, correctly-keyed copy instead of surviving as an orphan.
-    private func backfillLegacyEquipmentSeedKeys(_ models: [EquipmentProfileModel]) {
-        for model in models where model.seedKey == nil {
-            switch model.name {
-            case "Gym": model.seedKey = "gym"
-            case "Home": model.seedKey = "home"
-            default: break
-            }
-        }
-    }
-
-    private func foldEquipmentProfiles(groupedBySeedKey models: [EquipmentProfileModel]) -> Int {
-        var groups: [String: [EquipmentProfileModel]] = [:]
-        for model in models {
-            guard let key = model.seedKey else { continue }
-            groups[key, default: []].append(model)
-        }
-        return foldEquipmentProfileGroups(groups)
-    }
-
-    private func foldEquipmentProfiles(groupedByFieldsEquality models: [EquipmentProfileModel]) -> Int {
-        var groups: [String: [EquipmentProfileModel]] = [:]
-        for model in models {
-            let key = [
-                model.name, "\(model.barKg)", model.availableEquipment.joined(separator: ","),
-                model.plateStockKg.map { "\($0)" }.joined(separator: ","),
-                model.plateCounts.map { "\($0)" }.joined(separator: ","), "\(model.collarsKg)"
-            ].joined(separator: "|")
-            groups[key, default: []].append(model)
-        }
-        return foldEquipmentProfileGroups(groups)
-    }
-
-    private func foldEquipmentProfileGroups(_ groups: [String: [EquipmentProfileModel]]) -> Int {
-        var removed = 0
-        for group in groups.values where group.count > 1 {
-            let ordered = group.sorted { lhs, rhs in
-                if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
-                return lhs.id.uuidString < rhs.id.uuidString
-            }
-            let survivor = ordered[0]
-            for duplicate in ordered.dropFirst() {
-                survivor.isActive = survivor.isActive || duplicate.isActive
-                context.delete(duplicate)
-                removed += 1
-            }
-        }
-        return removed
     }
 }

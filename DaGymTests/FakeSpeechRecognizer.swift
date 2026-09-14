@@ -7,8 +7,11 @@ import Foundation
 ///
 /// By default the stream finishes right after yielding `scriptedEvents` (the common case: a
 /// clean hold-then-release). Set `finishesAutomatically = false` to model a still-listening
-/// recognizer that only ends when `stopListening()` is called — the shape needed to test
-/// "released mid-recognition" without a real, indefinitely-suspending audio stream.
+/// recognizer that only ends when `endAudio()`/`stopListening()` is called — the shape needed to
+/// test "released mid-recognition", and the shape needed to model the real thing's timing, where
+/// the *final* hypothesis only arrives after the audio stops. `finalAfterEndAudio` is that final:
+/// set it alongside a truncated `.partial` to reproduce "eight reps at 2" on screen resolving to
+/// "eight reps at 225" a beat later.
 @MainActor
 final class FakeSpeechRecognizer: SpeechRecognizing {
     var authorizationStatus: VoiceAuthorizationStatus
@@ -17,11 +20,19 @@ final class FakeSpeechRecognizer: SpeechRecognizing {
     var authorizationToGrant: VoiceAuthorizationStatus
     /// Events yielded by the stream `startListening()` returns, in order.
     var scriptedEvents: [SpeechRecognitionEvent] = []
+    /// Yielded as `.final` when `endAudio()` is called, the way a real recognizer commits to a
+    /// hypothesis only once the audio stops.
+    var finalAfterEndAudio: SpeechTranscript?
     /// Thrown synchronously from `startListening()` instead of returning a stream, when set.
     var startError: SpeechRecognitionFailure?
     var finishesAutomatically = true
+    /// `endAudio()` ends the stream (the default) so tests that script no final don't pay the
+    /// controller's real 0.8 s wait. Set `false` to model a recognizer that is still deciding —
+    /// which is the window a second press has to land in to reproduce the re-press race.
+    var finishesOnEndAudio = true
 
     private(set) var startListeningCallCount = 0
+    private(set) var endAudioCallCount = 0
     private(set) var stopListeningCallCount = 0
     private var continuation: AsyncThrowingStream<SpeechRecognitionEvent, Error>.Continuation?
 
@@ -49,6 +60,15 @@ final class FakeSpeechRecognizer: SpeechRecognizing {
             self.continuation = nil
         }
         return stream
+    }
+
+    func endAudio() {
+        endAudioCallCount += 1
+        guard let continuation else { return }
+        if let finalAfterEndAudio { continuation.yield(.final(finalAfterEndAudio)) }
+        guard finishesOnEndAudio else { return }
+        continuation.finish()
+        self.continuation = nil
     }
 
     func stopListening() {

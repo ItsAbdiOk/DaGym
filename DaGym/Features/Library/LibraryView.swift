@@ -242,7 +242,6 @@ private struct LibraryRow: View {
                 )
         }
         .buttonStyle(.dgControl)
-        .dgTapTarget()
         .accessibilityLabel(exercise.isFavorite ? "Remove from favourites" : "Add to favourites")
     }
 

@@ -52,7 +52,6 @@ extension ActiveWorkoutView {
             }
             Button("Finish") { showFinishConfirm = true }
                 .buttonStyle(.dgControl)
-                .dgTapTarget()
                 .font(DGFont.condensedLabel(13))
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.inkOnCoral)

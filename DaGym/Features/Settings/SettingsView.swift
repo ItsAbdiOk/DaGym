@@ -29,6 +29,7 @@ struct SettingsView: View {
                     restTimerCard
                     trainingCard
                     RemindersSettingsSection()
+                    VoiceSettingsSection()
                     DisplaySettingsSection()
                     calendarCard
                     ICloudSettingsSection()

@@ -7,7 +7,9 @@ import SwiftUI
 /// in `ExerciseArtCatalog`, or while its paths are still loading.
 ///
 /// `animated` cycles frame 1 → 2 → 3 → 2 on a gentle loop so the motion reads as one rep, not a
-/// flicker. With `accessibilityReduceMotion` on, it shows frame 1 only — no looping motion.
+/// flicker. With `accessibilityReduceMotion` on there is no loop: the art cross-fades once from
+/// frame 1 to frame 3 and then stays still, and the driving timeline is torn down so nothing
+/// keeps re-rendering at display refresh rate.
 struct ExerciseArtView: View {
     var seedID: String?
     var size: CGFloat = 44
@@ -16,11 +18,18 @@ struct ExerciseArtView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var frameIndex = 0
     @State private var paths: [Path]?
+    /// When the reduce-motion one-shot cross-fade started, and whether it has finished.
+    /// `nil`/`false` until the motion task runs; once finished the `TimelineView` is torn
+    /// down so nothing re-evaluates at display refresh rate any more.
+    @State private var crossfadeStart: Date?
+    @State private var crossfadeFinished = false
 
     /// One playback step: 1 → 2 → 3 → 2 → (repeat), each held long enough to read as a
     /// deliberate rep rather than a flicker.
     private static let sequence = [1, 2, 3, 2]
     private static let stepDuration: TimeInterval = 0.55
+    /// The reduce-motion one-shot cross-fade: frame 1 → frame 3, once, then still.
+    private static let crossfadeDuration: TimeInterval = 4
 
     var body: some View {
         Group {
@@ -36,27 +45,37 @@ struct ExerciseArtView: View {
 
     @ViewBuilder
     private func artwork(frames: [Path]) -> some View {
-        if reduceMotion {
-            // No looping motion: frame 1 at rest, or a slow one-shot cross-fade into frame 3
-            // when asked to animate, per the reduce-motion contract (no repeating movement).
-            if animated {
+        motionFrames(frames)
+            // Owned by SwiftUI, so it is cancelled when the view goes away and restarted (not
+            // stacked) when it comes back or when `animated`/Reduce Motion flips.
+            .task(id: motionID) { await runMotion() }
+    }
+
+    @ViewBuilder
+    private func motionFrames(_ frames: [Path]) -> some View {
+        if !animated {
+            frameShape(frames[0])
+        } else if reduceMotion {
+            // No looping motion: a slow one-shot cross-fade into frame 3, then a still frame —
+            // the timeline is gone once it lands, so nothing keeps re-rendering.
+            if crossfadeFinished {
+                frameShape(frames[2])
+            } else {
                 TimelineView(.animation) { context in
-                    let t = crossfadeProgress(since: context.date)
+                    let t = crossfadeProgress(at: context.date)
                     ZStack {
                         frameShape(frames[0]).opacity(1 - t)
                         frameShape(frames[2]).opacity(t)
                     }
                 }
-            } else {
-                frameShape(frames[0])
             }
-        } else if animated {
-            frameShape(frames[Self.sequence[frameIndex] - 1])
-                .onAppear(perform: startLoop)
         } else {
-            frameShape(frames[0])
+            frameShape(frames[Self.sequence[frameIndex] - 1])
         }
     }
+
+    /// Restarts the motion task whenever anything it depends on changes.
+    private var motionID: String { "\(seedID ?? "")|\(animated)|\(reduceMotion)" }
 
     private func frameShape(_ framePath: Path) -> some View {
         ExerciseArtShape(source: framePath)
@@ -72,21 +91,32 @@ struct ExerciseArtView: View {
         paths = await ExerciseArtPathStore.shared.frames(forSlug: slug)
     }
 
-    private func startLoop() {
-        guard animated, !reduceMotion else { return }
-        Task { @MainActor in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(Self.stepDuration))
-                guard animated else { return }
-                frameIndex = (frameIndex + 1) % Self.sequence.count
-            }
+    /// Drives whichever motion the current settings call for, as a structured child of the
+    /// view's own `.task(id:)` so SwiftUI cancels it on disappear — no detached ticker outlives
+    /// the view, and re-appearing never stacks a second one.
+    private func runMotion() async {
+        guard animated else { return }
+        guard !reduceMotion else {
+            crossfadeFinished = false
+            crossfadeStart = .now
+            try? await Task.sleep(for: .seconds(Self.crossfadeDuration))
+            guard !Task.isCancelled else { return }
+            crossfadeFinished = true
+            return
+        }
+        frameIndex = 0
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(Self.stepDuration))
+            guard !Task.isCancelled else { return }
+            frameIndex = (frameIndex + 1) % Self.sequence.count
         }
     }
 
-    /// A slow 4-second one-shot cross-fade, held on frame 3, for the reduce-motion + animated case.
-    private func crossfadeProgress(since referenceDate: Date) -> Double {
-        let elapsed = referenceDate.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 8)
-        return min(1, max(0, elapsed / 4))
+    /// A slow one-shot cross-fade anchored to the moment the view appeared (not to the absolute
+    /// clock), so it runs exactly once instead of restarting on a repeating modulus.
+    private func crossfadeProgress(at date: Date) -> Double {
+        guard let crossfadeStart else { return 0 }
+        return min(1, max(0, date.timeIntervalSince(crossfadeStart) / Self.crossfadeDuration))
     }
 
     private var accessibilityLabel: String {

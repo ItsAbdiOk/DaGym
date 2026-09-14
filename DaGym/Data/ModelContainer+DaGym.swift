@@ -24,17 +24,26 @@ enum DaGymSchema {
         SeedStateModel.self,
         ExerciseNoteModel.self,
         GymCardModel.self,
-        CoachInteractionModel.self
+        CoachInteractionModel.self,
+        ImportedHealthWorkoutModel.self,
+        IgnoredHealthWorkoutModel.self
     ]
 
     /// Models that live in the separate, always-local photo store (see
     /// `ModelContainer.dagym(...)`), not the main CloudKit-syncable one.
     static let photoModels: [any PersistentModel.Type] = [ProgressPhotoModel.self]
 
+    /// Models holding HealthKit-derived rows. They live in their own always-local store
+    /// (`ModelContainer.dagymHealth`) because App Store Guideline 5.1.3 forbids storing data
+    /// read out of HealthKit in iCloud — exactly the reason photos have their own store.
+    static let healthModels: [any PersistentModel.Type] = [
+        ImportedHealthWorkoutModel.self, IgnoredHealthWorkoutModel.self
+    ]
+
     /// Every other model — the ones the main configuration owns.
     static var mainModels: [any PersistentModel.Type] {
-        let photoIDs = Set(photoModels.map(ObjectIdentifier.init))
-        return models.filter { !photoIDs.contains(ObjectIdentifier($0)) }
+        let localIDs = Set((photoModels + healthModels).map(ObjectIdentifier.init))
+        return models.filter { !localIDs.contains(ObjectIdentifier($0)) }
     }
 }
 
@@ -85,6 +94,21 @@ extension ModelContainer {
             )
         return try ModelContainer(for: schema, configurations: [configuration])
     }
+
+    /// HealthKit-derived rows (imported external workouts and their delete tombstones): a
+    /// separate, always-local container so nothing read out of Apple Health can ever reach
+    /// iCloud, whatever `Preferences.iCloudSyncEnabled` is set to. App Store Guideline 5.1.3.
+    static func dagymHealth(inMemory: Bool = false) throws -> ModelContainer {
+        let schema = Schema(DaGymSchema.healthModels)
+        let configuration = inMemory
+            ? ModelConfiguration(
+                "DaGymHealth", schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none
+            )
+            : ModelConfiguration(
+                "DaGymHealth", schema: schema, url: StoreMigration.healthStoreURL(), cloudKitDatabase: .none
+            )
+        return try ModelContainer(for: schema, configurations: [configuration])
+    }
 }
 
 /// Moves the on-disk SwiftData store from its pre-App-Group default location into the App Group
@@ -106,6 +130,12 @@ enum StoreMigration {
     /// `iCloudSyncEnabled` is set to.
     static func photoStoreURL() -> URL {
         containerDirectory().appendingPathComponent("DaGymPhotos.sqlite")
+    }
+
+    /// Where the always-local HealthKit-derived store lives — its own file alongside the others,
+    /// never CloudKit-backed (App Store Guideline 5.1.3).
+    static func healthStoreURL() -> URL {
+        containerDirectory().appendingPathComponent("DaGymHealth.sqlite")
     }
 
     /// Copies `<name>.store` plus its `-wal`/`-shm` sidecar files from the legacy location to the

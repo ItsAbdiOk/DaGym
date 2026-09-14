@@ -12,6 +12,10 @@ struct CoachView: View {
     @State private var cards: [CoachCard] = []
     @State private var expanded: Set<String> = []
     @State private var undoAction: UndoAction?
+    /// Whether anything has been logged yet — "nothing to flag" and "nothing to read" are two
+    /// different empty states, and congratulating someone on consistency before their first
+    /// workout reads as a machine that isn't looking.
+    @State private var hasTrained = false
 
     var body: some View {
         ZStack {
@@ -20,12 +24,7 @@ struct CoachView: View {
                 VStack(alignment: .leading, spacing: DGSpace.s5) {
                     header
                     if cards.isEmpty {
-                        EmptyState(
-                            symbol: "checkmark.seal",
-                            title: "You're On Track",
-                            message: "No flags right now — that's what consistent training looks "
-                                + "like. Check back after your next session."
-                        )
+                        emptyState
                     } else {
                         ForEach(cards, id: \.fingerprint) { card in
                             CoachCardView(
@@ -52,6 +51,25 @@ struct CoachView: View {
         .dgWarmHaptics()
     }
 
+    @ViewBuilder
+    private var emptyState: some View {
+        if hasTrained {
+            EmptyState(
+                symbol: "checkmark.seal",
+                title: "You're On Track",
+                message: "No flags right now — that's what consistent training looks like. "
+                    + "Check back after your next session."
+            )
+        } else {
+            EmptyState(
+                symbol: "list.bullet.clipboard",
+                title: "Nothing To Read Yet",
+                message: "These checks run on your logged sessions. Finish a workout or two and "
+                    + "anything worth flagging will show up here."
+            )
+        }
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: DGSpace.s2) {
             Text("Coach")
@@ -74,6 +92,7 @@ struct CoachView: View {
         cards = store.coachCards(
             weeklyGoal: preferences.weeklyGoal, now: Date(), calendar: preferences.trainingCalendar
         )
+        hasTrained = !store.workoutDates().isEmpty
     }
 
     private func toggle(_ card: CoachCard) {
@@ -88,10 +107,27 @@ struct CoachView: View {
     /// suggested action this adapter can carry out with no active workout to hand it to — see
     /// `WorkoutStore.applyCoachDeload`). Every other suggested action is recorded honestly as
     /// "seen and agreed with" without pretending to act on it.
+    ///
+    /// Undoable, like Dismiss: Approve is the button that actually changes the lifter's plan, so
+    /// it had the stronger claim on an Undo of the two and was the one without it. Undo puts back
+    /// both the plan targets and the recorded approval.
     private func approve(_ card: CoachCard) {
-        store.recordCoachInteraction(rule: card.rule, fingerprint: card.fingerprint, outcome: .approved)
-        if case .deloadExercise(let exerciseName, let toWeightKg, _) = card.suggestedAction {
-            store.applyCoachDeload(exerciseName: exerciseName, toWeightKg: toWeightKg)
+        let interactionID = store.recordCoachInteraction(
+            rule: card.rule, fingerprint: card.fingerprint, outcome: .approved
+        )
+        var applied: CoachDeloadApplication?
+        if case .deloadExercise(let name, let exerciseID, let toWeightKg) = card.suggestedAction {
+            applied = store.applyCoachDeload(
+                exerciseID: exerciseID, exerciseName: name, toWeightKg: toWeightKg
+            )
+        }
+        let message = applied.map {
+            "\($0.exerciseName) set to \(preferences.formatWeight(kg: $0.weightKg))"
+        } ?? "Approved \"\(card.title)\""
+        undoAction = UndoAction(message: message) {
+            if let applied { store.undoCoachDeload(applied) }
+            store.removeCoachInteraction(id: interactionID)
+            refresh()
         }
         refresh()
     }

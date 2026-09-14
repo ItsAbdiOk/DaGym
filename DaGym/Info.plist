@@ -55,9 +55,9 @@
 	<key>NSFaceIDUsageDescription</key>
 	<string>DaGym can lock your progress photos behind Face ID.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>DaGym reads your bodyweight, body fat percentage, lean body mass, height, heart-rate variability, resting heart rate, sleep and workouts logged in other apps to personalise training suggestions and fill in your Body screen. Nothing is uploaded anywhere.</string>
+	<string>DaGym reads your bodyweight, body fat percentage, lean body mass, height, heart-rate variability, resting heart rate, sleep and workouts logged in other apps to personalise training suggestions and fill in your Body screen. What DaGym reads from Health stays on this iPhone — it is never copied to iCloud or sent to a server.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>DaGym saves your strength workouts and bodyweight to Apple Health, plus an active-energy estimate only if you turn that on in Settings.</string>
+	<string>DaGym saves your strength workouts and bodyweight to Apple Health, plus an active-energy estimate only if you turn that on in Settings. Deleting a workout in DaGym deletes the one it wrote to Health too.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>DaGym uses the microphone so you can log sets by voice mid-workout. Audio is processed entirely on your device and never leaves it.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

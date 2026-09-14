@@ -22,11 +22,21 @@ public struct CoachSessionSummary: Hashable, Sendable {
 /// app layer assembles this once and both engines read from it.
 public struct CoachLiftSnapshot: Hashable, Sendable {
     public var name: String
+    /// The library exercise this lift is, so an approved action names a row rather than a string
+    /// (two custom exercises may share a name). Nil when the app layer couldn't resolve one.
+    public var exerciseID: UUID?
     public var stallState: StallState
-    /// e1RM from recent sessions, oldest first, excluding planned deloads — same contract as
-    /// `DeloadDetector.LiftSnapshot.e1rmTrend`.
+    /// e1RM from recent sessions, oldest first, excluding planned deloads, at most
+    /// `TrainingConstants.coachE1rmDowntrendSessions` long — the window this coach's own
+    /// downtrend rule judges. Longer is not better: `deloadSnapshot` trims it again to the three
+    /// points `DeloadDetector.LiftSnapshot.e1rmTrend` is specified over.
     public var e1rmTrend: [Double]
+    /// Average RPE at the same load, oldest first, same length contract as `e1rmTrend`.
     public var rpeAtSameLoadTrend: [Double]?
+    /// The rounding grid this lift's load must land on (plates, a dumbbell step, a machine
+    /// stack). Nil for bodyweight/assisted/timed work and when the app layer can't tell — the
+    /// stalled-lift rule then names no concrete weight rather than inventing an unloadable one.
+    public var loadGrid: LoadGrid?
     public var lastWorkingWeightKg: Double?
     public var lastWorkingSetCount: Int?
     /// Sessions in a row this lift was either missed (target not hit) or logged as a failure —
@@ -39,26 +49,44 @@ public struct CoachLiftSnapshot: Hashable, Sendable {
     public var substitutionCandidate: SubstitutionCandidate?
 
     public init(
-        name: String, stallState: StallState, e1rmTrend: [Double], rpeAtSameLoadTrend: [Double]? = nil,
+        name: String, exerciseID: UUID? = nil, stallState: StallState, e1rmTrend: [Double],
+        rpeAtSameLoadTrend: [Double]? = nil, loadGrid: LoadGrid? = nil,
         lastWorkingWeightKg: Double? = nil, lastWorkingSetCount: Int? = nil,
         consecutiveFailedSessions: Int = 0, substitutionCandidate: SubstitutionCandidate? = nil
     ) {
         self.name = name
+        self.exerciseID = exerciseID
         self.stallState = stallState
         self.e1rmTrend = e1rmTrend
         self.rpeAtSameLoadTrend = rpeAtSameLoadTrend
+        self.loadGrid = loadGrid
         self.lastWorkingWeightKg = lastWorkingWeightKg
         self.lastWorkingSetCount = lastWorkingSetCount
         self.consecutiveFailedSessions = consecutiveFailedSessions
         self.substitutionCandidate = substitutionCandidate
     }
 
-    /// The `DeloadDetector.LiftSnapshot` view of this lift, for the deload-overdue rule.
+    /// The `DeloadDetector.LiftSnapshot` view of this lift, for the deload-overdue rule. Both
+    /// trends are trimmed to the last `TrainingConstants.deloadTrendSessions` points that type is
+    /// specified over: `DeloadDetector.isNotProgressing` compares the *first* element against the
+    /// last, so handing it a longer history would read "higher than a season ago" as "not
+    /// progressing" for anyone who has ever had a better month.
     var deloadSnapshot: LiftSnapshot {
-        LiftSnapshot(
-            name: name, stalls: stallState.consecutiveMisses, e1rmTrend: e1rmTrend,
-            rpeAtSameLoadTrend: rpeAtSameLoadTrend
+        let window = TrainingConstants.deloadTrendSessions
+        return LiftSnapshot(
+            name: name, stalls: stallState.consecutiveMisses,
+            e1rmTrend: Array(e1rmTrend.suffix(window)),
+            rpeAtSameLoadTrend: rpeAtSameLoadTrend.map { Array($0.suffix(window)) }
         )
+    }
+
+    /// True when this lift alone is enough for `DeloadDetector` to say something — used to
+    /// collapse the deload-overdue card into the per-lift card that already covers the same
+    /// evidence. The stall arm is checked directly because `DeloadDetector` only reports stalls
+    /// once `deloadMinLiftsStalling` lifts share one.
+    var drivesDeloadSuggestion: Bool {
+        if stallState.consecutiveMisses >= TrainingConstants.deloadStallCount { return true }
+        return DeloadDetector.evaluate(lifts: [deloadSnapshot], hardWeeks: 0) != nil
     }
 }
 
@@ -120,6 +148,11 @@ public struct CoachInput: Sendable {
     // Muscle coverage: sets per muscle over the rolling `coachCoverageWindowDays` window, already
     // computed (e.g. via `BodySeries.setsPerMuscle(workouts:window:now:calendar:)`).
     public var muscleSetsInWindow: [Muscle: Double]
+    /// The muscles this lifter's *current* plan trains as a **primary** mover. Secondary-only
+    /// muscles are deliberately excluded: `setsPerMuscle` weights a secondary mover at 0.5, so a
+    /// muscle that only ever gets incidental work can never clear
+    /// `coachMinSetsPerMuscleInWindow` and would flag a gap forever for training that is going
+    /// exactly to plan.
     public var trackedMuscles: [Muscle]
 
     // Per-lift state: stalls, e1RM trend, struggling/substitution info.

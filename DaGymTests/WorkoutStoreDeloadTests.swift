@@ -125,18 +125,46 @@ struct WorkoutStoreDeloadTests {
         stalledLift(store, name: "Squat")
 
         let suggestion = try #require(store.deloadSuggestion(snoozedUntil: nil))
-        let dismissed = store.deloadSuggestion(
-            snoozedUntil: nil, dismissedFingerprint: suggestion.fingerprint
-        )
-        #expect(dismissed == nil)
+        store.dismissDeloadSuggestion(suggestion)
+        #expect(store.deloadSuggestion(snoozedUntil: nil) == nil)
 
         stalledLift(store, name: "Overhead Press")
-        let stillSuppressed = store.deloadSuggestion(
-            snoozedUntil: nil, dismissedFingerprint: suggestion.fingerprint
-        )
-        // New evidence (a third stalled lift changes the reason string/fingerprint) still shows.
+        let stillSuppressed = store.deloadSuggestion(snoozedUntil: nil)
+        // New evidence (a third stalled lift joins the set driving it) still shows.
         #expect(stillSuppressed != nil)
         #expect(stillSuppressed?.fingerprint != suggestion.fingerprint)
+    }
+
+    @Test("Home and the Coach tab show the same card, and one dismissal covers both")
+    func homeAndCoachShareOneCard() throws {
+        let store = try makeStore()
+        stalledLift(store, name: "Bench Press")
+        stalledLift(store, name: "Squat")
+
+        let now = Date()
+        let home = try #require(store.deloadSuggestion(snoozedUntil: nil, now: now))
+        let coachCard = try #require(store.coachCards(now: now).first { $0.rule == .deloadOverdue })
+        // Same evidence, same wording, same identity — not two implementations that agree today.
+        #expect(home.fingerprint == coachCard.fingerprint)
+        #expect(home.reason == coachCard.body)
+
+        // Dismissing on the Coach tab takes Home's card down too.
+        store.recordCoachInteraction(
+            rule: .deloadOverdue, fingerprint: coachCard.fingerprint, outcome: .dismissed, date: now
+        )
+        #expect(store.deloadSuggestion(snoozedUntil: nil, now: now) == nil)
+        #expect(!store.coachCards(now: now).contains { $0.rule == .deloadOverdue })
+    }
+
+    @Test("hardWeekStreak reads the `now` it is given, not the clock")
+    func hardWeekStreakIsPureOverNow() throws {
+        let store = try makeStore()
+        stalledLift(store, name: "Bench Press")
+        // A year from now nothing has been trained "this week" whatever today is, so the streak
+        // is zero — which it can only be if `now` is actually used.
+        let farFuture = try #require(Calendar.current.date(byAdding: .year, value: 1, to: Date()))
+        #expect(store.hardWeekStreak(weeklyGoal: 1, now: farFuture) == 0)
+        #expect(store.hardWeekStreak(weeklyGoal: 1, now: Date()) >= 1)
     }
 
     /// Like `stalledLift`'s session logging, but lets the caller flag the session as a planned

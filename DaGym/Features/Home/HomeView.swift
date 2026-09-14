@@ -108,9 +108,12 @@ struct HomeView: View {
         deloadSuggestion = nil
     }
 
+    /// "Not now": snoozes the whole card for a week *and* records the dismissal against this
+    /// evidence in the same store the Coach tab reads, so the identical card doesn't just
+    /// reappear one tab over (`WorkoutStore.dismissDeloadSuggestion`).
     private func snoozeDeload() {
         preferences.deloadSnoozedUntil = Calendar.current.date(byAdding: .day, value: 7, to: Date())
-        preferences.deloadDismissedFingerprint = deloadSuggestion?.fingerprint
+        if let deloadSuggestion { store.dismissDeloadSuggestion(deloadSuggestion) }
         deloadSuggestion = nil
     }
 

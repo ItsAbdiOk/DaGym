@@ -30,6 +30,8 @@ final class ContainerProvider {
     private var mainContainer: ModelContainer?
     private var photoContainer: ModelContainer?
     private var photosResolved = false
+    private var healthContainer: ModelContainer?
+    private var healthResolved = false
     private var sharedStore: WorkoutStore?
     private(set) var mainResolution: Resolution?
 
@@ -63,6 +65,22 @@ final class ContainerProvider {
         return photoContainer
     }
 
+    /// The always-local store for HealthKit-derived rows (imported external workouts and their
+    /// delete tombstones), or `nil` if it failed to open — Health import then reads as empty and
+    /// refuses writes rather than falling back to the CloudKit-mirrored main store, which
+    /// Guideline 5.1.3 forbids. See `WorkoutStore.healthContext`.
+    func healthImports() -> ModelContainer? {
+        if healthResolved { return healthContainer }
+        healthResolved = true
+        do {
+            healthContainer = try ModelContainer.dagymHealth(inMemory: inMemory)
+        } catch {
+            let message = error.localizedDescription
+            containerLogger.error("Health store failed to load: \(message, privacy: .public)")
+        }
+        return healthContainer
+    }
+
     /// One `WorkoutStore` over the main container's `mainContext`, shared by the app shell and
     /// the intents so a bodyweight logged through Siri is written by the context the open app
     /// is reading from.
@@ -70,7 +88,8 @@ final class ContainerProvider {
         if let sharedStore { return sharedStore }
         guard let container = main(cloudKitEnabled: cloudKitEnabled) else { return nil }
         let store = WorkoutStore(
-            context: container.mainContext, photoContext: photos().map(ModelContext.init)
+            context: container.mainContext, photoContext: photos().map(ModelContext.init),
+            healthContext: healthImports().map(ModelContext.init)
         )
         sharedStore = store
         return store

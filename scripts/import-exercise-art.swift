@@ -211,11 +211,6 @@ private func runMain() throws {
 /// this specific source package emits.
 private let pathDataRegex = try! NSRegularExpression(pattern: #"d="([^"]*)""#)
 
-/// A decimal token in path data, e.g. "123.456" or the leading-dot shorthand SVG minifiers use,
-/// "-.957" (no digit before the point). Used to round coordinate precision down before shipping
-/// — see `roundCoordinates`. Bare integers ("-7") need no rounding and are left untouched.
-private let numberRegex = try! NSRegularExpression(pattern: #"-?[0-9]*\.[0-9]+"#)
-
 private func extractPathData(from svgURL: URL) throws -> String {
     let content = try String(contentsOf: svgURL, encoding: .utf8)
     let range = NSRange(content.startIndex..., in: content)
@@ -227,33 +222,127 @@ private func extractPathData(from svgURL: URL) throws -> String {
     return String(content[group])
 }
 
-/// Rounds every decimal coordinate in `d` to `decimals` places. At the 44–240pt sizes
+/// One lexed piece of path data: a command letter, or a parameter.
+private enum PathToken: Equatable {
+    case command(Character)
+    /// A numeric parameter, with the text it was written as.
+    case number(Double, String)
+    /// An arc's large-arc / sweep flag — always a bare "0" or "1", never rounded or reshaped.
+    case flag(Character)
+}
+
+/// Lexes SVG path data the way a conforming renderer does, which is the only way to read it
+/// unambiguously: inside an `A`/`a` command, parameters 4 and 5 are single-character flags, so
+/// the minified form `a1.5 1.5 0 01.3.2` means (1.5, 1.5, 0, flag 0, flag 1, .3, .2) — a plain
+/// "a number is digits with a dot" scan would instead read "01.3" as one coordinate and silently
+/// desync every command after it. The vendored MuscleMap data is written in exactly that style,
+/// so this has to be arc-aware even though today's exercise-art source is not minified.
+private func lexPathData(_ d: String) -> [PathToken] {
+    var tokens: [PathToken] = []
+    var index = d.startIndex
+    var command: Character?
+    var paramIndex = 0
+
+    func isArcFlagPosition() -> Bool {
+        guard let command, command == "a" || command == "A" else { return false }
+        let position = paramIndex % 7
+        return position == 3 || position == 4
+    }
+
+    while index < d.endIndex {
+        let char = d[index]
+        if char.isLetter {
+            command = char
+            paramIndex = 0
+            tokens.append(.command(char))
+            index = d.index(after: index)
+        } else if char == " " || char == "," || char == "\n" || char == "\t" || char == "\r" {
+            index = d.index(after: index)
+        } else if isArcFlagPosition(), char == "0" || char == "1" {
+            tokens.append(.flag(char))
+            paramIndex += 1
+            index = d.index(after: index)
+        } else {
+            var text = ""
+            if char == "-" || char == "+" {
+                text.append(char)
+                index = d.index(after: index)
+            }
+            var hasDecimal = false
+            var hasExponent = false
+            while index < d.endIndex {
+                let next = d[index]
+                if next.isNumber {
+                    text.append(next)
+                } else if next == "." && !hasDecimal && !hasExponent {
+                    hasDecimal = true
+                    text.append(next)
+                } else if (next == "e" || next == "E") && !hasExponent && !text.isEmpty {
+                    hasExponent = true
+                    text.append(next)
+                    index = d.index(after: index)
+                    if index < d.endIndex, d[index] == "-" || d[index] == "+" {
+                        text.append(d[index])
+                    } else {
+                        continue
+                    }
+                } else {
+                    break
+                }
+                index = d.index(after: index)
+            }
+            guard let value = Double(text) else { break }
+            tokens.append(.number(value, text))
+            paramIndex += 1
+        }
+    }
+    return tokens
+}
+
+/// Rounds every coordinate in `d` to `decimals` places. At the 44–240pt sizes
 /// `ExerciseArtView` renders these paths (against a 512-unit viewBox), 1 decimal place is well
 /// under a tenth of a display pixel of error — invisible — while shrinking the shipped data
 /// (repeated short decimals compress much better than the source SVGs' full float precision).
-private func roundCoordinates(_ d: String, decimals: Int) -> String {
-    let range = NSRange(d.startIndex..., in: d)
-    let matches = numberRegex.matches(in: d, range: range)
-    var result = ""
-    var cursor = d.startIndex
+///
+/// Rewrites from the lexed token stream with explicit separators, so a rounded number can never
+/// merge into its neighbour the way the source's unseparated shorthand ("2.3.346" = 2.3, .346)
+/// invites. Throws if re-lexing the result does not reproduce the same token shape, which is the
+/// backstop against this ever silently desyncing a frame.
+private func roundCoordinates(_ d: String, decimals: Int) throws -> String {
+    let tokens = lexPathData(d)
     let scale = pow(10.0, Double(decimals))
-    for match in matches {
-        guard let matchRange = Range(match.range, in: d) else { continue }
-        let gap = d[cursor..<matchRange.lowerBound]
-        // Source SVGs sometimes butt two numbers together with no separator, relying on a
-        // second "." (or a "-" sign) to mark the boundary ("2.3.346" = 2.3, then .346). Rounding
-        // can reshape a number (drop its "." entirely, or gain a leading "0") in a way that
-        // erases that boundary and lets the two numbers silently merge into one wrong value on
-        // reparse. An empty gap between two number tokens is exactly that unseparated case, so
-        // force a space there rather than trusting the (possibly now-different) token shapes to
-        // still be self-delimiting.
-        result += gap.isEmpty && !result.isEmpty ? " " : gap
-        let value = (Double(d[matchRange]) ?? 0)
-        let rounded = (value * scale).rounded() / scale
-        result += trimmedNumber(rounded, decimals: decimals)
-        cursor = matchRange.upperBound
+    var result = ""
+    var previousWasParameter = false
+    for token in tokens {
+        switch token {
+        case .command(let letter):
+            result.append(letter)
+            previousWasParameter = false
+        case .flag(let digit):
+            if previousWasParameter { result.append(" ") }
+            result.append(digit)
+            previousWasParameter = true
+        case .number(let value, _):
+            if previousWasParameter { result.append(" ") }
+            result += trimmedNumber((value * scale).rounded() / scale, decimals: decimals)
+            previousWasParameter = true
+        }
     }
-    result += d[cursor...]
+
+    let relexed = lexPathData(result)
+    guard relexed.count == tokens.count else {
+        throw ImportError.roundingDesync(before: tokens.count, after: relexed.count)
+    }
+    for (original, rewritten) in zip(tokens, relexed) {
+        switch (original, rewritten) {
+        case (.command(let lhs), .command(let rhs)) where lhs == rhs: continue
+        case (.flag(let lhs), .flag(let rhs)) where lhs == rhs: continue
+        case (.number(let lhs, _), .number(let rhs, _))
+            where abs(lhs - rhs) <= 1 / scale / 2 + .ulpOfOne: continue
+        default:
+            throw ImportError.roundingDesync(before: tokens.count, after: relexed.count)
+        }
+    }
     return result
 }
 
@@ -268,10 +357,15 @@ private func trimmedNumber(_ value: Double, decimals: Int) -> String {
 
 private enum ImportError: Error, CustomStringConvertible {
     case noPathData(String)
+    case roundingDesync(before: Int, after: Int)
 
     var description: String {
         switch self {
         case .noPathData(let filename): return "no d=\"...\" path found in \(filename)"
+        case .roundingDesync(let before, let after):
+            return "rounding changed the path's token stream (\(before) tokens in, \(after) out) "
+                + "— the source path data uses a form the tokenizer mis-reads; fix lexPathData "
+                + "before shipping this blob"
         }
     }
 }
@@ -289,7 +383,7 @@ private func writePathData(
                 of: "assets/", with: ""
             ))
             let rawPath = try extractPathData(from: sourceSVG)
-            frames.append(roundCoordinates(rawPath, decimals: 1))
+            frames.append(try roundCoordinates(rawPath, decimals: 1))
         }
         framesBySlug[exercise.slug] = frames
     }

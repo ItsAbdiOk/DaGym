@@ -27,9 +27,11 @@ struct LogBodyweightIntent: AppIntent {
         let preferences = Preferences()
         let unit = preferences.weightUnit
         let kg = unit.toKg(weight)
-        store.logBodyweight(kg: kg)
+        // The pushed Health sample carries the logged row's own date, so the two sides describe
+        // the same weigh-in rather than two a few milliseconds apart.
+        let logged = store.logBodyweight(kg: kg)
         let health = HealthSyncService(workoutStore: store, preferences: preferences)
-        await health.pushBodyweight(kg: kg)
+        await health.pushBodyweight(kg: kg, date: logged.date)
         let dialog = IntentFormatting.bodyweightLoggedDialog(kg: kg, unit: unit)
         return .result(dialog: IntentDialog(stringLiteral: dialog))
     }

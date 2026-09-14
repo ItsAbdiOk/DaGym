@@ -31,17 +31,17 @@ struct CoachEngineTests {
         #expect(cards.count <= 2)
     }
 
-    /// Deliberately over-provisions evidence for every rule so more than
-    /// `TrainingConstants.coachMaxCards` would otherwise fire, and checks the cap actually engages.
-    @Test("output is capped even when many rules fire at once")
-    func outputIsCapped() {
+    /// Evidence for every rule at once, so more than `TrainingConstants.coachMaxCards` would
+    /// otherwise fire. Shared by the cap tests below.
+    private var overProvisionedInput: CoachInput {
         let liftA = CoachLiftSnapshot(
             name: "Bench Press", stallState: StallState(consecutiveMisses: 3, lastWeightKg: 60),
-            e1rmTrend: [100, 100, 95, 90], lastWorkingWeightKg: 60, lastWorkingSetCount: 4
+            e1rmTrend: [100, 100, 95, 90], loadGrid: .step(2.5), lastWorkingWeightKg: 60,
+            lastWorkingSetCount: 4
         )
         let liftB = CoachLiftSnapshot(
             name: "Squat", stallState: StallState(consecutiveMisses: 4, lastWeightKg: 100),
-            e1rmTrend: [], lastWorkingWeightKg: 100, lastWorkingSetCount: 4
+            e1rmTrend: [], loadGrid: .step(2.5), lastWorkingWeightKg: 100, lastWorkingSetCount: 4
         )
         let strugglingCandidate = SubstitutionCandidate(
             id: UUID(), name: "Overhead Press", primary: [.delts], equipment: "barbell", mechanic: "compound"
@@ -52,7 +52,7 @@ struct CoachEngineTests {
         )
         let strugglingLift = CoachLiftSnapshot(
             name: "Overhead Press", stallState: StallState(), e1rmTrend: [],
-            consecutiveFailedSessions: 3, substitutionCandidate: strugglingCandidate
+            consecutiveFailedSessions: 4, substitutionCandidate: strugglingCandidate
         )
 
         // Adherence needs its own shape: the two weeks right before `now`'s own week barely
@@ -70,7 +70,7 @@ struct CoachEngineTests {
             sparseWeekOffsets.compactMap { calendar.date(byAdding: .day, value: $0, to: monday) }
         }
 
-        let input = CoachInput(
+        return CoachInput(
             schedule: WeeklySchedule(dayRoutines: [
                 .monday: [UUID()], .tuesday: [UUID()], .wednesday: [UUID()], .thursday: [UUID()]
             ]),
@@ -97,9 +97,68 @@ struct CoachEngineTests {
             )],
             lastWorkoutDate: CoachTestSupport.daysAgo(60, from: now)
         )
+    }
 
-        let cards = CoachEngine.cards(for: input, now: now, calendar: calendar)
+    @Test("output is capped even when many rules fire at once")
+    func outputIsCapped() {
+        let cards = CoachEngine.cards(for: overProvisionedInput, now: now, calendar: calendar)
         #expect(cards.count == TrainingConstants.coachMaxCards)
+    }
+
+    /// *Which* five, not just how many. The cap is a ranking, so what it drops is the point:
+    /// every warning survives, the two highest-ranked notices follow, and the PR — pleasant but
+    /// not urgent — is the first thing cut.
+    @Test("the cap keeps the warnings and drops the pleasantries")
+    func capKeepsTheRightCards() {
+        let cards = CoachEngine.cards(for: overProvisionedInput, now: now, calendar: calendar)
+        let rules = Set(cards.map(\.rule))
+        #expect(rules == Set([
+            .stalledLift, .e1rmDowntrend, .deloadOverdue, .recoveryDebt, .returnFromLayoff
+        ] as [CoachRule]))
+        #expect(cards.prefix(3).allSatisfy { $0.severity == .warning })
+        #expect(!rules.contains(.prMilestone))
+        // The layoff explains the missed weeks, so neither restatement of it is even generated.
+        #expect(!rules.contains(.adherenceDrop))
+        #expect(!rules.contains(.muscleCoverageGap))
+    }
+
+    @Test("a holiday returner gets one card about not training, not three")
+    func layoffSuppressesItsOwnRestatements() {
+        let routineID = UUID()
+        let schedule = WeeklySchedule(dayRoutines: [
+            .monday: [routineID], .tuesday: [routineID], .wednesday: [routineID], .thursday: [routineID]
+        ])
+        // Two full weeks of training, then two empty ones, and nothing logged for 40 days.
+        let attended = ["2023-12-11T00:00:00Z", "2023-12-18T00:00:00Z"].flatMap { monday in
+            (0..<4).compactMap {
+                calendar.date(byAdding: .day, value: $0, to: CoachTestSupport.date(monday))
+            }
+        }
+        let input = CoachInput(
+            schedule: schedule, workoutDates: attended,
+            muscleSetsInWindow: [.chest: 0, .hams: 0], trackedMuscles: [.chest, .hams],
+            lastWorkoutDate: CoachTestSupport.daysAgo(40, from: now)
+        )
+        let cards = CoachEngine.cards(for: input, now: now, calendar: calendar)
+        #expect(cards.map(\.rule) == [.returnFromLayoff])
+    }
+
+    @Test("a dismissal lasts exactly its cooldown, then the card comes back")
+    func dismissalExpiresOnSchedule() {
+        let lift = CoachLiftSnapshot(
+            name: "Bench Press", stallState: StallState(consecutiveMisses: 1, lastWeightKg: 60),
+            e1rmTrend: [], loadGrid: .step(2.5), lastWorkingWeightKg: 60
+        )
+        let fingerprint = CoachCard.makeFingerprint(rule: .stalledLift, key: "Bench Press")
+        let input = CoachInput(lifts: [lift], interactions: [CoachInteraction(
+            rule: .stalledLift, fingerprint: fingerprint, outcome: .dismissed, date: now
+        )])
+        let cooldown = TrainingConstants.coachStalledLiftCooldownDays
+        let justBefore = now.addingTimeInterval(Double(cooldown) * 86_400 - 60)
+        let justAfter = now.addingTimeInterval(Double(cooldown) * 86_400 + 60)
+        #expect(CoachEngine.cards(for: input, now: justBefore, calendar: calendar).isEmpty)
+        #expect(CoachEngine.cards(for: input, now: justAfter, calendar: calendar)
+            .contains { $0.rule == .stalledLift })
     }
 
     @Test("determinism: the same input, now and calendar always produce identical output")

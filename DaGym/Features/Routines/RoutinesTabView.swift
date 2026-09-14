@@ -86,7 +86,6 @@ struct RoutinesTabView: View {
             .dgGlass(.regular, in: Capsule())
         }
         .buttonStyle(.dgControl)
-        .dgTapTarget()
     }
 
     @ViewBuilder
@@ -199,7 +198,6 @@ private struct RoutineCard: View {
             .padding(.horizontal, DGSpace.s4)
             .frame(height: 36)
             .background(DGColor.coral, in: Capsule())
-            .dgTapTarget()
     }
 
     private var equipmentBadge: some View {

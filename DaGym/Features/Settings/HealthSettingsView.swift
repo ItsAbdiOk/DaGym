@@ -73,8 +73,7 @@ struct HealthSettingsView: View {
             VStack(spacing: 0) {
                 HealthToggleRow(
                     title: "Save workouts to Health",
-                    detail: "Each finished session is written as a strength-training workout with "
-                        + "duration, sets and volume. No calorie estimate — we don't guess.",
+                    detail: writeWorkoutsDetail,
                     isOn: binding(\.healthWriteWorkouts)
                 )
                 HealthDivider()
@@ -103,10 +102,21 @@ struct HealthSettingsView: View {
                 HealthDivider()
                 HealthToggleRow(
                     title: "Import workouts from other apps",
-                    detail: "Strength workouts logged on your Watch or in another app show up in "
-                        + "History too. Never duplicated, and never anything DaGym itself wrote.",
+                    detail: "Strength workouts logged on your Watch or in another app can be "
+                        + "brought into History from Settings. Never duplicated, never anything "
+                        + "DaGym itself wrote, and one you delete stays deleted.",
                     isOn: binding(\.healthImportWorkouts)
                 )
+                if preferences.healthImportWorkouts {
+                    HealthDivider()
+                    HealthToggleRow(
+                        title: "Import automatically",
+                        detail: "Off by default: imports happen when you tap Import in Settings. "
+                            + "Turn this on and new sessions are brought in on their own, in the "
+                            + "background, as soon as Health has them.",
+                        isOn: binding(\.healthAutoImportWorkouts)
+                    )
+                }
                 HealthDivider()
                 HealthToggleRow(
                     title: "Estimate calories",
@@ -118,6 +128,25 @@ struct HealthSettingsView: View {
             }
             .dgCard(padding: 0)
         }
+        // A freshly enabled sync should start observing now, not after a relaunch. Registration
+        // is idempotent (`HealthKitStore.shared` keeps one observer per type), and turning the
+        // toggles off simply leaves the observer with nothing to do.
+        .onChange(of: preferences.healthImportWorkouts) { _, _ in registerObservers() }
+        .onChange(of: preferences.healthAutoImportWorkouts) { _, _ in registerObservers() }
+    }
+
+    /// Honest about what actually gets written: the calorie line contradicted the "Estimate
+    /// calories" toggle three rows below it whenever that toggle was on.
+    private var writeWorkoutsDetail: String {
+        let base = "Each finished session is written as a strength-training workout with "
+            + "duration, sets and volume. Deleting it here deletes it from Health too. "
+        return base + (preferences.healthEstimateCalories
+            ? "Calories are included as a rough estimate, marked as one in Health."
+            : "No calorie estimate — we don't guess.")
+    }
+
+    private func registerObservers() {
+        Task { await healthSync.startObservingHealthChanges() }
     }
 
     private var permissionsCard: some View {

@@ -53,6 +53,18 @@ struct ExerciseArtTests {
         }
     }
 
+    @Test("every slug the catalogue maps to exists in the shipped path-data blob")
+    func everyCatalogSlugIsShipped() async {
+        let shipped = await ExerciseArtPathStore.shared.allSlugs()
+        let missing = Set(ExerciseArtCatalog.slugsBySeedID.values).subtracting(shipped).sorted()
+
+        // A catalogue entry with no blob entry is a silently art-less exercise: the hero falls
+        // back to the glyph with nothing to say why. Regenerate both with
+        // scripts/import-exercise-art.sh.
+        #expect(missing.isEmpty, "catalogue slugs missing from ExerciseArtPaths.zlib: \(missing)")
+        #expect(!shipped.isEmpty)
+    }
+
     @Test("a slug with no bundled path data returns nil rather than crashing")
     func unknownSlugReturnsNil() async {
         let frames = await ExerciseArtPathStore.shared.frames(forSlug: "does-not-exist-slug")

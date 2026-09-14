@@ -306,7 +306,6 @@ private struct WorkoutActionBar: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.dgControl)
-        .dgTapTarget()
     }
 }
 

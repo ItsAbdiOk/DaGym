@@ -350,11 +350,16 @@ public struct BackupEquipmentProfile: Codable, Sendable, Identifiable {
     public var plateCounts: [Int]
     public var collarsKg: Double
     public var createdAt: Date
+    /// `EquipmentProfileModel.seedKey` — "gym"/"home" for a seeded profile, `nil` for one the
+    /// user made. Carried through a backup so a restored profile keeps its seed identity
+    /// instead of arriving unkeyed and being re-derived by a guess on the restoring device.
+    /// Absent from backups written before this field existed, which decode as `nil`.
+    public var seedKey: String?
 
     public init(
         id: UUID, name: String, isActive: Bool = false, barKg: Double = 20,
         availableEquipment: [String] = [], plateStockKg: [Double] = [], plateCounts: [Int] = [],
-        collarsKg: Double = 0, createdAt: Date = Date()
+        collarsKg: Double = 0, createdAt: Date = Date(), seedKey: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -365,6 +370,7 @@ public struct BackupEquipmentProfile: Codable, Sendable, Identifiable {
         self.plateCounts = plateCounts
         self.collarsKg = collarsKg
         self.createdAt = createdAt
+        self.seedKey = seedKey
     }
 }
 

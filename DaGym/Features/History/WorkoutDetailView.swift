@@ -88,7 +88,6 @@ struct WorkoutDetailView: View {
             .foregroundStyle(DGColor.ink3)
         }
         .buttonStyle(.dgControl)
-        .dgTapTarget()
     }
 
     private func titleBlock(_ detail: WorkoutDetail) -> some View {

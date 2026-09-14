@@ -54,8 +54,7 @@ struct HomeSnapshot {
             thisWeekCount: streak.thisWeekCount,
             recoveryMap: Recovery.map(events: store.recoveryEvents(since: since), now: now),
             deloadSuggestion: store.deloadSuggestion(
-                snoozedUntil: preferences.deloadSnoozedUntil,
-                dismissedFingerprint: preferences.deloadDismissedFingerprint, weeklyGoal: weeklyGoal,
+                snoozedUntil: preferences.deloadSnoozedUntil, weeklyGoal: weeklyGoal, now: now,
                 calendar: calendar
             ),
             hasAnyRoutines: !store.routines().isEmpty,

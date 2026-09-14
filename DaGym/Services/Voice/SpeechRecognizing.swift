@@ -1,12 +1,29 @@
 import Foundation
 
+/// A recognized utterance plus how sure the *recognizer* is that those are the words that were
+/// said. `confidence` is the mean `SFTranscriptionSegment.confidence` over the segments of the
+/// final hypothesis, 0…1.
+///
+/// `0` means **unknown**, not "certainly wrong": Apple only populates segment confidence on a
+/// final result, so every partial carries 0, and some locales/devices report 0 even on a final.
+/// `VoiceAutoLogPolicy` treats unknown as "not eligible for auto-log" rather than as a low score —
+/// silently writing to someone's training log needs a number we actually have.
+struct SpeechTranscript: Sendable, Equatable {
+    var text: String
+    var confidence: Double
+
+    init(_ text: String, confidence: Double = 0) {
+        self.text = text
+        self.confidence = confidence
+    }
+}
+
 /// One update from an in-progress recognition. `.partial` fires repeatedly as the recognizer
-/// refines its guess; `.final` fires once if the recognizer becomes confident enough to end on
-/// its own (v1's hold-to-talk button always ends the session itself on release, but the seam
-/// supports a recognizer that finishes early).
+/// refines its guess and carries no confidence; `.final` fires once, when the recognizer has
+/// committed to a hypothesis — which, after `endAudio()`, is the transcript the app acts on.
 enum SpeechRecognitionEvent: Sendable, Equatable {
     case partial(String)
-    case final(String)
+    case final(SpeechTranscript)
 }
 
 /// Failures `SpeechRecognizing` can throw or finish a stream with. Each maps to one of the
@@ -18,7 +35,8 @@ enum SpeechRecognitionFailure: Error, Sendable, Equatable {
     /// On-device recognition isn't available for this locale/device right now. Per the app's
     /// no-network promise, this never falls back to server-based recognition — it fails instead.
     case onDeviceUnavailable
-    /// The audio engine couldn't start (route conflict, hardware busy, etc.).
+    /// The audio engine couldn't start (route conflict, hardware busy, an input format the tap
+    /// can't be installed with).
     case audioEngineUnavailable
     /// The recognizer ended without ever producing a transcript.
     case noSpeechDetected
@@ -46,8 +64,15 @@ protocol SpeechRecognizing: AnyObject {
     /// support, audio engine busy) rather than opening a stream that immediately fails.
     func startListening() throws -> AsyncThrowingStream<SpeechRecognitionEvent, Error>
 
+    /// Stops feeding audio to the recognizer but **leaves the recognition task alive** so its
+    /// final hypothesis can still arrive. This is what a button *release* calls first: the last
+    /// partial is routinely a truncated guess ("eight reps at 2" for "…at 225"), so acting on it
+    /// is how wrong numbers get written to a training log. Callers then wait a bounded time for
+    /// `.final` and call `stopListening()` afterwards, whatever arrived.
+    func endAudio()
+
     /// Ends the audio engine and recognition task and releases the input tap. Safe to call at
-    /// any time, including when nothing is listening — this is what a button release always
-    /// calls, so it must never leak a tap or leave the audio session stuck active.
+    /// any time, including when nothing is listening — this is what an explicit cancel calls, so
+    /// it must never leak a tap or leave the audio session stuck active.
     func stopListening()
 }

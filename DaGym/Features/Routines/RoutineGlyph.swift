@@ -116,7 +116,6 @@ struct GlyphCard: View {
                         }
                 }
                 .buttonStyle(.dgControl)
-                .dgTapTarget()
                 .accessibilityLabel(option.displayName)
                 .accessibilityAddTraits(tint == option.rawValue ? .isSelected : [])
             }
@@ -136,7 +135,6 @@ struct GlyphCard: View {
                 )
         }
         .buttonStyle(.dgControl)
-        .dgTapTarget()
         .accessibilityLabel(symbol.replacingOccurrences(of: ".", with: " "))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }

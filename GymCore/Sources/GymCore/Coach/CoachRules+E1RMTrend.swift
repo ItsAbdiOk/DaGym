@@ -11,11 +11,17 @@ extension CoachRules {
         var decline: Double
     }
 
-    static func e1rmDowntrendCards(input: CoachInput, now: Date) -> [CoachCard] {
+    /// - Parameter coveredLifts: lifts that already have a card for the same underlying problem
+    ///   (the stalled-lift rule runs first). A lift that has stopped moving and a lift whose e1RM
+    ///   is sliding are the same lift; saying it twice doesn't make it twice as true.
+    static func e1rmDowntrendCards(
+        input: CoachInput, now: Date, coveredLifts: Set<String>
+    ) -> [CoachCard] {
         let window = TrainingConstants.coachE1rmDowntrendSessions
         let fraction = TrainingConstants.coachE1rmDowntrendFraction
 
         let candidates = input.lifts
+            .filter { !coveredLifts.contains($0.name) }
             .compactMap { downtrend(for: $0, window: window) }
             .filter { $0.decline >= fraction }
             .sorted { $0.decline > $1.decline }

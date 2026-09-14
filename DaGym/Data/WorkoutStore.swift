@@ -65,6 +65,18 @@ final class WorkoutStore {
     /// doesn't contain it — a trap, not an error).
     let photoContext: ModelContext?
 
+    /// HealthKit-derived rows (imported external workouts, delete tombstones) live in their own
+    /// always-local container (see `ModelContainer.dagymHealth`) — App Store Guideline 5.1.3
+    /// forbids storing HealthKit data in iCloud, and the main store is CloudKit-mirrored whenever
+    /// `Preferences.iCloudSyncEnabled` is on. `nil` when that container failed to open: Health
+    /// import then reads as empty and refuses writes.
+    let healthContext: ModelContext?
+
+    /// Called with a `WorkoutModel.healthKitID` when a workout DaGym itself wrote to Apple Health
+    /// is deleted here, so `HealthSyncService` can delete the `HKWorkout` it saved. Set by
+    /// `HealthSyncService.bind(to:)`; this type stays unaware of HealthKit itself.
+    var onWorkoutDeletedFromHealth: ((String) -> Void)?
+
     /// Bumps on every successful `save()`/`savePhotos()` — the one signal screens key their
     /// `refresh()` on (`.onChange(of: store.changeToken)`) so a finished workout, a schedule
     /// edit or a photo delete shows up without a tab switch. Never decrements.
@@ -79,15 +91,17 @@ final class WorkoutStore {
     /// than growing with N — see `WorkoutStoreStartPerformanceTests`.
     var finishedWorkoutsQueryCount = 0
 
-    init(context: ModelContext, photoContext: ModelContext?) {
+    init(context: ModelContext, photoContext: ModelContext?, healthContext: ModelContext? = nil) {
         self.context = context
         self.photoContext = photoContext
+        self.healthContext = healthContext
     }
 
-    /// Tests and previews: photos in an in-memory store, no extra setup.
+    /// Tests and previews: photos and Health imports in in-memory stores, no extra setup.
     convenience init(context: ModelContext) {
         let photos = (try? ModelContainer.dagymPhotos(inMemory: true)).map(ModelContext.init)
-        self.init(context: context, photoContext: photos)
+        let health = (try? ModelContainer.dagymHealth(inMemory: true)).map(ModelContext.init)
+        self.init(context: context, photoContext: photos, healthContext: health)
     }
 
     func savePhotos() {
@@ -97,6 +111,18 @@ final class WorkoutStore {
             changeToken += 1
         } catch {
             storeLogger.error("Photo store save failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Persists the always-local Health store (imported workouts, tombstones) and bumps
+    /// `changeToken` so History redraws, exactly as `savePhotos()` does for the photo store.
+    func saveHealth() {
+        guard let healthContext, healthContext.hasChanges else { return }
+        do {
+            try healthContext.save()
+            changeToken += 1
+        } catch {
+            storeLogger.error("Health store save failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 

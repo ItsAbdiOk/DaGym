@@ -41,12 +41,16 @@ struct OnboardingHealthStep: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// Turns the two write toggles on only for what the user actually granted. HealthKit keeps
+    /// read permission opaque, but it will say whether a *write* was authorized or denied — so a
+    /// declined sheet no longer leaves "Save workouts to Health" and "Sync bodyweight" switched
+    /// on, claiming a sync that silently can't happen.
     private func connect() {
-        preferences.healthWriteWorkouts = true
-        preferences.healthSyncBodyweight = true
         isConnecting = true
         Task {
             await healthSync.authorize()
+            preferences.healthWriteWorkouts = await healthSync.canWrite(.workouts)
+            preferences.healthSyncBodyweight = await healthSync.canWrite(.bodyMass)
             isConnecting = false
             onNext()
         }

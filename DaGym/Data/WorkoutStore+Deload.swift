@@ -5,33 +5,52 @@ import SwiftData
 /// A suggested deload, for the Home "why a deload?" card.
 struct DeloadSuggestionInfo: Hashable {
     var reason: String
-    /// Stable id of the evidence behind this suggestion (`GymCore.DeloadSuggestion.fingerprint`)
-    /// — persisted when the user dismisses it so the same evidence isn't shown again.
+    /// The Coach card's own fingerprint for this evidence (`CoachCard.fingerprint` for
+    /// `.deloadOverdue`) — the key a dismissal is stored under, shared with the Coach tab so
+    /// dismissing here silences there and vice versa.
     var fingerprint: String
 }
 
 extension WorkoutStore {
     /// A suggested deload from stalls, e1RM regression, rising RPE at the same load, or
-    /// accumulated hard weeks across the main lifts (plan.md §6.5) — nil when nothing warrants
-    /// one, the user snoozed it (`snoozedUntil` is `Preferences.deloadSnoozedUntil`), or its
-    /// evidence exactly matches `dismissedFingerprint` (`Preferences.deloadDismissedFingerprint`).
+    /// accumulated hard weeks (plan.md §6.5) — nil when nothing warrants one, the user snoozed it
+    /// (`snoozedUntil` is `Preferences.deloadSnoozedUntil`), or the same evidence was already
+    /// dismissed or approved on the Coach tab within `CoachRule.deloadOverdue`'s cooldown.
+    ///
+    /// This is literally the Coach tab's `.deloadOverdue` card, read through `CoachEngine`: same
+    /// lift snapshots, same wording, same fingerprint, same dismissal rows. It used to be a
+    /// parallel implementation over four hard-coded "main lifts" named "Bench"/"Squat"/… with its
+    /// own dismissal stored in `Preferences` — so the two screens showed different text for the
+    /// same problem and dismissing either one did nothing to the other.
     func deloadSuggestion(
-        snoozedUntil: Date?, dismissedFingerprint: String? = nil, weeklyGoal: Int = 4,
-        calendar: Calendar = .current
+        snoozedUntil: Date?, weeklyGoal: Int = 4, now: Date = Date(), calendar: Calendar = .current
     ) -> DeloadSuggestionInfo? {
-        if let snoozedUntil, snoozedUntil > Date() { return nil }
-        // Fetched once and shared: `mainLiftSnapshots` would otherwise re-query the whole
-        // finished-workout list once per main lift (bench/squat/deadlift/ohp).
+        if let snoozedUntil, snoozedUntil > now { return nil }
+        // Fetched once and shared: `coachLiftSnapshots` would otherwise re-query the whole
+        // finished-workout list once per lift.
         let finishedWorkouts = finishedWorkoutModelsNewestFirst()
-        let suggestion = DeloadDetector.evaluate(
-            lifts: mainLiftSnapshots(finishedWorkouts: finishedWorkouts),
-            hardWeeks: hardWeekStreak(
-                weeklyGoal: weeklyGoal, calendar: calendar, finishedWorkouts: finishedWorkouts
-            )
+        // Only the three fields the deload rule reads — Home refreshes on every store change, and
+        // a full `coachInput()` would also compute recovery, body series, PRs and milestones.
+        let input = CoachInput(
+            lifts: coachLiftSnapshots(finishedWorkouts: finishedWorkouts),
+            hardWeeksInARow: hardWeekStreak(
+                weeklyGoal: weeklyGoal, calendar: calendar, now: now, finishedWorkouts: finishedWorkouts
+            ),
+            interactions: coachInteractions()
         )
-        guard let suggestion else { return nil }
-        guard suggestion.fingerprint != dismissedFingerprint else { return nil }
-        return DeloadSuggestionInfo(reason: suggestion.reason, fingerprint: suggestion.fingerprint)
+        guard let card = CoachEngine.deloadCard(for: input, now: now),
+              !CoachEngine.isSuppressed(card, interactions: input.interactions, now: now) else {
+            return nil
+        }
+        return DeloadSuggestionInfo(reason: card.body, fingerprint: card.fingerprint)
+    }
+
+    /// Records a Home-side "Not now" as the same `.deloadOverdue` dismissal the Coach tab writes,
+    /// so the card stays down on both screens for its cooldown.
+    func dismissDeloadSuggestion(_ suggestion: DeloadSuggestionInfo, date: Date = Date()) {
+        recordCoachInteraction(
+            rule: .deloadOverdue, fingerprint: suggestion.fingerprint, outcome: .dismissed, date: date
+        )
     }
 
     /// "Plan a deload week": creates and immediately starts a two-week program — week 1 deload,
@@ -65,52 +84,6 @@ extension WorkoutStore {
     static let deloadProgramName = "Deload Week"
     static let deloadPreviousProgramIDKey = "deloadPreviousProgramID"
 
-    /// The main lifts in a fixed order. The suggestion's reason string (and so its dismissable
-    /// `fingerprint`) lists lifts in snapshot order, so this must not depend on dictionary or
-    /// fetch order — otherwise the same evidence would hash differently between two reads and a
-    /// dismissal would never stick.
-    private static let mainLiftOrder = ["bench", "squat", "deadlift", "ohp"]
-
-    /// Stall count + e1RM/RPE trend per main lift key (bench/squat/deadlift/ohp — the map
-    /// `WorkoutStore+Milestones.swift` uses), from whichever routine exercise trains each one,
-    /// in `mainLiftOrder`.
-    private func mainLiftSnapshots(finishedWorkouts: [WorkoutModel]) -> [LiftSnapshot] {
-        let routineExercises = (try? context.fetch(FetchDescriptor<RoutineExerciseModel>())) ?? []
-        var byKey: [String: RoutineExerciseModel] = [:]
-        for routineExercise in routineExercises {
-            guard let name = routineExercise.exercise?.name, let key = Self.mainLiftKey(name: name) else {
-                continue
-            }
-            byKey[key] = routineExercise
-        }
-        return Self.mainLiftOrder.compactMap { key in
-            byKey[key].flatMap {
-                liftSnapshot(key: key, routineExercise: $0, finishedWorkouts: finishedWorkouts)
-            }
-        }
-    }
-
-    private func liftSnapshot(
-        key: String, routineExercise: RoutineExerciseModel, finishedWorkouts: [WorkoutModel]
-    ) -> LiftSnapshot? {
-        guard let exerciseID = routineExercise.exercise?.id else { return nil }
-        // Fetch extra and filter, then take 3 — a planned deload week's lower numbers are not a
-        // decline (`LiftSnapshot.e1rmTrend`'s documented contract), so it must never occupy one
-        // of the 3 trend slots.
-        let unfiltered = exerciseHistory(exerciseID: exerciseID, limit: 9, finishedWorkouts: finishedWorkouts)
-        let history = Array(unfiltered.filter { !$0.wasPlannedDeload }.prefix(3))
-        guard !history.isEmpty else { return nil }
-        let oldestFirst = history.reversed()
-        let e1rms = oldestFirst.compactMap { entry in
-            entry.workingSets.compactMap { OneRepMax.estimate(weight: $0.weightKg, reps: $0.reps) }.max()
-        }
-        let rpes = oldestFirst.compactMap { entry in entry.workingSets.first?.effort?.rpe }
-        return LiftSnapshot(
-            name: key.capitalized, stalls: routineExercise.stallStateValue.consecutiveMisses,
-            e1rmTrend: e1rms, rpeAtSameLoadTrend: rpes.isEmpty ? nil : rpes
-        )
-    }
-
     /// Consecutive recent weeks (working back from this week) that met `weeklyGoal` with no
     /// planned deload session in them — a simple proxy for "accumulated weeks of hard training
     /// without a lighter week" (A4b: a deload week breaks the streak even if it also hit the
@@ -118,8 +91,11 @@ extension WorkoutStore {
     /// hard-coded 3).
     /// Exposed (not `private`) so `WorkoutStore+Coach.swift`'s adapter can reuse the same
     /// hard-week count for `CoachInput.hardWeeksInARow` rather than re-deriving it.
+    /// `now` is passed in, never read: this feeds `CoachInput.hardWeeksInARow`, and an adapter
+    /// that reads the clock behind the engine's back makes a pinned-`now` test a lie.
     func hardWeekStreak(
-        weeklyGoal: Int, calendar: Calendar = .current, finishedWorkouts: [WorkoutModel]? = nil
+        weeklyGoal: Int, calendar: Calendar = .current, now: Date = Date(),
+        finishedWorkouts: [WorkoutModel]? = nil
     ) -> Int {
         var weekCounts: [Date: Int] = [:]
         var weeksWithDeload: Set<Date> = []
@@ -133,21 +109,12 @@ extension WorkoutStore {
             }
         }
         var streak = 0
-        var cursor = calendar.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
+        var cursor = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
         while (weekCounts[cursor] ?? 0) >= max(1, weeklyGoal), !weeksWithDeload.contains(cursor) {
             streak += 1
             guard let previous = calendar.date(byAdding: .weekOfYear, value: -1, to: cursor) else { break }
             cursor = previous
         }
         return streak
-    }
-
-    private static func mainLiftKey(name: String) -> String? {
-        let lower = name.lowercased()
-        if lower.contains("bench press") { return "bench" }
-        if lower.contains("squat") { return "squat" }
-        if lower.contains("deadlift") { return "deadlift" }
-        if lower.contains("overhead press") || lower.contains("shoulder press") { return "ohp" }
-        return nil
     }
 }

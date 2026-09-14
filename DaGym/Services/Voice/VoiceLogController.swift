@@ -1,19 +1,6 @@
 import Foundation
 import GymCore
 
-/// Auto-log confidence gate. `minConfidence` is deliberately high (well above
-/// `ExerciseMatcher.threshold`'s 0.82) because auto-logging silently mutates the workout — unlike
-/// a normal confirm-card flow, there's no "are you sure" between the parse and the write. 0.90
-/// only lets through utterances the closed grammar matched cleanly (an exact single-set pattern,
-/// no ambiguity, no out-of-range numbers) rather than anything that merely cleared the exercise
-/// matcher's own, looser bar. Combined with "zero validation flags" and "single set only" (see
-/// `VoiceLogController.isEligible`), this keeps auto-log to the exact case the spec asks for —
-/// "two twenty-five for eight" — while anything even slightly uncertain (a fuzzy exercise name, a
-/// suspicious jump, multiple sets) always lands on the review card instead.
-enum VoiceAutoLogPolicy {
-    static let minConfidence = 0.90
-}
-
 /// One set's before/after, so an auto-logged (or manually confirmed) command can be undone
 /// exactly — including un-inserting a set this command had to add because every planned set was
 /// already done. See `VoiceLogController+Apply.swift`.
@@ -37,10 +24,11 @@ struct VoiceLogTurnContext {
 /// Orchestrates one hold-to-talk turn: builds a `GymCore.ParseContext` from the live
 /// `WorkoutSession` (`VoiceLogController+Context.swift`), runs the transcript through
 /// `VoiceCommandParser`/`LogCommandValidator`, and either applies the result immediately
-/// (auto-log) or hands it to the UI as a reviewable card. Every mutation goes through
-/// `WorkoutSession.completeSet`/`addSet` (`VoiceLogController+Apply.swift`) — the same calls
-/// `ActiveWorkoutView+Actions` makes for a tap on the checkmark — so voice is never a parallel
-/// write path. Error classification lives in `VoiceLogController+Errors.swift`.
+/// (auto-log, opt-in and off by default — see `VoiceAutoLogPolicy`) or hands it to the UI as a
+/// reviewable card. Every mutation goes through `WorkoutSession.completeSet`/`addSet`
+/// (`VoiceLogController+Apply.swift`) — the same calls `ActiveWorkoutView+Actions` makes for a tap
+/// on the checkmark — so voice is never a parallel write path. Error classification lives in
+/// `VoiceLogController+Errors.swift`, parse/validate in `VoiceLogController+Process.swift`.
 @MainActor
 @Observable
 final class VoiceLogController {
@@ -58,15 +46,27 @@ final class VoiceLogController {
         let id = UUID()
         var transcript: String
         var exerciseName: String
+        /// The user's display unit. Weights in this card are still canonical kg — this is what
+        /// the view converts through, so an lb user is never shown (or asked to type) kg.
+        var unit: WeightUnit
         var weightKg: Double?
         var reps: Int?
         var durationSeconds: Int?
+        /// How many sets the utterance asked for ("three sets of eight at sixty" → 3). Shown on
+        /// the card, and all of them are written on confirm.
+        var setCount: Int
+        /// The first set exactly as parsed, so confirm can tell an edited field from an
+        /// untouched one and leave a heterogeneous spec ("10, 10, 8") alone.
+        var parsed: LogSetSpec.SetValues
         var spec: LogSetSpec
         var entryID: UUID
     }
 
     enum VoiceLogError: Equatable {
         case permissionDenied
+        /// Parental controls or an MDM profile blocks speech recognition — there is no Settings
+        /// switch this user can flip, so the copy must not send them to one.
+        case permissionRestricted
         case onDeviceUnavailable
         case nothingHeard
         case didNotUnderstand
@@ -75,17 +75,35 @@ final class VoiceLogController {
         /// A grammar command v1's app layer doesn't act on yet (repeat/rate/correct/undo/
         /// swap/add/remove/rest/note/query) — parsed correctly, just not wired to a mutation.
         case unsupportedCommand
+        /// The numbers on the review card don't pass `LogCommandValidator` (5000 kg, 0 reps).
+        case valueOutOfRange
         case audioFailure
     }
 
     /// Read-only from outside `VoiceLogController*.swift` by convention (SwiftUI only ever binds
-    /// to it); not `private(set)` because `VoiceLogController+Apply.swift` also sets it — the
+    /// to it); not `private(set)` because the other files in this feature also set it — the
     /// mutation still only ever happens from code in this feature, just split across files to
     /// stay under the line-count cap.
     var state: State = .idle
     let recognizer: any SpeechRecognizing
     let speaker: VoiceSpeechSynthesizing
+
     private var listenTask: Task<Void, Never>?
+    /// True between press and release. The permission prompts cancel the drag gesture holding
+    /// the button, so this is how the listen task knows nobody is holding it any more.
+    private var isHolding = false
+    /// The recognizer's committed hypothesis for this turn, with its confidence. Nil until
+    /// `.final` arrives — which is the whole point of waiting for it on release.
+    private var finalTranscript: SpeechTranscript?
+    private var streamEnded = false
+    /// Bumped on every press. A release that was awaiting the final hypothesis when a *new*
+    /// press arrived must not resume and tear that new turn down.
+    private var turn = 0
+
+    /// How long a release waits for the final hypothesis before giving up and using the last
+    /// partial (which then can't auto-log, having no recognition confidence). The user is
+    /// already done speaking, so this is dead time they feel — 0.8 s is the most we'll spend.
+    private static let finalHypothesisTimeout = Duration.milliseconds(800)
 
     init(recognizer: any SpeechRecognizing, speaker: VoiceSpeechSynthesizing) {
         self.recognizer = recognizer
@@ -98,16 +116,34 @@ final class VoiceLogController {
     /// into `state`.
     func startHolding() {
         listenTask?.cancel()
+        turn += 1
+        isHolding = true
+        finalTranscript = nil
+        streamEnded = false
         state = .listening(partial: "")
-        listenTask = Task {
+        listenTask = Task { [weak self] in
+            guard let self else { return }
             let authorization = recognizer.authorizationStatus == .notDetermined
                 ? await recognizer.requestAuthorization()
                 : recognizer.authorizationStatus
-            guard authorization == .authorized else {
-                state = .error(.permissionDenied)
+            // `.notDetermined` puts two system alerts under the held finger, which cancels the
+            // drag gesture. Starting the mic now would leave "Listening…" up with nobody
+            // holding anything — and the next release would log whatever the gym said.
+            guard isHolding else {
+                streamEnded = true
+                state = .idle
                 return
             }
-            await stream()
+            switch authorization {
+            case .authorized:
+                await stream()
+            case .restricted:
+                streamEnded = true
+                state = .error(.permissionRestricted)
+            default:
+                streamEnded = true
+                state = .error(.permissionDenied)
+            }
         }
     }
 
@@ -120,159 +156,116 @@ final class VoiceLogController {
     }
 
     private func stream() async {
+        defer { streamEnded = true }
         do {
             let events = try recognizer.startListening()
             for try await event in events {
                 guard !Task.isCancelled else { return }
                 switch event {
-                case .partial(let text): state = .listening(partial: text)
-                case .final(let text): state = .listening(partial: text)
+                case .partial(let text):
+                    state = .listening(partial: text)
+                case .final(let transcript):
+                    finalTranscript = transcript
+                    state = .listening(partial: transcript.text)
                 }
             }
-        } catch SpeechRecognitionFailure.onDeviceUnavailable {
-            state = .error(.onDeviceUnavailable)
-        } catch SpeechRecognitionFailure.notAuthorized {
-            state = .error(.permissionDenied)
-        } catch SpeechRecognitionFailure.noSpeechDetected {
-            state = .error(.nothingHeard)
         } catch {
-            state = .error(.audioFailure)
+            // A cancelled turn's late failure must not overwrite what the release already
+            // decided — the review card or auto-log toast is on screen by now.
+            guard !Task.isCancelled else { return }
+            state = .error(Self.failure(error))
         }
     }
 
-    /// Button release. Tears down the recognizer, takes whatever transcript it had, and resolves
-    /// it against the session — auto-logging or opening the review card.
+    private static func failure(_ error: Error) -> VoiceLogError {
+        switch error as? SpeechRecognitionFailure {
+        case .onDeviceUnavailable: .onDeviceUnavailable
+        case .notAuthorized: .permissionDenied
+        case .noSpeechDetected: .nothingHeard
+        default: .audioFailure
+        }
+    }
+
+    /// Button release. Stops the mic, waits (briefly) for the recognizer's final hypothesis, and
+    /// resolves it against the session — auto-logging or opening the review card.
+    ///
+    /// Async on purpose: parsing the partial transcript that happened to be in `state` when the
+    /// finger lifted is how "eight reps at 225" released a beat early became "eight reps at 2",
+    /// and 2.5 kg × 8 went into someone's history with no card and no undo prompt.
     func stopHolding(
         session: WorkoutSession, store: WorkoutStore, preferences: Preferences,
         undo: @escaping (UndoAction) -> Void
-    ) {
-        let transcript: String
-        if case .listening(let partial) = state { transcript = partial } else { transcript = "" }
+    ) async {
+        guard isHolding else { return }
+        isHolding = false
+        let pressGeneration = turn
+
+        recognizer.endAudio()
+        await waitForFinalHypothesis()
+        // A fresh press while we were waiting owns the recognizer now; this release belongs to a
+        // turn that is over. Stopping it here would kill the new stream and log into the old one.
+        guard pressGeneration == turn else { return }
+        let transcript = (finalTranscript?.text ?? currentPartial)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let confidence = finalTranscript?.confidence
         recognizer.stopListening()
         listenTask?.cancel()
         listenTask = nil
-        process(transcript: transcript, session: session, store: store, preferences: preferences, undo: undo)
+
+        if let preserved = preservedError(transcript: transcript) {
+            state = .error(preserved)
+            return
+        }
+        let context = VoiceLogTurnContext(
+            session: session, store: store, preferences: preferences, undo: undo
+        )
+        process(transcript: transcript, recognitionConfidence: confidence, turn: context)
     }
 
     /// Releasing the button mid-recognition (or navigating away) must tear down cleanly without
     /// touching the session — this is the "kill it mid-recognition" path, distinct from a normal
-    /// release, which always calls `stopHolding(session:store:preferences:undo:)` instead.
+    /// release, which always calls `stopHolding(session:store:preferences:undo:)` instead. This
+    /// is the only path that cancels the recognition task outright rather than letting the final
+    /// hypothesis land.
     func cancel() {
+        isHolding = false
+        turn += 1
         recognizer.stopListening()
         listenTask?.cancel()
         listenTask = nil
+        finalTranscript = nil
         state = .idle
     }
 
     func dismissReview() { state = .idle }
 
-    // MARK: Parsing → validation → application
+    private var currentPartial: String {
+        if case .listening(let partial) = state { return partial }
+        return ""
+    }
 
-    private func process(
-        transcript: String, session: WorkoutSession, store: WorkoutStore, preferences: Preferences,
-        undo: @escaping (UndoAction) -> Void
-    ) {
-        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { state = .error(.nothingHeard); return }
-
-        let context = Self.buildContext(session: session, preferences: preferences)
-        let result = VoiceCommandParser.parse(trimmed, context: context)
-        guard !result.commands.isEmpty else { state = .error(.didNotUnderstand); return }
-
-        if let notInSession = Self.unresolvedExerciseNotInSession(result.commands) {
-            state = .error(notInSession)
-            return
-        }
-
-        switch LogCommandValidator.validate(result.commands, in: context, hasUndoReceipt: false) {
-        case .failure(let error):
-            state = .error(Self.map(error, commands: result.commands))
-        case .success(let validated):
-            let turn = VoiceLogTurnContext(
-                session: session, store: store, preferences: preferences, undo: undo
-            )
-            handle(validated: validated, confidence: result.confidence, transcript: trimmed, turn: turn)
+    /// After `endAudio()` the recognizer still owes us a final hypothesis. Polling rather than a
+    /// continuation on purpose: the final can arrive before, during or after this call, and the
+    /// stream can also simply end — one loop covers all three with no resume-twice hazard, at a
+    /// cost of at most 40 main-actor wake-ups.
+    private func waitForFinalHypothesis() async {
+        let deadline = ContinuousClock.now + Self.finalHypothesisTimeout
+        while finalTranscript == nil, !streamEnded, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
         }
     }
 
-    private func handle(
-        validated: [ValidatedCommand], confidence: Double, transcript: String, turn: VoiceLogTurnContext
-    ) {
-        guard validated.count == 1, let only = validated.first else {
-            state = .error(.unsupportedCommand)
-            return
-        }
-
-        switch only.command {
-        case .logSet(let spec):
-            handleLogSet(
-                spec, flags: only.flags, confidence: confidence, transcript: transcript, turn: turn
-            )
-        case .completeOnDeck:
-            if Self.isEligible(confidence: confidence, flags: only.flags) {
-                applyCompleteOnDeck(
-                    session: turn.session, store: turn.store, preferences: turn.preferences, undo: turn.undo
-                )
-            } else {
-                state = .error(.unsupportedCommand)
-            }
+    /// An error raised while the finger was still down is the real answer for this turn. Release
+    /// used to see "not `.listening`, empty transcript" and overwrite every one of them with
+    /// "Didn't catch that" — so a user who had just denied microphone access was told to speak
+    /// louder instead of being sent to Settings.
+    private func preservedError(transcript: String) -> VoiceLogError? {
+        guard case .error(let existing) = state else { return nil }
+        switch existing {
+        case .permissionDenied, .permissionRestricted, .onDeviceUnavailable, .audioFailure:
+            return existing
         default:
-            // Repeat/rate/correct/undo/swap/add/remove/rest/note/query: parsed correctly by
-            // GymCore, but v1's app layer only ever writes a logSet/completeOnDeck — see
-            // `VoiceLogError.unsupportedCommand`.
-            state = .error(.unsupportedCommand)
-        }
-    }
-
-    private func handleLogSet(
-        _ spec: LogSetSpec, flags: [ValidationFlag], confidence: Double, transcript: String,
-        turn: VoiceLogTurnContext
-    ) {
-        let session = turn.session
-        let store = turn.store
-        let preferences = turn.preferences
-        let undo = turn.undo
-        guard let entryIndex = Self.resolveEntryIndex(exercise: spec.exercise, session: session) else {
-            state = .error(.unsupportedCommand)
-            return
-        }
-        let exerciseName = session.exercises[entryIndex].exercise.name
-
-        if spec.sets.count == 1, Self.isEligible(confidence: confidence, flags: flags) {
-            apply(spec: spec, entryIndex: entryIndex, session: session, store: store) { result in
-                undo(UndoAction(message: result.summary, undo: result.undo))
-                self.state = .autoLogged(message: result.summary)
-                if preferences.voiceSpeakBackOnHeadphones { self.speakBack(result.summary) }
-            }
-            return
-        }
-
-        state = .reviewing(ReviewCard(
-            transcript: transcript, exerciseName: exerciseName,
-            weightKg: spec.sets.first?.weightKg, reps: spec.sets.first?.reps,
-            durationSeconds: spec.sets.first?.durationSeconds, spec: spec,
-            entryID: session.exercises[entryIndex].id
-        ))
-    }
-
-    /// The review card's "Log" button — applies exactly what's shown (or was edited into) the
-    /// card, through the same mutation path as an auto-log.
-    func confirmReview(
-        _ card: ReviewCard, session: WorkoutSession, store: WorkoutStore, undo: @escaping (UndoAction) -> Void
-    ) {
-        guard let entryIndex = session.exercises.firstIndex(where: { $0.id == card.entryID }) else {
-            state = .error(.unsupportedCommand)
-            return
-        }
-        var spec = card.spec
-        spec.sets = [LogSetSpec.SetValues(
-            reps: card.reps, weightKg: card.weightKg, durationSeconds: card.durationSeconds,
-            assistanceKg: spec.sets.first?.assistanceKg, addedKg: spec.sets.first?.addedKg,
-            isBodyweight: spec.sets.first?.isBodyweight ?? false
-        )]
-        apply(spec: spec, entryIndex: entryIndex, session: session, store: store) { result in
-            undo(UndoAction(message: result.summary, undo: result.undo))
-            self.state = .idle
+            return transcript.isEmpty ? existing : nil
         }
     }
 }

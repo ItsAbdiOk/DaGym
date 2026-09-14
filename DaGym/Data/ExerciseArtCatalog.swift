@@ -206,39 +206,82 @@ enum ExerciseArtCatalog {
 /// coordinates rounded to 1 decimal place — see import-exercise-art.swift) and parses each
 /// frame into a SwiftUI `Path` on first use, reusing MuscleMap's vendored SVG parser
 /// (`DaGym/Vendor/MuscleMap/Core/{SVGPathParser,PathBuilder}.swift`). An `actor` so decoding
-/// and parsing run off the main actor, and results are cached in memory for the process
-/// lifetime so the same slug is never re-parsed.
+/// and parsing run off the main actor.
+///
+/// Memory is deliberately bounded. The decoded blob is ~12 MB of raw path strings, so it is
+/// never kept: only the ~3.4 MB compressed `Data` stays resident, and a miss decompresses,
+/// pulls out the one slug it needs and throws the rest away. Parsed `Path`s are kept in a
+/// small LRU (`cacheLimit`) rather than for the process lifetime — only
+/// `ExerciseDetailView`'s hero draws these, so a miss costs one decode per exercise opened
+/// and the steady-state footprint is a few parsed paths instead of tens of megabytes.
 actor ExerciseArtPathStore {
     static let shared = ExerciseArtPathStore()
 
-    private var rawFramesBySlug: [String: [String]]?
+    /// How many slugs' parsed frames to keep. Well above the depth anyone browses back
+    /// through in one sitting, and still small — three `Path`s each.
+    private static let cacheLimit = 8
+
+    private var compressedData: Data??
     private var pathCache: [String: [Path]] = [:]
+    /// Least-recently-used first; `pathCache`'s eviction order.
+    private var recentSlugs: [String] = []
 
     /// The three frame `Path`s for `slug` (in a 512×512 coordinate space, matching the
     /// source SVGs' viewBox — callers scale to their display size), in playback order, or
     /// `nil` if `slug` has no bundled path data.
     func frames(forSlug slug: String) -> [Path]? {
-        if let cached = pathCache[slug] { return cached }
-        guard let raw = loadedRawFrames()[slug] else { return nil }
+        if let cached = pathCache[slug] {
+            touch(slug)
+            return cached
+        }
+        guard let raw = rawFrames(forSlug: slug) else { return nil }
         let paths = raw.map { PathBuilder.buildPath(from: $0, scale: 1, offsetX: 0, offsetY: 0) }
         pathCache[slug] = paths
+        touch(slug)
+        evictIfNeeded()
         return paths
     }
 
-    private func loadedRawFrames() -> [String: [String]] {
-        if let rawFramesBySlug { return rawFramesBySlug }
-        let loaded = Self.loadRawFrames()
-        rawFramesBySlug = loaded
+    private func touch(_ slug: String) {
+        recentSlugs.removeAll { $0 == slug }
+        recentSlugs.append(slug)
+    }
+
+    private func evictIfNeeded() {
+        while recentSlugs.count > Self.cacheLimit {
+            pathCache.removeValue(forKey: recentSlugs.removeFirst())
+        }
+    }
+
+    /// Decompresses and decodes the bundled blob, returns just `slug`'s frames, and lets the
+    /// other ~12 MB of strings go out of scope immediately.
+    private func rawFrames(forSlug slug: String) -> [String]? {
+        guard
+            let compressed = loadedCompressedData(),
+            let data = try? (compressed as NSData).decompressed(using: .zlib) as Data,
+            let decoded = try? JSONDecoder().decode([String: [String]].self, from: data)
+        else { return nil }
+        return decoded[slug]
+    }
+
+    /// The ~3.4 MB compressed blob, read once and kept (the outer optional marks "already
+    /// tried"; the inner one marks "not present in the bundle").
+    private func loadedCompressedData() -> Data? {
+        if let compressedData { return compressedData }
+        let loaded = Bundle.main.url(forResource: "ExerciseArtPaths", withExtension: "zlib")
+            .flatMap { try? Data(contentsOf: $0, options: .mappedIfSafe) }
+        compressedData = loaded
         return loaded
     }
 
-    private static func loadRawFrames() -> [String: [String]] {
+    /// Every slug the shipped blob actually contains — for tests that assert the catalogue and
+    /// the blob agree. Not used at runtime (it materialises the whole decoded blob).
+    func allSlugs() -> Set<String> {
         guard
-            let url = Bundle.main.url(forResource: "ExerciseArtPaths", withExtension: "zlib"),
-            let compressed = try? Data(contentsOf: url),
+            let compressed = loadedCompressedData(),
             let data = try? (compressed as NSData).decompressed(using: .zlib) as Data,
             let decoded = try? JSONDecoder().decode([String: [String]].self, from: data)
-        else { return [:] }
-        return decoded
+        else { return [] }
+        return Set(decoded.keys)
     }
 }

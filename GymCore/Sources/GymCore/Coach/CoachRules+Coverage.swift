@@ -31,7 +31,11 @@ extension CoachRules {
         let evidence = named.map {
             CoachEvidenceItem("\($0.muscle.displayName) sets in window", .number($0.sets))
         } + [CoachEvidenceItem("Window (days)", .count(TrainingConstants.coachCoverageWindowDays))]
-        let key = named.map(\.muscle.rawValue).joined(separator: ",")
+        // Every gap muscle, in a fixed order — not the three named ones in set-count order.
+        // The named list re-sorts itself as the window rolls, so keying on it changed the
+        // fingerprint overnight and a dismissed card reappeared for the same three muscles.
+        // A muscle joining or leaving the gap set is genuinely new evidence and still gets through.
+        let key = gaps.map(\.muscle.rawValue).sorted().joined(separator: ",")
         let verb = named.count == 1 ? "hasn't" : "haven't"
 
         return [CoachCard(

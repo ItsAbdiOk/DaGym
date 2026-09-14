@@ -5,9 +5,13 @@ import SwiftUI
 // to be the final look. Keep the structure (three labeled fields + two actions) easy to re-skin
 // rather than investing in bespoke layout here.
 
-/// The "what I understood" card: shown whenever a voice command didn't clear the auto-log bar
-/// (low confidence, a suspicious jump, more than one set, an exercise that needed disambiguation
-/// pointed at the on-deck one anyway). Every field is editable before logging.
+/// The "what I understood" card: shown whenever a voice command didn't clear the auto-log bar —
+/// which, with auto-log off by default, is every command. Every field is editable before logging,
+/// and what's typed here goes through `LogCommandValidator` on confirm just like a spoken value.
+///
+/// Values are shown and edited in the user's own unit. Storage stays canonical kg (plan.md §3);
+/// `card.unit` is what this view converts through, so an lb lifter editing "102.5" is editing
+/// pounds, not silently writing 102.5 kg.
 struct VoiceReviewCard: View {
     @Binding var card: VoiceLogController.ReviewCard
     var onLog: () -> Void
@@ -24,17 +28,22 @@ struct VoiceReviewCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Text(card.exerciseName)
-                .font(DGFont.title2)
-                .foregroundStyle(DGColor.ink1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(card.exerciseName)
+                    .font(DGFont.title2)
+                    .foregroundStyle(DGColor.ink1)
+                if card.setCount > 1 {
+                    // "Three sets of eight at sixty" used to write exactly one set and say
+                    // nothing about the other two.
+                    Text("\(card.setCount) sets — these values apply to each")
+                        .font(DGFont.subhead)
+                        .foregroundStyle(DGColor.ink3)
+                }
+            }
 
             HStack(spacing: DGSpace.s3) {
-                field(label: "Weight (kg)") {
-                    TextField(
-                        "Weight",
-                        value: Binding(get: { card.weightKg ?? 0 }, set: { card.weightKg = $0 }),
-                        format: .number
-                    )
+                field(label: "Weight (\(card.unit.symbol))") {
+                    TextField("Weight", value: weightBinding, format: .number)
                 }
                 field(label: "Reps") {
                     TextField(
@@ -55,7 +64,7 @@ struct VoiceReviewCard: View {
                     .frame(height: 44)
                     .background(DGColor.surface3, in: Capsule())
 
-                DGPrimaryButton(title: "Log set", height: 44, action: onLog)
+                DGPrimaryButton(title: card.setCount > 1 ? "Log sets" : "Log set", height: 44, action: onLog)
             }
         }
         .padding(DGSpace.s5)
@@ -65,6 +74,19 @@ struct VoiceReviewCard: View {
                 .strokeBorder(DGColor.hairline, lineWidth: 1)
         }
         .accessibilityElement(children: .contain)
+    }
+
+    /// Canonical kg in, the user's unit out — and back. The getter snaps to the unit's own
+    /// display step so the field shows "225", not "224.99999".
+    private var weightBinding: Binding<Double> {
+        Binding(
+            get: {
+                guard let weightKg = card.weightKg else { return 0 }
+                let step = card.unit.displayStep
+                return (card.unit.display(kg: weightKg) / step).rounded() * step
+            },
+            set: { card.weightKg = card.unit.toKg($0) }
+        )
     }
 
     private func field(label: String, @ViewBuilder content: () -> some View) -> some View {

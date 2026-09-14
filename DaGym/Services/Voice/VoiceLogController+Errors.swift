@@ -49,11 +49,15 @@ extension VoiceLogController {
         }
     }
 
-    /// The auto-log gate: high parser confidence (`VoiceAutoLogPolicy.minConfidence`) and no
-    /// validator flag asking for a second look. `.roundedToPlates` is fine — that's routine
-    /// rounding, not a reason to stop and ask.
-    static func isEligible(confidence: Double, flags: [ValidationFlag]) -> Bool {
-        guard confidence >= VoiceAutoLogPolicy.minConfidence else { return false }
+    /// The auto-log gate. Every leg has to hold: the user opted in, we have a combined
+    /// confidence at all (i.e. a final hypothesis with a real recognition score — see
+    /// `VoiceAutoLogPolicy`), it clears the bar, and no validator flag asks for a second look.
+    /// `.roundedToPlates` is fine — that's routine rounding, not a reason to stop and ask.
+    static func isEligible(
+        confidence: Double?, flags: [ValidationFlag], autoLogEnabled: Bool
+    ) -> Bool {
+        guard autoLogEnabled else { return false }
+        guard let confidence, confidence >= VoiceAutoLogPolicy.minConfidence else { return false }
         return !flags.contains { flag in
             if case .needsConfirmation = flag { return true }
             if case .suspicious = flag { return true }

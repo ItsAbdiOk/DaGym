@@ -7,6 +7,10 @@ private let appLogger = Logger(subsystem: "dev.abdirahmanmohamed.dagym", categor
 
 @main
 struct DaGymApp: App {
+    // HealthKit background delivery only — see `DaGymAppDelegate`. A HealthKit background launch
+    // renders no scenes, so observer registration cannot live in a view's `.task`.
+    @UIApplicationDelegateAdaptor(DaGymAppDelegate.self) private var appDelegate
+
     var body: some Scene {
         WindowGroup {
             if let route = DebugRoute.fromLaunchArguments {
@@ -125,6 +129,9 @@ struct AppRootContainer: View {
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
         EquipmentSeeder.seedIfNeeded(store: store)
         store.dedupeSeededRows()
+        // One-time repair: the first Apple Health build wrote HealthKit-derived rows into the
+        // CloudKit-mirrored main store. Move/clear them — App Store Guideline 5.1.3.
+        store.purgeHealthDerivedRowsFromMainStore()
         // A second iCloud device imports the first one's seeded rows after launch; fold those
         // as they land. Kept in `phase` so the observer lives as long as the store does.
         let deduper = store.startRemoteChangeDedupe()
@@ -134,10 +141,9 @@ struct AppRootContainer: View {
         let healthSync = HealthSyncService(workoutStore: store, preferences: preferences)
         let healthInsights = HealthInsightsService(workoutStore: store, preferences: preferences)
         TrainingNotificationScheduler().bind(store: store, preferences: preferences)
-        // Background delivery (plan.md §6.8): keeps bodyweight and imported workouts current
-        // without the user opening Settings. No-ops until Health has been authorized at least
-        // once, so this is safe to call unconditionally on every launch.
-        Task { await healthSync.startObservingHealthChanges() }
+        // Background delivery is registered in `DaGymAppDelegate` instead — a HealthKit
+        // background launch renders no scenes, so this `.task` would never run on exactly the
+        // launches that need it.
         phase = .ready(store, healthSync, healthInsights, deduper)
     }
 }

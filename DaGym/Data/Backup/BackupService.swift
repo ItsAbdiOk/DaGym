@@ -194,7 +194,8 @@ enum BackupService {
             BackupEquipmentProfile(
                 id: $0.id, name: $0.name, isActive: $0.isActive, barKg: $0.barKg,
                 availableEquipment: $0.availableEquipment, plateStockKg: $0.plateStockKg,
-                plateCounts: $0.plateCounts, collarsKg: $0.collarsKg, createdAt: $0.createdAt
+                plateCounts: $0.plateCounts, collarsKg: $0.collarsKg, createdAt: $0.createdAt,
+                seedKey: $0.seedKey
             )
         }
     }

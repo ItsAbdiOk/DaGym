@@ -82,7 +82,6 @@ struct GymCardSheet: View {
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             DGIconButton(symbol: "xmark", size: 36, accessibilityLabel: "Close") { dismiss() }
-                .dgTapTarget()
         }
     }
 
@@ -127,7 +126,6 @@ struct GymCardSheet: View {
             }
             .ignoresSafeArea()
             DGIconButton(symbol: "xmark", accessibilityLabel: "Cancel scan") { showingScanner = false }
-                .dgTapTarget()
                 .padding(DGSpace.s4)
         }
     }

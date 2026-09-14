@@ -44,7 +44,6 @@ extension ExerciseDetailView {
                 .foregroundStyle(DGColor.ink3)
             }
             .buttonStyle(.dgControl)
-            .dgTapTarget()
             Spacer()
             Button(action: toggleFavorite) {
                 Image(systemName: exercise.isFavorite ? "star.fill" : "star")
@@ -54,7 +53,6 @@ extension ExerciseDetailView {
                     .dgGlass(.regular, in: Circle())
             }
             .buttonStyle(.dgControl)
-            .dgTapTarget()
         }
     }
 

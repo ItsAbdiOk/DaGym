@@ -20,6 +20,7 @@ struct OnboardingUnitsStep: View {
                     unitChip(.lb, title: "Pounds")
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .dgCard()
             Spacer()
             DGPrimaryButton(title: "Continue", action: onNext)

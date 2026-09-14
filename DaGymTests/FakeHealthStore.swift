@@ -9,8 +9,8 @@ actor FakeHealthStore: HealthStoring {
 
     private(set) var savedWorkouts: [HealthWorkoutInput] = []
     private(set) var savedBodyMasses: [HealthBodyMass] = []
+    private(set) var deletedWorkoutIDs: [String] = []
     private(set) var authorizationRequested = false
-    private(set) var bodyMassObserverRegistered = false
     private(set) var workoutObserverRegistered = false
     var bodyMassToReturn: HealthBodyMass?
     var bodyMassHistoryToReturn: [HealthSample] = []
@@ -23,7 +23,12 @@ actor FakeHealthStore: HealthStoring {
     var restingHeartRateToReturn: [HealthSample] = []
     var sleepToReturn: [HealthSleepInterval] = []
     var externalWorkoutsToReturn: [HealthExternalWorkout] = []
+    var authorizationRequestToReturn: HealthAuthorizationRequest = .alreadyRequested
+    var sharingAuthorizationToReturn: HealthShareAuthorization = .authorized
     private var nextWorkoutID = 0
+    /// The `HKObserverQuery` handler `observeWorkoutChanges` was registered with, so a test can
+    /// fire the observer the way HealthKit would. Nil until registration.
+    private var workoutOnChange: (@Sendable () async -> Void)?
 
     init(isAvailable: Bool = true) {
         self.isAvailable = isAvailable
@@ -63,14 +68,53 @@ actor FakeHealthStore: HealthStoring {
         sleepToReturn = sleep
     }
 
+    func setAuthorizationRequestToReturn(_ value: HealthAuthorizationRequest) {
+        authorizationRequestToReturn = value
+    }
+
+    func setSharingAuthorizationToReturn(_ value: HealthShareAuthorization) {
+        sharingAuthorizationToReturn = value
+    }
+
+    /// Fires the registered workout observer exactly the way `HealthKitStore` does: run the
+    /// handler to completion, *then* signal HealthKit that the delivery is finished.
+    ///
+    /// The order matters — HealthKit's completion handler means "I'm done, you may suspend me",
+    /// and the old code called it before the pull's `Task` had even started. Because the handler
+    /// is `async`, this call only returns once the import has actually landed, which is what the
+    /// ordering test asserts. `completionCalledAfterPull` records whether that held.
+    @discardableResult
+    func triggerWorkoutChange() async -> Bool {
+        guard let workoutOnChange else { return false }
+        await workoutOnChange()
+        completionCalledAfterPull = true
+        return true
+    }
+
+    /// Set by `triggerWorkoutChange()` once the handler has returned — i.e. the point at which
+    /// `HealthKitStore` calls HealthKit's completion handler.
+    private(set) var completionCalledAfterPull = false
+
     func requestAuthorization() async throws {
         authorizationRequested = true
+    }
+
+    func authorizationRequestStatus() async -> HealthAuthorizationRequest {
+        authorizationRequestToReturn
+    }
+
+    func sharingAuthorization(for type: HealthShareType) async -> HealthShareAuthorization {
+        sharingAuthorizationToReturn
     }
 
     func saveWorkout(_ input: HealthWorkoutInput) async throws -> String {
         savedWorkouts.append(input)
         nextWorkoutID += 1
         return "fake-hk-\(nextWorkoutID)"
+    }
+
+    func deleteOwnWorkout(healthKitID: String) async throws {
+        deletedWorkoutIDs.append(healthKitID)
     }
 
     func saveBodyMass(kg: Double, date: Date) async throws {
@@ -109,11 +153,8 @@ actor FakeHealthStore: HealthStoring {
         externalWorkoutsToReturn
     }
 
-    func observeBodyMassChanges(onChange: @escaping @Sendable () -> Void) async throws {
-        bodyMassObserverRegistered = true
-    }
-
-    func observeWorkoutChanges(onChange: @escaping @Sendable () -> Void) async throws {
+    func observeWorkoutChanges(onChange: @escaping @Sendable () async -> Void) async throws {
         workoutObserverRegistered = true
+        workoutOnChange = onChange
     }
 }

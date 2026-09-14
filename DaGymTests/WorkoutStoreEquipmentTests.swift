@@ -97,4 +97,88 @@ struct WorkoutStoreEquipmentTests {
         #expect(remaining.count == 1)
         #expect(remaining.first?.isActive == true)
     }
+
+    // MARK: - Dedupe safety
+
+    @Test("a user-created profile named Gym survives the seed-key backfill and fold")
+    func userCreatedGymSurvivesDedupe() throws {
+        let container = try ModelContainer.dagym(inMemory: true)
+        let context = ModelContext(container)
+        let store = WorkoutStore(context: context)
+        EquipmentSeeder.seedIfNeeded(store: store)
+
+        // Their own "Gym": a 15 kg bar and a short plate set, nothing like the seeded one.
+        let mine = store.createProfile(
+            name: "Gym", barKg: 15,
+            availableEquipment: ["barbell", "bodyweight"],
+            plateStock: [PlateStock(weightKg: 20, count: 2), PlateStock(weightKg: 5, count: 4)]
+        )
+
+        // Runs on every launch; used to stamp `mine` with seedKey "gym" and delete it.
+        #expect(store.dedupeEquipmentProfiles() == 0)
+        #expect(store.dedupeEquipmentProfiles() == 0)
+
+        let profiles = store.equipmentProfiles()
+        #expect(profiles.count == 3)
+        let survivor = try #require(profiles.first { $0.id == mine.id })
+        #expect(survivor.barKg == 15)
+        #expect(survivor.plateStock.count == 2)
+        #expect(survivor.seedKey == nil)
+    }
+
+    @Test("an untouched legacy profile is re-keyed and folds; a renamed one is left alone")
+    func renamedLegacyDuplicateIsNeverFoldedAway() throws {
+        let container = try ModelContainer.dagym(inMemory: true)
+        let context = ModelContext(container)
+        let store = WorkoutStore(context: context)
+        EquipmentSeeder.seedIfNeeded(store: store)
+
+        // Two pre-`seedKey` rows synced down later: one still exactly as seeded, one the user
+        // renamed. Both are newer than the seeded rows, so neither is the fold's survivor.
+        let later = Date().addingTimeInterval(60)
+        let untouched = legacyGym(named: "Gym", createdAt: later)
+        let renamed = legacyGym(named: "Commercial Gym", createdAt: later)
+        context.insert(untouched)
+        context.insert(renamed)
+        try context.save()
+
+        #expect(store.dedupeEquipmentProfiles() == 1)
+
+        let names = store.equipmentProfiles().map(\.name).sorted()
+        #expect(names == ["Commercial Gym", "Gym", "Home"])
+        // The rename is the user's, so it keeps its own identity rather than being merged away.
+        #expect(store.equipmentProfiles().first { $0.name == "Commercial Gym" }?.seedKey == nil)
+    }
+
+    @Test("a fold that leaves two profiles active is normalised back to one")
+    func twoActiveProfilesNormaliseToOne() throws {
+        let container = try ModelContainer.dagym(inMemory: true)
+        let context = ModelContext(container)
+        let store = WorkoutStore(context: context)
+        EquipmentSeeder.seedIfNeeded(store: store)
+
+        let models = try context.fetch(FetchDescriptor<EquipmentProfileModel>())
+        for model in models { model.isActive = true }
+        try context.save()
+        #expect(store.equipmentProfiles().filter(\.isActive).count == 2)
+
+        store.dedupeEquipmentProfiles()
+
+        let active = store.equipmentProfiles().filter(\.isActive)
+        #expect(active.count == 1)
+        // The oldest wins, which is the one `activeProfile()` would have silently picked anyway.
+        #expect(active.first?.name == "Gym")
+        #expect(store.activeProfile()?.id == active.first?.id)
+    }
+
+    /// A profile as `EquipmentSeeder` wrote it before `seedKey` existed: seeded values, no key.
+    private func legacyGym(named name: String, createdAt: Date) -> EquipmentProfileModel {
+        let seed = SeededEquipmentProfile.gym
+        return EquipmentProfileModel(
+            name: name, isActive: false, barKg: seed.barKg,
+            availableEquipment: seed.availableEquipment,
+            plateStockKg: seed.plateStock.map(\.weightKg), plateCounts: seed.plateStock.map(\.count),
+            collarsKg: seed.collarsKg, createdAt: createdAt, seedKey: nil
+        )
+    }
 }

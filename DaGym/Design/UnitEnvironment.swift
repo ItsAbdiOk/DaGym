@@ -73,6 +73,13 @@ final class Preferences {
     var healthImportWorkouts: Bool {
         didSet { defaults.set(healthImportWorkouts, forKey: Key.healthImportWorkouts) }
     }
+    /// Off by default, and only meaningful with `healthImportWorkouts` on: lets the HealthKit
+    /// background observer import new external sessions on its own. Without it, importing only
+    /// ever happens on the explicit Import tap — which is what the settings copy promises, and
+    /// what stops a workout appearing in History behind the user's back.
+    var healthAutoImportWorkouts: Bool {
+        didSet { defaults.set(healthAutoImportWorkouts, forKey: Key.healthAutoImportWorkouts) }
+    }
     /// Off by default: writes a rough, clearly-flagged active-energy estimate to Health with each
     /// finished workout, because the phone alone has no heart-rate data to back a real number
     /// (see the comment on `HealthKitStore.saveWorkout`). Never on unless the user opts in.
@@ -229,6 +236,17 @@ final class Preferences {
     var voiceSpeakBackOnHeadphones: Bool {
         didSet { defaults.set(voiceSpeakBackOnHeadphones, forKey: Key.voiceSpeakBackOnHeadphones) }
     }
+    /// Lets a voice command write a set straight into the workout, with no confirmation card —
+    /// only when `VoiceAutoLogPolicy`'s gate clears (a final recognition hypothesis whose own
+    /// confidence *and* the parser's both reach 0.90, a single set, no validator warning).
+    ///
+    /// **Off by default, deliberately.** Auto-log is the one path in the app that mutates
+    /// training history without the user seeing what's about to be written, so it stays opt-in
+    /// until the gate has proved itself on real utterances. With it off, every command lands on
+    /// the review card first — which costs one tap and can't quietly log the wrong number.
+    var voiceAutoLogEnabled: Bool {
+        didSet { defaults.set(voiceAutoLogEnabled, forKey: Key.voiceAutoLogEnabled) }
+    }
 
     enum Appearance: String, CaseIterable, Codable {
         case system, light, dark
@@ -259,6 +277,7 @@ final class Preferences {
         weighInBeforeWorkout = Self.boolValue(suite, Key.weighInBeforeWorkout, default: false)
         sampleDataMode = Self.boolValue(suite, Key.sampleDataMode, default: false)
         voiceSpeakBackOnHeadphones = Self.boolValue(suite, Key.voiceSpeakBackOnHeadphones, default: true)
+        voiceAutoLogEnabled = Self.boolValue(suite, Key.voiceAutoLogEnabled, default: false)
         weightUnit = WeightUnit(rawValue: suite.string(forKey: Key.weightUnit) ?? "") ?? .kg
         effortScale = Effort.Scale(rawValue: suite.string(forKey: Key.effortScale) ?? "") ?? .rpe
         defaultRestSeconds = Self.intValue(suite, Key.defaultRestSeconds, default: 150)
@@ -273,6 +292,9 @@ final class Preferences {
         healthReadRecovery = Self.boolValue(suite, Key.healthReadRecovery, default: false)
         healthReadBodyComposition = Self.boolValue(suite, Key.healthReadBodyComposition, default: false)
         healthImportWorkouts = Self.boolValue(suite, Key.healthImportWorkouts, default: false)
+        healthAutoImportWorkouts = Self.boolValue(
+            suite, Key.healthAutoImportWorkouts, default: false
+        )
         healthEstimateCalories = Self.boolValue(suite, Key.healthEstimateCalories, default: false)
         calendarSyncEnabled = Self.boolValue(suite, Key.calendarSyncEnabled, default: false)
         scheduledStartHour = Self.intValue(suite, Key.scheduledStartHour, default: 18)

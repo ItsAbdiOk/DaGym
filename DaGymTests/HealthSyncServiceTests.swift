@@ -87,55 +87,33 @@ struct HealthSyncServiceTests {
         #expect(workout.healthKitID == nil)
     }
 
-    @Test("pullBodyweight creates one measurement when Health has a newer reading")
-    func pullBodyweightCreatesMeasurement() async throws {
+    @Test("pushBodyweight sends the measurement's own date, not a fresh one")
+    func pushBodyweightUsesMeasurementDate() async throws {
         let store = try makeStore()
         let preferences = Preferences(suite: makeSuite(#function))
         preferences.healthSyncBodyweight = true
         let health = FakeHealthStore()
-        await health.setBodyMassToReturn(HealthBodyMass(kg: 81.5, date: Date()))
         let service = HealthSyncService(healthStore: health, workoutStore: store, preferences: preferences)
 
-        await service.pullBodyweight()
+        let logged = store.logBodyweight(kg: 81.5, source: "manual")
+        await service.pushBodyweight(kg: 81.5, date: logged.date)
 
-        let measurement = try #require(store.latestBodyMeasurement())
-        #expect(measurement.bodyweightKg == 81.5)
-        #expect(measurement.source == "health")
+        let pushed = await health.savedBodyMasses
+        #expect(pushed.count == 1)
+        #expect(pushed[0].date == logged.date)
     }
 
-    @Test("pullBodyweight is a no-op when the toggle is off")
-    func pullBodyweightToggleOff() async throws {
+    @Test("pushBodyweight is a no-op when the bodyweight toggle is off")
+    func pushBodyweightToggleOff() async throws {
         let store = try makeStore()
         let preferences = Preferences(suite: makeSuite(#function))
         preferences.healthSyncBodyweight = false
         let health = FakeHealthStore()
-        await health.setBodyMassToReturn(HealthBodyMass(kg: 81.5, date: Date()))
         let service = HealthSyncService(healthStore: health, workoutStore: store, preferences: preferences)
 
-        await service.pullBodyweight()
+        await service.pushBodyweight(kg: 81.5, date: Date())
 
-        #expect(store.latestBodyMeasurement() == nil)
-    }
-
-    @Test("pullBodyweightHistory maps every new Health sample, skipping ones already stored")
-    func pullBodyweightHistoryMapsSamples() async throws {
-        let store = try makeStore()
-        let preferences = Preferences(suite: makeSuite(#function))
-        preferences.healthSyncBodyweight = true
-        let health = FakeHealthStore()
-        let existingDate = Date().addingTimeInterval(-86_400 * 10)
-        store.logBodyweight(kg: 80, date: existingDate, source: "health")
-        let newDate = Date().addingTimeInterval(-86_400 * 5)
-        await health.setBodyMassHistoryToReturn([
-            HealthSample(date: existingDate, value: 80), HealthSample(date: newDate, value: 79.2)
-        ])
-        let service = HealthSyncService(healthStore: health, workoutStore: store, preferences: preferences)
-
-        await service.pullBodyweightHistory()
-
-        let series = store.bodyweightSeries(days: 365)
-        #expect(series.count == 2)
-        #expect(series.contains { $0.date == newDate && $0.kg == 79.2 && $0.source == "health" })
+        #expect(await health.savedBodyMasses.isEmpty)
     }
 
     @Test("pullExternalWorkouts imports each external workout once, never a duplicate")
@@ -155,8 +133,10 @@ struct HealthSyncServiceTests {
         await service.pullExternalWorkouts()
 
         #expect(store.hasWorkout(healthKitID: "hk-external-1"))
-        let matching = store.workoutsWithHealthKitID("hk-external-1")
-        #expect(matching.count == 1)
+        #expect(store.importedHealthWorkouts().count == 1)
+        // And nothing HealthKit-derived landed in the CloudKit-mirrored main store.
+        #expect(store.history().count == 1)
+        #expect(store.workoutsWithHealthKitID("hk-external-1").isEmpty)
     }
 
     @Test("pullExternalWorkouts never imports a workout that already carries our own healthKitID")
@@ -178,15 +158,7 @@ struct HealthSyncServiceTests {
         await service.pullExternalWorkouts()
 
         #expect(store.workoutsWithHealthKitID("hk-ours-1").count == 1)
-    }
-}
-
-private extension WorkoutStore {
-    /// Test-only: every `WorkoutModel` carrying this `HKWorkout` uuid, so a dedupe test can
-    /// assert there's exactly one rather than just that `hasWorkout` returns true.
-    func workoutsWithHealthKitID(_ id: String) -> [WorkoutModel] {
-        let descriptor = FetchDescriptor<WorkoutModel>(predicate: #Predicate { $0.healthKitID == id })
-        return (try? context.fetch(descriptor)) ?? []
+        #expect(store.importedHealthWorkouts().isEmpty)
     }
 }
 
@@ -198,23 +170,38 @@ struct HealthUnitConversionTests {
         #expect(HealthUnitConversion.bodyFatPercent(fromFraction: 0) == 0)
     }
 
-    @Test("estimatedActiveEnergyKcal scales with bodyweight and duration")
-    func estimatedEnergyScalesCorrectly() {
-        // 5 METs * 80kg * 1 hour = 400 kcal.
-        let oneHour = HealthUnitConversion.estimatedActiveEnergyKcal(
-            durationSeconds: 3_600, bodyweightKg: 80
-        )
-        #expect(oneHour == 400)
-        // Half the duration halves the estimate.
-        let halfHour = HealthUnitConversion.estimatedActiveEnergyKcal(
-            durationSeconds: 1_800, bodyweightKg: 80
-        )
-        #expect(halfHour == 200)
+    @Test("a body fat reading outside 0...100 is refused rather than shown")
+    func bodyFatPlausibility() {
+        #expect(HealthUnitConversion.isPlausibleBodyFatPercent(18.3))
+        #expect(HealthUnitConversion.isPlausibleBodyFatPercent(100))
+        // A scale writing 18 into a 0...1 field reads back as 1800%.
+        #expect(!HealthUnitConversion.isPlausibleBodyFatPercent(1_800))
+        #expect(!HealthUnitConversion.isPlausibleBodyFatPercent(0))
+        #expect(!HealthUnitConversion.isPlausibleBodyFatPercent(-3))
     }
 
-    @Test("estimatedActiveEnergyKcal never goes negative on bad input")
-    func estimatedEnergyClampsNegatives() {
-        let value = HealthUnitConversion.estimatedActiveEnergyKcal(durationSeconds: -10, bodyweightKg: -5)
-        #expect(value == 0)
+    @Test("estimatedActiveEnergyKcal uses net METs, so it no longer over-reports by ~25%")
+    func estimatedEnergyUsesNetMETs() {
+        // Active energy is energy above resting (1 MET), so resistance training's 5 METs
+        // contributes 4: 4 * 80kg * 1 hour = 320 kcal, not the 400 the gross figure gave.
+        #expect(
+            HealthUnitConversion.estimatedActiveEnergyKcal(durationSeconds: 3_600, bodyweightKg: 80) == 320
+        )
+        // Half the duration halves the estimate.
+        #expect(
+            HealthUnitConversion.estimatedActiveEnergyKcal(durationSeconds: 1_800, bodyweightKg: 80) == 160
+        )
+    }
+
+    @Test("estimatedActiveEnergyKcal writes nothing rather than a zero or nonsense sample")
+    func estimatedEnergyRefusesNonsense() {
+        #expect(HealthUnitConversion.estimatedActiveEnergyKcal(durationSeconds: -10, bodyweightKg: -5) == nil)
+        #expect(HealthUnitConversion.estimatedActiveEnergyKcal(durationSeconds: 0, bodyweightKg: 80) == nil)
+        let noWeight = HealthUnitConversion.estimatedActiveEnergyKcal(
+            durationSeconds: 3_600, bodyweightKg: 0
+        )
+        #expect(noWeight == nil)
+        // 4 * 80 * (10/3600) = 0.89 kcal — under 1, so not worth a sample.
+        #expect(HealthUnitConversion.estimatedActiveEnergyKcal(durationSeconds: 10, bodyweightKg: 80) == nil)
     }
 }

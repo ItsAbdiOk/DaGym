@@ -31,7 +31,6 @@ struct SwapExerciseSheet: View {
             candidateList
             Button("Search the library instead") { showingLibrary = true }
                 .buttonStyle(.dgControl)
-                .dgTapTarget()
                 .font(DGFont.condensedLabel(13))
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink3)
@@ -126,7 +125,10 @@ private struct FlowChips: View {
         (.machineTaken, "Machine taken"),
         (.noBarbell, "No barbell"),
         (.shoulderHurts, "Shoulder hurts"),
-        (.shortOnTime, "Short on time")
+        (.shortOnTime, "Short on time"),
+        // The Coach's struggling-exercise card tells the lifter to swap from here, so the reason
+        // it scored its suggestion with has to be one they can actually pick.
+        (.strugglingWithExercise, "Struggling with it")
     ]
 
     var body: some View {
@@ -170,7 +172,6 @@ private struct CandidateRow: View {
             Spacer(minLength: DGSpace.s2)
             Button("Use") { onUse(exercise) }
                 .buttonStyle(.dgControl)
-                .dgTapTarget()
                 .font(DGFont.condensedLabel(12))
                 .textCase(.uppercase)
                 .foregroundStyle(isPrimary ? .white : DGColor.ink2)

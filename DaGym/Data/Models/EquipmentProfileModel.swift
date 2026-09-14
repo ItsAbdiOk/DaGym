@@ -25,8 +25,9 @@ final class EquipmentProfileModel {
     /// Stable identity for a profile `EquipmentSeeder` created ("gym"/"home"), `nil` for a
     /// profile the user made themselves. Lets `WorkoutStore.dedupeEquipmentProfiles()` fold two
     /// independently-seeded copies (two devices seeding before the first one's rows synced) back
-    /// into one, the same way `ExerciseModel.seedID` does for exercises — even after the user has
-    /// since edited one copy's fields, unlike a fold keyed on the fields themselves.
+    /// into one, the same way `ExerciseModel.seedID` does for exercises. Only a copy still
+    /// holding the seeded values verbatim is ever folded away: once the user edits one, it is
+    /// theirs and survives (see `SeededEquipmentProfile.isUntouchedSeededRow`).
     var seedKey: String?
 
     init(

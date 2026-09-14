@@ -99,6 +99,11 @@ public enum TrainingConstants {
 
     /// Deload detection thresholds (plan.md §7).
     public static let deloadStallCount = 3
+    /// How many recent sessions `LiftSnapshot.e1rmTrend`/`rpeAtSameLoadTrend` carry for
+    /// `DeloadDetector` — its regression check compares the last three points, and its
+    /// `isNotProgressing` check compares the first against the last, so a longer array
+    /// silently turns "lower than four months ago" into "not progressing".
+    public static let deloadTrendSessions = 3
     public static let deloadMinLiftsStalling = 2
     public static let deloadE1rmDropFraction = 0.05
     public static let deloadRpeRiseThreshold = 1.0
@@ -154,20 +159,41 @@ extension TrainingConstants {
     /// session duration counts as drift.
     public static let coachDriftDropFraction = 0.25
     public static let coachDriftCooldownDays = 5
+    /// Session drift: a logged session longer than this is a workout someone forgot to finish,
+    /// not a long session. It carries no usable duration signal, so it's left out of both the
+    /// recent and the baseline average rather than inflating the baseline it's compared against.
+    public static let coachDriftMaxSessionSeconds = 4 * 3600
 
     /// Muscle coverage: the rolling window the caller's sets-per-muscle map already covers, and
     /// the floor below which a muscle counts as a coverage gap.
     public static let coachCoverageWindowDays = 14
+    /// Counted the way `BodySeries.setsPerMuscle` counts: a primary mover is 1, a secondary
+    /// mover 0.5. Only muscles some routine trains *as a primary mover* are checked against it
+    /// (see `CoachInput.trackedMuscles`), so this is a floor on real direct work — 4 sets in 14
+    /// days is roughly "trained once a fortnight", not a training recommendation.
     public static let coachMinSetsPerMuscleInWindow = 4.0
     public static let coachCoverageCooldownDays = 7
     /// Muscle coverage: at most this many gap muscles are named in one card.
     public static let coachCoverageMaxNamedMuscles = 3
 
-    /// Stalled lift: consecutive missed sessions at the same weight (from the lift's own
-    /// `StallState.consecutiveMisses`) before the per-lift card fires. Same bar as
-    /// `linearMissesBeforeDeload` — it's the same "stopped moving" signal, just surfaced per lift
-    /// rather than folded into the holistic deload call.
-    public static let coachStalledLiftMisses = linearMissesBeforeDeload
+    /// Stalled lift: the persisted `StallState.consecutiveMisses` at which the per-lift card
+    /// fires. Deliberately *not* `linearMissesBeforeDeload`, and the arithmetic is not obvious:
+    ///
+    /// `WorkoutStore.finish` commits the stall that `startWorkout` already computed for the
+    /// session being finished, so the persisted counter is always one session behind reality —
+    /// after a session is logged, that session has not been judged yet. Persisted 1 means two
+    /// sessions short of target at the same weight; persisted 2 means three, and three is where
+    /// the linear rule deloads on its own, which also resets the counter to 0. So for any lift
+    /// the engine actually drives, the persisted value only ever takes 0, 1 or 2 — and at 2 the
+    /// engine's next prescription *is already the deload*, so a card there would offer the lifter
+    /// a number the app is about to show them anyway.
+    ///
+    /// 1 is therefore the only value at which this card says something the engine hasn't: two
+    /// missed sessions in, one session before the automatic deload, while the prescription on
+    /// offer is still "repeat the same weight". (Values of 3 and above do still occur, but only
+    /// via `RuleContext.lightestLoadPrescribed` — a lift with nothing lighter on the equipment,
+    /// which the card handles with no weight to suggest.)
+    public static let coachStalledLiftMisses = 1
     public static let coachStalledLiftCooldownDays = 7
 
     /// e1RM downtrend: the trailing session count the trend is judged over, and how far the most
@@ -180,19 +206,35 @@ extension TrainingConstants {
     /// just how long a dismissed/approved suggestion stays quiet.
     public static let coachDeloadCooldownDays = 10
 
-    /// Struggling exercise: consecutive failed/skipped sessions before a substitution is offered.
-    public static let coachStrugglingConsecutiveFailures = 2
+    /// Struggling exercise: consecutive sessions that came up short of the lift's own rep target
+    /// before a substitution is offered. Strictly above `linearMissesBeforeDeload` so the
+    /// progression engine's own deload gets a full run at the problem first — telling someone to
+    /// abandon a lift before it has even been repeated at a lighter weight is premature.
+    public static let coachStrugglingConsecutiveFailures = 4
     public static let coachSubstitutionCooldownDays = 7
 
     /// Recovery debt: a muscle at or above this "spent" score (`Recovery.map` scale, 0…1) counts
     /// toward the debt; at least this many such muscles at once fires the card.
-    public static let coachRecoveryDebtThreshold = 0.75
+    ///
+    /// `Recovery.map` is `f / (recoveryFatigueScale + f)` in raw fatigue `f`, and one hard
+    /// session's worth of primary sets is `f == recoveryFatigueScale` (0.5). The old 0.75 needed
+    /// `f == 3 × recoveryFatigueScale` — three undecayed hard sessions on the same muscle, which
+    /// a lifter training it twice a week never reaches. 0.6 is `f == 1.5 ×`: one hard session
+    /// plus part of another still in the window.
+    public static let coachRecoveryDebtThreshold = 0.6
     public static let coachRecoveryDebtMinMuscles = 2
     public static let coachRecoveryDebtCooldownDays = 3
+    /// Recovery debt: logged sessions required before the rule is allowed to fire at all. The
+    /// fatigue reference is a downward-only EWMA seeded at `recoveryFatigueScale`, so in a
+    /// lifter's first week an ordinary session reads as a bigger and bigger share of their
+    /// (still-falling) normal — noise, not debt.
+    public static let coachRecoveryDebtMinSessions = 6
 
-    /// PR / milestone: how recent an achievement or PR must be to still be worth a card.
+    /// PR / milestone: how recent an achievement or PR must be to still be worth a card. The
+    /// cooldown must outlast the lookback, or a dismissed PR card comes back tomorrow and the day
+    /// after — the same PR is not new evidence.
     public static let coachHighlightLookbackDays = 3.0
-    public static let coachHighlightCooldownDays = 1
+    public static let coachHighlightCooldownDays = 4
 
     /// Long layoff: days since the last logged workout before a "return to training" card fires.
     public static let coachLayoffMinDays = 10.0

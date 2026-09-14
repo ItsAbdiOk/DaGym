@@ -20,7 +20,6 @@ final class RestAlertPlayer {
     private let sampleRate = 44_100.0
     private let tone = ToneGenerator(sampleRate: 44_100, frequency: 1_000)
     private var isEngineConfigured = false
-    private var isPlaybackCategoryActive = false
 
     /// Plays a bleep. `longer` selects the final, longer tone played at 0.
     func bleep(longer: Bool = false) {
@@ -51,12 +50,23 @@ final class RestAlertPlayer {
     /// `.playback`, which pauses other audio but ignores the ringer switch — the Settings toggle
     /// that flips this key says so. Re-checked (cheaply) on every bleep rather than once, so
     /// toggling the setting mid-workout takes effect on the very next rest timer.
+    ///
+    /// Two coordination rules, both learned the hard way:
+    ///
+    /// * While voice logging holds the session (`VoiceAudioSession.isRecordingActive`) this does
+    ///   nothing. Changing the category under a running `AVAudioEngine` stops that engine with
+    ///   its input tap still installed — the partial transcript freezes, and the release logs
+    ///   whatever truncated number was on screen.
+    /// * The decision is made against the session's *current* category rather than a remembered
+    ///   flag, so after voice logging hands the session back (restoring the previous category)
+    ///   the next bleep re-applies what it needs instead of assuming it's still in force.
     private func updateSessionCategoryIfNeeded() {
+        guard !VoiceAudioSession.isRecordingActive else { return }
         let playOnSilent = UserDefaults.standard.bool(forKey: Self.playOnSilentKey)
-        guard playOnSilent != isPlaybackCategoryActive else { return }
-        isPlaybackCategoryActive = playOnSilent
+        let desired: AVAudioSession.Category = playOnSilent ? .playback : .ambient
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(playOnSilent ? .playback : .ambient)
+        guard session.category != desired else { return }
+        try? session.setCategory(desired)
         try? session.setActive(true)
     }
 }

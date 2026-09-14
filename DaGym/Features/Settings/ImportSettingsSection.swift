@@ -242,7 +242,6 @@ private struct HevyAPIKeySheet: View {
             if !apiKey.isEmpty {
                 Button("Remove Key", role: .destructive, action: onRemove)
                     .buttonStyle(.dgControl)
-                    .dgTapTarget()
                     .dgLabel(DGColor.danger)
             }
         }

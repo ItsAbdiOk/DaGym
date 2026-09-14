@@ -101,9 +101,13 @@ struct BodyweightSheet: View {
         case .goal:
             preferences.bodyweightGoalKg = kg
         case .log:
-            store.logBodyweight(kg: kg, source: "manual")
+            // The pushed sample carries the measurement's *own* date, not a fresh `Date()` a few
+            // milliseconds later: the two used to land at slightly different instants, and the
+            // reading then came back from Health looking like a separate weigh-in.
+            let logged = store.logBodyweight(kg: kg, source: "manual")
             if preferences.healthSyncBodyweight {
-                Task { await healthSync.pushBodyweight(kg: kg) }
+                let date = logged.date
+                Task { await healthSync.pushBodyweight(kg: kg, date: date) }
             }
         }
         dismiss()

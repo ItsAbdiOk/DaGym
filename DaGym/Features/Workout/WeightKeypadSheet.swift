@@ -8,6 +8,26 @@ import SwiftUI
 /// `value` is always canonical: kg when `unit` is set, raw reps when `unit`
 /// is nil. Everything shown/typed converts to the user's unit at the edges.
 struct WeightKeypadSheet: View {
+    /// What the sheet is being used for. Workout copy and the plate-loading preview only make
+    /// sense over a barbell lift — showing "Log set" and "nearest 97.5 / 100" in red under
+    /// someone's bodyweight is both wrong and alarming — so anything workout-specific is gated
+    /// on this rather than on `unit != nil`.
+    enum Purpose {
+        /// Logging a set against a bar: plate line, "Log set".
+        case logSet
+        /// A plain weight the user is recording about themselves: no bar, no plates.
+        case bodyweight
+
+        var primaryTitle: String {
+            switch self {
+            case .logSet: "Log set"
+            case .bodyweight: "Save"
+            }
+        }
+
+        var showsPlateLine: Bool { self == .logSet }
+    }
+
     var title: String
     @Binding var value: Double
     var step: Double
@@ -15,6 +35,7 @@ struct WeightKeypadSheet: View {
     var last: String?
     /// The display unit for a weight field, or `nil` for a plain-number field (reps).
     var unit: WeightUnit?
+    var purpose: Purpose = .logSet
     var onDone: () -> Void
 
     @State private var buffer = ""
@@ -26,9 +47,13 @@ struct WeightKeypadSheet: View {
             Text(title).dgLabel()
             stepperRow
             metaLabel
-            if unit != nil { PlateLine(target: value, bar: bar ?? preferences.weightUnit.defaultBar) }
+            if unit != nil, purpose.showsPlateLine {
+                PlateLine(target: value, bar: bar ?? preferences.weightUnit.defaultBar)
+            }
             keyGrid
-            DGPrimaryButton(title: "Log set", symbol: "checkmark", fill: DGColor.success, height: 52) {
+            DGPrimaryButton(
+                title: purpose.primaryTitle, symbol: "checkmark", fill: DGColor.success, height: 52
+            ) {
                 onDone()
                 dismiss()
             }

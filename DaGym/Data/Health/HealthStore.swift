@@ -25,8 +25,9 @@ struct HealthBodyMass: Sendable, Equatable {
 /// like strength training. Never one of ours — `HealthKitStore.externalStrengthWorkouts` filters
 /// out anything carrying our own `DaGymWorkoutID` metadata before it ever reaches this struct.
 struct HealthExternalWorkout: Sendable, Equatable {
-    /// `HKWorkout.uuid.uuidString` — the dedupe key. Stored on `WorkoutModel.healthKitID` once
-    /// imported, so a later sync never creates a second `WorkoutModel` for the same sample.
+    /// `HKWorkout.uuid.uuidString` — the dedupe key. Stored on `ImportedHealthWorkoutModel` in
+    /// the always-local Health store once imported (and tombstoned there if the user deletes it),
+    /// so a later pull never imports the same sample twice or resurrects a deleted one.
     var uuid: String
     var start: Date
     var end: Date
@@ -36,6 +37,35 @@ struct HealthExternalWorkout: Sendable, Equatable {
 enum HealthStoreError: Error {
     case unavailable
     case saveFailed
+}
+
+/// Whether HealthKit has ever shown its permission sheet for the types DaGym asks for.
+/// HealthKit deliberately never reveals whether a *read* was granted or denied — a denied read
+/// looks exactly like "no data". This is the one thing it will say, and it's enough to tell
+/// "we've never asked" apart from "we asked and got nothing back", which is what the UI needs to
+/// choose between staying quiet and offering "Check Health permissions".
+enum HealthAuthorizationRequest: Sendable, Equatable {
+    /// Health is unavailable, or the status couldn't be determined.
+    case unknown
+    /// The sheet has never been shown for at least one of our types.
+    case shouldRequest
+    /// Every type has been put to the user already. Silence now means no data *or* a denied read.
+    case alreadyRequested
+}
+
+/// The three things DaGym can write to Health, for `HealthStoring.sharingAuthorization(for:)`.
+/// Unlike reads, write permission is readable — which is what lets onboarding avoid leaving a
+/// "Save workouts to Health" toggle on after the user said no.
+enum HealthShareType: Sendable, Equatable {
+    case workouts
+    case bodyMass
+    case activeEnergy
+}
+
+enum HealthShareAuthorization: Sendable, Equatable {
+    case notDetermined
+    case denied
+    case authorized
 }
 
 /// Everything `saveWorkout` needs, bundled into one value so the method stays under the lint
@@ -72,6 +102,15 @@ protocol HealthStoring: Sendable {
     /// toggles in `HealthSettingsView` control what DaGym actually *uses*, independent of this grant.
     func requestAuthorization() async throws
 
+    /// Whether the permission sheet has already been shown for every type DaGym asks for
+    /// (`HKHealthStore.statusForAuthorizationRequest`). Never throws — an error reads as
+    /// `.unknown`, which the UI treats the same as "don't say anything yet".
+    func authorizationRequestStatus() async -> HealthAuthorizationRequest
+
+    /// Whether the user granted, denied, or was never asked for permission to *write* one type.
+    /// HealthKit exposes this for shares only; reads are deliberately opaque.
+    func sharingAuthorization(for type: HealthShareType) async -> HealthShareAuthorization
+
     /// Saves one finished strength session as an `HKWorkout` (activity `.traditionalStrengthTraining`)
     /// and returns its `HKWorkout.uuid` string, so the caller can record it on `WorkoutModel.healthKitID`
     /// and never save the same workout twice. `HealthWorkoutInput.energyKcal` is nil unless the
@@ -80,6 +119,12 @@ protocol HealthStoring: Sendable {
     /// session (P5). When a caller does have a real heart-rate-derived energy figure, it's passed
     /// here too, with `energyIsEstimate: false`.
     func saveWorkout(_ input: HealthWorkoutInput) async throws -> String
+
+    /// Deletes the `HKWorkout` DaGym itself wrote for `healthKitID` (matched on our own
+    /// `DaGymWorkoutID` metadata as well as the uuid, so this can never touch another app's
+    /// sample). Called when the workout is deleted here — "Never duplicated" in the settings copy
+    /// has to mean the Health side dies with it. A no-op when the sample is already gone.
+    func deleteOwnWorkout(healthKitID: String) async throws
 
     func saveBodyMass(kg: Double, date: Date) async throws
     func latestBodyMass() async throws -> HealthBodyMass?
@@ -103,12 +148,15 @@ protocol HealthStoring: Sendable {
     /// anything DaGym itself wrote (filtered on `DaGymWorkoutID` metadata). Oldest first.
     func externalStrengthWorkouts(since: Date) async throws -> [HealthExternalWorkout]
 
-    /// Registers for background delivery of new body mass samples and starts an `HKObserverQuery`
-    /// that calls `onChange` (on an arbitrary thread) whenever one lands — including from another
-    /// app or device. Safe to call more than once; only the first registration takes effect.
-    func observeBodyMassChanges(onChange: @escaping @Sendable () -> Void) async throws
-    /// Same as `observeBodyMassChanges`, for new `HKWorkout` samples.
-    func observeWorkoutChanges(onChange: @escaping @Sendable () -> Void) async throws
+    /// Registers for background delivery of new `HKWorkout` samples and starts an
+    /// `HKObserverQuery` that runs `onChange` whenever one lands — including from another app or
+    /// device. Safe to call more than once; only the first registration takes effect.
+    ///
+    /// `onChange` is `async` on purpose: HealthKit hands the observer a completion handler that
+    /// must only be called once the work is *finished*. Calling it early lets iOS suspend the app
+    /// mid-fetch, and missing it entirely makes iOS stop delivering after a few strikes. The
+    /// implementation awaits `onChange` and calls the completion handler after it returns.
+    func observeWorkoutChanges(onChange: @escaping @Sendable () async -> Void) async throws
 }
 
 /// The real `HealthStoring`, wrapping `HKHealthStore`. An actor: every call already hops off the
@@ -116,6 +164,12 @@ protocol HealthStoring: Sendable {
 /// instances from ever needing to be `Sendable` themselves — only the plain-value results
 /// (`HealthSample`, `HealthBodyMass`, `String`) cross back out.
 actor HealthKitStore: HealthStoring {
+    /// The one instance the app uses. `HKObserverQuery` registration is per-`HealthKitStore`
+    /// (`workoutObserver` is what makes a second `observeWorkoutChanges` call a no-op), so
+    /// every `HealthSyncService`/`HealthInsightsService` sharing this instance is what keeps the
+    /// app-delegate registration and a Settings toggle flip from starting two observers on the
+    /// same type.
+    static let shared = HealthKitStore()
     // Not `private`: `HealthKitStore+Read.swift` holds roughly half of this actor's methods
     // (moved there to stay under the file-length lint limit) and needs to reach `store` and the
     // type constants below — `private` is file-scoped in Swift, so a same-actor extension in a
@@ -143,12 +197,12 @@ actor HealthKitStore: HealthStoring {
     ]
     private static let writeTypes: Set<HKSampleType> = [bodyMassType, workoutType, activeEnergyType]
 
-    /// Kept alive for as long as this actor lives, so the `HKObserverQuery`s aren't deallocated
-    /// (and silently stop firing) the moment `observeBodyMassChanges`/`observeWorkoutChanges`
-    /// returns. `nil` until first registered. Not `private`: set from `HealthKitStore+Read.swift`,
+    /// Kept alive for as long as this actor lives, so the `HKObserverQuery` isn't deallocated
+    /// (and silently stops firing) the moment `observeWorkoutChanges` returns, and so a second
+    /// call is a no-op. `nil` until first registered. Not `private`: set from
+    /// `HealthKitStore+Read.swift`,
     /// which holds the observer methods (kept out of this file to stay under the file-length
     /// lint limit) — `private` is file-scoped in Swift, so a same-module extension can't see it.
-    var bodyMassObserver: HKObserverQuery?
     var workoutObserver: HKObserverQuery?
 
     func requestAuthorization() async throws {
@@ -156,8 +210,41 @@ actor HealthKitStore: HealthStoring {
         try await store.requestAuthorization(toShare: Self.writeTypes, read: Self.readTypes)
     }
 
+    func authorizationRequestStatus() async -> HealthAuthorizationRequest {
+        guard isAvailable else { return .unknown }
+        guard let status = try? await store.statusForAuthorizationRequest(
+            toShare: Self.writeTypes, read: Self.readTypes
+        ) else { return .unknown }
+        switch status {
+        case .shouldRequest: return .shouldRequest
+        case .unnecessary: return .alreadyRequested
+        default: return .unknown
+        }
+    }
+
+    func sharingAuthorization(for type: HealthShareType) async -> HealthShareAuthorization {
+        guard isAvailable else { return .notDetermined }
+        switch store.authorizationStatus(for: Self.shareType(type)) {
+        case .sharingAuthorized: return .authorized
+        case .sharingDenied: return .denied
+        default: return .notDetermined
+        }
+    }
+
+    private static func shareType(_ type: HealthShareType) -> HKSampleType {
+        switch type {
+        case .workouts: workoutType
+        case .bodyMass: bodyMassType
+        case .activeEnergy: activeEnergyType
+        }
+    }
+
     func saveWorkout(_ input: HealthWorkoutInput) async throws -> String {
         guard isAvailable else { throw HealthStoreError.unavailable }
+        // `HKWorkoutBuilder.finishWorkout()` throws when the collection is empty in time, which a
+        // backfilled session dated "30 minutes, zero seconds ago" or a mis-entered duration can
+        // produce. One second is enough to make the sample valid, and is honest about what it is.
+        let end = max(input.end, input.start.addingTimeInterval(1))
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .traditionalStrengthTraining
         let builder = HKWorkoutBuilder(healthStore: store, configuration: configuration, device: .local())
@@ -170,14 +257,16 @@ actor HealthKitStore: HealthStoring {
             HKMetadataKeyWorkoutBrandName: input.title
         ])
         if let energyKcal = input.energyKcal {
-            try await builder.addSamples([Self.energySample(input: input, kcal: energyKcal)])
+            try await builder.addSamples([Self.energySample(input: input, end: end, kcal: energyKcal)])
         }
-        try await builder.endCollection(at: input.end)
+        try await builder.endCollection(at: end)
         guard let workout = try await builder.finishWorkout() else { throw HealthStoreError.saveFailed }
         return workout.uuid.uuidString
     }
 
-    private static func energySample(input: HealthWorkoutInput, kcal: Double) -> HKQuantitySample {
+    private static func energySample(
+        input: HealthWorkoutInput, end: Date, kcal: Double
+    ) -> HKQuantitySample {
         let quantity = HKQuantity(unit: .kilocalorie(), doubleValue: kcal)
         var metadata: [String: Any] = [
             "DaGymWorkoutID": input.workoutID, "DaGymEnergyIsEstimate": input.energyIsEstimate
@@ -186,9 +275,22 @@ actor HealthKitStore: HealthStoring {
             metadata[HKMetadataKeyWasUserEntered] = true
         }
         return HKQuantitySample(
-            type: activeEnergyType, quantity: quantity, start: input.start, end: input.end,
+            type: activeEnergyType, quantity: quantity, start: input.start, end: end,
             metadata: metadata
         )
+    }
+
+    /// Deletes the `HKWorkout` we wrote for this id. The predicate is the sample's own uuid
+    /// *and* the presence of our `DaGymWorkoutID` metadata, so a uuid collision (or a
+    /// `healthKitID` that somehow points at another app's sample) can't delete someone else's
+    /// data. HealthKit itself also refuses to delete objects this app didn't save.
+    func deleteOwnWorkout(healthKitID: String) async throws {
+        guard isAvailable, let uuid = UUID(uuidString: healthKitID) else { return }
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            HKQuery.predicateForObject(with: uuid),
+            HKQuery.predicateForObjects(withMetadataKey: "DaGymWorkoutID")
+        ])
+        _ = try await store.deleteObjects(of: Self.workoutType, predicate: predicate)
     }
 
     func saveBodyMass(kg: Double, date: Date) async throws {

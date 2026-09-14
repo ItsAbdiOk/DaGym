@@ -22,13 +22,14 @@ extension CoachRules {
         guard let best = candidates.first else { return [] }
 
         let evidence: [CoachEvidenceItem] = [
-            .init("Consecutive failed/skipped sessions", .count(worst.consecutiveFailedSessions)),
+            .init("Sessions short of target in a row", .count(worst.consecutiveFailedSessions)),
             .init("Suggested swap", .text(best.candidate.name))
         ]
         return [CoachCard(
             rule: .strugglingExercise, severity: .notice, title: "\(worst.name) isn't going well",
-            body: "\(worst.name) has been missed or failed \(worst.consecutiveFailedSessions) sessions "
-                + "in a row — \(best.candidate.name) hits the same muscles and might fit better.",
+            body: "\(worst.name) has come up short of its rep target "
+                + "\(worst.consecutiveFailedSessions) sessions in a row — \(best.candidate.name) hits "
+                + "the same muscles and might fit you better.",
             evidence: evidence,
             suggestedAction: .substituteExercise(
                 exerciseName: worst.name, candidateID: best.candidate.id, candidateName: best.candidate.name

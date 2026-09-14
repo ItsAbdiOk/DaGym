@@ -56,12 +56,48 @@ struct CoachRulesDriftTests {
             Issue.record("expected at least one session")
             return
         }
-        let key = String(Int(mostRecentDate.timeIntervalSince1970))
+        // Keyed on the week the newest session falls in, not its timestamp: drift is a
+        // weeks-long shape, and a per-session key minted a fresh fingerprint every workout.
+        let calendar = CoachTestSupport.calendar
+        let weekStart = calendar.dateInterval(of: .weekOfYear, for: mostRecentDate)?.start ?? mostRecentDate
+        let key = DateKey.string(for: weekStart, calendar: calendar)
         let fingerprint = CoachCard.makeFingerprint(rule: .sessionDrift, key: key)
         let interaction = CoachInteraction(
             rule: .sessionDrift, fingerprint: fingerprint, outcome: .dismissed, date: now
         )
         let input = CoachInput(recentSessions: sessionList, interactions: [interaction])
+        let cards = CoachEngine.cards(for: input, now: now, calendar: CoachTestSupport.calendar)
+        #expect(!cards.contains { $0.rule == .sessionDrift })
+    }
+
+    @Test("sessions with no plan behind them carry no set signal")
+    func unplannedSessionsAreNotBaseline() {
+        // Every baseline session freestyle (`plannedSetCount == 0`, what the store now reports
+        // for a session with no routine). There is no plan to have drifted from, so a collapsed
+        // recent set count must not fire on its own — only duration could, and it hasn't moved.
+        var sessionList = sessions(recentCompletedSets: 3)
+        for index in 0..<8 {
+            sessionList[index] = CoachSessionSummary(
+                date: sessionList[index].date, plannedSetCount: 0, completedSetCount: 14,
+                durationSeconds: 3600
+            )
+        }
+        let input = CoachInput(recentSessions: sessionList)
+        let cards = CoachEngine.cards(for: input, now: now, calendar: CoachTestSupport.calendar)
+        #expect(!cards.contains { $0.rule == .sessionDrift })
+    }
+
+    @Test("a workout left open overnight is ignored rather than inflating the baseline")
+    func overnightSessionIsNotABaseline() {
+        // Baseline sets and recent sets are identical, so only duration can fire this. One
+        // 14-hour "session" in the baseline would make every normal session afterwards look like
+        // a 75 % collapse.
+        var sessionList = sessions(recentCompletedSets: 10)
+        sessionList[0] = CoachSessionSummary(
+            date: sessionList[0].date, plannedSetCount: 10, completedSetCount: 10,
+            durationSeconds: 14 * 3600
+        )
+        let input = CoachInput(recentSessions: sessionList)
         let cards = CoachEngine.cards(for: input, now: now, calendar: CoachTestSupport.calendar)
         #expect(!cards.contains { $0.rule == .sessionDrift })
     }

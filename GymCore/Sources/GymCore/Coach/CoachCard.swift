@@ -33,8 +33,10 @@ public struct CoachEvidenceItem: Hashable, Sendable {
 /// A suggested next step, described as data so the app layer decides how to present and apply it
 /// (a button label, a sheet, a routine edit) rather than the engine baking in copy or UI.
 public enum CoachSuggestedAction: Hashable, Sendable {
-    /// Deload `exerciseName` to `toWeightKg` for `sets` sets.
-    case deloadExercise(exerciseName: String, toWeightKg: Double, sets: Int)
+    /// Deload `exerciseName` (identified by `exerciseID` in the library, nil only when the app
+    /// layer couldn't resolve one) to `toWeightKg` — a real load on that exercise's own grid, not
+    /// a raw fraction. Only the weight changes; the set count is the lifter's to decide.
+    case deloadExercise(exerciseName: String, exerciseID: UUID?, toWeightKg: Double)
     /// Swap `exerciseName` for `candidateName` (`candidateID` identifies it in the library).
     case substituteExercise(exerciseName: String, candidateID: UUID, candidateName: String)
     /// Add a session on `weekday`.

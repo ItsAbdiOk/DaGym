@@ -174,10 +174,12 @@ struct BodyView: View {
         composition = await healthInsights.bodyComposition()
     }
 
+    /// "Sync" re-reads Health rather than copying it in: bodyweight held in Health is read live
+    /// by `mergedBodyweightSeries` every refresh, because copying it into the main store would
+    /// put HealthKit data in iCloud (App Store Guideline 5.1.3).
     private func syncWithHealth() {
         isSyncing = true
         Task {
-            await healthSync.pullBodyweight()
             await refresh()
             isSyncing = false
         }

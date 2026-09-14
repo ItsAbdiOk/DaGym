@@ -18,6 +18,13 @@ struct BodyMapView: View {
         case front, back
     }
 
+    /// A fixed width-for-height for thumbnail-sized maps. The figures' own aspect ratios differ
+    /// (727:1280 male, 650:1450 female), so sizing a thumbnail by height alone makes its width —
+    /// and everything laid out beside it — jump when the user switches `BodyFigure`. Call sites
+    /// that only have a height box the map into this ratio instead; the figure still draws at
+    /// its own proportions inside, just letterboxed.
+    static let thumbnailAspectRatio: CGFloat = 100.0 / 140.0
+
     var side: Side
     var mode: Mode = .hit
     /// 0…1 per muscle. Missing = inert.
@@ -53,13 +60,20 @@ struct BodyMapView: View {
                         BodyMapMuscleMapping.isAddressable($0, on: side)
                     } ?? false
                     let transformedPath = region.path.applying(transform)
+                    let tappable = addressable && onTap != nil ? region.muscle : nil
                     transformedPath
                         .fill(fillColor(muscle: region.muscle, addressable: addressable))
                         .contentShape(transformedPath)
                         .onTapGesture {
-                            guard addressable, let muscle = region.muscle else { return }
-                            onTap?(muscle)
+                            if let tappable { onTap?(tappable) }
                         }
+                        // Only addressable regions take a hit area. An inert one (a knee over
+                        // the quads, the hands over the forearm, or `.adductors` — mapped to a
+                        // back-only muscle — over the front thigh) is drawn *after* the muscle
+                        // it overlaps, so leaving it hit-testable swallows that muscle's taps.
+                        // With no `onTap` at all (thumbnails) nothing takes taps, so a row's
+                        // own tap target keeps working over the whole thumbnail.
+                        .allowsHitTesting(tappable != nil)
                 }
             }
             .animation(DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion), value: intensity)
@@ -165,14 +179,20 @@ struct BodyMapPair: View {
 
     var body: some View {
         HStack(spacing: DGSpace.s1) {
-            BodyMapView(side: .front, mode: mode, intensity: intensity)
-                .accessibilityHidden(true)
-            BodyMapView(side: .back, mode: mode, intensity: intensity)
-                .accessibilityHidden(true)
+            sideMap(.front)
+            sideMap(.back)
         }
         .frame(height: height)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(BodyMapAccessibility.label(intensity: intensity))
+    }
+
+    /// Each side gets a fixed width for the given height, so the pair takes the same room —
+    /// and the text beside it sits in the same place — whichever `BodyFigure` is active.
+    private func sideMap(_ side: BodyMapView.Side) -> some View {
+        BodyMapView(side: side, mode: mode, intensity: intensity)
+            .frame(width: height * BodyMapView.thumbnailAspectRatio, height: height)
+            .accessibilityHidden(true)
     }
 }
 

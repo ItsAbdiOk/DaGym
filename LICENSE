@@ -19,3 +19,12 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+The MIT licence above covers DaGym's own source code only. This repository also
+contains third-party material under other licences — including CC BY-SA 4.0
+exercise artwork (DaGym/Resources/ExerciseArtPaths.zlib), MIT-licensed vendored
+code (DaGym/Vendor/MuscleMap), CC BY-SA exercise data from wger, and the Barlow
+typefaces under the SIL Open Font License 1.1. See THIRD-PARTY.md for the full
+list and the notices that apply to each.

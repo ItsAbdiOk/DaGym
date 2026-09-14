@@ -33,9 +33,9 @@ struct CoachRulesSubstitutionTests {
         )
     }
 
-    @Test("2 consecutive failed/skipped sessions offers a substitution")
+    @Test("4 consecutive sessions short of target offers a substitution")
     func fires() {
-        let cards = CoachEngine.cards(for: input(failures: 2), now: now, calendar: calendar)
+        let cards = CoachEngine.cards(for: input(failures: 4), now: now, calendar: calendar)
         #expect(cards.contains { $0.rule == .strugglingExercise })
         let card = cards.first { $0.rule == .strugglingExercise }
         guard case .substituteExercise(_, _, let candidateName) = card?.suggestedAction else {
@@ -43,17 +43,22 @@ struct CoachRulesSubstitutionTests {
             return
         }
         #expect(candidateName == "Incline Dumbbell Press")
+        // The rule can't see a skipped session at all (a lift that wasn't logged never reaches
+        // the history it reads), so the copy must not claim it can.
+        #expect(card?.body.contains("skipped") == false)
     }
 
-    @Test("1 failed session (just under the threshold) doesn't fire")
+    /// Three is where the progression engine's own deload lands. Being told to give up on a lift
+    /// before it has even been repeated lighter is premature, so the card waits one session longer.
+    @Test("3 sessions short of target (the engine's own deload point) doesn't fire yet")
     func nearMissDoesNotFire() {
-        let cards = CoachEngine.cards(for: input(failures: 1), now: now, calendar: calendar)
+        let cards = CoachEngine.cards(for: input(failures: 3), now: now, calendar: calendar)
         #expect(!cards.contains { $0.rule == .strugglingExercise })
     }
 
     @Test("no resolved substitution candidate for the lift doesn't fire even past the threshold")
     func noCandidateDoesNotFire() {
-        let noCandidateInput = input(failures: 3, withCandidate: false)
+        let noCandidateInput = input(failures: 5, withCandidate: false)
         let cards = CoachEngine.cards(for: noCandidateInput, now: now, calendar: calendar)
         #expect(!cards.contains { $0.rule == .strugglingExercise })
     }
@@ -65,7 +70,7 @@ struct CoachRulesSubstitutionTests {
             rule: .strugglingExercise, fingerprint: fingerprint, outcome: .dismissed, date: now
         )
         let cards = CoachEngine.cards(
-            for: input(failures: 2, interactions: [interaction]), now: now, calendar: calendar
+            for: input(failures: 4, interactions: [interaction]), now: now, calendar: calendar
         )
         #expect(!cards.contains { $0.rule == .strugglingExercise })
     }
