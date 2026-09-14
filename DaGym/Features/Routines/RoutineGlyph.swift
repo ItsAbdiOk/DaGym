@@ -101,7 +101,8 @@ struct GlyphCard: View {
                             Circle().strokeBorder(DGColor.ink1, lineWidth: tint == option.rawValue ? 2 : 0)
                         }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
+                .dgTapTarget()
                 .accessibilityLabel(option.displayName)
                 .accessibilityAddTraits(tint == option.rawValue ? .isSelected : [])
             }
@@ -120,7 +121,8 @@ struct GlyphCard: View {
                     in: RoundedRectangle(cornerRadius: 10, style: .continuous)
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgControl)
+        .dgTapTarget()
         .accessibilityLabel(symbol.replacingOccurrences(of: ".", with: " "))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }

@@ -70,6 +70,15 @@ final class WorkoutStore {
     /// edit or a photo delete shows up without a tab switch. Never decrements.
     private(set) var changeToken = 0
 
+    // Not `private(set)`: the only writer is `finishedWorkoutModelsNewestFirst()`, which
+    // lives in WorkoutStore+Progression.swift, and a private setter is file-scoped.
+    /// Test-only instrumentation: bumped once per actual `context.fetch` of the finished-workout
+    /// list inside `finishedWorkoutModelsNewestFirst()` — the single query every progression and
+    /// history lookup (prescriptions, ghosts, last-sessions strip, sparkline) now funnels through.
+    /// A regression test asserts this stays bounded when starting an N-exercise routine, rather
+    /// than growing with N — see `WorkoutStoreStartPerformanceTests`.
+    var finishedWorkoutsQueryCount = 0
+
     init(context: ModelContext, photoContext: ModelContext?) {
         self.context = context
         self.photoContext = photoContext

@@ -28,6 +28,9 @@ struct ExerciseInfo: Identifiable, Hashable {
     /// Licence covering `instructions` when sourced externally, e.g. "CC-BY-SA 4.0".
     var licence = ""
     var authors: [String] = []
+    /// The seeded JSON id (`ExerciseModel.seedID`), used to look up illustrated art in
+    /// `ExerciseArtCatalog`. Nil for custom exercises and any fixture built without one.
+    var seedID: String?
 
     enum LoggingStyle: String, CaseIterable {
         case weightReps = "Weight × reps"
@@ -44,7 +47,7 @@ struct ExerciseInfo: Identifiable, Hashable {
         isFavorite: Bool = false, isCustom: Bool = false, isPerSide: Bool = false, bestE1RM: Double? = nil,
         bestSet: String? = nil, sessions: Int = 0, instructions: String = "",
         loggingStyle: LoggingStyle = .weightReps, dataSource: String = "", sourceURL: String = "",
-        licence: String = "", authors: [String] = []
+        licence: String = "", authors: [String] = [], seedID: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -66,6 +69,7 @@ struct ExerciseInfo: Identifiable, Hashable {
         self.sourceURL = sourceURL
         self.licence = licence
         self.authors = authors
+        self.seedID = seedID
     }
 
     /// "Chest · front delts · triceps"

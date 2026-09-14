@@ -62,7 +62,7 @@ struct BackfillSheet: View {
                         .frame(height: 52)
                         .dgGlass(.regular, radius: DGRadius.lg)
                 }
-                .buttonStyle(DGPressStyle())
+                .buttonStyle(.dgControl)
                 routineButton
             }
         }

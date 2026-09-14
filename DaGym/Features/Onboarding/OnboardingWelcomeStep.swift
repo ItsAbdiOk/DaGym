@@ -50,18 +50,19 @@ struct OnboardingWelcomeStep: View {
                 DGPrimaryButton(title: "Set Up · 5 Questions", action: onStart)
                     .accessibilityIdentifier(A11yID.onboardingNext)
                 Button("Skip and start lifting", action: onSkip)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.dgControl)
                     .font(DGFont.condensedLabel(13))
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink3)
                     .accessibilityIdentifier(A11yID.onboardingSkipAll)
                 Button("Explore with sample data", action: onExploreSampleData)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.dgControl)
                     .font(DGFont.condensedLabel(13))
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink4)
             }
         }
+        .frame(maxWidth: .infinity)
     }
 }
 

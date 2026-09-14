@@ -18,6 +18,7 @@ struct OnboardingScheduleStep: View {
             DGPrimaryButton(title: "Continue", action: onNext)
                 .accessibilityIdentifier(A11yID.onboardingNext)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var weeklyGoalCard: some View {
@@ -64,7 +65,7 @@ struct OnboardingScheduleStep: View {
                 .frame(width: 44, height: 44)
                 .background(coral ? DGColor.coral : DGColor.surface3, in: Circle())
         }
-        .buttonStyle(DGPressStyle())
+        .buttonStyle(.dgControl)
     }
 
     private func adjustGoal(by delta: Int) {

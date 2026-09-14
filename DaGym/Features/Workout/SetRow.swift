@@ -64,7 +64,8 @@ struct SetRow: View {
                     .foregroundStyle(weightColor)
                     .frame(minWidth: 44, alignment: .leading)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.dgControl)
+            .dgTapTarget()
             .accessibilityLabel("Weight")
             .accessibilityValue(
                 "\(preferences.formatWeight(kg: set.weightKg)) \(preferences.weightUnit.symbol)"
@@ -86,7 +87,8 @@ struct SetRow: View {
                 }
                 .frame(minWidth: 30, alignment: .leading)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.dgControl)
+            .dgTapTarget()
             .accessibilityLabel("Reps")
             .accessibilityValue(isPerSide ? "\(repsText) per side" : repsText)
             if showsSteppers { stepper(symbol: "plus", label: "Increase reps") { onAdjustReps(1) } }
@@ -139,7 +141,8 @@ struct SetRow: View {
                 .frame(width: 28, height: 28)
                 .background(DGColor.surface3, in: Circle())
         }
-        .buttonStyle(DGPressStyle())
+        .buttonStyle(.dgControl)
+        .dgTapTarget()
         .accessibilityLabel(label)
     }
 
@@ -154,7 +157,7 @@ struct SetRow: View {
                 .frame(minHeight: DGTap.rowHeight)
                 .background(fill)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgControl)
         .accessibilityLabel(label)
     }
 
@@ -195,7 +198,8 @@ struct SetRow: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgControl)
+        .dgTapTarget()
         .accessibilityLabel(
             set.effort.map { "Effort, \($0.displayValue(scale: effortScale))" } ?? "Effort, not set"
         )
@@ -212,7 +216,7 @@ struct SetRow: View {
                     in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
                 )
         }
-        .buttonStyle(DGPressStyle())
+        .buttonStyle(.dgControl)
         .accessibilityIdentifier(A11yID.setRowDone(rowIndex))
         .accessibilityLabel(doneButtonLabel)
         .accessibilityAddTraits(set.isDone ? .isSelected : [])

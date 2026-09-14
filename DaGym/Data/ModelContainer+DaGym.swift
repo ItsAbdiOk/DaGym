@@ -23,7 +23,8 @@ enum DaGymSchema {
         ProgramWeekModel.self,
         SeedStateModel.self,
         ExerciseNoteModel.self,
-        GymCardModel.self
+        GymCardModel.self,
+        CoachInteractionModel.self
     ]
 
     /// Models that live in the separate, always-local photo store (see

@@ -53,7 +53,7 @@ struct TimedHoldCard: View {
                     .frame(height: 44)
                     .dgGlass(.regular, in: Capsule())
             }
-            .buttonStyle(DGPressStyle())
+            .buttonStyle(.dgControl)
             Button(action: onStop) {
                 Text("Stop")
                     .font(DGFont.condensedLabel(13))
@@ -63,7 +63,7 @@ struct TimedHoldCard: View {
                     .frame(height: 44)
                     .background(DGColor.coral, in: Capsule())
             }
-            .buttonStyle(DGPressStyle())
+            .buttonStyle(.dgControl)
         }
     }
 
@@ -108,7 +108,7 @@ struct TimedSetRow: View {
                         .foregroundStyle(DGColor.success)
                         .frame(width: 44, height: 44)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
             } else {
                 Button(action: onStart) {
                     Text("Start")
@@ -119,7 +119,8 @@ struct TimedSetRow: View {
                         .frame(height: 36)
                         .background(isCurrent ? DGColor.coral : DGColor.surface3, in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
+                .dgTapTarget()
             }
         }
         .padding(.horizontal, DGSpace.s3)

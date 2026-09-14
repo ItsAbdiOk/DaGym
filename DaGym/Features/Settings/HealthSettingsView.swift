@@ -15,6 +15,7 @@ struct HealthSettingsView: View {
                     VStack(alignment: .leading, spacing: DGSpace.s6) {
                         statusCard
                         toggleCard
+                        permissionsCard
                         syncFooter
                         disclaimer
                     }
@@ -80,13 +81,89 @@ struct HealthSettingsView: View {
                 HealthToggleRow(
                     title: "Sync bodyweight",
                     detail: "Health becomes the source of truth for your bodyweight: readings sync "
-                        + "both ways, and a logged entry here is sent to Health too.",
+                        + "both ways, full history included, and a logged entry here is sent to "
+                        + "Health too.",
                     isOn: binding(\.healthSyncBodyweight)
+                )
+                HealthDivider()
+                HealthToggleRow(
+                    title: "Read body composition",
+                    detail: "Body fat percentage, lean body mass and height fill in Body screen "
+                        + "fields automatically when Health has them. Read-only — never written.",
+                    isOn: binding(\.healthReadBodyComposition)
+                )
+                HealthDivider()
+                HealthToggleRow(
+                    title: "Read recovery context",
+                    detail: "Resting heart rate, heart-rate variability and last night's sleep show up "
+                        + "as plain context next to the muscle recovery map. Read-only, and never a "
+                        + "readiness score or training recommendation.",
+                    isOn: binding(\.healthReadRecovery)
+                )
+                HealthDivider()
+                HealthToggleRow(
+                    title: "Import workouts from other apps",
+                    detail: "Strength workouts logged on your Watch or in another app show up in "
+                        + "History too. Never duplicated, and never anything DaGym itself wrote.",
+                    isOn: binding(\.healthImportWorkouts)
+                )
+                HealthDivider()
+                HealthToggleRow(
+                    title: "Estimate calories",
+                    detail: "Off by default: we don't guess. Turning this on adds a rough "
+                        + "active-energy estimate to each saved workout, clearly marked in Health "
+                        + "as an estimate rather than a real heart-rate reading.",
+                    isOn: binding(\.healthEstimateCalories)
                 )
             }
             .dgCard(padding: 0)
         }
     }
+
+    private var permissionsCard: some View {
+        VStack(alignment: .leading, spacing: DGSpace.s3) {
+            Text("Exactly what's read and written").dgLabel()
+            VStack(spacing: 0) {
+                ForEach(Array(Self.permissionRows.enumerated()), id: \.offset) { index, row in
+                    if index > 0 { HealthDivider() }
+                    HealthPermissionRow(row: row)
+                }
+            }
+            .dgCard(padding: 0)
+        }
+    }
+
+    /// The complete list `requestAuthorization()` grants, one row per data type, in plain
+    /// language — so nothing DaGym can read or write to Health is a surprise. Kept in sync by
+    /// hand with `HealthKitStore.readTypes`/`writeTypes`.
+    private static let permissionRows: [HealthPermissionRow.Info] = [
+        .init(
+            kind: .read, title: "Bodyweight", reason: "Backs the bodyweight chart and trend logic."
+        ),
+        .init(
+            kind: .read, title: "Body fat %, lean mass, height",
+            reason: "Fills in Body screen fields when \"Read body composition\" is on."
+        ),
+        .init(
+            kind: .read, title: "Heart-rate variability, resting heart rate, sleep",
+            reason: "Shown as context on the Recovery map — never a readiness score."
+        ),
+        .init(
+            kind: .read, title: "Workouts from other apps",
+            reason: "Surfaced in History when \"Import workouts from other apps\" is on."
+        ),
+        .init(
+            kind: .write, title: "Bodyweight", reason: "Two-way sync when \"Sync bodyweight\" is on."
+        ),
+        .init(
+            kind: .write, title: "Strength workouts",
+            reason: "Every finished session, when \"Save workouts to Health\" is on."
+        ),
+        .init(
+            kind: .write, title: "Active energy (calories)",
+            reason: "Only when \"Estimate calories\" is on, clearly marked as an estimate."
+        )
+    ]
 
     @ViewBuilder
     private var syncFooter: some View {
@@ -134,6 +211,37 @@ private struct HealthToggleRow: View {
 private struct HealthDivider: View {
     var body: some View {
         Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
+    }
+}
+
+/// One row of the "Exactly what's read and written" list: a Read/Write badge, the data type,
+/// and why DaGym touches it.
+private struct HealthPermissionRow: View {
+    struct Info {
+        enum Kind { case read, write }
+        var kind: Kind
+        var title: String
+        var reason: String
+    }
+
+    var row: Info
+
+    var body: some View {
+        HStack(alignment: .top, spacing: DGSpace.s3) {
+            Text(row.kind == .read ? "READ" : "WRITE")
+                .font(DGFont.condensedLabel(11))
+                .foregroundStyle(row.kind == .read ? DGColor.ink3 : DGColor.coral)
+                .frame(width: 44, alignment: .leading)
+                .padding(.top, 2)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.title).font(DGFont.body).foregroundStyle(DGColor.ink1)
+                Text(row.reason).font(DGFont.footnote).foregroundStyle(DGColor.ink4)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, DGSpace.s5)
+        .padding(.vertical, DGSpace.s4)
     }
 }
 

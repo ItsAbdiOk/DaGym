@@ -67,7 +67,7 @@ struct DataSettingsSection: View {
                 symbol: "trash", isBusy: isBusy, tint: DGColor.danger, titleTint: DGColor.danger
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgRow)
         .disabled(isBusy)
     }
 
@@ -83,7 +83,7 @@ struct DataSettingsSection: View {
                 symbol: "square.and.arrow.up", isBusy: isBusy
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgRow)
         .disabled(isBusy)
     }
 
@@ -94,7 +94,7 @@ struct DataSettingsSection: View {
                 symbol: "square.and.arrow.down", isBusy: isBusy
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgRow)
         .disabled(isBusy)
     }
 

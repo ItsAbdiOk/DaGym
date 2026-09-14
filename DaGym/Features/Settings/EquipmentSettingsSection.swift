@@ -54,7 +54,8 @@ struct EquipmentSettingsSection: View {
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(DGColor.coral)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.dgControl)
+            .dgTapTarget()
         }
     }
 
@@ -65,7 +66,8 @@ struct EquipmentSettingsSection: View {
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(profile.isActive ? DGColor.coral : DGColor.ink4)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.dgControl)
+            .dgTapTarget()
             Text(profile.name).font(DGFont.body).foregroundStyle(DGColor.ink1)
             Spacer()
             Button {
@@ -76,7 +78,8 @@ struct EquipmentSettingsSection: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(DGColor.ink4)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.dgControl)
+            .dgTapTarget()
         }
         .padding(.horizontal, DGSpace.s5)
         .frame(minHeight: 52)

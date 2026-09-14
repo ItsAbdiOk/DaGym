@@ -12,11 +12,12 @@ struct DebugScreenView: View {
     @State private var weight = 82.5
     @State private var scale = Effort.Scale.rpe
     @State private var healthSync: HealthSyncService?
+    @State private var healthInsights: HealthInsightsService?
 
     var body: some View {
         Group {
-            if let healthSync {
-                screen.environment(healthSync)
+            if let healthSync, let healthInsights {
+                screen.environment(healthSync).environment(healthInsights)
             } else {
                 AmbientWash()
             }
@@ -25,6 +26,7 @@ struct DebugScreenView: View {
             // The `.rest` route is the real in-workout rest UI mid-countdown.
             if route == .rest { session.startRest(seconds: 90, after: 0, set: 0) }
             healthSync = HealthSyncService(workoutStore: store, preferences: preferences)
+            healthInsights = HealthInsightsService(workoutStore: store, preferences: preferences)
         }
     }
 

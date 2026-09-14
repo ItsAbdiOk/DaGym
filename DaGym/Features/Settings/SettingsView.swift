@@ -10,8 +10,6 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showingAcknowledgements = false
     @State private var showingPrivacyPolicy = false
-    @State private var showingHealthSettings = false
-    @State private var showingBodyweightSheet = false
     @State private var eventStore: EventStoring = EventKitStore()
     @State private var syncTask: Task<Void, Never>?
     /// The weekly-goal stepper needs its own reschedule (S14/F14): `RemindersSettingsSection`'s
@@ -37,7 +35,7 @@ struct SettingsView: View {
                     DataSettingsSection()
                     ImportSettingsSection()
                     EquipmentSettingsSection()
-                    healthCard
+                    AppleHealthSettingsCard()
                     aboutCard
                 }
                 .padding(.horizontal, DGSpace.s4)
@@ -47,30 +45,6 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showingAcknowledgements) { AcknowledgementsView() }
         .sheet(isPresented: $showingPrivacyPolicy) { PrivacyPolicyView() }
-        .sheet(isPresented: $showingHealthSettings) { HealthSettingsView() }
-        .sheet(isPresented: $showingBodyweightSheet) { BodyweightSheet() }
-    }
-
-    private var healthCard: some View {
-        SettingsSection(title: "Apple Health") {
-            Button { showingHealthSettings = true } label: {
-                SettingsRow(label: "Apple Health") {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(DGColor.ink4)
-                }
-            }
-            .buttonStyle(.plain)
-            SettingsDivider()
-            Button { showingBodyweightSheet = true } label: {
-                SettingsRow(label: "Bodyweight") {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(DGColor.ink4)
-                }
-            }
-            .buttonStyle(.plain)
-        }
     }
 
     private var header: some View {
@@ -236,7 +210,7 @@ struct SettingsView: View {
                     .foregroundStyle(DGColor.ink4)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgRow)
     }
 
     private var privacyPolicyRow: some View {
@@ -247,7 +221,7 @@ struct SettingsView: View {
                     .foregroundStyle(DGColor.ink4)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgRow)
     }
 
     private static var versionText: String {
@@ -272,8 +246,10 @@ struct SettingsView: View {
     }
 }
 
-/// A labeled "SECTION" title above a `.dgCard()` of hairline-separated rows.
-private struct SettingsSection<Content: View>: View {
+/// A labeled "SECTION" title above a `.dgCard()` of hairline-separated rows. Not `private`:
+/// `AppleHealthSettingsCard.swift` reuses this and `SettingsRow`/`SettingsDivider` below for the
+/// same visual language — `private` is file-scoped in Swift, so a different file can't see it.
+struct SettingsSection<Content: View>: View {
     var title: String
     @ViewBuilder var content: Content
 
@@ -287,7 +263,7 @@ private struct SettingsSection<Content: View>: View {
 }
 
 /// One "label … trailing control" row inside a settings card.
-private struct SettingsRow<Trailing: View>: View {
+struct SettingsRow<Trailing: View>: View {
     var label: String
     @ViewBuilder var trailing: Trailing
 
@@ -303,7 +279,7 @@ private struct SettingsRow<Trailing: View>: View {
 }
 
 /// Hairline separator between rows, indented to align with row text.
-private struct SettingsDivider: View {
+struct SettingsDivider: View {
     var body: some View {
         Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
     }
@@ -311,10 +287,14 @@ private struct SettingsDivider: View {
 
 #Preview {
     if let store = PreviewStore.make() {
+        let preferences = Preferences()
         return AnyView(
             SettingsView()
-                .environment(Preferences())
+                .environment(preferences)
                 .environment(store)
+                .environment(HealthInsightsService(
+                    healthStore: HealthKitStore(), workoutStore: store, preferences: preferences
+                ))
         )
     }
     return AnyView(EmptyView())

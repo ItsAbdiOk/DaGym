@@ -131,7 +131,7 @@ private struct MilestoneCard: View {
                     .strokeBorder(cardStroke, lineWidth: 1)
             }
         }
-        .buttonStyle(DGPressStyle())
+        .buttonStyle(.dgCard)
         .accessibilityElement(children: .combine)
     }
 

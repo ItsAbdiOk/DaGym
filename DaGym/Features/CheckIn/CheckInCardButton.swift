@@ -42,7 +42,7 @@ struct CheckInCardButton: View {
             .frame(minHeight: DGTap.rowHeight)
             .dgCard(padding: 0)
         }
-        .buttonStyle(DGPressStyle())
+        .buttonStyle(.dgCard)
         .accessibilityLabel(cardName.map { "Gym card, \($0)" } ?? "Add your gym card")
         .task { refresh() }
         .onChange(of: store.changeToken) { _, _ in refresh() }

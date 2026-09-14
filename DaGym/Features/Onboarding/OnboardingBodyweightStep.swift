@@ -9,6 +9,7 @@ struct OnboardingBodyweightStep: View {
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
     @State private var kg: Double = 75
+    @State private var showKeypad = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s6) {
@@ -25,26 +26,47 @@ struct OnboardingBodyweightStep: View {
                 DGPrimaryButton(title: "Save & Continue", action: save)
                     .accessibilityIdentifier(A11yID.onboardingNext)
                 Button("Skip", action: onSkip)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.dgControl)
                     .font(DGFont.condensedLabel(13))
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink3)
                     .accessibilityIdentifier(A11yID.onboardingSkip)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .task { kg = store.latestBodyMeasurement()?.bodyweightKg ?? kg }
+        .sheet(isPresented: $showKeypad) {
+            WeightKeypadSheet(
+                title: "Weight", value: $kg, step: preferences.weightUnit.defaultIncrementKg,
+                bar: nil, last: nil, unit: preferences.weightUnit, onDone: {}
+            )
+        }
     }
 
     private var stepperRow: some View {
         HStack {
             stepperButton(symbol: "minus") { step(by: -fineStepKg) }
             Spacer()
-            VStack(spacing: 0) {
-                Text(preferences.formatWeight(kg: kg))
-                    .dgMetric(DGFont.metricXL)
-                    .foregroundStyle(DGColor.ink1)
-                Text(preferences.unitSymbol.uppercased()).dgLabel()
+            Button {
+                Haptics.step()
+                showKeypad = true
+            } label: {
+                VStack(spacing: 0) {
+                    Text(preferences.formatWeight(kg: kg))
+                        .dgMetric(DGFont.metricXL)
+                        .foregroundStyle(DGColor.ink1)
+                    Text(preferences.unitSymbol.uppercased()).dgLabel()
+                }
+                .overlay(alignment: .top) {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(DGColor.ink4)
+                        .offset(x: 44, y: -4)
+                }
             }
+            .buttonStyle(.dgControl)
+            .accessibilityLabel("Weight, \(preferences.formatWeight(kg: kg)) \(preferences.unitSymbol)")
+            .accessibilityHint("Opens a keypad to type your weight directly")
             Spacer()
             stepperButton(symbol: "plus", coral: true) { step(by: fineStepKg) }
         }
@@ -61,7 +83,7 @@ struct OnboardingBodyweightStep: View {
                 .frame(width: 44, height: 44)
                 .background(coral ? DGColor.coral : DGColor.surface3, in: Circle())
         }
-        .buttonStyle(DGPressStyle())
+        .buttonStyle(.dgControl)
     }
 
     private var fineStepKg: Double { preferences.weightUnit.toKg(preferences.weightUnit.displayStep) }

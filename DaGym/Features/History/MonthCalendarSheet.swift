@@ -150,6 +150,7 @@ struct MonthCalendarSheet: View {
             DGIconButton(symbol: "chevron.left", size: 36, accessibilityLabel: "Previous month") {
                 shift(by: -1)
             }
+            .dgTapTarget()
             Spacer()
             Text(Self.monthLabel(month))
                 .font(DGFont.title3)
@@ -159,6 +160,7 @@ struct MonthCalendarSheet: View {
             DGIconButton(symbol: "chevron.right", size: 36, accessibilityLabel: "Next month") {
                 shift(by: 1)
             }
+            .dgTapTarget()
         }
     }
 
@@ -182,7 +184,7 @@ struct MonthCalendarSheet: View {
                 } label: {
                     DayCell(day: day, isSelected: day == selected)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
                 .accessibilityLabel(Self.accessibilityLabel(day))
             }
         }
@@ -273,7 +275,7 @@ struct MonthCalendarSheet: View {
                 .frame(height: 52)
                 .dgGlass(.regular, radius: DGRadius.lg)
         }
-        .buttonStyle(DGPressStyle())
+        .buttonStyle(.dgControl)
     }
 
     private func select(_ day: MonthCalendarDay) {

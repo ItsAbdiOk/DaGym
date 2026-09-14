@@ -20,6 +20,7 @@ struct OnboardingHealthStep: View {
             Label("Bodyweight in, workouts out", systemImage: "heart.fill")
                 .font(DGFont.subhead)
                 .foregroundStyle(DGColor.ink2)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .dgCard()
             Text("Skippable — turn it on later in Settings.")
                 .font(DGFont.footnote)
@@ -30,13 +31,14 @@ struct OnboardingHealthStep: View {
                     .accessibilityIdentifier(A11yID.onboardingNext)
                     .disabled(isConnecting)
                 Button("Skip", action: onSkip)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.dgControl)
                     .font(DGFont.condensedLabel(13))
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink3)
                     .accessibilityIdentifier(A11yID.onboardingSkip)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func connect() {

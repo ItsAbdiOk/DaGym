@@ -14,6 +14,9 @@ excluded:
   - DaGym.xcodeproj
   - .build
   - GymCore/.build
+  # Vendored third-party code (see DaGym/Vendor/MuscleMap/LICENSE) — kept verbatim from
+  # upstream, not reformatted to our rules.
+  - DaGym/Vendor
 
 opt_in_rules:
   - array_init

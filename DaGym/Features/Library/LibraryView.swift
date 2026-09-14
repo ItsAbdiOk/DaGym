@@ -87,6 +87,7 @@ struct LibraryView: View {
             .onChange(of: favoritesOnly) { _, _ in refresh() }
             .onChange(of: customOnly) { _, _ in refresh() }
         }
+        .dgWarmHaptics()
     }
 
     private var muscleChipRow: some View {
@@ -130,7 +131,7 @@ struct LibraryView: View {
                 NavigationLink(value: exercise) {
                     LibraryRow(exercise: exercise) { toggleFavorite(exercise.id) }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgCard)
             }
         }
         .navigationDestination(for: ExerciseInfo.self) { exercise in
@@ -178,7 +179,7 @@ struct EquipmentFilterBanner: View {
                 .lineLimit(1)
             Text("·").font(DGFont.footnote).foregroundStyle(DGColor.ink4).accessibilityHidden(true)
             Button(showingAll ? "Only \(profileName)" : "Show all") { showingAll.toggle() }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
                 .font(DGFont.footnote.weight(.semibold))
                 .foregroundStyle(DGColor.coralText)
             Spacer(minLength: 0)
@@ -240,7 +241,8 @@ private struct LibraryRow: View {
                     exercise.isFavorite ? DGColor.prGold.opacity(0.18) : DGColor.surface2, in: Circle()
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgControl)
+        .dgTapTarget()
         .accessibilityLabel(exercise.isFavorite ? "Remove from favourites" : "Add to favourites")
     }
 

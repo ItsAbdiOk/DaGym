@@ -1,0 +1,29 @@
+Exercise illustration artwork (DaGym/Resources/ExerciseArtPaths.zlib)
+
+The 3-frame animated exercise illustrations shown in DaGym are by Bryl Lim
+(https://bryllim.com), derived from Everkinetic (https://github.com/everkinetic/data),
+and are licensed under Creative Commons Attribution-ShareAlike 4.0 International
+(CC BY-SA 4.0).
+
+License text:      https://creativecommons.org/licenses/by-sa/4.0/legalcode
+Human-readable summary: https://creativecommons.org/licenses/by-sa/4.0/
+Source repository: https://github.com/everkinetic/data
+Artist:             Bryl Lim, https://bryllim.com
+
+Changes made by DaGym: DaGym does not ship the source SVG files. Instead, each frame's
+single vector path (the `d="..."` attribute) is extracted, its coordinates rounded to
+1 decimal place, and the result is packed into one zlib-compressed data file
+(ExerciseArtPaths.zlib, see scripts/import-exercise-art.swift). At display time DaGym
+parses that path data into a native SwiftUI shape and fills it with a solid tint that
+follows the app's colour palette (light/dark mode and the user's chosen accent colour) —
+this replaces the artwork's original white fill but changes no other aspect of the
+linework. This is still an adaptation of the licensed artwork, so it remains subject to
+the ShareAlike term: any redistribution of DaGym (or of ExerciseArtPaths.zlib on its own)
+must carry this same attribution and be offered under CC BY-SA 4.0.
+
+Only the illustrated artwork and its accompanying exercise metadata (names, slugs,
+frame ordering) from Bryl Lim's "workout-guide" package are used. None of that
+package's source code is used anywhere in DaGym.
+
+This notice satisfies the CC BY-SA 4.0 requirement to give appropriate credit,
+provide a link to the license, and indicate changes made to the licensed material.

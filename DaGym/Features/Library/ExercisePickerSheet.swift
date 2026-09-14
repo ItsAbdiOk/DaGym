@@ -76,7 +76,7 @@ struct ExercisePickerSheet: View {
                     } label: {
                         ExercisePickerRow(exercise: exercise)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.dgCard)
                 }
             }
             .padding(.bottom, DGSpace.s6)

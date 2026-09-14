@@ -58,6 +58,7 @@ struct ActiveWorkoutView: View {
             .background(AmbientWash())
         }
         .background(DGColor.bgBase)
+        .dgWarmHaptics()
         .overlay(alignment: .bottom) { bottomChrome }
         .dgUndoToast($undoAction)
         .overlay { Color.white.opacity(flashOpacity).ignoresSafeArea().allowsHitTesting(false) }
@@ -113,6 +114,11 @@ struct ActiveWorkoutView: View {
             DGPrimaryButton(title: "Finish", height: 44) { showFinishConfirm = true }
                 .frame(width: 96)
                 .accessibilityIdentifier(A11yID.workoutFinish)
+            // Voice logging entry point (plan: DaGym/Features/Voice). Self-contained — owns its
+            // own controller — so this is the one line the rest of the screen needs.
+            VoiceLogEntryPoint(
+                session: session, store: store, preferences: preferences, undoAction: $undoAction
+            )
             headerMenu
         }
         .padding(.horizontal, DGSpace.s4)
@@ -299,7 +305,8 @@ private struct WorkoutActionBar: View {
             .foregroundStyle(tint)
             .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgControl)
+        .dgTapTarget()
     }
 }
 

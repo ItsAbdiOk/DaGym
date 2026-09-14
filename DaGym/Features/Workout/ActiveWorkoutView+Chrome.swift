@@ -51,7 +51,8 @@ extension ActiveWorkoutView {
                     .foregroundStyle(DGColor.ink1)
             }
             Button("Finish") { showFinishConfirm = true }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
+                .dgTapTarget()
                 .font(DGFont.condensedLabel(13))
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.inkOnCoral)
@@ -92,7 +93,7 @@ extension ActiveWorkoutView {
                     .background(DGColor.coral, in: Circle())
                     .shadow(color: DGColor.coral.opacity(0.35), radius: 12, y: 6)
             }
-            .buttonStyle(DGPressStyle())
+            .buttonStyle(.dgControl)
             .accessibilityLabel("Add exercise")
         }
         .padding(.horizontal, DGSpace.s4)

@@ -259,7 +259,8 @@ private struct CollapsedExerciseRow: View {
                         .frame(height: 36)
                         .dgGlass(.regular, in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
+                .dgTapTarget()
             } else {
                 Text("\(entry.doneCount)/\(entry.sets.count)")
                     .dgMetric(DGFont.subhead)

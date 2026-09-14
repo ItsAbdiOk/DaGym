@@ -50,6 +50,19 @@ extension WorkoutStore {
         return ((try? context.fetch(descriptor)) ?? []).compactMap(Self.measurementInfo)
     }
 
+    /// Manual-only bodyweight readings from the last `days`, oldest first — the local half of
+    /// `HealthInsightsService.mergedBodyweightSeries`'s day-level merge with Health history.
+    /// Excludes anything with `source == "health"` so a reading already pulled in by
+    /// `HealthSyncService.pullBodyweightHistory` never gets merged in twice.
+    func manualBodyweightSeries(days: Int = 90) -> [BodyMeasurementInfo] {
+        let since = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? .distantPast
+        let predicate = #Predicate<BodyMeasurementModel> { $0.date >= since && $0.source == "manual" }
+        let descriptor = FetchDescriptor<BodyMeasurementModel>(
+            predicate: predicate, sortBy: [SortDescriptor(\.date, order: .forward)]
+        )
+        return ((try? context.fetch(descriptor)) ?? []).compactMap(Self.measurementInfo)
+    }
+
     /// The most recent readings, newest first, for the "recent measurements" list.
     func recentBodyMeasurements(limit: Int = 20) -> [BodyMeasurementInfo] {
         var descriptor = FetchDescriptor<BodyMeasurementModel>(
@@ -57,6 +70,14 @@ extension WorkoutStore {
         )
         descriptor.fetchLimit = limit
         return ((try? context.fetch(descriptor)) ?? []).compactMap(Self.measurementInfo)
+    }
+
+    /// Every measurement date already stored, across every source — `HealthSyncService.
+    /// pullBodyweightHistory`'s dedupe key, so a Health sample already logged (by an earlier
+    /// pull, or because the user weighed in manually at that exact instant) is never re-inserted.
+    func bodyMeasurementDates() -> Set<Date> {
+        let descriptor = FetchDescriptor<BodyMeasurementModel>()
+        return Set(((try? context.fetch(descriptor)) ?? []).map(\.date))
     }
 
     private static func measurementInfo(_ model: BodyMeasurementModel) -> BodyMeasurementInfo? {

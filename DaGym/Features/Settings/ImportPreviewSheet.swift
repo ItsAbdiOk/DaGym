@@ -78,7 +78,7 @@ struct ImportPreviewSheet: View {
     private var actions: some View {
         HStack(spacing: DGSpace.s3) {
             Button("Cancel", action: onCancel)
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(15))
                 .tracking(1.5)
                 .textCase(.uppercase)

@@ -54,6 +54,7 @@ struct RoutinesTabView: View {
             .task { refresh() }
             .onChange(of: store.changeToken) { refresh() }
         }
+        .dgWarmHaptics()
     }
 
     private var header: some View {
@@ -84,7 +85,8 @@ struct RoutinesTabView: View {
             .frame(height: 36)
             .dgGlass(.regular, in: Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgControl)
+        .dgTapTarget()
     }
 
     @ViewBuilder
@@ -104,7 +106,7 @@ struct RoutinesTabView: View {
                             profileName: activeProfile?.name ?? "", onStart: { onStart(routine) }
                         )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.dgCard)
                     .contextMenu {
                         Button("Copy", systemImage: "doc.on.doc") { duplicate(routine) }
                         Button("Delete", systemImage: "trash", role: .destructive) { delete(routine) }
@@ -189,7 +191,7 @@ private struct RoutineCard: View {
 
     private var startPill: some View {
         Button("Start", action: onStart)
-            .buttonStyle(.plain)
+            .buttonStyle(.dgControl)
             .font(DGFont.condensedLabel(13))
             .tracking(1.2)
             .textCase(.uppercase)
@@ -197,6 +199,7 @@ private struct RoutineCard: View {
             .padding(.horizontal, DGSpace.s4)
             .frame(height: 36)
             .background(DGColor.coral, in: Capsule())
+            .dgTapTarget()
     }
 
     private var equipmentBadge: some View {

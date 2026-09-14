@@ -93,13 +93,13 @@ struct RoutineBuilderView: View {
             .frame(height: 44)
             .dgGlass(.thin, radius: DGRadius.lg)
         }
-        .buttonStyle(DGPressStyle())
+        .buttonStyle(.dgCard)
     }
 
     private var navRow: some View {
         HStack {
             Button("Cancel", action: onDone)
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
                 .dgLabel()
             Spacer()
             Text(routineID == nil ? "New Routine" : "Edit Routine")
@@ -113,7 +113,7 @@ struct RoutineBuilderView: View {
                 }
             }
             Button("Save", action: save)
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
                 .dgLabel(DGColor.coralText)
                 .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
@@ -291,7 +291,8 @@ private struct BuilderExerciseCard: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(isSuperset ? DGColor.aiVioletText : DGColor.ink3)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.dgControl)
+            .dgTapTarget()
             .accessibilityLabel(isSuperset ? "Remove from superset" : "Link into superset")
             Menu {
                 Button("Move Up", systemImage: "arrow.up", action: onMoveUp)

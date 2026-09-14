@@ -24,12 +24,27 @@ Everkinetic (https://github.com/everkinetic/data), licensed under **CC-BY-SA 4.0
 
 > Illustration by Everkinetic (https://github.com/everkinetic/data), CC-BY-SA 4.0.
 
+## Exercise illustrations
+
+**Bryl Lim** — the animated 3-frame exercise illustrations shown throughout the app are by
+[Bryl Lim](https://bryllim.com), derived from Everkinetic (https://github.com/everkinetic/data),
+licensed under **Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)**.
+Licence: https://creativecommons.org/licenses/by-sa/4.0/deed.en. DaGym does not ship the
+source SVGs — each frame's vector path data is extracted and rendered as a native shape,
+recoloured/tinted to match the app's palette; no other changes were made to the linework.
+Full attribution notice: `ATTRIBUTION-ExerciseArt.txt` in the app bundle.
+
+> Exercise illustrations by Bryl Lim (https://bryllim.com), derived from Everkinetic
+> (https://github.com/everkinetic/data), licensed under CC-BY-SA 4.0. Recoloured/tinted by
+> DaGym for display.
+
 ## Muscle diagrams
 
-**MuscleMap** — the interactive muscle-highlight diagrams are powered by MuscleMap, licensed
-under the **MIT License**.
+**MuscleMap** — the body map's anatomical figure and muscle-region outlines are adapted from
+[MuscleMap](https://github.com/melihcolpan/MuscleMap) by Melih Colpan, licensed under the
+**MIT License**. Vendored source and licence text: `DaGym/Vendor/MuscleMap`.
 
-> Muscle diagrams by MuscleMap, MIT licence.
+> Body map by MuscleMap (https://github.com/melihcolpan/MuscleMap), © Melih Colpan, MIT licence.
 
 ## Typography
 

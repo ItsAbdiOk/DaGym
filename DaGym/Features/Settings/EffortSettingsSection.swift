@@ -35,7 +35,7 @@ struct EffortSettingsSection: View {
                                 .foregroundStyle(DGColor.ink4)
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.dgRow)
                 }
             }
             .dgCard(padding: 0)

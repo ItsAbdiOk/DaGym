@@ -26,6 +26,7 @@ struct OnboardingDoneStep: View {
             DGPrimaryButton(title: "Get Started", action: onFinish)
                 .accessibilityIdentifier(A11yID.onboardingNext)
         }
+        .frame(maxWidth: .infinity)
     }
 }
 

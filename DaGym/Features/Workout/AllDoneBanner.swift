@@ -31,7 +31,7 @@ struct AllDoneBanner: View {
                         .frame(height: 44)
                         .dgGlass(.regular, in: Capsule())
                 }
-                .buttonStyle(DGPressStyle())
+                .buttonStyle(.dgControl)
             }
         }
         .dgCard(

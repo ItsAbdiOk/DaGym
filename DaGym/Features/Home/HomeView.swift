@@ -69,6 +69,7 @@ struct HomeView: View {
                 .padding(.bottom, DGSpace.s6)
             }
         }
+        .dgWarmHaptics()
         .task { refresh() }
         .onChange(of: store.changeToken) { refresh() }
         .onChange(of: preferences.weeklyGoal) { refresh() }
@@ -302,7 +303,7 @@ private struct RecoveryCard: View {
                 Text("Recovery").dgLabel()
                 Spacer()
                 Button("See Map", action: onSeeRecovery)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.dgControl)
                     .font(DGFont.condensedLabel(12))
                     .tracking(1.2)
                     .textCase(.uppercase)

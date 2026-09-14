@@ -67,7 +67,8 @@ struct EquipmentProfileView: View {
     private var navRow: some View {
         HStack {
             Button("Cancel") { dismiss() }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
+                .dgTapTarget()
                 .font(DGFont.condensedLabel(13))
                 .tracking(1.2)
                 .textCase(.uppercase)
@@ -79,7 +80,8 @@ struct EquipmentProfileView: View {
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             Button("Save", action: save)
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
+                .dgTapTarget()
                 .font(DGFont.condensedLabel(13))
                 .tracking(1.2)
                 .textCase(.uppercase)
@@ -223,7 +225,7 @@ struct EquipmentProfileView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgCard)
     }
 
     private func save() {

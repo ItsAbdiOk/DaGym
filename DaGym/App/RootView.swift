@@ -304,7 +304,7 @@ private extension RootView {
             } label: { tabLabel(.routines) }
             Tab(value: DGTab.progress) { HistoryTabView() } label: { tabLabel(.progress) }
             Tab(value: DGTab.library) { LibraryView() } label: { tabLabel(.library) }
-            Tab(value: DGTab.coach) { CoachPlaceholderView() } label: { tabLabel(.coach) }
+            Tab(value: DGTab.coach) { CoachView() } label: { tabLabel(.coach) }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .tint(DGColor.coral) // the system bar's selected tint follows the accent theme

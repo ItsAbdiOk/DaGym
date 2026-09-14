@@ -276,7 +276,7 @@ private struct MetricSegmentToggle: View {
                             }
                         }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
             }
         }
         .dgGlass(.thin, radius: 12)

@@ -42,10 +42,10 @@ struct RestPill: View {
                     .frame(width: 44, height: 44)
                     .dgGlass(.regular, in: Circle())
             }
-            .buttonStyle(DGPressStyle())
+            .buttonStyle(.dgControl)
             .accessibilityLabel("Add 30 seconds")
             Button("Skip", action: onSkip)
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(13))
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.inkOnCoral)

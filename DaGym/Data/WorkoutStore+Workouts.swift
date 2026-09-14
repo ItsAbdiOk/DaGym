@@ -153,37 +153,58 @@ extension WorkoutStore {
         guard let routine else { return [] }
         let routineExercises = (routine.exercises ?? []).sorted { $0.order < $1.order }
         let weekKind = currentWeekKind(forRoutineID: routine.id)
-        return routineExercises.compactMap {
-            buildEntry(routine: routine, routineExercise: $0, weekKind: weekKind).map(withHistoryStrip)
+        // Fetched once for the whole routine: every exercise below reads finished-workout
+        // history (progression baseline, ghosts, last-sessions strip, sparkline) from this same
+        // in-memory list instead of each issuing its own round trip to the store — the fix for
+        // the N+1 pattern that made `startWorkout` visibly stall on an 8+ exercise routine.
+        let finishedWorkouts = finishedWorkoutModelsNewestFirst()
+        return routineExercises.compactMap { routineExercise in
+            buildEntry(
+                routine: routine, routineExercise: routineExercise, weekKind: weekKind,
+                finishedWorkouts: finishedWorkouts
+            ).map { withHistoryStrip($0, finishedWorkouts: finishedWorkouts) }
         }
     }
 
     /// Fills the card's "last sessions" strip and e1RM sparkline from finished history — the
-    /// two fields every store-built entry shows on `ExerciseCard`.
-    func withHistoryStrip(_ entry: WorkoutExerciseEntry) -> WorkoutExerciseEntry {
+    /// two fields every store-built entry shows on `ExerciseCard`. Pass `finishedWorkouts`
+    /// (newest first) to reuse an already-fetched list instead of querying the store again.
+    func withHistoryStrip(
+        _ entry: WorkoutExerciseEntry, finishedWorkouts: [WorkoutModel]? = nil
+    ) -> WorkoutExerciseEntry {
         var entry = entry
-        entry.lastSessions = lastSessions(exerciseID: entry.exercise.id)
-        entry.sparkline = sparklineSeries(exerciseID: entry.exercise.id).suffix(8).map(\.1)
+        entry.lastSessions = lastSessions(exerciseID: entry.exercise.id, finishedWorkouts: finishedWorkouts)
+        entry.sparkline = sparklineSeries(exerciseID: entry.exercise.id, finishedWorkouts: finishedWorkouts)
+            .suffix(8).map(\.1)
         return entry
     }
 
     private func buildEntry(
-        routine: RoutineModel, routineExercise: RoutineExerciseModel, weekKind: ProgramWeekKind?
+        routine: RoutineModel, routineExercise: RoutineExerciseModel, weekKind: ProgramWeekKind?,
+        finishedWorkouts: [WorkoutModel]
     ) -> WorkoutExerciseEntry? {
         guard let exerciseModel = routineExercise.exercise else { return nil }
         let info = exerciseInfo(for: exerciseModel)
         let plannedSets = (routineExercise.plannedSets ?? []).sorted { $0.order < $1.order }
         if weekKind == .deload, !routineExercise.excludeFromProgression {
-            return deloadEntry(info: info, plannedSets: plannedSets, routineExercise: routineExercise)
-        }
-        if let prescribed = computeProgression(
-            routine: routine, routineExercise: routineExercise, exerciseInfo: info, plannedSets: plannedSets
-        ) {
-            return prescribedEntry(
-                info: info, plannedSets: plannedSets, prescribed: prescribed, routineExercise: routineExercise
+            return deloadEntry(
+                info: info, plannedSets: plannedSets, routineExercise: routineExercise,
+                finishedWorkouts: finishedWorkouts
             )
         }
-        return autoFillEntry(info: info, plannedSets: plannedSets, routineExercise: routineExercise)
+        if let prescribed = computeProgression(
+            routine: routine, routineExercise: routineExercise, exerciseInfo: info, plannedSets: plannedSets,
+            finishedWorkouts: finishedWorkouts
+        ) {
+            return prescribedEntry(
+                info: info, plannedSets: plannedSets, prescribed: prescribed,
+                routineExercise: routineExercise, finishedWorkouts: finishedWorkouts
+            )
+        }
+        return autoFillEntry(
+            info: info, plannedSets: plannedSets, routineExercise: routineExercise,
+            finishedWorkouts: finishedWorkouts
+        )
     }
 
     /// Prescribed by `ProgressionEngine`: the engine's numbers for the working sets, the
@@ -196,10 +217,10 @@ extension WorkoutStore {
     /// the extras are appended, templated on the last planned working set.
     private func prescribedEntry(
         info: ExerciseInfo, plannedSets: [PlannedSetModel], prescribed: Prescribed,
-        routineExercise: RoutineExerciseModel
+        routineExercise: RoutineExerciseModel, finishedWorkouts: [WorkoutModel]
     ) -> WorkoutExerciseEntry {
         let planned = plannedSets.map(Self.autoFillSpec)
-        let (previous, previousDate) = previousSets(exerciseID: info.id)
+        let (previous, previousDate) = previousSets(exerciseID: info.id, finishedWorkouts: finishedWorkouts)
         let ghosts = AutoFill.prescriptions(
             planned: planned, previous: previous, incrementKg: info.incrementKg,
             planUpdatedAt: routineExercise.routine?.updatedAt, previousDate: previousDate
@@ -275,10 +296,11 @@ extension WorkoutStore {
     /// logged load (`DeloadDetector.deloadPlan`), flagged `wasPlannedDeload` so it's excluded as
     /// the baseline future progression builds from.
     private func deloadEntry(
-        info: ExerciseInfo, plannedSets: [PlannedSetModel], routineExercise: RoutineExerciseModel
+        info: ExerciseInfo, plannedSets: [PlannedSetModel], routineExercise: RoutineExerciseModel,
+        finishedWorkouts: [WorkoutModel]
     ) -> WorkoutExerciseEntry {
-        let baseline = exerciseHistory(exerciseID: info.id).first { !$0.wasPlannedDeload }?
-            .workingSets.first?.weightKg
+        let baseline = exerciseHistory(exerciseID: info.id, finishedWorkouts: finishedWorkouts)
+            .first { !$0.wasPlannedDeload }?.workingSets.first?.weightKg
         let baselineWeight = baseline ?? plannedSets.first?.targetWeightKg ?? 0
         let plan = DeloadDetector.deloadPlan(sets: max(plannedSets.count, 1), load: baselineWeight)
         let equipment = activeEquipment()
@@ -304,12 +326,13 @@ extension WorkoutStore {
     /// The plain previous-session auto-fill, unaffected by the progression engine — used when an
     /// exercise is excluded from progression.
     private func autoFillEntry(
-        info: ExerciseInfo, plannedSets: [PlannedSetModel], routineExercise: RoutineExerciseModel
+        info: ExerciseInfo, plannedSets: [PlannedSetModel], routineExercise: RoutineExerciseModel,
+        finishedWorkouts: [WorkoutModel]
     ) -> WorkoutExerciseEntry {
         let planned = plannedSets.map(Self.autoFillSpec)
         let sets = autoFilledSets(
             exerciseID: info.id, planned: planned, incrementKg: info.incrementKg,
-            planUpdatedAt: routineExercise.routine?.updatedAt
+            planUpdatedAt: routineExercise.routine?.updatedAt, finishedWorkouts: finishedWorkouts
         )
         return WorkoutExerciseEntry(
             exercise: info, sets: sets, supersetGroup: routineExercise.supersetGroup,
@@ -326,9 +349,12 @@ extension WorkoutStore {
     /// each set kind (`GymCore.AutoFill`). Shared by `autoFillEntry` (excluded routine exercises)
     /// and `autoFilledEntry` (a freshly added exercise's default three working sets).
     private func autoFilledSets(
-        exerciseID: UUID, planned: [AutoFillSetSpec], incrementKg: Double, planUpdatedAt: Date? = nil
+        exerciseID: UUID, planned: [AutoFillSetSpec], incrementKg: Double, planUpdatedAt: Date? = nil,
+        finishedWorkouts: [WorkoutModel]? = nil
     ) -> [SetEntry] {
-        let (previous, previousDate) = previousSets(exerciseID: exerciseID)
+        let (previous, previousDate) = previousSets(
+            exerciseID: exerciseID, finishedWorkouts: finishedWorkouts
+        )
         let prescriptions = AutoFill.prescriptions(
             planned: planned, previous: previous, incrementKg: incrementKg,
             planUpdatedAt: planUpdatedAt, previousDate: previousDate
@@ -351,8 +377,12 @@ extension WorkoutStore {
     /// for `AutoFill`'s "is the plan newer than this?" check. A session with nothing completed,
     /// a planned deload, or one logged under an excluded routine slot is skipped — the next
     /// older one is the previous.
-    private func previousSets(exerciseID: UUID) -> (sets: [PreviousSet], date: Date?) {
-        guard let previous = previousLoggedExercise(exerciseID: exerciseID) else { return ([], nil) }
+    private func previousSets(
+        exerciseID: UUID, finishedWorkouts: [WorkoutModel]? = nil
+    ) -> (sets: [PreviousSet], date: Date?) {
+        guard let previous = previousLoggedExercise(
+            exerciseID: exerciseID, finishedWorkouts: finishedWorkouts
+        ) else { return ([], nil) }
         let sets = (previous.exercise.sets ?? []).filter(\.isCompleted).sorted { $0.order < $1.order }
         return (
             sets.map { setModel in
@@ -373,9 +403,9 @@ extension WorkoutStore {
     }
 
     private func previousLoggedExercise(
-        exerciseID: UUID
+        exerciseID: UUID, finishedWorkouts: [WorkoutModel]? = nil
     ) -> (exercise: WorkoutExerciseModel, workout: WorkoutModel)? {
-        for workout in finishedWorkoutModelsNewestFirst() {
+        for workout in finishedWorkouts ?? finishedWorkoutModelsNewestFirst() {
             let candidates = (workout.exercises ?? []).filter {
                 $0.exercise?.id == exerciseID && !$0.wasPlannedDeload && !$0.excludedFromProgression
                     && ($0.sets ?? []).contains(where: \.isCompleted)

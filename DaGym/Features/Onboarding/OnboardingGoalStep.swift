@@ -31,6 +31,7 @@ struct OnboardingGoalStep: View {
             DGPrimaryButton(title: "Continue", action: onNext)
                 .accessibilityIdentifier(A11yID.onboardingNext)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
             if preferences.trainingGoal.isEmpty { preferences.trainingGoal = "general" }
         }
@@ -66,7 +67,7 @@ private struct GoalRow: View {
             }
             .dgCard(fill: isSelected ? DGColor.coralWash : DGColor.surface1, padding: DGSpace.s4)
         }
-        .buttonStyle(DGPressStyle())
+        .buttonStyle(.dgCard)
     }
 }
 

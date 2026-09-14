@@ -50,11 +50,11 @@ struct ProgressChartsSection: View {
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             Button("1RM Calc") { showingCalculator = true }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
             Button("See All") { showingProgress = true }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.coralText)
         }

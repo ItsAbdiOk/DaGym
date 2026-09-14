@@ -122,7 +122,7 @@ struct PhotoCaptureView: View {
                     .frame(height: 52)
                     .dgGlass(.regular, radius: DGRadius.lg)
             }
-            .buttonStyle(DGPressStyle())
+            .buttonStyle(.dgControl)
             DGPrimaryButton(title: "Save", symbol: "checkmark") { save(data: data) }
         }
         .padding(.horizontal, DGSpace.s4)

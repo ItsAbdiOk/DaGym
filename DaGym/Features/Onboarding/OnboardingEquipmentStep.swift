@@ -30,6 +30,7 @@ struct OnboardingEquipmentStep: View {
             DGPrimaryButton(title: "Continue", action: onNext)
                 .accessibilityIdentifier(A11yID.onboardingNext)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .task { refresh() }
     }
 

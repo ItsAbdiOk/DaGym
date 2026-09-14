@@ -1,4 +1,3 @@
-import Charts
 import SwiftData
 import SwiftUI
 import UIKit
@@ -7,15 +6,22 @@ import UIKit
 /// Health pull, the recent-readings list, and progress photos (plan.md §6.4, §6.8).
 struct BodyView: View {
     @Environment(WorkoutStore.self) private var store
-    @Environment(Preferences.self) private var preferences
+    // Not `private`: `BodyView+HealthComposition.swift` (kept separate to stay under the
+    // type-body-length lint limit) reads these — `private` is file-scoped in Swift, so a
+    // same-type extension in a different file can't see a `private` member. Still internal to
+    // the module either way.
+    @Environment(Preferences.self) var preferences
     @Environment(HealthSyncService.self) private var healthSync
+    @Environment(HealthInsightsService.self) var healthInsights
 
     @State private var series: [BodyMeasurementInfo] = []
     @State private var recent: [BodyMeasurementInfo] = []
+    @State var composition: HealthInsightsService.BodyComposition?
     @State private var isLoggingWeight = false
     @State private var isEditingGoal = false
     @State private var isSyncing = false
     @State private var isShowingPhotos = false
+    @State var isShowingHealthSettings = false
 
     var body: some View {
         ZStack {
@@ -25,6 +31,7 @@ struct BodyView: View {
                     header
                     chartCard
                     actionsRow
+                    bodyCompositionCard
                     recentList
                     ProgressPhotosCard(onOpen: { isShowingPhotos = true })
                 }
@@ -33,13 +40,22 @@ struct BodyView: View {
                 .padding(.bottom, DGSpace.s8)
             }
         }
-        .task { refresh() }
-        .onChange(of: store.changeToken) { refresh() }
-        .sheet(isPresented: $isLoggingWeight, onDismiss: refresh) { BodyweightSheet() }
+        .task { await refresh() }
+        .onChange(of: store.changeToken) { Task { await refresh() } }
+        .sheet(
+            isPresented: $isLoggingWeight,
+            onDismiss: { Task { await refresh() } },
+            content: { BodyweightSheet() }
+        )
         .sheet(isPresented: $isEditingGoal) { BodyweightSheet(purpose: .goal) }
         .sheet(isPresented: $isShowingPhotos) {
             PhotoLockGate { ProgressPhotosView() }
         }
+        .sheet(
+            isPresented: $isShowingHealthSettings,
+            onDismiss: { Task { await refresh() } },
+            content: { HealthSettingsView() }
+        )
     }
 
     private var header: some View {
@@ -97,7 +113,7 @@ struct BodyView: View {
                 .frame(height: 28)
                 .dgGlass(.thin, radius: DGRadius.sm)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgControl)
     }
 
     private var goalLabel: String {
@@ -106,38 +122,12 @@ struct BodyView: View {
     }
 
     private var chart: some View {
-        Chart {
-            ForEach(series) { point in
-                LineMark(x: .value("Date", point.date), y: .value("Weight", displayWeight(point.kg)))
-                    .foregroundStyle(DGColor.coral)
-                    .interpolationMethod(.catmullRom)
-                PointMark(x: .value("Date", point.date), y: .value("Weight", displayWeight(point.kg)))
-                    .foregroundStyle(pointColor(for: point))
-            }
-            if let goalKg = preferences.bodyweightGoalKg {
-                RuleMark(y: .value("Goal", displayWeight(goalKg)))
-                    .foregroundStyle(DGColor.info)
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                    .annotation(position: .top, alignment: .leading) {
-                        Text("Goal \(preferences.formatWeight(kg: goalKg))").dgLabel(DGColor.infoText)
-                    }
-            }
-        }
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .month)) { AxisValueLabel(format: .dateTime.month(.abbreviated)) }
-        }
-        .chartYAxis { AxisMarks(position: .leading) }
-        .chartYScale(domain: yDomain)
-    }
-
-    /// A few units either side of the readings (and the goal) rather than a 0-based axis, so a
-    /// 75 → 74 kg move is visible instead of a flat line at the top of the chart.
-    private var yDomain: ClosedRange<Double> {
-        var values = series.map { displayWeight($0.kg) }
-        if let goalKg = preferences.bodyweightGoalKg { values.append(displayWeight(goalKg)) }
-        guard let low = values.min(), let high = values.max() else { return 0...100 }
-        let pad = max(2, (high - low) * 0.25)
-        return (low - pad)...(high + pad)
+        TrendChartView(
+            points: series.map { TrendChartView.Point(date: $0.date, value: displayWeight($0.kg)) },
+            lineColor: DGColor.coral, pointColor: weightPointColor,
+            goal: preferences.bodyweightGoalKg.map(displayWeight),
+            goalLabel: preferences.bodyweightGoalKg.map { "Goal \(preferences.formatWeight(kg: $0))" }
+        )
     }
 
     private var actionsRow: some View {
@@ -157,7 +147,7 @@ struct BodyView: View {
                     .padding(.horizontal, DGSpace.s4)
                     .dgGlass(.regular, radius: DGRadius.lg)
                 }
-                .buttonStyle(DGPressStyle())
+                .buttonStyle(.dgControl)
                 .disabled(isSyncing)
             }
         }
@@ -178,21 +168,22 @@ struct BodyView: View {
         }
     }
 
-    private func refresh() {
-        series = store.bodyweightSeries()
+    private func refresh() async {
         recent = store.recentBodyMeasurements()
+        series = await healthInsights.mergedBodyweightSeries()
+        composition = await healthInsights.bodyComposition()
     }
 
     private func syncWithHealth() {
         isSyncing = true
         Task {
             await healthSync.pullBodyweight()
-            refresh()
+            await refresh()
             isSyncing = false
         }
     }
 
-    private func displayWeight(_ kg: Double) -> Double { preferences.weightUnit.display(kg: kg) }
+    func displayWeight(_ kg: Double) -> Double { preferences.weightUnit.display(kg: kg) }
 
     private var changeText: String? {
         guard let first = series.first, let last = series.last, first.id != last.id else { return nil }
@@ -212,13 +203,13 @@ struct BodyView: View {
 
     /// A reading is coloured by whether it moved toward the goal versus the one before it —
     /// success when it did, danger when it moved away, neutral with no goal or no history yet.
-    private func pointColor(for point: BodyMeasurementInfo) -> Color {
-        guard let goalKg = preferences.bodyweightGoalKg,
-              let index = series.firstIndex(where: { $0.id == point.id }), index > 0 else {
+    private func weightPointColor(_ point: TrendChartView.Point, index: Int) -> Color {
+        guard let goalKg = preferences.bodyweightGoalKg, index > 0, index < series.count else {
             return DGColor.coral
         }
         let previous = series[index - 1]
-        let movedTowardGoal = abs(point.kg - goalKg) < abs(previous.kg - goalKg)
+        let current = series[index]
+        let movedTowardGoal = abs(current.kg - goalKg) < abs(previous.kg - goalKg)
         return movedTowardGoal ? DGColor.success : DGColor.danger
     }
 }
@@ -284,7 +275,7 @@ private struct ProgressPhotosCard: View {
             .padding(DGSpace.s4)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .buttonStyle(DGPressStyle())
+        .buttonStyle(.dgCard)
         .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
@@ -319,6 +310,9 @@ private struct ProgressPhotosCard: View {
                 .environment(store)
                 .environment(preferences)
                 .environment(HealthSyncService(
+                    healthStore: HealthKitStore(), workoutStore: store, preferences: preferences
+                ))
+                .environment(HealthInsightsService(
                     healthStore: HealthKitStore(), workoutStore: store, preferences: preferences
                 ))
         )

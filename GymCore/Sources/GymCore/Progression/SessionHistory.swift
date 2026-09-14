@@ -96,7 +96,7 @@ public struct StallState: Hashable, Codable, Sendable {
 
     /// The weight-based rules' update: a new miss streak and weight, keeping what the
     /// other rules remember (a spell on linear must not cost the TM its cycle marker).
-    func advancing(
+    public func advancing(
         misses: Int, weightKg: Double?, weakestReps: Int? = nil, bestWeakestReps: Int? = nil
     ) -> StallState {
         var next = self

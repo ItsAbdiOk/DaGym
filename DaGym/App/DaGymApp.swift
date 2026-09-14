@@ -24,7 +24,7 @@ struct DaGymApp: App {
 struct AppRootContainer: View {
     private enum LaunchPhase {
         case loading
-        case ready(WorkoutStore, HealthSyncService, RemoteChangeDeduper)
+        case ready(WorkoutStore, HealthSyncService, HealthInsightsService, RemoteChangeDeduper)
     }
 
     private let preferences: Preferences
@@ -87,7 +87,7 @@ struct AppRootContainer: View {
             AmbientWash()
                 .modelContainer(container)
                 .task { await seed() }
-        case .ready(let store, let healthSync, _):
+        case .ready(let store, let healthSync, let healthInsights, _):
             Group {
                 if hasCompletedOnboarding {
                     RootView()
@@ -111,6 +111,7 @@ struct AppRootContainer: View {
             .environment(store)
             .environment(preferences)
             .environment(healthSync)
+            .environment(healthInsights)
             .modelContainer(container)
             .preferredColorScheme(preferences.appearance.colorScheme)
             .task { healthSync.bind(to: store) }
@@ -131,8 +132,13 @@ struct AppRootContainer: View {
         // offers to resume anything newer.
         store.purgeUnfinished(olderThan: Date().addingTimeInterval(-24 * 60 * 60))
         let healthSync = HealthSyncService(workoutStore: store, preferences: preferences)
+        let healthInsights = HealthInsightsService(workoutStore: store, preferences: preferences)
         TrainingNotificationScheduler().bind(store: store, preferences: preferences)
-        phase = .ready(store, healthSync, deduper)
+        // Background delivery (plan.md §6.8): keeps bodyweight and imported workouts current
+        // without the user opening Settings. No-ops until Health has been authorized at least
+        // once, so this is safe to call unconditionally on every launch.
+        Task { await healthSync.startObservingHealthChanges() }
+        phase = .ready(store, healthSync, healthInsights, deduper)
     }
 }
 

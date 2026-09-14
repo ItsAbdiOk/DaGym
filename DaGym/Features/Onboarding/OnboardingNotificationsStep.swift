@@ -16,6 +16,7 @@ struct OnboardingNotificationsStep: View {
             Label("Rest timer only, never nagging", systemImage: "bell.fill")
                 .font(DGFont.subhead)
                 .foregroundStyle(DGColor.ink2)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .dgCard()
             Text("Skippable — turn it on later in Settings.")
                 .font(DGFont.footnote)
@@ -25,13 +26,14 @@ struct OnboardingNotificationsStep: View {
                 DGPrimaryButton(title: "Allow", action: enable)
                     .accessibilityIdentifier(A11yID.onboardingNext)
                 Button("Skip", action: onSkip)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.dgControl)
                     .font(DGFont.condensedLabel(13))
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink3)
                     .accessibilityIdentifier(A11yID.onboardingSkip)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func enable() {

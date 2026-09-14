@@ -1,13 +1,15 @@
 import Foundation
 import HealthKit
 
-/// One HRV or resting-heart-rate reading (`HealthStoring.recentHRV`/`recentRestingHeartRate`).
+/// One point-in-time reading of a Health quantity type — HRV, resting heart rate, body mass,
+/// body fat %, lean body mass or height — returned by every date-ranged/latest read on
+/// `HealthStoring`. What `value` means depends on which method returned it (kg, ms, bpm, %, m).
 struct HealthSample: Sendable, Equatable {
     var date: Date
     var value: Double
 }
 
-/// One asleep interval (`HealthStoring.recentSleep`) — asleep time only, never "in bed".
+/// One asleep interval (`HealthStoring.sleep`) — asleep time only, never "in bed".
 struct HealthSleepInterval: Sendable, Equatable {
     var start: Date
     var end: Date
@@ -17,6 +19,18 @@ struct HealthSleepInterval: Sendable, Equatable {
 struct HealthBodyMass: Sendable, Equatable {
     var kg: Double
     var date: Date
+}
+
+/// One `HKWorkout` logged by another app (Watch, a third-party trainer app, etc.) that looks
+/// like strength training. Never one of ours — `HealthKitStore.externalStrengthWorkouts` filters
+/// out anything carrying our own `DaGymWorkoutID` metadata before it ever reaches this struct.
+struct HealthExternalWorkout: Sendable, Equatable {
+    /// `HKWorkout.uuid.uuidString` — the dedupe key. Stored on `WorkoutModel.healthKitID` once
+    /// imported, so a later sync never creates a second `WorkoutModel` for the same sample.
+    var uuid: String
+    var start: Date
+    var end: Date
+    var title: String
 }
 
 enum HealthStoreError: Error {
@@ -34,6 +48,14 @@ struct HealthWorkoutInput: Sendable {
     var workoutID: String
     var setCount: Int
     var volumeKg: Double
+    /// Active energy to attach to the `HKWorkout`, or nil to write none — see `energyIsEstimate`
+    /// and the comment on `saveWorkout` for when each is appropriate.
+    var energyKcal: Double?
+    /// True when `energyKcal` is a guess (`Preferences.healthEstimateCalories`), not a real
+    /// heart-rate-derived reading. Marked on the written sample with `HKMetadataKeyWasUserEntered`
+    /// plus our own `DaGymEnergyIsEstimate` key, so anything reading Health back can tell the
+    /// difference. Meaningless when `energyKcal` is nil.
+    var energyIsEstimate: Bool = false
 }
 
 /// Everything `HealthSyncService` needs from Apple Health, abstracted so it can be exercised with
@@ -45,23 +67,48 @@ protocol HealthStoring: Sendable {
     var isAvailable: Bool { get }
 
     /// Requests every read/write type this feature ever touches in one sheet: share (write) body
-    /// mass and workouts, read body mass, HRV, resting heart rate and sleep. The per-type toggles
-    /// in `HealthSettingsView` control what DaGym actually *uses*, independent of this grant.
+    /// mass, workouts and active energy; read body mass, body fat %, lean body mass, height, HRV,
+    /// resting heart rate, sleep and workouts (to find ones logged in other apps). The per-type
+    /// toggles in `HealthSettingsView` control what DaGym actually *uses*, independent of this grant.
     func requestAuthorization() async throws
 
     /// Saves one finished strength session as an `HKWorkout` (activity `.traditionalStrengthTraining`)
     /// and returns its `HKWorkout.uuid` string, so the caller can record it on `WorkoutModel.healthKitID`
-    /// and never save the same workout twice. No active-energy estimate is written: plan.md §6.8 and
-    /// the owner's brief are explicit that calories must come from real heart-rate data, which this
-    /// app doesn't have outside a Watch session (P5) — writing a guessed number would misinform
-    /// anyone cross-referencing Health against a real energy sensor.
+    /// and never save the same workout twice. `HealthWorkoutInput.energyKcal` is nil unless the
+    /// user turned on "Estimate calories" — plan.md §6.8 and the owner's brief are explicit that
+    /// calories must come from real heart-rate data, which this app doesn't have outside a Watch
+    /// session (P5). When a caller does have a real heart-rate-derived energy figure, it's passed
+    /// here too, with `energyIsEstimate: false`.
     func saveWorkout(_ input: HealthWorkoutInput) async throws -> String
 
     func saveBodyMass(kg: Double, date: Date) async throws
     func latestBodyMass() async throws -> HealthBodyMass?
-    func recentHRV(days: Int) async throws -> [HealthSample]
-    func recentRestingHeartRate(days: Int) async throws -> [HealthSample]
-    func recentSleep(days: Int) async throws -> [HealthSleepInterval]
+    /// Every body mass sample in the window, oldest first — backs the bodyweight chart and trend
+    /// logic with full Health history, not just the latest reading.
+    func bodyMassHistory(from: Date, to: Date) async throws -> [HealthSample]
+
+    func latestBodyFatPercentage() async throws -> HealthSample?
+    func bodyFatHistory(from: Date, to: Date) async throws -> [HealthSample]
+
+    func latestLeanBodyMass() async throws -> HealthSample?
+    func leanBodyMassHistory(from: Date, to: Date) async throws -> [HealthSample]
+
+    func latestHeight() async throws -> HealthSample?
+
+    func hrv(from: Date, to: Date) async throws -> [HealthSample]
+    func restingHeartRate(from: Date, to: Date) async throws -> [HealthSample]
+    func sleep(from: Date, to: Date) async throws -> [HealthSleepInterval]
+
+    /// `HKWorkout` samples that look like strength training, logged since `since`, excluding
+    /// anything DaGym itself wrote (filtered on `DaGymWorkoutID` metadata). Oldest first.
+    func externalStrengthWorkouts(since: Date) async throws -> [HealthExternalWorkout]
+
+    /// Registers for background delivery of new body mass samples and starts an `HKObserverQuery`
+    /// that calls `onChange` (on an arbitrary thread) whenever one lands — including from another
+    /// app or device. Safe to call more than once; only the first registration takes effect.
+    func observeBodyMassChanges(onChange: @escaping @Sendable () -> Void) async throws
+    /// Same as `observeBodyMassChanges`, for new `HKWorkout` samples.
+    func observeWorkoutChanges(onChange: @escaping @Sendable () -> Void) async throws
 }
 
 /// The real `HealthStoring`, wrapping `HKHealthStore`. An actor: every call already hops off the
@@ -69,17 +116,40 @@ protocol HealthStoring: Sendable {
 /// instances from ever needing to be `Sendable` themselves — only the plain-value results
 /// (`HealthSample`, `HealthBodyMass`, `String`) cross back out.
 actor HealthKitStore: HealthStoring {
-    private let store = HKHealthStore()
+    // Not `private`: `HealthKitStore+Read.swift` holds roughly half of this actor's methods
+    // (moved there to stay under the file-length lint limit) and needs to reach `store` and the
+    // type constants below — `private` is file-scoped in Swift, so a same-actor extension in a
+    // different file can't see a `private` member. Still actor-isolated and still internal to
+    // the module, so nothing outside `HealthKitStore` itself can touch these either way.
+    let store = HKHealthStore()
 
     nonisolated var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
-    private static let bodyMassType = HKQuantityType(.bodyMass)
-    private static let hrvType = HKQuantityType(.heartRateVariabilitySDNN)
-    private static let restingHRType = HKQuantityType(.restingHeartRate)
-    private static let sleepType = HKCategoryType(.sleepAnalysis)
-    private static let workoutType = HKObjectType.workoutType()
-    private static let readTypes: Set<HKObjectType> = [bodyMassType, hrvType, restingHRType, sleepType]
-    private static let writeTypes: Set<HKSampleType> = [bodyMassType, workoutType]
+    static let bodyMassType = HKQuantityType(.bodyMass)
+    static let bodyFatType = HKQuantityType(.bodyFatPercentage)
+    static let leanBodyMassType = HKQuantityType(.leanBodyMass)
+    static let heightType = HKQuantityType(.height)
+    static let hrvType = HKQuantityType(.heartRateVariabilitySDNN)
+    static let restingHRType = HKQuantityType(.restingHeartRate)
+    private static let activeEnergyType = HKQuantityType(.activeEnergyBurned)
+    static let sleepType = HKCategoryType(.sleepAnalysis)
+    static let workoutType = HKObjectType.workoutType()
+    static let strengthActivityTypes: Set<HKWorkoutActivityType> = [
+        .traditionalStrengthTraining, .functionalStrengthTraining, .coreTraining
+    ]
+    private static let readTypes: Set<HKObjectType> = [
+        bodyMassType, bodyFatType, leanBodyMassType, heightType, hrvType, restingHRType, sleepType,
+        workoutType
+    ]
+    private static let writeTypes: Set<HKSampleType> = [bodyMassType, workoutType, activeEnergyType]
+
+    /// Kept alive for as long as this actor lives, so the `HKObserverQuery`s aren't deallocated
+    /// (and silently stop firing) the moment `observeBodyMassChanges`/`observeWorkoutChanges`
+    /// returns. `nil` until first registered. Not `private`: set from `HealthKitStore+Read.swift`,
+    /// which holds the observer methods (kept out of this file to stay under the file-length
+    /// lint limit) — `private` is file-scoped in Swift, so a same-module extension can't see it.
+    var bodyMassObserver: HKObserverQuery?
+    var workoutObserver: HKObserverQuery?
 
     func requestAuthorization() async throws {
         guard isAvailable else { return }
@@ -99,9 +169,26 @@ actor HealthKitStore: HealthStoring {
             "DaGymVolumeKg": input.volumeKg,
             HKMetadataKeyWorkoutBrandName: input.title
         ])
+        if let energyKcal = input.energyKcal {
+            try await builder.addSamples([Self.energySample(input: input, kcal: energyKcal)])
+        }
         try await builder.endCollection(at: input.end)
         guard let workout = try await builder.finishWorkout() else { throw HealthStoreError.saveFailed }
         return workout.uuid.uuidString
+    }
+
+    private static func energySample(input: HealthWorkoutInput, kcal: Double) -> HKQuantitySample {
+        let quantity = HKQuantity(unit: .kilocalorie(), doubleValue: kcal)
+        var metadata: [String: Any] = [
+            "DaGymWorkoutID": input.workoutID, "DaGymEnergyIsEstimate": input.energyIsEstimate
+        ]
+        if input.energyIsEstimate {
+            metadata[HKMetadataKeyWasUserEntered] = true
+        }
+        return HKQuantitySample(
+            type: activeEnergyType, quantity: quantity, start: input.start, end: input.end,
+            metadata: metadata
+        )
     }
 
     func saveBodyMass(kg: Double, date: Date) async throws {
@@ -121,41 +208,21 @@ actor HealthKitStore: HealthStoring {
         }
     }
 
-    func recentHRV(days: Int) async throws -> [HealthSample] {
-        try await recentQuantitySamples(type: Self.hrvType, days: days) { quantity in
-            quantity.doubleValue(for: HKUnit.secondUnit(with: .milli))
-        }
-    }
-
-    func recentRestingHeartRate(days: Int) async throws -> [HealthSample] {
-        try await recentQuantitySamples(type: Self.restingHRType, days: days) { quantity in
-            quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute()))
-        }
-    }
-
-    func recentSleep(days: Int) async throws -> [HealthSleepInterval] {
-        guard isAvailable else { return [] }
-        let predicate = Self.recentPredicate(days: days)
-        let sort = [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
-        return try await runQuery(
-            type: Self.sleepType, predicate: predicate, limit: HKObjectQueryNoLimit, sort: sort
-        ) { samples in
-            samples.compactMap { sample -> HealthSleepInterval? in
-                guard let category = sample as? HKCategorySample, Self.isAsleep(category.value) else {
-                    return nil
-                }
-                return HealthSleepInterval(start: category.startDate, end: category.endDate)
-            }
+    func bodyMassHistory(from: Date, to: Date) async throws -> [HealthSample] {
+        try await quantitySamples(type: Self.bodyMassType, from: from, to: to) { quantity in
+            quantity.doubleValue(for: .gramUnit(with: .kilo))
         }
     }
 
     // MARK: - Helpers
 
-    private func recentQuantitySamples(
-        type: HKQuantityType, days: Int, value: @escaping @Sendable (HKQuantity) -> Double
+    /// Not `private` — see the comment on `store` above; used from both this file and
+    /// `HealthKitStore+Read.swift`.
+    func quantitySamples(
+        type: HKQuantityType, from: Date, to: Date, value: @escaping @Sendable (HKQuantity) -> Double
     ) async throws -> [HealthSample] {
         guard isAvailable else { return [] }
-        let predicate = Self.recentPredicate(days: days)
+        let predicate = HKQuery.predicateForSamples(withStart: from, end: to, options: .strictStartDate)
         let sort = [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
         return try await runQuery(
             type: type, predicate: predicate, limit: HKObjectQueryNoLimit, sort: sort
@@ -167,22 +234,22 @@ actor HealthKitStore: HealthStoring {
         }
     }
 
-    private static func recentPredicate(days: Int) -> NSPredicate {
-        let start = Date().addingTimeInterval(-Double(days) * 86_400)
-        return HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
-    }
-
-    private static func isAsleep(_ rawValue: Int) -> Bool {
-        switch HKCategoryValueSleepAnalysis(rawValue: rawValue) {
-        case .asleepUnspecified, .asleepCore, .asleepDeep, .asleepREM: return true
-        default: return false
+    func latestQuantitySample(
+        type: HKQuantityType, value: @escaping @Sendable (HKQuantity) -> Double
+    ) async throws -> HealthSample? {
+        guard isAvailable else { return nil }
+        let sort = [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]
+        return try await runQuery(type: type, predicate: nil, limit: 1, sort: sort) { samples in
+            guard let sample = samples.first as? HKQuantitySample else { return nil }
+            return HealthSample(date: sample.endDate, value: value(sample.quantity))
         }
     }
 
     /// Bridges the completion-handler-only `HKSampleQuery` to `async`, mapping the raw (non-
     /// `Sendable`) `[HKSample]` down to a `Sendable` result *inside* the completion handler so
-    /// nothing but plain values ever crosses back into this actor.
-    private func runQuery<T: Sendable>(
+    /// nothing but plain values ever crosses back into this actor. Not `private` — see the
+    /// comment on `store` above.
+    func runQuery<T: Sendable>(
         type: HKSampleType, predicate: NSPredicate?, limit: Int, sort: [NSSortDescriptor],
         map: @escaping @Sendable ([HKSample]) -> T
     ) async throws -> T {

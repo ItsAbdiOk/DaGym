@@ -73,8 +73,9 @@ struct DisplaySettingsSection: View {
         .frame(minHeight: 52)
     }
 
-    /// Read by `BodyMapView` for a subtly different shoulder/hip silhouette; the muscle regions
-    /// it draws never change.
+    /// Read by `BodyMapView` to pick the male or female anatomical figure (MuscleMap ships no
+    /// androgynous figure, so "Neutral" falls back to the male one — see
+    /// `BodyMapView.gender(for:)`); the set of `Muscle` regions it draws never changes.
     private var bodyFigureRow: some View {
         HStack {
             Text("Body figure").font(DGFont.body).foregroundStyle(DGColor.ink1)
@@ -132,7 +133,8 @@ private struct AccentSwatch: View {
                     Circle().strokeBorder(DGColor.hairline, lineWidth: isSelected ? 0 : 1)
                 }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgControl)
+        .dgTapTarget()
         .accessibilityLabel(accent.displayName)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }

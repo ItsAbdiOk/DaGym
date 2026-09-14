@@ -13,6 +13,9 @@ struct EquipmentProfileInfo: Identifiable, Hashable {
     var availableEquipment: [String]
     var plateStock: [PlateStock]
     var collarsKg: Double
+    /// `EquipmentSeeder`'s stable identity for this profile ("gym"/"home"), `nil` for a
+    /// user-created one. See `EquipmentProfileModel.seedKey`.
+    var seedKey: String?
 }
 
 /// Editable fields for `WorkoutStore.updateProfile(id:draft:)`, bundled so
@@ -52,13 +55,14 @@ extension WorkoutStore {
     @discardableResult
     func createProfile(
         name: String, isActive: Bool = false, barKg: Double = 20,
-        availableEquipment: [String] = [], plateStock: [PlateStock] = [], collarsKg: Double = 0
+        availableEquipment: [String] = [], plateStock: [PlateStock] = [], collarsKg: Double = 0,
+        seedKey: String? = nil
     ) -> EquipmentProfileInfo {
         if isActive { deactivateAll() }
         let model = EquipmentProfileModel(
             name: name, isActive: isActive, barKg: barKg, availableEquipment: availableEquipment,
             plateStockKg: plateStock.map(\.weightKg), plateCounts: plateStock.map(\.count),
-            collarsKg: collarsKg
+            collarsKg: collarsKg, seedKey: seedKey
         )
         context.insert(model)
         save()
@@ -114,7 +118,8 @@ extension WorkoutStore {
         let stock = zip(model.plateStockKg, model.plateCounts).map { PlateStock(weightKg: $0, count: $1) }
         return EquipmentProfileInfo(
             id: model.id, name: model.name, isActive: model.isActive, barKg: model.barKg,
-            availableEquipment: model.availableEquipment, plateStock: stock, collarsKg: model.collarsKg
+            availableEquipment: model.availableEquipment, plateStock: stock, collarsKg: model.collarsKg,
+            seedKey: model.seedKey
         )
     }
 }
@@ -152,11 +157,11 @@ enum EquipmentSeeder {
             store.createProfile(
                 name: "Gym", isActive: true, barKg: Bar.olympic.weightKg,
                 availableEquipment: EquipmentOption.allCases.map(\.rawValue),
-                plateStock: PlateStock.standardKg
+                plateStock: PlateStock.standardKg, seedKey: "gym"
             )
             store.createProfile(
                 name: "Home", isActive: false, barKg: Bar.olympic.weightKg,
-                availableEquipment: ["dumbbell", "bodyweight", "bands"], plateStock: []
+                availableEquipment: ["dumbbell", "bodyweight", "bands"], plateStock: [], seedKey: "home"
             )
         }
         state.equipmentSeeded = true
@@ -166,12 +171,47 @@ enum EquipmentSeeder {
 }
 
 extension WorkoutStore {
-    /// Folds profiles that are identical in every field but `id`/`isActive`/`createdAt` — what two
-    /// devices seeding "Gym" and "Home" before syncing produce — into the oldest (by `id` on a
-    /// tie). The survivor is active if any copy was. Returns the number removed.
+    /// Folds duplicate equipment profiles two devices can each produce by seeding "Gym"/"Home"
+    /// before the other's rows synced down — the same class of race `ExerciseSeeder.dedupe(in:)`
+    /// handles for exercises. Seeded profiles fold on `seedKey` (stable even after the user edits
+    /// one copy's name or plates, unlike a fields-equality match); profiles predating `seedKey`
+    /// (and any user-created profile that happens to be named "Gym"/"Home") get backfilled first
+    /// so existing installs' pre-existing duplicates clean up the same way. Anything left over —
+    /// genuinely custom, unkeyed profiles — still folds if every field matches, the original
+    /// safety net. The survivor is the oldest (by `id` on a tie) and active if any copy was.
+    /// Returns the number removed.
     @discardableResult
     func dedupeEquipmentProfiles() -> Int {
         let models = (try? context.fetch(FetchDescriptor<EquipmentProfileModel>())) ?? []
+        backfillLegacyEquipmentSeedKeys(models)
+        var removed = foldEquipmentProfiles(groupedBySeedKey: models)
+        removed += foldEquipmentProfiles(groupedByFieldsEquality: models.filter { $0.seedKey == nil })
+        if removed > 0 { save() }
+        return removed
+    }
+
+    /// A profile seeded before `seedKey` existed has none; match it back to its seed identity by
+    /// name so it folds with any newer, correctly-keyed copy instead of surviving as an orphan.
+    private func backfillLegacyEquipmentSeedKeys(_ models: [EquipmentProfileModel]) {
+        for model in models where model.seedKey == nil {
+            switch model.name {
+            case "Gym": model.seedKey = "gym"
+            case "Home": model.seedKey = "home"
+            default: break
+            }
+        }
+    }
+
+    private func foldEquipmentProfiles(groupedBySeedKey models: [EquipmentProfileModel]) -> Int {
+        var groups: [String: [EquipmentProfileModel]] = [:]
+        for model in models {
+            guard let key = model.seedKey else { continue }
+            groups[key, default: []].append(model)
+        }
+        return foldEquipmentProfileGroups(groups)
+    }
+
+    private func foldEquipmentProfiles(groupedByFieldsEquality models: [EquipmentProfileModel]) -> Int {
         var groups: [String: [EquipmentProfileModel]] = [:]
         for model in models {
             let key = [
@@ -181,6 +221,10 @@ extension WorkoutStore {
             ].joined(separator: "|")
             groups[key, default: []].append(model)
         }
+        return foldEquipmentProfileGroups(groups)
+    }
+
+    private func foldEquipmentProfileGroups(_ groups: [String: [EquipmentProfileModel]]) -> Int {
         var removed = 0
         for group in groups.values where group.count > 1 {
             let ordered = group.sorted { lhs, rhs in
@@ -194,7 +238,6 @@ extension WorkoutStore {
                 removed += 1
             }
         }
-        if removed > 0 { save() }
         return removed
     }
 }

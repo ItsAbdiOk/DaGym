@@ -62,13 +62,25 @@ targets:
         # foreground-started Live Activity; push-to-start is out of scope for now (see plan §6.2).
         NSSupportsLiveActivities: true
         NSSupportsLiveActivitiesFrequentUpdates: false
-        # Apple Health (plan.md §6.8): bodyweight sync, workout write-back, and read-only
-        # recovery signals (HRV/RHR/sleep, P6). Plain-language, no medical claims.
+        # Apple Health (plan.md §6.8): bodyweight/body-composition history, workout write-back
+        # (with an opt-in calorie estimate), imported external workouts, and read-only recovery
+        # signals (HRV/RHR/sleep, P6). Plain-language, no medical claims.
         NSHealthShareUsageDescription: >-
-          DaGym reads your bodyweight, heart-rate variability, resting heart rate and sleep to
-          personalise training suggestions. Nothing is uploaded anywhere.
+          DaGym reads your bodyweight, body fat percentage, lean body mass, height, heart-rate
+          variability, resting heart rate, sleep and workouts logged in other apps to personalise
+          training suggestions and fill in your Body screen. Nothing is uploaded anywhere.
         NSHealthUpdateUsageDescription: >-
-          DaGym saves your strength workouts and bodyweight to Apple Health.
+          DaGym saves your strength workouts and bodyweight to Apple Health, plus an active-energy
+          estimate only if you turn that on in Settings.
+        # Voice logging (plan.md §6.5): recognition runs on-device only — the recogniser is
+        # configured with requiresOnDeviceRecognition, so no audio and no transcript leaves the
+        # phone. Both strings say so, because that is the whole reason a lifter would allow it.
+        NSMicrophoneUsageDescription: >-
+          DaGym uses the microphone so you can log sets by voice mid-workout. Audio is processed
+          entirely on your device and never leaves it.
+        NSSpeechRecognitionUsageDescription: >-
+          DaGym uses on-device speech recognition to turn what you say into a logged set. Nothing
+          is sent to a server.
         # Calendar sync (plan.md §6.8): write-only access is enough — DaGym only creates,
         # updates and deletes events in its own "DaGym" calendar, never reads the user's other
         # events.
@@ -121,6 +133,14 @@ targets:
       properties:
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []
+        # Background delivery (plan.md §6.8, `HealthKitStore.observeBodyMassChanges`/
+        # `observeWorkoutChanges`): lets HKObserverQuery wake DaGym when a new bodyweight or
+        # workout sample lands outside the app, so Health data stays current without the user
+        # opening Settings. NOTE: this is a new capability grant — Xcode's "HealthKit" capability
+        # must have "Background Delivery" checked (or this entitlement re-added if it's ever
+        # stripped by a manual signing pass), and it changes the provisioning profile: a profile
+        # regenerated/downloaded before this change won't have it.
+        com.apple.developer.healthkit.background-delivery: true
         com.apple.developer.icloud-services: [CloudKit]
         com.apple.developer.icloud-container-identifiers:
           - iCloud.dev.abdirahmanmohamed.dagym

@@ -27,7 +27,8 @@ struct PlateChip: View {
             .background(DGColor.surface2, in: Capsule())
             .overlay(Capsule().strokeBorder(DGColor.hairline))
         }
-        .buttonStyle(DGPressStyle())
+        .buttonStyle(.dgControl)
+        .dgTapTarget()
         .accessibilityLabel("Plates, \(text)")
     }
 

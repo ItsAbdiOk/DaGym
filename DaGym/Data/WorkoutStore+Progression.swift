@@ -27,9 +27,12 @@ extension WorkoutStore {
 
     /// The engine's full output for this exercise, or nil when it's excluded from progression
     /// or has no rule (see `effectiveRule`) — the caller falls back to the plain AutoFill path.
+    /// `finishedWorkouts`, when passed, is used as-is instead of re-fetching (newest first) —
+    /// callers building every exercise of a routine fetch it once and share it, rather than each
+    /// exercise re-querying the whole finished-workout list.
     func computeProgression(
         routine: RoutineModel, routineExercise: RoutineExerciseModel, exerciseInfo: ExerciseInfo,
-        plannedSets: [PlannedSetModel]
+        plannedSets: [PlannedSetModel], finishedWorkouts: [WorkoutModel]? = nil
     ) -> Prescribed? {
         guard !routineExercise.excludeFromProgression, let exerciseID = routineExercise.exercise?.id,
               let rule = effectiveRule(routine: routine, routineExercise: routineExercise) else {
@@ -38,7 +41,8 @@ extension WorkoutStore {
         let specs = progressionSpecs(plannedSets)
         let equipment = activeEquipment()
         return ProgressionEngine.prescribe(
-            rule: rule, planned: specs, history: exerciseHistory(exerciseID: exerciseID),
+            rule: rule, planned: specs,
+            history: exerciseHistory(exerciseID: exerciseID, finishedWorkouts: finishedWorkouts),
             stall: routineExercise.stallStateValue, bodyweightKg: latestBodyMeasurement()?.bodyweightKg,
             trainingMaxKg: routineExercise.trainingMaxKg, weekInCycle: weekInCycle(forRoutineID: routine.id),
             bar: exerciseInfo.bar ?? equipment.bar, plates: equipment.plates, collarsKg: equipment.collarsKg,
@@ -107,13 +111,16 @@ extension WorkoutStore {
             return
         }
         let routineExercises = routine.exercises ?? []
+        // Fetched once and shared: every exercise's `computeProgression` below would otherwise
+        // re-query the whole finished-workout list from the store.
+        let finishedWorkouts = finishedWorkoutModelsNewestFirst()
         for entry in session.exercises {
             guard let routineExercise = matchingRoutineExercise(entry: entry, in: routineExercises) else {
                 continue
             }
             guard let plannedSets = routineExercise.plannedSets, let result = computeProgression(
                 routine: routine, routineExercise: routineExercise, exerciseInfo: entry.exercise,
-                plannedSets: plannedSets
+                plannedSets: plannedSets, finishedWorkouts: finishedWorkouts
             ) else {
                 continue
             }
@@ -125,10 +132,13 @@ extension WorkoutStore {
     /// Up to the last 6 finished workouts' sets for this exercise, newest first, as
     /// `GymCore.ExerciseHistoryEntry` — the shape `ProgressionEngine.prescribe` expects. A
     /// session logged under an excluded routine slot (`excludedFromProgression`) is not history
-    /// the engine may build on, so it's left out here rather than flagged.
-    func exerciseHistory(exerciseID: UUID, limit: Int = 6) -> [ExerciseHistoryEntry] {
+    /// the engine may build on, so it's left out here rather than flagged. Pass `finishedWorkouts`
+    /// (newest first) to reuse an already-fetched list instead of querying the store again.
+    func exerciseHistory(
+        exerciseID: UUID, limit: Int = 6, finishedWorkouts: [WorkoutModel]? = nil
+    ) -> [ExerciseHistoryEntry] {
         var result: [ExerciseHistoryEntry] = []
-        for workout in finishedWorkoutModelsNewestFirst() {
+        for workout in finishedWorkouts ?? finishedWorkoutModelsNewestFirst() {
             guard let match = matchingExercise(exerciseID: exerciseID, in: workout),
                   !match.excludedFromProgression else { continue }
             let sets = completedHistorySets(match)
@@ -156,6 +166,7 @@ extension WorkoutStore {
     }
 
     func finishedWorkoutModelsNewestFirst() -> [WorkoutModel] {
+        finishedWorkoutsQueryCount += 1
         let predicate = #Predicate<WorkoutModel> { $0.endedAt != nil }
         let descriptor = FetchDescriptor<WorkoutModel>(
             predicate: predicate, sortBy: [SortDescriptor(\.startedAt, order: .reverse)]

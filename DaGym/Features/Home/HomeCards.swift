@@ -35,7 +35,7 @@ struct StarterPlanCard: View {
                             in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
                         )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.dgRow)
                 }
             }
         }
@@ -61,7 +61,7 @@ struct SampleDataBanner: View {
                 .foregroundStyle(DGColor.ink2)
             Spacer()
             Button("Clear", action: onClear)
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(12))
                 .tracking(1.2)
                 .textCase(.uppercase)
@@ -112,7 +112,7 @@ struct BodyweightTile: View {
                     .foregroundStyle(DGColor.ink4)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgCard)
         .dgCard()
     }
 

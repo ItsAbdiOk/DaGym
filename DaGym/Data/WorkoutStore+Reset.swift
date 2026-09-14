@@ -39,6 +39,7 @@ extension WorkoutStore {
         try? context.delete(model: SeedStateModel.self, includeSubclasses: true)
         try? context.delete(model: ExerciseNoteModel.self, includeSubclasses: true)
         try? context.delete(model: GymCardModel.self, includeSubclasses: true)
+        try? context.delete(model: CoachInteractionModel.self, includeSubclasses: true)
     }
 
     /// Every `Preferences` property, written back to the same default each `init(suite:)` uses.
@@ -57,6 +58,9 @@ extension WorkoutStore {
         preferences.healthWriteWorkouts = false
         preferences.healthSyncBodyweight = false
         preferences.healthReadRecovery = false
+        preferences.healthReadBodyComposition = false
+        preferences.healthImportWorkouts = false
+        preferences.healthEstimateCalories = false
         preferences.calendarSyncEnabled = false
         preferences.scheduledStartHour = 18
         preferences.iCloudSyncEnabled = true

@@ -74,7 +74,7 @@ struct ImportSettingsSection: View {
             .padding(.horizontal, DGSpace.s5)
             .frame(minHeight: 56)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgRow)
         .disabled(isBusy)
     }
 
@@ -109,7 +109,7 @@ struct ImportSettingsSection: View {
             .padding(.horizontal, DGSpace.s5)
             .frame(minHeight: 56)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgRow)
         .disabled(isBusy)
     }
 
@@ -241,7 +241,8 @@ private struct HevyAPIKeySheet: View {
                 .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             if !apiKey.isEmpty {
                 Button("Remove Key", role: .destructive, action: onRemove)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.dgControl)
+                    .dgTapTarget()
                     .dgLabel(DGColor.danger)
             }
         }
@@ -354,7 +355,7 @@ private struct ImportCSVPreviewSheet: View {
     private var actions: some View {
         HStack(spacing: DGSpace.s3) {
             Button("Cancel", action: onCancel)
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(15))
                 .tracking(1.5)
                 .textCase(.uppercase)

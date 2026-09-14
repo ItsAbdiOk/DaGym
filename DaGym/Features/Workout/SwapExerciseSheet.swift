@@ -30,7 +30,8 @@ struct SwapExerciseSheet: View {
             WhyCard(title: "Why these three", message: whyMessage)
             candidateList
             Button("Search the library instead") { showingLibrary = true }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
+                .dgTapTarget()
                 .font(DGFont.condensedLabel(13))
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink3)
@@ -168,7 +169,8 @@ private struct CandidateRow: View {
             }
             Spacer(minLength: DGSpace.s2)
             Button("Use") { onUse(exercise) }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
+                .dgTapTarget()
                 .font(DGFont.condensedLabel(12))
                 .textCase(.uppercase)
                 .foregroundStyle(isPrimary ? .white : DGColor.ink2)

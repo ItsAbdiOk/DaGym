@@ -30,7 +30,7 @@ struct BodyweightSheet: View {
             }
             if purpose == .goal, preferences.bodyweightGoalKg != nil {
                 Button("Clear goal", action: clearGoal)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.dgControl)
                     .dgLabel(DGColor.danger)
             }
         }
@@ -82,7 +82,7 @@ struct BodyweightSheet: View {
                 .frame(width: 44, height: 44)
                 .background(fill, in: Circle())
         }
-        .buttonStyle(DGPressStyle())
+        .buttonStyle(.dgControl)
     }
 
     private static let quickAmount = 1

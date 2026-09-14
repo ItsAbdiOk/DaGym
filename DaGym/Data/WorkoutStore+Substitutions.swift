@@ -33,7 +33,17 @@ extension WorkoutStore {
         }
     }
 
-    private func substitutionCandidate(for model: ExerciseModel) -> SubstitutionCandidate {
+    /// Every exercise in the library as a `SubstitutionCandidate` — the struggling-exercise coach
+    /// rule's substitution pool (`CoachInput.substitutionLibrary`), the same mapping `substitutes`
+    /// already applies per mid-workout swap.
+    func substitutionCandidates() -> [SubstitutionCandidate] {
+        let models = (try? context.fetch(FetchDescriptor<ExerciseModel>())) ?? []
+        return models.map(substitutionCandidate(for:))
+    }
+
+    /// Not `private`: `WorkoutStore+Coach.swift` reuses this same mapping for
+    /// `CoachLiftSnapshot.substitutionCandidate` and `substitutionCandidates()` above.
+    func substitutionCandidate(for model: ExerciseModel) -> SubstitutionCandidate {
         SubstitutionCandidate(
             id: model.id, name: model.name, primary: model.primary, secondary: model.secondary,
             equipment: model.equipment, mechanic: model.mechanic ?? "compound",

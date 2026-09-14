@@ -9,46 +9,6 @@ import SwiftUI
 @Observable
 @MainActor
 final class Preferences {
-    private enum Key {
-        static let weightUnit = "weightUnit"
-        static let effortScale = "effortScale"
-        static let defaultRestSeconds = "defaultRestSeconds"
-        static let weeklyGoal = "weeklyGoal"
-        static let keepScreenAwake = "keepScreenAwake"
-        static let restSound = "restSound"
-        static let restHaptics = "restHaptics"
-        static let restScreenFlash = "restScreenFlash"
-        static let weekStartsMonday = "weekStartsMonday"
-        static let healthWriteWorkouts = "healthWriteWorkouts"
-        static let healthSyncBodyweight = "healthSyncBodyweight"
-        static let healthReadRecovery = "healthReadRecovery"
-        static let calendarSyncEnabled = "calendarSyncEnabled"
-        static let scheduledStartHour = "scheduledStartHour"
-        static let iCloudSyncEnabled = "iCloudSyncEnabled"
-        static let streakRemindersEnabled = "streakRemindersEnabled"
-        static let weeklyRecapEnabled = "weeklyRecapEnabled"
-        static let reminderHour = "reminderHour"
-        static let bodyweightGoalKg = "bodyweightGoalKg"
-        static let syncPhotos = "syncPhotos"
-        static let lockPhotos = "lockPhotos"
-        static let hasCompletedOnboarding = "hasCompletedOnboarding"
-        static let trainingGoal = "trainingGoal"
-        static let deloadSnoozedUntil = "deloadSnoozedUntil"
-        static let deloadDismissedFingerprint = "deloadDismissedFingerprint"
-        static let accent = "accent"
-        static let compactWorkoutLayout = "compactWorkoutLayout"
-        static let showSetSteppers = "showSetSteppers"
-        static let restPauseSeconds = "restPauseSeconds"
-        static let workoutDayReminderEnabled = "workoutDayReminderEnabled"
-        static let workoutDayReminderHour = "workoutDayReminderHour"
-        static let effortTrackingEnabled = "effortTrackingEnabled"
-        static let appearance = "appearance"
-        static let bodyFigure = "bodyFigure"
-        static let playRestSoundOnSilent = "playRestSoundOnSilent"
-        static let weighInBeforeWorkout = "weighInBeforeWorkout"
-        static let sampleDataMode = "sampleDataMode"
-    }
-
     private let defaults: UserDefaults
 
     var weightUnit: WeightUnit {
@@ -101,6 +61,23 @@ final class Preferences {
     /// never written.
     var healthReadRecovery: Bool {
         didSet { defaults.set(healthReadRecovery, forKey: Key.healthReadRecovery) }
+    }
+    /// Reads body fat %, lean body mass and height from Health to fill in Body screen fields
+    /// that would otherwise need a manual entry. Read-only — never written.
+    var healthReadBodyComposition: Bool {
+        didSet { defaults.set(healthReadBodyComposition, forKey: Key.healthReadBodyComposition) }
+    }
+    /// Imports `HKWorkout` strength sessions logged in other apps (or a Watch) into History.
+    /// Deduplicated hard: `HealthSyncService.pullExternalWorkouts` never imports a workout DaGym
+    /// itself wrote, and never imports the same external workout twice (plan.md §6.8).
+    var healthImportWorkouts: Bool {
+        didSet { defaults.set(healthImportWorkouts, forKey: Key.healthImportWorkouts) }
+    }
+    /// Off by default: writes a rough, clearly-flagged active-energy estimate to Health with each
+    /// finished workout, because the phone alone has no heart-rate data to back a real number
+    /// (see the comment on `HealthKitStore.saveWorkout`). Never on unless the user opts in.
+    var healthEstimateCalories: Bool {
+        didSet { defaults.set(healthEstimateCalories, forKey: Key.healthEstimateCalories) }
     }
     /// Mirrors the weekly schedule onto a dedicated "DaGym" calendar via EventKit (plan.md §6.8).
     var calendarSyncEnabled: Bool {
@@ -244,6 +221,14 @@ final class Preferences {
     var sampleDataMode: Bool {
         didSet { defaults.set(sampleDataMode, forKey: Key.sampleDataMode) }
     }
+    /// Voice logging speaks a short confirmation ("eight reps at 225 logged") back via
+    /// `AVSpeechSynthesis` when audio is routed to headphones — silent on the phone speaker
+    /// either way, so this only matters mid-workout with AirPods in. On by default: it's the
+    /// whole point of hands-free logging, but off is one tap away for anyone who'd rather glance
+    /// at the "what I understood" confirmation instead.
+    var voiceSpeakBackOnHeadphones: Bool {
+        didSet { defaults.set(voiceSpeakBackOnHeadphones, forKey: Key.voiceSpeakBackOnHeadphones) }
+    }
 
     enum Appearance: String, CaseIterable, Codable {
         case system, light, dark
@@ -273,6 +258,7 @@ final class Preferences {
         playRestSoundOnSilent = Self.boolValue(suite, Key.playRestSoundOnSilent, default: false)
         weighInBeforeWorkout = Self.boolValue(suite, Key.weighInBeforeWorkout, default: false)
         sampleDataMode = Self.boolValue(suite, Key.sampleDataMode, default: false)
+        voiceSpeakBackOnHeadphones = Self.boolValue(suite, Key.voiceSpeakBackOnHeadphones, default: true)
         weightUnit = WeightUnit(rawValue: suite.string(forKey: Key.weightUnit) ?? "") ?? .kg
         effortScale = Effort.Scale(rawValue: suite.string(forKey: Key.effortScale) ?? "") ?? .rpe
         defaultRestSeconds = Self.intValue(suite, Key.defaultRestSeconds, default: 150)
@@ -285,6 +271,9 @@ final class Preferences {
         healthWriteWorkouts = Self.boolValue(suite, Key.healthWriteWorkouts, default: false)
         healthSyncBodyweight = Self.boolValue(suite, Key.healthSyncBodyweight, default: false)
         healthReadRecovery = Self.boolValue(suite, Key.healthReadRecovery, default: false)
+        healthReadBodyComposition = Self.boolValue(suite, Key.healthReadBodyComposition, default: false)
+        healthImportWorkouts = Self.boolValue(suite, Key.healthImportWorkouts, default: false)
+        healthEstimateCalories = Self.boolValue(suite, Key.healthEstimateCalories, default: false)
         calendarSyncEnabled = Self.boolValue(suite, Key.calendarSyncEnabled, default: false)
         scheduledStartHour = Self.intValue(suite, Key.scheduledStartHour, default: 18)
         iCloudSyncEnabled = Self.boolValue(suite, Key.iCloudSyncEnabled, default: true)
@@ -321,11 +310,4 @@ final class Preferences {
         return formatter.string(from: NSNumber(value: display)) ?? "\(Int(display))"
     }
 
-    private static func intValue(_ suite: UserDefaults, _ key: String, default value: Int) -> Int {
-        suite.object(forKey: key) as? Int ?? value
-    }
-
-    private static func boolValue(_ suite: UserDefaults, _ key: String, default value: Bool) -> Bool {
-        suite.object(forKey: key) as? Bool ?? value
-    }
 }

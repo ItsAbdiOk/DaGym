@@ -20,8 +20,14 @@ extension WorkoutStore {
         calendar: Calendar = .current
     ) -> DeloadSuggestionInfo? {
         if let snoozedUntil, snoozedUntil > Date() { return nil }
+        // Fetched once and shared: `mainLiftSnapshots` would otherwise re-query the whole
+        // finished-workout list once per main lift (bench/squat/deadlift/ohp).
+        let finishedWorkouts = finishedWorkoutModelsNewestFirst()
         let suggestion = DeloadDetector.evaluate(
-            lifts: mainLiftSnapshots(), hardWeeks: hardWeekStreak(weeklyGoal: weeklyGoal, calendar: calendar)
+            lifts: mainLiftSnapshots(finishedWorkouts: finishedWorkouts),
+            hardWeeks: hardWeekStreak(
+                weeklyGoal: weeklyGoal, calendar: calendar, finishedWorkouts: finishedWorkouts
+            )
         )
         guard let suggestion else { return nil }
         guard suggestion.fingerprint != dismissedFingerprint else { return nil }
@@ -68,7 +74,7 @@ extension WorkoutStore {
     /// Stall count + e1RM/RPE trend per main lift key (bench/squat/deadlift/ohp — the map
     /// `WorkoutStore+Milestones.swift` uses), from whichever routine exercise trains each one,
     /// in `mainLiftOrder`.
-    private func mainLiftSnapshots() -> [LiftSnapshot] {
+    private func mainLiftSnapshots(finishedWorkouts: [WorkoutModel]) -> [LiftSnapshot] {
         let routineExercises = (try? context.fetch(FetchDescriptor<RoutineExerciseModel>())) ?? []
         var byKey: [String: RoutineExerciseModel] = [:]
         for routineExercise in routineExercises {
@@ -78,16 +84,20 @@ extension WorkoutStore {
             byKey[key] = routineExercise
         }
         return Self.mainLiftOrder.compactMap { key in
-            byKey[key].flatMap { liftSnapshot(key: key, routineExercise: $0) }
+            byKey[key].flatMap {
+                liftSnapshot(key: key, routineExercise: $0, finishedWorkouts: finishedWorkouts)
+            }
         }
     }
 
-    private func liftSnapshot(key: String, routineExercise: RoutineExerciseModel) -> LiftSnapshot? {
+    private func liftSnapshot(
+        key: String, routineExercise: RoutineExerciseModel, finishedWorkouts: [WorkoutModel]
+    ) -> LiftSnapshot? {
         guard let exerciseID = routineExercise.exercise?.id else { return nil }
         // Fetch extra and filter, then take 3 — a planned deload week's lower numbers are not a
         // decline (`LiftSnapshot.e1rmTrend`'s documented contract), so it must never occupy one
         // of the 3 trend slots.
-        let unfiltered = exerciseHistory(exerciseID: exerciseID, limit: 9)
+        let unfiltered = exerciseHistory(exerciseID: exerciseID, limit: 9, finishedWorkouts: finishedWorkouts)
         let history = Array(unfiltered.filter { !$0.wasPlannedDeload }.prefix(3))
         guard !history.isEmpty else { return nil }
         let oldestFirst = history.reversed()
@@ -106,10 +116,14 @@ extension WorkoutStore {
     /// without a lighter week" (A4b: a deload week breaks the streak even if it also hit the
     /// workout count, and the count is the user's actual `Preferences.weeklyGoal`, not a
     /// hard-coded 3).
-    private func hardWeekStreak(weeklyGoal: Int, calendar: Calendar = .current) -> Int {
+    /// Exposed (not `private`) so `WorkoutStore+Coach.swift`'s adapter can reuse the same
+    /// hard-week count for `CoachInput.hardWeeksInARow` rather than re-deriving it.
+    func hardWeekStreak(
+        weeklyGoal: Int, calendar: Calendar = .current, finishedWorkouts: [WorkoutModel]? = nil
+    ) -> Int {
         var weekCounts: [Date: Int] = [:]
         var weeksWithDeload: Set<Date> = []
-        for workout in finishedWorkoutModelsNewestFirst() {
+        for workout in finishedWorkouts ?? finishedWorkoutModelsNewestFirst() {
             guard let start = calendar.dateInterval(of: .weekOfYear, for: workout.startedAt)?.start else {
                 continue
             }

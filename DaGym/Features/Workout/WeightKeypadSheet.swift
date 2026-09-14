@@ -53,7 +53,7 @@ struct WeightKeypadSheet: View {
                     .frame(width: 44, height: 44)
                     .background(DGColor.surface3, in: Circle())
             }
-            .buttonStyle(DGPressStyle())
+            .buttonStyle(.dgControl)
             .accessibilityLabel("Decrease by \(formattedStep)")
             Spacer(minLength: DGSpace.s4)
             Text(displayValue)
@@ -71,7 +71,7 @@ struct WeightKeypadSheet: View {
                     .frame(width: 44, height: 44)
                     .background(DGColor.coral, in: Circle())
             }
-            .buttonStyle(DGPressStyle())
+            .buttonStyle(.dgControl)
             .accessibilityLabel("Increase by \(formattedStep)")
         }
     }
@@ -195,7 +195,7 @@ private struct KeypadKey: View {
                 .frame(height: 52)
                 .dgGlass(.regular, radius: DGRadius.sm)
         }
-        .buttonStyle(DGPressStyle())
+        .buttonStyle(.dgControl)
         .accessibilityLabel(accessibilityLabel ?? label)
     }
 }

@@ -186,6 +186,6 @@ struct WorkoutStoreWipeAllDataTests {
     /// fails instead of silently leaving that model's rows behind after a reset.
     @Test("mainModels count matches the number of types wipeAllData deletes")
     func mainModelsCountMatchesDeleteList() {
-        #expect(DaGymSchema.mainModels.count == 18)
+        #expect(DaGymSchema.mainModels.count == 19)
     }
 }

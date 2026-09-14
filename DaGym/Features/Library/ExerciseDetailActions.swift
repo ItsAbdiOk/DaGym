@@ -43,7 +43,8 @@ struct ExerciseNotesCard: View {
                             .foregroundStyle(DGColor.ink4)
                             .frame(width: 28, height: 28)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.dgControl)
+                    .dgTapTarget()
                     .accessibilityLabel("Delete note")
                 }
             }
@@ -117,7 +118,7 @@ struct AddToRoutineSheet: View {
             .padding(.horizontal, DGSpace.s5)
             .frame(minHeight: DGTap.rowHeight)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgRow)
     }
 
     private func subtitle(_ routine: RoutineInfo) -> String {
@@ -144,7 +145,7 @@ struct AddToRoutineSheet: View {
             .padding(.horizontal, DGSpace.s5)
             .frame(minHeight: DGTap.rowHeight)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgRow)
     }
 
     private func finish(routineID: UUID) {
@@ -200,7 +201,7 @@ struct EditExerciseSheet: View {
     private var navRow: some View {
         HStack {
             Button("Cancel") { dismiss() }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(13))
                 .tracking(1.2)
                 .textCase(.uppercase)
@@ -212,7 +213,7 @@ struct EditExerciseSheet: View {
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             Button("Save", action: save)
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(13))
                 .tracking(1.2)
                 .textCase(.uppercase)
@@ -276,5 +277,83 @@ struct EditExerciseSheet: View {
         store.updateCustomExercise(id: exercise.id, fields: fields)
         onSaved()
         dismiss()
+    }
+}
+
+/// A labelled card of text lines ("Last 3 Sessions", "How To Do It") with an empty-state line.
+struct ExerciseTextCard: View {
+    var title: String
+    var lines: [String]
+    var emptyText: String
+    var tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DGSpace.s2) {
+            Text(title).dgLabel()
+            if lines.isEmpty {
+                Text(emptyText)
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.ink4)
+            } else {
+                ForEach(lines, id: \.self) { line in
+                    Text(line)
+                        .font(DGFont.body)
+                        .foregroundStyle(tint)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dgCard()
+    }
+}
+
+/// Bar-type options for the settings menu, mapped to `ExerciseModel.barType`.
+enum BarOption: String, CaseIterable, Identifiable {
+    case none, olympic, womens, ezBar
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .none: "None"
+        case .olympic: "Olympic"
+        case .womens: "Women's"
+        case .ezBar: "EZ Bar"
+        }
+    }
+
+    var storeValue: String? { self == .none ? nil : rawValue }
+
+    static func from(_ value: String?) -> BarOption {
+        BarOption(rawValue: value ?? "none") ?? .none
+    }
+}
+
+/// One editable "Label … Value ⌄" row inside the settings card (shared with `EditExerciseSheet`).
+struct MenuSettingsRow<Items: View>: View {
+    var label: String
+    var value: String
+    @ViewBuilder var items: Items
+
+    var body: some View {
+        Menu {
+            items
+        } label: {
+            HStack {
+                Text(label)
+                    .font(DGFont.body)
+                    .foregroundStyle(DGColor.ink1)
+                Spacer()
+                Text(value)
+                    .font(DGFont.subhead)
+                    .foregroundStyle(DGColor.ink3)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(DGColor.ink4)
+            }
+            .padding(.vertical, DGSpace.s3)
+            .padding(.horizontal, DGSpace.s5)
+        }
+        .buttonStyle(.dgRow)
     }
 }

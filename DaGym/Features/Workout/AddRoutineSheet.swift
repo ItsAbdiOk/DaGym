@@ -66,7 +66,7 @@ struct AddRoutineSheet: View {
             .frame(minHeight: DGTap.rowHeight)
             .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous))
         }
-        .buttonStyle(DGPressStyle())
+        .buttonStyle(.dgRow)
     }
 
     private func summary(_ routine: RoutineInfo) -> String {

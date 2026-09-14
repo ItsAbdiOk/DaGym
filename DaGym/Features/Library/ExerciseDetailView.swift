@@ -6,15 +6,16 @@ import SwiftUI
 /// editable reference settings for a single exercise.
 struct ExerciseDetailView: View {
     @Environment(WorkoutStore.self) private var store
-    @Environment(Preferences.self) private var preferences
-    @Environment(\.dismiss) private var dismiss
+    // Not private: the display-only computed properties live in ExerciseDetailView+Layout.swift.
+    @Environment(Preferences.self) var preferences
+    @Environment(\.dismiss) var dismiss
 
-    @State private var exercise: ExerciseInfo
+    @State var exercise: ExerciseInfo
     @State private var lastSessions: [String] = []
     @State private var restSeconds: Int
     @State private var incrementKg: Double
     @State private var barTypeKey: String?
-    @State private var showingCalculator = false
+    @State var showingCalculator = false
     @State private var notes: [ExerciseNoteInfo] = []
     @State private var showingAddToRoutine = false
     @State private var showingEdit = false
@@ -45,6 +46,7 @@ struct ExerciseDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: DGSpace.s5) {
                     topRow
+                    heroArt
                     titleBlock
                     statTiles
                     ExerciseChartView(exerciseID: exercise.id)
@@ -91,107 +93,6 @@ struct ExerciseDetailView: View {
         } message: {
             Text(ExerciseActionsCard.deleteWarning(routines: routinesUsing))
         }
-    }
-
-    private var instructionLines: [String] {
-        exercise.instructions.isEmpty ? [] : [exercise.instructions]
-    }
-
-    private var oneRepMaxRow: some View {
-        Button {
-            showingCalculator = true
-        } label: {
-            HStack {
-                Image(systemName: "function")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(DGColor.prGoldText)
-                Text("1RM Calculator")
-                    .font(DGFont.body)
-                    .foregroundStyle(DGColor.ink1)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(DGColor.ink4)
-            }
-            .padding(.horizontal, DGSpace.s5)
-            .frame(minHeight: DGTap.min)
-            .dgCard(padding: 0)
-        }
-        .buttonStyle(DGPressStyle())
-    }
-
-    private var topRow: some View {
-        HStack {
-            Button {
-                dismiss()
-            } label: {
-                HStack(spacing: DGSpace.s1) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 13, weight: .semibold))
-                    Text("Library").dgLabel()
-                }
-                .foregroundStyle(DGColor.ink3)
-            }
-            .buttonStyle(.plain)
-            Spacer()
-            Button(action: toggleFavorite) {
-                Image(systemName: exercise.isFavorite ? "star.fill" : "star")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(DGColor.prGoldText)
-                    .frame(width: 36, height: 36)
-                    .dgGlass(.regular, in: Circle())
-            }
-            .buttonStyle(DGPressStyle())
-        }
-    }
-
-    private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s1) {
-            HStack(alignment: .top) {
-                Text(exercise.name)
-                    .font(DGFont.title1)
-                    .textCase(.uppercase)
-                    .foregroundStyle(DGColor.ink1)
-                    .lineLimit(2)
-                Spacer()
-                BodyMapPair(intensity: exercise.hitMap, height: 56)
-            }
-            Text(equipmentLine)
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink3)
-        }
-    }
-
-    /// "barbell · olympic bar · 2.5 kg increment"; a bodyweight move has no bar and no
-    /// increment worth stating, so it reads just "bodyweight".
-    private var equipmentLine: String {
-        var parts = [exercise.equipment]
-        if let bar = exercise.bar { parts.append(bar.name.lowercased()) }
-        if exercise.incrementKg > 0 {
-            let increment = preferences.formatWeight(kg: exercise.incrementKg)
-            parts.append("\(increment) \(preferences.unitSymbol) increment")
-        }
-        return parts.joined(separator: " · ")
-    }
-
-    private var statTiles: some View {
-        HStack(spacing: DGSpace.s3) {
-            goldStat
-            StatTile(value: exercise.bestSet ?? "—", label: "Best Set")
-                .dgCard(radius: 14, padding: 0)
-            StatTile(value: "\(exercise.sessions)", label: "Sessions")
-                .dgCard(radius: 14, padding: 0)
-        }
-    }
-
-    private var goldStat: some View {
-        StatTile(
-            value: exercise.bestE1RM.map { preferences.formatWeight(kg: $0) } ?? "—",
-            label: "Best E1RM", tint: DGColor.prGoldText
-        )
-        .dgCard(
-            radius: 14, fill: DGColor.prGold.opacity(0.10), stroke: DGColor.prGold.opacity(0.35), padding: 0
-        )
     }
 
     private var settingsCard: some View {
@@ -248,7 +149,7 @@ struct ExerciseDetailView: View {
         dismiss()
     }
 
-    private func toggleFavorite() {
+    func toggleFavorite() {
         store.toggleFavorite(id: exercise.id)
         refresh()
     }
@@ -316,7 +217,7 @@ struct ExerciseActionsCard: View {
             .padding(.horizontal, DGSpace.s5)
             .frame(minHeight: DGTap.min)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgRow)
     }
 
     /// The delete confirmation's message: how many routines lose the exercise.
@@ -327,84 +228,6 @@ struct ExerciseActionsCard: View {
         case 1: return "Used in 1 routine — it'll be removed from \(routines[0].name). \(base)"
         default: return "Used in \(routines.count) routines — it'll be removed from all of them. \(base)"
         }
-    }
-}
-
-/// A labelled card of text lines ("Last 3 Sessions", "How To Do It") with an empty-state line.
-private struct ExerciseTextCard: View {
-    var title: String
-    var lines: [String]
-    var emptyText: String
-    var tint: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s2) {
-            Text(title).dgLabel()
-            if lines.isEmpty {
-                Text(emptyText)
-                    .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.ink4)
-            } else {
-                ForEach(lines, id: \.self) { line in
-                    Text(line)
-                        .font(DGFont.body)
-                        .foregroundStyle(tint)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .dgCard()
-    }
-}
-
-/// Bar-type options for the settings menu, mapped to `ExerciseModel.barType`.
-private enum BarOption: String, CaseIterable, Identifiable {
-    case none, olympic, womens, ezBar
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .none: "None"
-        case .olympic: "Olympic"
-        case .womens: "Women's"
-        case .ezBar: "EZ Bar"
-        }
-    }
-
-    var storeValue: String? { self == .none ? nil : rawValue }
-
-    static func from(_ value: String?) -> BarOption {
-        BarOption(rawValue: value ?? "none") ?? .none
-    }
-}
-
-/// One editable "Label … Value ⌄" row inside the settings card (shared with `EditExerciseSheet`).
-struct MenuSettingsRow<Items: View>: View {
-    var label: String
-    var value: String
-    @ViewBuilder var items: Items
-
-    var body: some View {
-        Menu {
-            items
-        } label: {
-            HStack {
-                Text(label)
-                    .font(DGFont.body)
-                    .foregroundStyle(DGColor.ink1)
-                Spacer()
-                Text(value)
-                    .font(DGFont.subhead)
-                    .foregroundStyle(DGColor.ink3)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(DGColor.ink4)
-            }
-            .padding(.vertical, DGSpace.s3)
-            .padding(.horizontal, DGSpace.s5)
-        }
-        .buttonStyle(.plain)
     }
 }
 

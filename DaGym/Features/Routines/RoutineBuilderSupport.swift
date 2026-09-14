@@ -104,6 +104,6 @@ struct AddExerciseButton: View {
                     .strokeBorder(DGColor.hairline, style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
             }
         }
-        .buttonStyle(DGPressStyle())
+        .buttonStyle(.dgCard)
     }
 }

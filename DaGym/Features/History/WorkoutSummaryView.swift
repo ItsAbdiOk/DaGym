@@ -69,7 +69,7 @@ struct WorkoutSummaryView: View {
                     .frame(width: 52, height: 52)
                     .dgGlass(.regular, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
             }
-            .buttonStyle(DGPressStyle())
+            .buttonStyle(.dgControl)
         }
     }
 }

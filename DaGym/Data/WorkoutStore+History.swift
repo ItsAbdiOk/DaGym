@@ -85,7 +85,7 @@ extension WorkoutStore {
     /// — started before this one. "Before its own date", not "newest overall", so a backfill
     /// compares against what came before it.
     private func previousWorkout(before workout: WorkoutModel) -> WorkoutModel? {
-        finishedWorkoutsNewestFirst().first { candidate in
+        finishedWorkoutModelsNewestFirst().first { candidate in
             guard candidate.id != workout.id, candidate.startedAt < workout.startedAt else { return false }
             if let routineID = workout.routineID { return candidate.routineID == routineID }
             return candidate.routineID == nil && candidate.title == workout.title
@@ -148,7 +148,10 @@ extension WorkoutStore {
     func resumeSession(for workoutID: UUID) -> WorkoutSession? {
         guard let model = fetchWorkoutModel(id: workoutID), model.endedAt == nil else { return nil }
         let session = WorkoutSession(model: model, exerciseInfo: exerciseInfo(for:))
-        session.exercises = session.exercises.map(withHistoryStrip)
+        // Fetched once and shared across every exercise's history strip, rather than each one
+        // re-querying the whole finished-workout list.
+        let finishedWorkouts = finishedWorkoutModelsNewestFirst()
+        session.exercises = session.exercises.map { withHistoryStrip($0, finishedWorkouts: finishedWorkouts) }
         return session
     }
 
@@ -220,7 +223,7 @@ extension WorkoutStore {
 
     /// Total finished-workout count and lifetime volume, for the History header.
     func lifetimeStats() -> (workouts: Int, volumeKg: Double) {
-        let finished = finishedWorkoutsNewestFirst()
+        let finished = finishedWorkoutModelsNewestFirst()
         let volume = finished.reduce(0.0) { total, workout in
             total + workoutVolume(workout)
         }
@@ -246,11 +249,13 @@ extension WorkoutStore {
     }
 
     /// "80 × 8,8,7" style lines for the last few finished sessions of an exercise — "0:45, 0:40"
-    /// for a timed hold, "12, 12, 10" for unloaded reps (see `sessionLine`).
-    func lastSessions(exerciseID: UUID, limit: Int = 3) -> [String] {
+    /// for a timed hold, "12, 12, 10" for unloaded reps (see `sessionLine`). Pass
+    /// `finishedWorkouts` (newest first) to reuse an already-fetched list instead of querying
+    /// the store again.
+    func lastSessions(exerciseID: UUID, limit: Int = 3, finishedWorkouts: [WorkoutModel]? = nil) -> [String] {
         let style = fetchExerciseModel(id: exerciseID)?.style ?? .weightReps
         var lines: [String] = []
-        for workout in finishedWorkoutsNewestFirst() {
+        for workout in finishedWorkouts ?? finishedWorkoutModelsNewestFirst() {
             guard let line = sessionLine(exerciseID: exerciseID, style: style, in: workout) else { continue }
             lines.append(line)
             if lines.count == limit { break }
@@ -259,30 +264,36 @@ extension WorkoutStore {
     }
 
     /// e1RM per finished workout that included this exercise, oldest first, for the sparkline.
-    func e1rmSeries(exerciseID: UUID) -> [(Date, Double)] {
-        finishedWorkoutsNewestFirst().reversed().compactMap { workout in
+    /// Pass `finishedWorkouts` (newest first) to reuse an already-fetched list.
+    func e1rmSeries(exerciseID: UUID, finishedWorkouts: [WorkoutModel]? = nil) -> [(Date, Double)] {
+        (finishedWorkouts ?? finishedWorkoutModelsNewestFirst()).reversed().compactMap { workout in
             bestE1RM(exerciseID: exerciseID, in: workout).map { (workout.startedAt, $0) }
         }
     }
 
     /// The card sparkline's per-session value, oldest first, by how the exercise is logged:
-    /// best hold for a timed exercise, best reps for unloaded reps, else best e1RM.
-    func sparklineSeries(exerciseID: UUID) -> [(Date, Double)] {
+    /// best hold for a timed exercise, best reps for unloaded reps, else best e1RM. Pass
+    /// `finishedWorkouts` (newest first) to reuse an already-fetched list.
+    func sparklineSeries(exerciseID: UUID, finishedWorkouts: [WorkoutModel]? = nil) -> [(Date, Double)] {
         let style = fetchExerciseModel(id: exerciseID)?.style ?? .weightReps
         switch style {
         case .timedHold, .cardio:
-            return bestPerSession(exerciseID: exerciseID) { Double($0.durationSeconds ?? 0) }
+            return bestPerSession(exerciseID: exerciseID, finishedWorkouts: finishedWorkouts) {
+                Double($0.durationSeconds ?? 0)
+            }
         case .bodyweightReps:
-            return bestPerSession(exerciseID: exerciseID) { Double($0.reps) }
+            return bestPerSession(exerciseID: exerciseID, finishedWorkouts: finishedWorkouts) {
+                Double($0.reps)
+            }
         case .weightReps, .assisted, .weightedBodyweight:
-            return e1rmSeries(exerciseID: exerciseID)
+            return e1rmSeries(exerciseID: exerciseID, finishedWorkouts: finishedWorkouts)
         }
     }
 
     private func bestPerSession(
-        exerciseID: UUID, value: (SetLogModel) -> Double
+        exerciseID: UUID, finishedWorkouts: [WorkoutModel]? = nil, value: (SetLogModel) -> Double
     ) -> [(Date, Double)] {
-        finishedWorkoutsNewestFirst().reversed().compactMap { workout in
+        (finishedWorkouts ?? finishedWorkoutModelsNewestFirst()).reversed().compactMap { workout in
             guard let match = matchingExercise(exerciseID: exerciseID, in: workout) else { return nil }
             let best = (match.sets ?? [])
                 .filter { $0.isCompleted && $0.setKind.countsTowardStats }
@@ -293,7 +304,7 @@ extension WorkoutStore {
 
     /// Every finished workout's start date, for `Streaks.weekly`.
     func workoutDates() -> [Date] {
-        finishedWorkoutsNewestFirst().map(\.startedAt)
+        finishedWorkoutModelsNewestFirst().map(\.startedAt)
     }
 
     /// Recovery stimulus events (`GymCore.Recovery`) from completed, non-warm-up sets of
@@ -339,14 +350,6 @@ extension WorkoutStore {
         guard rir > 0 else { return 1.0 }
         guard rir < 4 else { return 0.5 }
         return 1.0 - Double(rir) * 0.125
-    }
-
-    private func finishedWorkoutsNewestFirst() -> [WorkoutModel] {
-        let predicate = #Predicate<WorkoutModel> { $0.endedAt != nil }
-        let descriptor = FetchDescriptor<WorkoutModel>(
-            predicate: predicate, sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
-        )
-        return (try? context.fetch(descriptor)) ?? []
     }
 
     private func workoutVolume(_ workout: WorkoutModel) -> Double {

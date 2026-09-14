@@ -10,7 +10,19 @@ actor FakeHealthStore: HealthStoring {
     private(set) var savedWorkouts: [HealthWorkoutInput] = []
     private(set) var savedBodyMasses: [HealthBodyMass] = []
     private(set) var authorizationRequested = false
+    private(set) var bodyMassObserverRegistered = false
+    private(set) var workoutObserverRegistered = false
     var bodyMassToReturn: HealthBodyMass?
+    var bodyMassHistoryToReturn: [HealthSample] = []
+    var bodyFatToReturn: HealthSample?
+    var bodyFatHistoryToReturn: [HealthSample] = []
+    var leanBodyMassToReturn: HealthSample?
+    var leanBodyMassHistoryToReturn: [HealthSample] = []
+    var heightToReturn: HealthSample?
+    var hrvToReturn: [HealthSample] = []
+    var restingHeartRateToReturn: [HealthSample] = []
+    var sleepToReturn: [HealthSleepInterval] = []
+    var externalWorkoutsToReturn: [HealthExternalWorkout] = []
     private var nextWorkoutID = 0
 
     init(isAvailable: Bool = true) {
@@ -19,6 +31,36 @@ actor FakeHealthStore: HealthStoring {
 
     func setBodyMassToReturn(_ value: HealthBodyMass?) {
         bodyMassToReturn = value
+    }
+
+    func setBodyMassHistoryToReturn(_ values: [HealthSample]) {
+        bodyMassHistoryToReturn = values
+    }
+
+    func setExternalWorkoutsToReturn(_ values: [HealthExternalWorkout]) {
+        externalWorkoutsToReturn = values
+    }
+
+    func setBodyFatToReturn(_ value: HealthSample?, history: [HealthSample] = []) {
+        bodyFatToReturn = value
+        bodyFatHistoryToReturn = history
+    }
+
+    func setLeanBodyMassToReturn(_ value: HealthSample?, history: [HealthSample] = []) {
+        leanBodyMassToReturn = value
+        leanBodyMassHistoryToReturn = history
+    }
+
+    func setHeightToReturn(_ value: HealthSample?) {
+        heightToReturn = value
+    }
+
+    func setRecoverySamples(
+        restingHeartRate: [HealthSample] = [], hrv: [HealthSample] = [], sleep: [HealthSleepInterval] = []
+    ) {
+        restingHeartRateToReturn = restingHeartRate
+        hrvToReturn = hrv
+        sleepToReturn = sleep
     }
 
     func requestAuthorization() async throws {
@@ -39,9 +81,39 @@ actor FakeHealthStore: HealthStoring {
         bodyMassToReturn
     }
 
-    func recentHRV(days: Int) async throws -> [HealthSample] { [] }
+    func bodyMassHistory(from: Date, to: Date) async throws -> [HealthSample] {
+        bodyMassHistoryToReturn
+    }
 
-    func recentRestingHeartRate(days: Int) async throws -> [HealthSample] { [] }
+    func latestBodyFatPercentage() async throws -> HealthSample? { bodyFatToReturn }
 
-    func recentSleep(days: Int) async throws -> [HealthSleepInterval] { [] }
+    func bodyFatHistory(from: Date, to: Date) async throws -> [HealthSample] {
+        bodyFatHistoryToReturn
+    }
+
+    func latestLeanBodyMass() async throws -> HealthSample? { leanBodyMassToReturn }
+
+    func leanBodyMassHistory(from: Date, to: Date) async throws -> [HealthSample] {
+        leanBodyMassHistoryToReturn
+    }
+
+    func latestHeight() async throws -> HealthSample? { heightToReturn }
+
+    func hrv(from: Date, to: Date) async throws -> [HealthSample] { hrvToReturn }
+
+    func restingHeartRate(from: Date, to: Date) async throws -> [HealthSample] { restingHeartRateToReturn }
+
+    func sleep(from: Date, to: Date) async throws -> [HealthSleepInterval] { sleepToReturn }
+
+    func externalStrengthWorkouts(since: Date) async throws -> [HealthExternalWorkout] {
+        externalWorkoutsToReturn
+    }
+
+    func observeBodyMassChanges(onChange: @escaping @Sendable () -> Void) async throws {
+        bodyMassObserverRegistered = true
+    }
+
+    func observeWorkoutChanges(onChange: @escaping @Sendable () -> Void) async throws {
+        workoutObserverRegistered = true
+    }
 }

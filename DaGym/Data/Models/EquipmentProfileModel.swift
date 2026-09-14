@@ -22,11 +22,17 @@ final class EquipmentProfileModel {
     var plateCounts: [Int] = []
     var collarsKg: Double = 0
     var createdAt: Date = Date()
+    /// Stable identity for a profile `EquipmentSeeder` created ("gym"/"home"), `nil` for a
+    /// profile the user made themselves. Lets `WorkoutStore.dedupeEquipmentProfiles()` fold two
+    /// independently-seeded copies (two devices seeding before the first one's rows synced) back
+    /// into one, the same way `ExerciseModel.seedID` does for exercises — even after the user has
+    /// since edited one copy's fields, unlike a fold keyed on the fields themselves.
+    var seedKey: String?
 
     init(
         id: UUID = UUID(), name: String = "Gym", isActive: Bool = false, barKg: Double = 20,
         availableEquipment: [String] = [], plateStockKg: [Double] = [], plateCounts: [Int] = [],
-        collarsKg: Double = 0, createdAt: Date = Date()
+        collarsKg: Double = 0, createdAt: Date = Date(), seedKey: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -37,5 +43,6 @@ final class EquipmentProfileModel {
         self.plateCounts = plateCounts
         self.collarsKg = collarsKg
         self.createdAt = createdAt
+        self.seedKey = seedKey
     }
 }

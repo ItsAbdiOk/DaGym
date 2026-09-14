@@ -25,6 +25,7 @@ struct OnboardingUnitsStep: View {
             DGPrimaryButton(title: "Continue", action: onNext)
                 .accessibilityIdentifier(A11yID.onboardingNext)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func unitChip(_ unit: WeightUnit, title: String) -> some View {

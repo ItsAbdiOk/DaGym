@@ -36,7 +36,7 @@ struct ProgramsView: View {
     private var navRow: some View {
         HStack {
             Button("Done", action: onDone)
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
                 .dgLabel()
             Spacer()
             Text("Programs")
@@ -142,14 +142,14 @@ private struct ProgramCard: View {
         HStack(spacing: DGSpace.s3) {
             if program.isActive {
                 Button("Stop", role: .destructive, action: onStop)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.dgControl)
                     .dgLabel(DGColor.danger)
                 Button("Complete", action: onComplete)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.dgControl)
                     .dgLabel()
             } else {
                 Button("Start", action: onStart)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.dgControl)
                     .dgLabel(DGColor.coralText)
             }
         }

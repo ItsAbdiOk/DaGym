@@ -37,7 +37,7 @@ struct NewExerciseSheet: View {
     private var navRow: some View {
         HStack {
             Button("Cancel") { dismiss() }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(13))
                 .tracking(1.2)
                 .textCase(.uppercase)
@@ -49,7 +49,7 @@ struct NewExerciseSheet: View {
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             Button("Save", action: save)
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(13))
                 .tracking(1.2)
                 .textCase(.uppercase)
@@ -158,7 +158,7 @@ private struct MuscleRow: View {
                     .foregroundStyle(muscle == nil ? DGColor.ink4 : DGColor.ink1)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.dgRow)
         }
     }
 }
@@ -178,7 +178,7 @@ private struct EquipmentRow: View {
                     .foregroundStyle(DGColor.ink1)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.dgRow)
         }
     }
 }
@@ -198,7 +198,7 @@ private struct LoggingStyleRow: View {
                     .foregroundStyle(DGColor.ink1)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.dgRow)
         }
     }
 }
@@ -237,7 +237,7 @@ private struct BarTypeRow: View {
                         .foregroundStyle(DGColor.ink1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgRow)
             }
         }
     }

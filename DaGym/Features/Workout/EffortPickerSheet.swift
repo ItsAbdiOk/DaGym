@@ -61,7 +61,8 @@ struct EffortPickerSheet: View {
                         .frame(height: 40)
                         .background { if on { Capsule().fill(DGColor.coral) } }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
+                .dgTapTarget()
             }
         }
         .padding(4)
@@ -104,7 +105,7 @@ private struct EffortRow: View {
                     .strokeBorder(isSelected ? effort.color : .clear, lineWidth: 1)
             }
         }
-        .buttonStyle(DGPressStyle())
+        .buttonStyle(.dgRow)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

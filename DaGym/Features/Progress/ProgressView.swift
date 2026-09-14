@@ -58,10 +58,11 @@ struct ProgressScreen: View {
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             Button("1RM Calc") { showingCalculator = true }
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.coralText)
             DGIconButton(symbol: "xmark", size: 36, accessibilityLabel: "Close") { dismiss() }
+                .dgTapTarget()
         }
     }
 
@@ -140,7 +141,7 @@ private struct ExercisePickerRow: View {
             .frame(minHeight: DGTap.min)
             .dgGlass(.thin, radius: DGRadius.md)
         }
-        .buttonStyle(DGPressStyle())
+        .buttonStyle(.dgControl)
     }
 }
 

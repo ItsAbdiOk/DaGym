@@ -43,7 +43,7 @@ struct ScheduleView: View {
     private var navRow: some View {
         HStack {
             Button("Close", action: onDone)
-                .buttonStyle(.plain)
+                .buttonStyle(.dgControl)
                 .dgLabel()
             Spacer()
             Text("Schedule")
@@ -237,7 +237,7 @@ private struct ThisWeekRow: View {
             Spacer()
             if !routines.isEmpty {
                 Button("Move…", action: onMove)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.dgControl)
                     .font(DGFont.condensedLabel(12))
                     .tracking(1.2)
                     .textCase(.uppercase)

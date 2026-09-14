@@ -1,9 +1,11 @@
 import GymCore
 import SwiftUI
 
-/// Abstract segmented body map: one component, three jobs (thumbnail,
-/// live "muscles hit", recovery heatmap). Tapered stack of rounded
-/// segments in a 100 × 140 box, not a silhouette.
+/// Body map: one component, three jobs (thumbnail, live "muscles hit", recovery heatmap).
+/// Draws the real anatomical figure from the vendored MuscleMap package
+/// (`DaGym/Vendor/MuscleMap`, MIT — see its `LICENSE`), tinting our 14 `GymCore.Muscle`
+/// regions on top of an inert body silhouette. The mapping from MuscleMap's ~30 upstream
+/// regions onto our 14 muscles lives in `BodyMapMuscleMapping`.
 struct BodyMapView: View {
     enum Mode {
         /// Four engagement steps of coral; 0 / nil = inert.
@@ -25,97 +27,76 @@ struct BodyMapView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(Preferences.self) private var preferences
 
-    private struct Segment {
-        let muscle: Muscle
-        let rect: CGRect
-        let radius: CGFloat
+    /// One drawable region of the figure: `muscle` is nil for parts that aren't one of our
+    /// 14 groups (head, hair, hands, feet, knees, ankles, neck) — those render as inert body.
+    fileprivate struct Region {
+        let muscle: Muscle?
+        /// Unscaled path in MuscleMap's original SVG coordinate space; transformed to the
+        /// view's own coordinate space at draw time.
+        let path: Path
     }
-
-    // Geometry copied from the design component (viewBox 0 0 100 140).
-    private static let front: [Segment] = [
-        Segment(muscle: .traps, rect: CGRect(x: 30, y: 0, width: 40, height: 12), radius: 5),
-        Segment(muscle: .delts, rect: CGRect(x: 2, y: 16, width: 19, height: 20), radius: 6),
-        Segment(muscle: .chest, rect: CGRect(x: 27, y: 16, width: 46, height: 20), radius: 6),
-        Segment(muscle: .delts, rect: CGRect(x: 79, y: 16, width: 19, height: 20), radius: 6),
-        Segment(muscle: .biceps, rect: CGRect(x: 4, y: 40, width: 16, height: 18), radius: 5),
-        Segment(muscle: .abs, rect: CGRect(x: 30, y: 40, width: 40, height: 18), radius: 5),
-        Segment(muscle: .biceps, rect: CGRect(x: 80, y: 40, width: 16, height: 18), radius: 5),
-        Segment(muscle: .forearms, rect: CGRect(x: 6, y: 62, width: 14, height: 12), radius: 4),
-        Segment(muscle: .obliques, rect: CGRect(x: 27, y: 62, width: 46, height: 12), radius: 5),
-        Segment(muscle: .forearms, rect: CGRect(x: 80, y: 62, width: 14, height: 12), radius: 4),
-        Segment(muscle: .quads, rect: CGRect(x: 22, y: 78, width: 56, height: 34), radius: 7),
-        Segment(muscle: .calves, rect: CGRect(x: 32, y: 116, width: 36, height: 22), radius: 6)
-    ]
-
-    private static let back: [Segment] = [
-        Segment(muscle: .traps, rect: CGRect(x: 24, y: 0, width: 52, height: 16), radius: 6),
-        Segment(muscle: .delts, rect: CGRect(x: 2, y: 20, width: 19, height: 26), radius: 6),
-        Segment(muscle: .lats, rect: CGRect(x: 27, y: 20, width: 46, height: 26), radius: 6),
-        Segment(muscle: .delts, rect: CGRect(x: 79, y: 20, width: 19, height: 26), radius: 6),
-        Segment(muscle: .triceps, rect: CGRect(x: 4, y: 50, width: 16, height: 16), radius: 5),
-        Segment(muscle: .lowerBack, rect: CGRect(x: 30, y: 50, width: 40, height: 16), radius: 5),
-        Segment(muscle: .triceps, rect: CGRect(x: 80, y: 50, width: 16, height: 16), radius: 5),
-        Segment(muscle: .forearms, rect: CGRect(x: 6, y: 70, width: 14, height: 14), radius: 4),
-        Segment(muscle: .glutes, rect: CGRect(x: 27, y: 70, width: 46, height: 14), radius: 5),
-        Segment(muscle: .forearms, rect: CGRect(x: 80, y: 70, width: 14, height: 14), radius: 4),
-        Segment(muscle: .hams, rect: CGRect(x: 22, y: 88, width: 56, height: 30), radius: 7),
-        Segment(muscle: .calves, rect: CGRect(x: 32, y: 122, width: 36, height: 18), radius: 6)
-    ]
 
     var body: some View {
         GeometryReader { geo in
-            let scale = min(geo.size.width / 100, geo.size.height / 140)
-            let offset = CGSize(
-                width: (geo.size.width - 100 * scale) / 2,
-                height: (geo.size.height - 140 * scale) / 2
-            )
+            let gender = Self.gender(for: preferences.bodyFigure)
+            let mmSide = self.mmSide
+            let viewBox = BodyPathProvider.viewBox(gender: gender, side: mmSide)
+            let scale = min(geo.size.width / viewBox.size.width, geo.size.height / viewBox.size.height)
+            let offsetX = (geo.size.width - viewBox.size.width * scale) / 2 - viewBox.origin.x * scale
+            let offsetY = (geo.size.height - viewBox.size.height * scale) / 2 - viewBox.origin.y * scale
+            let transform = CGAffineTransform(a: scale, b: 0, c: 0, d: scale, tx: offsetX, ty: offsetY)
+
+            let regions = BodyMapRegionCache.shared.regions(gender: gender, side: mmSide)
             ZStack(alignment: .topLeading) {
-                ForEach(Array(segments.enumerated()), id: \.offset) { _, seg in
-                    RoundedRectangle(cornerRadius: seg.radius * scale, style: .continuous)
-                        .fill(color(for: seg.muscle))
-                        .frame(width: seg.rect.width * scale, height: seg.rect.height * scale)
-                        .offset(
-                            x: seg.rect.minX * scale + offset.width,
-                            y: seg.rect.minY * scale + offset.height
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture { onTap?(seg.muscle) }
+                ForEach(Array(regions.enumerated()), id: \.offset) { _, region in
+                    let addressable = region.muscle.map {
+                        BodyMapMuscleMapping.isAddressable($0, on: side)
+                    } ?? false
+                    let transformedPath = region.path.applying(transform)
+                    transformedPath
+                        .fill(fillColor(muscle: region.muscle, addressable: addressable))
+                        .contentShape(transformedPath)
+                        .onTapGesture {
+                            guard addressable, let muscle = region.muscle else { return }
+                            onTap?(muscle)
+                        }
                 }
             }
             .animation(DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion), value: intensity)
         }
-        .aspectRatio(100 / 140, contentMode: .fit)
+        .aspectRatio(aspectRatio, contentMode: .fit)
         .accessibilityLabel(accessibilityDescription)
     }
 
-    private var segments: [Segment] {
-        Self.adjusted(side == .front ? Self.front : Self.back, for: preferences.bodyFigure)
+    private var mmSide: BodySide {
+        switch side {
+        case .front: .front
+        case .back: .back
+        }
     }
 
-    /// Nudges the shoulder (delts) and hip (quads/hams/glutes) segments a few units wider or
-    /// narrower per `figure` — a subtle proportion difference, not a different drawing. Every
-    /// other segment, and every `Muscle` region, is untouched.
-    private static func adjusted(_ base: [Segment], for figure: Preferences.BodyFigure) -> [Segment] {
-        guard figure != .neutral else { return base }
-        let shoulderShift: CGFloat = figure == .male ? 2 : -2
-        let hipShift: CGFloat = figure == .male ? -2 : 2
-        return base.map { segment in
-            switch segment.muscle {
-            case .delts:
-                let isLeftSide = segment.rect.minX < 50
-                let dx = isLeftSide ? -shoulderShift : shoulderShift
-                return Segment(
-                    muscle: segment.muscle, rect: segment.rect.offsetBy(dx: dx, dy: 0), radius: segment.radius
-                )
-            case .quads, .hams, .glutes:
-                return Segment(
-                    muscle: segment.muscle, rect: segment.rect.insetBy(dx: -hipShift / 2, dy: 0),
-                    radius: segment.radius
-                )
-            default:
-                return segment
-            }
+    /// The figure's own proportions (male and female source art have different aspect
+    /// ratios), so the frame this view asks for tracks the active `BodyFigure`.
+    private var aspectRatio: CGFloat {
+        let gender = Self.gender(for: preferences.bodyFigure)
+        let box = BodyPathProvider.viewBox(gender: gender, side: mmSide).size
+        return box.width / box.height
+    }
+
+    /// MuscleMap ships male/female art only. `.neutral` has no androgynous figure to draw,
+    /// so it falls back to the male figure — an arbitrary but documented choice; every
+    /// `Muscle` region drawn is identical regardless, only proportions differ (see
+    /// `BodyMapMuscleMapping`).
+    private static func gender(for figure: Preferences.BodyFigure) -> BodyGender {
+        switch figure {
+        case .male, .neutral: .male
+        case .female: .female
         }
+    }
+
+    private func fillColor(muscle: Muscle?, addressable: Bool) -> Color {
+        guard addressable, let muscle else { return DGColor.bodyMapInert }
+        return color(for: muscle)
     }
 
     private func color(for muscle: Muscle) -> Color {
@@ -131,6 +112,40 @@ struct BodyMapView: View {
     }
 
     private var accessibilityDescription: String { BodyMapAccessibility.label(intensity: intensity) }
+}
+
+/// Parses and caches MuscleMap's SVG region data once per (gender, side), keyed off the
+/// vendored `BodyPathProvider`. Paths are cached unscaled (`PathBuilder` with `scale: 1,
+/// offsetX/Y: 0`) — cheap to re-transform per frame with a `CGAffineTransform`, unlike
+/// re-parsing the underlying SVG path strings, which `BodyMapView` would otherwise do on
+/// every body re-evaluation (it's used at thumbnail size in lists as well as full-screen).
+@MainActor
+private final class BodyMapRegionCache {
+    static let shared = BodyMapRegionCache()
+
+    private struct Key: Hashable {
+        let gender: BodyGender
+        let side: BodySide
+    }
+
+    private var storage: [Key: [BodyMapView.Region]] = [:]
+
+    private init() {}
+
+    func regions(gender: BodyGender, side: BodySide) -> [BodyMapView.Region] {
+        let key = Key(gender: gender, side: side)
+        if let cached = storage[key] { return cached }
+        let built = BodyPathProvider.paths(gender: gender, side: side).flatMap { part in
+            part.allPaths.map { svgPath in
+                BodyMapView.Region(
+                    muscle: BodyMapMuscleMapping.muscle(for: part.slug),
+                    path: PathBuilder.buildPath(from: svgPath, scale: 1, offsetX: 0, offsetY: 0)
+                )
+            }
+        }
+        storage[key] = built
+        return built
+    }
 }
 
 /// Pure label-building for a body map's `intensity` — shared by the single-side

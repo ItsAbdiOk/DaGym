@@ -6,8 +6,15 @@ import SwiftUI
 /// muscles saw no training this week. Presented as a sheet from Home's "See Map".
 struct RecoveryMapView: View {
     @Environment(WorkoutStore.self) private var store
+    // Not `private`: `RecoveryMapView+Health.swift` (kept separate to stay under the
+    // type-body-length lint limit) reads these — `private` is file-scoped in Swift, so a
+    // same-type extension in a different file can't see a `private` member.
+    @Environment(Preferences.self) var preferences
+    @Environment(HealthInsightsService.self) var healthInsights
     @State private var snapshot = RecoverySnapshot(map: [:], perMuscle: [], untrainedMuscles: [])
     @State private var selected: MuscleRecovery?
+    @State var recoverySignals: HealthInsightsService.RecoverySignals?
+    @State var isShowingHealthSettings = false
 
     var body: some View {
         ZStack {
@@ -16,6 +23,7 @@ struct RecoveryMapView: View {
                 VStack(alignment: .leading, spacing: DGSpace.s6) {
                     header
                     mapCard
+                    healthContextCard
                     muscleList
                     BalanceSection(untrainedMuscles: snapshot.untrainedMuscles)
                 }
@@ -24,14 +32,20 @@ struct RecoveryMapView: View {
                 .padding(.bottom, DGSpace.s8)
             }
         }
-        .task { refresh() }
+        .task { await refresh() }
         .sheet(item: $selected) { muscle in
             MuscleDetailSheet(recovery: muscle)
         }
+        .sheet(
+            isPresented: $isShowingHealthSettings,
+            onDismiss: { Task { await refresh() } },
+            content: { HealthSettingsView() }
+        )
     }
 
-    private func refresh() {
+    private func refresh() async {
         snapshot = store.recoverySnapshot()
+        recoverySignals = await healthInsights.recoverySignals()
     }
 
     private var header: some View {
@@ -140,7 +154,7 @@ private struct MuscleListRow: View {
                     .strokeBorder(DGColor.hairline, lineWidth: 1)
             }
         }
-        .buttonStyle(DGPressStyle())
+        .buttonStyle(.dgRow)
     }
 
     private var rampColor: Color {
@@ -226,8 +240,14 @@ private struct RecoveryFlowLayout: Layout {
 
 #Preview {
     if let container = try? ModelContainer.dagym(inMemory: true) {
+        let store = WorkoutStore(context: container.mainContext)
+        let preferences = Preferences()
         RecoveryMapView()
-            .environment(WorkoutStore(context: container.mainContext))
+            .environment(store)
+            .environment(preferences)
+            .environment(HealthInsightsService(
+                healthStore: HealthKitStore(), workoutStore: store, preferences: preferences
+            ))
     } else {
         Text("Preview unavailable")
     }

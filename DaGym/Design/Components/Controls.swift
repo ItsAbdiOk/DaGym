@@ -1,15 +1,6 @@
 import GymCore
 import SwiftUI
 
-/// Scale-0.97 press, 110 ms — for rows and keys.
-struct DGPressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(DGMotion.tap, value: configuration.isPressed)
-    }
-}
-
 /// Solid coral pill. The one "act now" control on a screen.
 struct DGPrimaryButton: View {
     var title: String
