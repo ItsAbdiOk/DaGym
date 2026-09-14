@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "E7A5CBE51070090C17C18B6E"
-               BuildableName = "DaGym.app"
+               BuildableName = "DaGymWatch.app"
                BlueprintName = "DaGymWatch"
                ReferencedContainer = "container:DaGym.xcodeproj">
             </BuildableReference>
@@ -31,7 +31,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "E7A5CBE51070090C17C18B6E"
-            BuildableName = "DaGym.app"
+            BuildableName = "DaGymWatch.app"
             BlueprintName = "DaGymWatch"
             ReferencedContainer = "container:DaGym.xcodeproj">
          </BuildableReference>
@@ -54,7 +54,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "E7A5CBE51070090C17C18B6E"
-            BuildableName = "DaGym.app"
+            BuildableName = "DaGymWatch.app"
             BlueprintName = "DaGymWatch"
             ReferencedContainer = "container:DaGym.xcodeproj">
          </BuildableReference>
@@ -71,7 +71,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "E7A5CBE51070090C17C18B6E"
-            BuildableName = "DaGym.app"
+            BuildableName = "DaGymWatch.app"
             BlueprintName = "DaGymWatch"
             ReferencedContainer = "container:DaGym.xcodeproj">
          </BuildableReference>
