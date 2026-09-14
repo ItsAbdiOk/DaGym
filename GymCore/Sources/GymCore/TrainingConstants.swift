@@ -131,3 +131,72 @@ extension TrainingConstants {
     /// is `.failure`/`.amrap`).
     public static let hardSetMaxRIR = 1
 }
+
+// MARK: - Coach (rule-based, deterministic coaching cards)
+
+extension TrainingConstants {
+    /// The most cards `CoachEngine` returns in one call — a brand-new lifter with a handful of
+    /// workouts must not be buried even if several rules technically fire.
+    public static let coachMaxCards = 5
+
+    /// Adherence: complete calendar weeks (most recent first, excluding the in-progress week)
+    /// compared against the schedule.
+    public static let coachAdherenceLookbackWeeks = 4
+    /// Adherence: the two most recent weeks' completion rate vs. the two before that must drop by
+    /// at least this fraction to fire — noise from a single light week isn't "dropping".
+    public static let coachAdherenceDropFraction = 0.34
+    public static let coachAdherenceCooldownDays = 5
+
+    /// Session drift: sessions compared (most recent) against the baseline window just before them.
+    public static let coachDriftRecentSessions = 4
+    public static let coachDriftBaselineSessions = 8
+    /// Session drift: a drop of this fraction in either completed/planned-set ratio or average
+    /// session duration counts as drift.
+    public static let coachDriftDropFraction = 0.25
+    public static let coachDriftCooldownDays = 5
+
+    /// Muscle coverage: the rolling window the caller's sets-per-muscle map already covers, and
+    /// the floor below which a muscle counts as a coverage gap.
+    public static let coachCoverageWindowDays = 14
+    public static let coachMinSetsPerMuscleInWindow = 4.0
+    public static let coachCoverageCooldownDays = 7
+    /// Muscle coverage: at most this many gap muscles are named in one card.
+    public static let coachCoverageMaxNamedMuscles = 3
+
+    /// Stalled lift: consecutive missed sessions at the same weight (from the lift's own
+    /// `StallState.consecutiveMisses`) before the per-lift card fires. Same bar as
+    /// `linearMissesBeforeDeload` — it's the same "stopped moving" signal, just surfaced per lift
+    /// rather than folded into the holistic deload call.
+    public static let coachStalledLiftMisses = linearMissesBeforeDeload
+    public static let coachStalledLiftCooldownDays = 7
+
+    /// e1RM downtrend: the trailing session count the trend is judged over, and how far the most
+    /// recent e1RM must sit below the window's peak.
+    public static let coachE1rmDowntrendSessions = 4
+    public static let coachE1rmDowntrendFraction = 0.05
+    public static let coachE1rmDowntrendCooldownDays = 7
+
+    /// Deload overdue: `DeloadDetector.evaluate` already carries its own thresholds — this is
+    /// just how long a dismissed/approved suggestion stays quiet.
+    public static let coachDeloadCooldownDays = 10
+
+    /// Struggling exercise: consecutive failed/skipped sessions before a substitution is offered.
+    public static let coachStrugglingConsecutiveFailures = 2
+    public static let coachSubstitutionCooldownDays = 7
+
+    /// Recovery debt: a muscle at or above this "spent" score (`Recovery.map` scale, 0…1) counts
+    /// toward the debt; at least this many such muscles at once fires the card.
+    public static let coachRecoveryDebtThreshold = 0.75
+    public static let coachRecoveryDebtMinMuscles = 2
+    public static let coachRecoveryDebtCooldownDays = 3
+
+    /// PR / milestone: how recent an achievement or PR must be to still be worth a card.
+    public static let coachHighlightLookbackDays = 3.0
+    public static let coachHighlightCooldownDays = 1
+
+    /// Long layoff: days since the last logged workout before a "return to training" card fires.
+    public static let coachLayoffMinDays = 10.0
+    public static let coachLayoffCooldownDays = 14
+    /// Long layoff: the working weight fraction suggested for the first session back.
+    public static let coachLayoffEaseBackFraction = 0.8
+}

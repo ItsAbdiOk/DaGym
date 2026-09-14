@@ -2,7 +2,7 @@ import Foundation
 
 /// The 14 named body-map regions. Drives the "muscles hit" thumbnail, the
 /// live workout map and the recovery heatmap.
-public enum Muscle: String, CaseIterable, Codable, Sendable, Identifiable {
+public enum Muscle: String, CaseIterable, Codable, Hashable, Sendable, Identifiable {
     case traps, delts, chest, abs, obliques, biceps, forearms, quads, calves
     case lats, triceps, lowerBack, glutes, hams
 

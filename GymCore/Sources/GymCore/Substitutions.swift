@@ -37,13 +37,16 @@ public enum SwapReason: Hashable, Sendable {
     case painArea(Muscle)
     case shoulderHurts
     case shortOnTime
+    /// The lifter keeps missing or failing this exercise (CoachEngine's struggling-lift rule) —
+    /// no equipment exclusion or pain steer, just the same-muscle/mechanic scoring.
+    case strugglingWithExercise
 
     /// The equipment kind this reason rules out entirely, when it names one.
     var excludedEquipment: String? {
         switch self {
         case .machineTaken: "machine"
         case .noBarbell: "barbell"
-        case .painArea, .shoulderHurts, .shortOnTime: nil
+        case .painArea, .shoulderHurts, .shortOnTime, .strugglingWithExercise: nil
         }
     }
 
@@ -53,7 +56,7 @@ public enum SwapReason: Hashable, Sendable {
         switch self {
         case .painArea(let muscle): muscle
         case .shoulderHurts: .delts
-        case .machineTaken, .noBarbell, .shortOnTime: nil
+        case .machineTaken, .noBarbell, .shortOnTime, .strugglingWithExercise: nil
         }
     }
 }
@@ -156,7 +159,7 @@ public enum Substitutions {
                 adjustment += painAvoidanceBonus
             }
             return adjustment
-        case .machineTaken, .noBarbell:
+        case .machineTaken, .noBarbell, .strugglingWithExercise:
             return 0
         }
     }
@@ -192,6 +195,8 @@ public enum Substitutions {
             return "Same \(muscleName), stays compound"
         case .machineTaken, .noBarbell:
             return "Same \(muscleName), \(candidate.equipment) only"
+        case .strugglingWithExercise:
+            return "Same \(muscleName), a change of stimulus"
         }
     }
 }

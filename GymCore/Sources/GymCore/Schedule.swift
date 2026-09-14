@@ -2,7 +2,7 @@ import Foundation
 
 /// A day of the week, numbered to match `Calendar.component(.weekday, from:)`
 /// (Sunday = 1 … Saturday = 7) so lookups never need a translation table.
-public enum Weekday: Int, CaseIterable, Codable, Sendable {
+public enum Weekday: Int, CaseIterable, Codable, Hashable, Sendable {
     case sunday = 1
     case monday = 2
     case tuesday = 3
