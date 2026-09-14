@@ -155,7 +155,11 @@ private struct CandidateRow: View {
 
     var body: some View {
         HStack(spacing: DGSpace.s3) {
-            BodyMapView(side: .front, mode: .hit, intensity: exercise.hitMap)
+            BodyMapView(
+                side: BodyMapMuscleMapping.thumbnailSide(forPrimary: exercise.primary),
+                mode: .hit,
+                intensity: exercise.hitMap
+            )
                 .padding(6)
                 .frame(width: 40, height: 40)
                 .background(

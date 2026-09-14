@@ -62,7 +62,8 @@ enum RoutineSeeder {
     /// the store still has routines but none of these, so deleting one (or all) stays deleted.
     private static func seedProgramRoutinesIfMissing(store: WorkoutStore) {
         let programIDs = Set(programRoutineNames.compactMap { starterIDs[$0] })
-        let models = (try? store.context.fetch(FetchDescriptor<RoutineModel>())) ?? []
+        let all = (try? store.context.fetch(FetchDescriptor<RoutineModel>())) ?? []
+        let models = all.filter { !$0.isMergedAway }
         guard !models.isEmpty else { return }
         let existingNames = Set(models.map(\.name))
         let alreadyThere = models.contains { $0.importedFromID.map(programIDs.contains) ?? false }
@@ -303,21 +304,89 @@ extension WorkoutStore {
             }
         }
         var replacements: [UUID: UUID] = [:]
+        var folded = 0
         for group in byImportID.values where group.count > 1 {
-            let ordered = group.sorted { lhs, rhs in
-                if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
-                return lhs.id.uuidString < rhs.id.uuidString
-            }
+            let ordered = group.sorted(by: Self.routineSurvivesFirst)
             let survivor = ordered[0]
+            survivor.mergedIntoID = nil
+            survivor.mergedAt = nil
             for duplicate in ordered.dropFirst() {
                 replacements[duplicate.id] = survivor.id
-                context.delete(duplicate)
+                if foldRoutine(duplicate, into: survivor) { folded += 1 }
             }
         }
-        guard !replacements.isEmpty else { return 0 }
-        repointRoutineReferences(replacements)
-        save()
-        return replacements.count
+        let swept = sweepRoutineTombstones(models)
+        if !replacements.isEmpty { repointRoutineReferences(replacements) }
+        if folded + swept > 0 || context.hasChanges { save() }
+        return folded + swept
+    }
+
+    private static func routineSurvivesFirst(_ lhs: RoutineModel, _ rhs: RoutineModel) -> Bool {
+        if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
+        return lhs.id.uuidString < rhs.id.uuidString
+    }
+
+    /// Tombstones `duplicate` rather than deleting it, for the same reason
+    /// `ExerciseSeeder.dedupe` does: CloudKit delivers a routine's slots after the routine, and
+    /// a hard delete left the other device's slots parentless *and* synced the delete back.
+    /// The loser's slots are merged into the survivor's — see `mergeProgressionState` — and
+    /// then removed, so the tombstone eventually becomes childless and sweepable.
+    /// Returns whether anything changed, so a settled tombstone stops counting as work.
+    private func foldRoutine(_ duplicate: RoutineModel, into survivor: RoutineModel) -> Bool {
+        let merged = mergeProgressionState(from: duplicate.exercises ?? [], into: survivor)
+        let changed = duplicate.mergedIntoID != survivor.id || merged
+        // The loser's slots are left attached to the tombstone rather than deleted, exactly as
+        // `ExerciseSeeder.dedupe` leaves a loser alive: they are the only record of that
+        // device's progression until a later pass has merged it, and deleting them through a
+        // `.cascade` parent is both destructive and a CloudKit delete that syncs back.
+        duplicate.mergedIntoID = survivor.id
+        if duplicate.mergedAt == nil { duplicate.mergedAt = Date() }
+        return changed
+    }
+
+    /// Carries each losing slot's engine memory (`stallJSON`, `trainingMaxKg`) onto the
+    /// survivor's slot for the same exercise, when the survivor's slot has none.
+    ///
+    /// `WorkoutStore.persistProgression` writes those two fields without touching
+    /// `RoutineModel.updatedAt`, so a device that trained five times can easily look "older"
+    /// than a device that merely renamed the routine — and used to lose every stall streak and
+    /// rolling training max to it.
+    /// Returns whether anything was actually written, so a settled tombstone stops counting as
+    /// work on every remote-change pass.
+    @discardableResult
+    private func mergeProgressionState(
+        from slots: [RoutineExerciseModel], into survivor: RoutineModel
+    ) -> Bool {
+        let survivorSlots = survivor.exercises ?? []
+        var merged = false
+        for slot in slots {
+            guard let exerciseID = slot.exercise?.id,
+                  let target = survivorSlots.first(where: { $0.exercise?.id == exerciseID })
+            else { continue }
+            if target.stallJSON.isEmpty || target.stallJSON == "{}", slot.stallJSON != target.stallJSON {
+                target.stallJSON = slot.stallJSON
+                merged = true
+            }
+            if target.trainingMaxKg == nil, slot.trainingMaxKg != nil {
+                target.trainingMaxKg = slot.trainingMaxKg
+                merged = true
+            }
+        }
+        return merged
+    }
+
+    /// Deletes routine tombstones that have been merged for longer than
+    /// `ExerciseSeeder.tombstoneGracePeriod` and have had no slots arrive since.
+    private func sweepRoutineTombstones(_ models: [RoutineModel]) -> Int {
+        let cutoff = Date().addingTimeInterval(-ExerciseSeeder.tombstoneGracePeriod)
+        var swept = 0
+        for model in models {
+            guard model.isMergedAway, let mergedAt = model.mergedAt, mergedAt < cutoff,
+                  (model.exercises ?? []).isEmpty else { continue }
+            context.delete(model)
+            swept += 1
+        }
+        return swept
     }
 
     private func repointRoutineReferences(_ replacements: [UUID: UUID]) {
@@ -331,20 +400,33 @@ extension WorkoutStore {
         for program in programs where program.routineIDs.contains(where: { replacements[$0] != nil }) {
             program.routineIDs = program.routineIDs.map { replacements[$0] ?? $0 }
         }
+        // Walked over the list-valued storage, not the single-routine `days`/`overrides` views:
+        // those only ever see (and only ever write) a day's *first* routine, so a day planned
+        // "Push A + Arms" used to lose "Arms" the moment "Push A" folded. Duplicates that
+        // collapse onto the same survivor within one day are also removed.
         var schedule = schedule()
         var changed = false
-        for (day, routineID) in schedule.days {
-            if let survivor = replacements[routineID] {
-                schedule.days[day] = survivor
+        for (day, routineIDs) in schedule.dayRoutines {
+            let mapped = Self.repointed(routineIDs, replacements)
+            if mapped != routineIDs {
+                schedule.dayRoutines[day] = mapped.isEmpty ? nil : mapped
                 changed = true
             }
         }
-        for (key, routineID) in schedule.overrides {
-            if let routineID, let survivor = replacements[routineID] {
-                schedule.overrides[key] = survivor
+        for (key, routineIDs) in schedule.dateOverrides {
+            let mapped = Self.repointed(routineIDs, replacements)
+            if mapped != routineIDs {
+                schedule.dateOverrides[key] = mapped
                 changed = true
             }
         }
         if changed { saveSchedule(schedule) }
+    }
+
+    /// `routineIDs` with every folded routine swapped for its survivor, order preserved and
+    /// any duplicate the swap created collapsed to its first occurrence.
+    private static func repointed(_ routineIDs: [UUID], _ replacements: [UUID: UUID]) -> [UUID] {
+        var seen: Set<UUID> = []
+        return routineIDs.map { replacements[$0] ?? $0 }.filter { seen.insert($0).inserted }
     }
 }

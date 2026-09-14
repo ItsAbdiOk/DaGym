@@ -69,18 +69,39 @@ struct AppRootContainer: View {
                 // A `-dgUITest` launch always wins, though: it must land on the seeded in-memory
                 // store even if the XCTest environment `isUnitTestHost` sniffs for leaks in.
                 AmbientWash()
-            } else if let container {
+            } else if let container, storeIsUsable {
                 launchContent(container: container)
             } else {
-                ZStack {
-                    AmbientWash()
-                    EmptyState(
-                        symbol: "exclamationmark.triangle",
-                        title: "Storage Unavailable",
-                        message: "DaGym couldn't open its database. Try relaunching the app."
-                    )
-                }
+                storageUnavailable
             }
+        }
+    }
+
+    /// False when the store that opened is not durable — either nothing opened at all, or the
+    /// on-disk store failed and `ContainerProvider` substituted a throwaway in-memory one.
+    ///
+    /// That substitution used to be invisible: the app seeded the empty in-memory store and
+    /// looked exactly like a fresh install, so a lifter could train into it for a week and lose
+    /// every session the moment the process was killed. A `-dgUITest` run is the one case where
+    /// an in-memory store is the point, so it is allowed through.
+    private var storeIsUsable: Bool {
+        guard !LaunchFlags.isTesting else { return true }
+        return ContainerProvider.shared.mainResolution?.isDurable ?? false
+    }
+
+    private var storageUnavailable: some View {
+        ZStack {
+            AmbientWash()
+            EmptyState(
+                symbol: "exclamationmark.triangle",
+                title: "Your Data Couldn't Be Opened",
+                message: """
+                    DaGym found its database but couldn't open it, so it hasn't started. \
+                    Your training history is still on this device — nothing has been deleted. \
+                    Try relaunching; if that doesn't help, restart your iPhone before \
+                    reinstalling, since reinstalling would remove the local copy.
+                    """
+            )
         }
     }
 
@@ -127,8 +148,14 @@ struct AppRootContainer: View {
         guard let store = provider.store(cloudKitEnabled: preferences.iCloudSyncEnabled) else { return }
         ExerciseSeeder.seedIfNeeded(context: store.context)
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
-        EquipmentSeeder.seedIfNeeded(store: store)
+        EquipmentSeeder.seedIfNeeded(store: store, unit: preferences.weightUnit)
         store.dedupeSeededRows()
+        // Warm-ups round onto the lifter's own rack, not a bare increment. `WorkoutSession`
+        // is store-free, so this is where the two are introduced — before any session exists.
+        WorkoutSession.defaultWarmupGrid = { [weak store] exercise in
+            guard let store else { return .step(max(exercise.incrementKg, 0.5)) }
+            return store.loadGrid(for: exercise, equipment: store.activeEquipment())
+        }
         // One-time repair: the first Apple Health build wrote HealthKit-derived rows into the
         // CloudKit-mirrored main store. Move/clear them — App Store Guideline 5.1.3.
         store.purgeHealthDerivedRowsFromMainStore()

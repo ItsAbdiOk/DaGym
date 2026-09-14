@@ -139,7 +139,7 @@ struct BodySeriesTests {
         #expect(series[0].volumeKg == 1000)
     }
 
-    @Test("sets per muscle counts primary at 1 and secondary at 0.5, within the day window")
+    @Test("sets per muscle counts primary at 1 and secondary at the shared share, within the day window")
     func setsPerMuscleWeighting() {
         let now = Date()
         let workouts = [
@@ -155,7 +155,7 @@ struct BodySeriesTests {
         ]
         let result = BodySeries.setsPerMuscle(workouts: workouts, days: 7, now: now, calendar: calendar)
         #expect(result[.chest] == 2)
-        #expect(result[.triceps] == 1)
+        #expect(result[.triceps] == 2 * SessionStats.secondaryMuscleShare)
     }
 
     @Test("sets per muscle excludes workouts outside the day window")

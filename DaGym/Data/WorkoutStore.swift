@@ -154,8 +154,13 @@ final class WorkoutStore {
         }
     }
 
+    /// `mergedIntoID == nil` throughout: a row that lost a seed fold is a tombstone kept only
+    /// so late-arriving CloudKit children still resolve (`ExerciseSeeder.dedupe`), and must
+    /// never be handed to a caller as if it were a real library exercise.
     func fetchExerciseModel(id: UUID) -> ExerciseModel? {
-        var descriptor = FetchDescriptor<ExerciseModel>(predicate: #Predicate { $0.id == id })
+        var descriptor = FetchDescriptor<ExerciseModel>(
+            predicate: #Predicate { $0.id == id && $0.mergedIntoID == nil }
+        )
         descriptor.fetchLimit = 1
         return fetchFirst(descriptor)
     }
@@ -166,7 +171,9 @@ final class WorkoutStore {
     func fetchExerciseModels(ids: Set<UUID>) -> [UUID: ExerciseModel] {
         guard !ids.isEmpty else { return [:] }
         let wanted = Array(ids)
-        let descriptor = FetchDescriptor<ExerciseModel>(predicate: #Predicate { wanted.contains($0.id) })
+        let descriptor = FetchDescriptor<ExerciseModel>(
+            predicate: #Predicate { wanted.contains($0.id) && $0.mergedIntoID == nil }
+        )
         return Dictionary(fetch(descriptor).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
@@ -177,7 +184,9 @@ final class WorkoutStore {
     }
 
     func fetchRoutineModel(id: UUID) -> RoutineModel? {
-        var descriptor = FetchDescriptor<RoutineModel>(predicate: #Predicate { $0.id == id })
+        var descriptor = FetchDescriptor<RoutineModel>(
+            predicate: #Predicate { $0.id == id && $0.mergedIntoID == nil }
+        )
         descriptor.fetchLimit = 1
         return fetchFirst(descriptor)
     }

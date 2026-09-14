@@ -37,7 +37,6 @@ struct HomeSnapshot {
         let streak = Streaks.weekly(
             workoutDates: store.workoutDates(), weeklyGoal: weeklyGoal, calendar: calendar, now: now
         )
-        let since = calendar.date(byAdding: .day, value: -7, to: now) ?? now
         let latest = store.latestBodyMeasurement()
         let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: now) ?? now
         let past = latest.flatMap { _ in store.latestBodyMeasurement(asOf: thirtyDaysAgo) }
@@ -52,7 +51,10 @@ struct HomeSnapshot {
             streakCurrent: streak.current,
             streakLongest: streak.longest,
             thisWeekCount: streak.thisWeekCount,
-            recoveryMap: Recovery.map(events: store.recoveryEvents(since: since), now: now),
+            // Same window and same calendar as the Recovery screen and the coach — Home used
+            // to build its own 7-day slice, so one muscle read two different numbers on two
+            // screens (and the Recovery screen's copy claimed a third window).
+            recoveryMap: store.recoveryMap(now: now, calendar: calendar),
             deloadSuggestion: store.deloadSuggestion(
                 snoozedUntil: preferences.deloadSnoozedUntil, weeklyGoal: weeklyGoal, now: now,
                 calendar: calendar

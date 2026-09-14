@@ -114,6 +114,8 @@ struct HistoryTabView: View {
         updated.moved(date: newDate, toRoutines: routineIDs)
         store.saveSchedule(updated)
         WidgetSnapshotWriter.refresh(store: store, preferences: preferences)
+        // Same reason as `ScheduleView.persist`: the moved day's reminder has to move with it.
+        TrainingNotificationScheduler().rescheduleAll(store: store, preferences: preferences)
         refresh()
     }
 

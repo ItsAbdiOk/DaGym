@@ -253,4 +253,22 @@ struct FeatureWorkoutTests {
         let result = PlateCalculator.load(target: 21, bar: .olympic)
         #expect(PlateChip.text(for: result, format: format) == "Bar 20 · nearest 20 / 22.5")
     }
+
+    // MARK: keypad step
+
+    @Test("a kg lifter keeps the exercise's own increment")
+    func keypadStepKg() {
+        #expect(KeypadStep.kg(2.5, unit: .kg) == 2.5)
+        #expect(KeypadStep.kg(5, unit: .kg) == 5)
+        #expect(KeypadStep.kg(1, unit: nil) == 1)
+    }
+
+    @Test("a lb lifter steps by whole 2.5 lb, not by 5.5 lb")
+    func keypadStepLb() {
+        // 2.5 kg is 5.51 lb: stepping by it walks the lifter off every round pound.
+        #expect(abs(WeightUnit.lb.display(kg: KeypadStep.kg(2.5, unit: .lb)) - 5) < 0.01)
+        #expect(abs(WeightUnit.lb.display(kg: KeypadStep.kg(5, unit: .lb)) - 10) < 0.01)
+        // Never smaller than the lightest pair an lb rack can build.
+        #expect(abs(WeightUnit.lb.display(kg: KeypadStep.kg(0.5, unit: .lb)) - 2.5) < 0.01)
+    }
 }

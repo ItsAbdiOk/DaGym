@@ -10,10 +10,17 @@ import Foundation
 /// when one exists, matching how most lifters read an unqualified name.
 public enum ImportAliases {
     /// The seed exercise id for `name`, or `nil` when it isn't one of the curated common names.
+    ///
+    /// A name that *names its equipment* is only ever answered with that equipment's variant:
+    /// "Squat (Bodyweight)", "Deadlift (Dumbbell)" and "Bicep Curl (Cable)" have no entry here, so
+    /// they fall through to fuzzy matching (and, failing that, a custom exercise) rather than
+    /// collapsing onto the barbell seed — which would merge a different lift's history into the
+    /// barbell one and hand it the barbell's personal records. Only an *unqualified* name ("Squat",
+    /// bare "Bicep Curl") takes the barbell default, which is how most lifters read it.
     public static func seedID(for name: String) -> String? {
         let (base, qualifier) = normalised(name)
         guard let entry = table[base] else { return nil }
-        if let qualifier, let id = entry[qualifier] { return id }
+        if let qualifier { return entry[qualifier] }
         if let barbell = entry["barbell"] { return barbell }
         return entry.keys.min().flatMap { entry[$0] }
     }
@@ -30,11 +37,21 @@ public enum ImportAliases {
             return (text.lowercased(), nil)
         }
         text = String(text[..<open]).trimmingCharacters(in: .whitespaces)
-        return (text.lowercased(), inside)
+        return (text.lowercased(), canonicalQualifier(inside))
+    }
+
+    /// Folds spelling variants of the same equipment onto the key the table uses, so
+    /// "(EZ Bar)" and "(EZ-Bar)" both find the `ezbar` entry.
+    private static func canonicalQualifier(_ qualifier: String) -> String {
+        switch qualifier {
+        case "ez bar", "ez-bar": "ezbar"
+        default: qualifier
+        }
     }
 
     private static let knownQualifiers: Set<String> = [
-        "barbell", "dumbbell", "machine", "cable", "kettlebell", "bodyweight", "ezbar", "ez bar"
+        "barbell", "dumbbell", "machine", "cable", "kettlebell", "bodyweight", "ezbar", "ez bar",
+        "ez-bar", "smith", "band", "assisted", "weighted"
     ]
 
     /// normalised(unqualified name) → equipment qualifier → seed id.

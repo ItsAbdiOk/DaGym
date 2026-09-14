@@ -25,7 +25,10 @@ struct RecoveryMapView: View {
                     mapCard
                     healthContextCard
                     muscleList
-                    BalanceSection(untrainedMuscles: snapshot.untrainedMuscles)
+                    BalanceSection(
+                        untrainedMuscles: snapshot.untrainedMuscles,
+                        restedMuscles: snapshot.detrainedMuscles
+                    )
                 }
                 .padding(.horizontal, DGSpace.s4)
                 .padding(.top, DGSpace.s3)
@@ -44,7 +47,8 @@ struct RecoveryMapView: View {
     }
 
     private func refresh() async {
-        snapshot = store.recoverySnapshot()
+        // Same calendar Home and the coach use, so the same muscle can't read two ways.
+        snapshot = store.recoverySnapshot(calendar: preferences.trainingCalendar)
         recoverySignals = await healthInsights.recoverySignals()
     }
 
@@ -54,7 +58,7 @@ struct RecoveryMapView: View {
                 .font(DGFont.title1)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
-            Text("Fresh → spent · based on the last 7 days")
+            Text("Fresh → spent · based on the last \(WorkoutStore.recoveryWindowDays) days")
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
         }
@@ -162,39 +166,80 @@ private struct MuscleListRow: View {
         return DGColor.recovery[min(4, max(0, index))]
     }
 
-    private var statusLabel: String {
-        guard let recoveredBy = recovery.recoveredBy else { return "Fresh" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE HH:mm"
-        return "Recovered by \(formatter.string(from: recoveredBy))"
-    }
+    private var statusLabel: String { recovery.easesOffLabel }
 }
 
-/// "Not trained this week" tag row, computed from the snapshot's untrained muscles.
+/// What hasn't been trained: the "not this week" tags, plus the graded longest-without-work
+/// list the snapshot already computes. Strictly descriptive — how long it has been, never a
+/// claim about what that time off has done to the lifter.
 private struct BalanceSection: View {
     var untrainedMuscles: [Muscle]
+    var restedMuscles: [MuscleRetention]
+
+    /// Enough to be useful, short enough that a lifter two weeks off training doesn't get a
+    /// wall of every muscle they own.
+    private static let maxListed = 4
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
             Text("Balance").dgLabel()
-            if untrainedMuscles.isEmpty {
-                Text("Every muscle group has seen work this week.")
+            thisWeek
+            if !listed.isEmpty { longestWithoutWork }
+        }
+        .dgCard()
+    }
+
+    @ViewBuilder
+    private var thisWeek: some View {
+        if untrainedMuscles.isEmpty {
+            Text("Every muscle group has seen work this week.")
+                .font(DGFont.subhead)
+                .foregroundStyle(DGColor.ink3)
+        } else {
+            VStack(alignment: .leading, spacing: DGSpace.s2) {
+                Text("Not trained this week")
                     .font(DGFont.subhead)
                     .foregroundStyle(DGColor.ink3)
-            } else {
-                VStack(alignment: .leading, spacing: DGSpace.s2) {
-                    Text("Not trained this week")
-                        .font(DGFont.subhead)
-                        .foregroundStyle(DGColor.ink3)
-                    RecoveryFlowLayout(spacing: DGSpace.s2) {
-                        ForEach(untrainedMuscles) { muscle in
-                            DGTag(text: muscle.displayName)
-                        }
+                RecoveryFlowLayout(spacing: DGSpace.s2) {
+                    ForEach(untrainedMuscles) { muscle in
+                        DGTag(text: muscle.displayName)
                     }
                 }
             }
         }
-        .dgCard()
+    }
+
+    /// Only muscles this lifter has actually trained at some point: one they have never trained
+    /// has nothing to say beyond the "not trained this week" tag it already carries, and a brand
+    /// new account would otherwise get a list of four "No sets logged" rows.
+    private var listed: [MuscleRetention] {
+        Array(restedMuscles.filter { $0.lastTrained != nil }.prefix(Self.maxListed))
+    }
+
+    private var longestWithoutWork: some View {
+        VStack(alignment: .leading, spacing: DGSpace.s2) {
+            Text("Longest without work")
+                .font(DGFont.subhead)
+                .foregroundStyle(DGColor.ink3)
+            ForEach(listed) { rested in
+                HStack {
+                    Text(rested.muscle.displayName)
+                        .font(DGFont.body)
+                        .foregroundStyle(DGColor.ink2)
+                    Spacer()
+                    Text(Self.sinceLabel(rested.lastTrained))
+                        .font(DGFont.footnote)
+                        .foregroundStyle(DGColor.ink3)
+                }
+                .frame(height: 28)
+            }
+        }
+    }
+
+    /// "3 weeks ago" / "18 days ago" / "No sets logged" — the fact, not an interpretation of it.
+    static func sinceLabel(_ lastTrained: Date?) -> String {
+        guard let lastTrained else { return "No sets logged" }
+        return lastTrained.formatted(.relative(presentation: .numeric))
     }
 }
 

@@ -10,7 +10,14 @@ extension ProgressionEngine {
         guard let baseline = context.baseline else { return context.firstTimePrescribed() }
         let workingSets = context.baselineWorkingSets
         guard !workingSets.isEmpty else { return context.firstTimePrescribed() }
-        let assistanceKg = workingSets.first?.assistanceKg ?? 0
+        // `weightKg` mirrors the assistance for this rule and is the field the log screen
+        // actually writes, so a lifter who retypes the weight has said what the assistance
+        // really was. `assistanceKg` is only trusted when there is no mirrored weight at all
+        // (an import, or a row logged before the mirror existed) — read first, it went stale
+        // the moment the number on the row was edited, and the rule then stepped down from a
+        // weight the lifter never used.
+        let logged = workingSets.first
+        let assistanceKg = (logged?.weightKg ?? 0) > 0 ? (logged?.weightKg ?? 0) : (logged?.assistanceKg ?? 0)
         let summary = performanceSummary(workingSets)
         let check = setsHitTarget(workingSets: workingSets, planned: context.planned)
         let hit = check == .hit || check == .rpeOver

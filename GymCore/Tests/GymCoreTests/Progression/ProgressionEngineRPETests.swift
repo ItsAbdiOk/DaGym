@@ -15,7 +15,8 @@ struct ProgressionEngineRPETests {
             rule: .rpeBased(targetRPE: 8), planned: planned, history: [entry], stall: StallState()
         )
         // Same reps/RPE in and out -> the load should come back to ~100, rounded to the grid.
-        let expected = WeightRounding.nearest(100, bar: .olympic, plates: PlateStock.standardKg, collarsKg: 0)
+        let grid = LoadGrid.plates(bar: .olympic, plates: PlateStock.standardKg, collarsKg: 0)
+        let expected = grid.nearest(100)
         #expect(result.sets.allSatisfy { $0.weightKg == expected })
     }
 

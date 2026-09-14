@@ -74,6 +74,19 @@ public struct StallState: Hashable, Codable, Sendable {
     /// Bodyweight rule: the plan's target when `lastTargetReps` was set. A plan that
     /// has since been edited outranks the engine's memory.
     public var lastPlanTargetReps: Int?
+    /// Bodyweight rule: how many working sets the lifter was actually asked for last
+    /// session. The plan's own set count never moves, so without this the "+1 set" rung
+    /// was re-proposed for ever and `maxSets` was unreachable.
+    public var lastTargetSets: Int?
+    /// Bodyweight rule: the plan's working-set count when `lastTargetSets` was set. A
+    /// plan that has since been re-sized outranks the engine's memory.
+    public var lastPlanTargetSets: Int?
+    /// The plan's working target weight the last time the engine judged this lift. A plan
+    /// target that has *changed* since outranks the engine for one session; a routine save
+    /// that left the target alone (a rename, a reorder, a glyph, a superset change) must
+    /// not. Keyed on the number rather than on `RoutineModel.updatedAt`, which every save
+    /// bumps — see `WorkoutStore.planOverridesPrescription`.
+    public var lastPlanTargetWeightKg: Double?
     /// Percent/TM rule: the `cycleIndex` the training max was last bumped in, so a
     /// bump happens once per cycle rather than on every week-1 call.
     public var trainingMaxCycle: Int?
@@ -81,7 +94,9 @@ public struct StallState: Hashable, Codable, Sendable {
     public init(
         consecutiveMisses: Int = 0, lastWeightKg: Double? = nil, lastWeakestReps: Int? = nil,
         bestWeakestReps: Int? = nil, lastTargetSeconds: Int? = nil, lastPlanTargetSeconds: Int? = nil,
-        lastTargetReps: Int? = nil, lastPlanTargetReps: Int? = nil, trainingMaxCycle: Int? = nil
+        lastTargetReps: Int? = nil, lastPlanTargetReps: Int? = nil, lastTargetSets: Int? = nil,
+        lastPlanTargetSets: Int? = nil, lastPlanTargetWeightKg: Double? = nil,
+        trainingMaxCycle: Int? = nil
     ) {
         self.consecutiveMisses = consecutiveMisses
         self.lastWeightKg = lastWeightKg
@@ -91,6 +106,9 @@ public struct StallState: Hashable, Codable, Sendable {
         self.lastPlanTargetSeconds = lastPlanTargetSeconds
         self.lastTargetReps = lastTargetReps
         self.lastPlanTargetReps = lastPlanTargetReps
+        self.lastTargetSets = lastTargetSets
+        self.lastPlanTargetSets = lastPlanTargetSets
+        self.lastPlanTargetWeightKg = lastPlanTargetWeightKg
         self.trainingMaxCycle = trainingMaxCycle
     }
 

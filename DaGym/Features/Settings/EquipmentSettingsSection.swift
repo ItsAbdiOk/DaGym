@@ -7,6 +7,7 @@ import SwiftUI
 /// stores and edits the profiles.
 struct EquipmentSettingsSection: View {
     @Environment(WorkoutStore.self) private var store
+    @Environment(Preferences.self) private var preferences
 
     @State private var profiles: [EquipmentProfileInfo] = []
     @State private var editingProfile: EquipmentProfileInfo?
@@ -36,6 +37,7 @@ struct EquipmentSettingsSection: View {
                 onDelete: isNewProfile ? nil : { store.deleteProfile(id: profile.id); refresh() }
             )
             .environment(store)
+            .environment(preferences)
         }
     }
 
@@ -46,7 +48,8 @@ struct EquipmentSettingsSection: View {
             Button {
                 isNewProfile = true
                 editingProfile = EquipmentProfileInfo(
-                    id: UUID(), name: "New Profile", isActive: false, barKg: 20,
+                    id: UUID(), name: "New Profile", isActive: false,
+                    barKg: preferences.weightUnit.defaultBar.weightKg,
                     availableEquipment: [], plateStock: [], collarsKg: 0
                 )
             } label: {
@@ -96,6 +99,7 @@ struct EquipmentSettingsSection: View {
                     .padding(DGSpace.s4)
             }
             .environment(store)
+            .environment(Preferences())
             .background(AmbientWash())
         )
     }

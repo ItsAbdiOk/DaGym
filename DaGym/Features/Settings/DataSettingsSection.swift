@@ -20,6 +20,9 @@ struct DataSettingsSection: View {
     @State private var errorMessage: String?
     @State private var confirmationMessage: String?
     @State private var showingResetConfirm = false
+    @State private var exportWarning: String?
+    /// The finished import's report, so its problems stay readable after the sheet is dismissed.
+    @State private var completedReport: ImportReport?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
@@ -73,6 +76,13 @@ struct DataSettingsSection: View {
 
     private func performReset() {
         store.wipeAllData(preferences: preferences)
+        // The wipe deletes every `ExerciseModel`, and seeding otherwise only happens at launch —
+        // so without this the app is left with an empty library until the next cold start, and
+        // anything imported in the meantime (a backup, a CSV) resolves against nothing.
+        BackupService.ensureExerciseLibrary(context: store.context)
+        store.save()
+        completedReport = nil
+        exportWarning = nil
         confirmationMessage = "Everything was reset"
     }
 
@@ -100,14 +110,42 @@ struct DataSettingsSection: View {
 
     @ViewBuilder
     private var footnote: some View {
-        if let confirmationMessage {
-            Text(confirmationMessage)
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.success)
-        } else {
-            Text("Backups include routines, workouts, custom exercises and equipment profiles.")
+        VStack(alignment: .leading, spacing: DGSpace.s2) {
+            if let confirmationMessage {
+                Text(confirmationMessage)
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.success)
+            } else {
+                Text(
+                    "Backups include routines, workouts, custom exercises, equipment profiles, "
+                        + "progress photos and your settings."
+                )
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink4)
+            }
+            if let exportWarning {
+                Text(exportWarning).font(DGFont.footnote).foregroundStyle(DGColor.ink3)
+            }
+            problemsFootnote
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Every problem the finished import reported, listed — not summarised away. A user who is
+    /// told "12 workouts" while 300 rows were skipped has no way to know anything went wrong.
+    @ViewBuilder
+    private var problemsFootnote: some View {
+        if let problems = completedReport?.problems, !problems.isEmpty {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(problems.prefix(8), id: \.self) { problem in
+                    Text(problem).font(DGFont.footnote).foregroundStyle(DGColor.danger)
+                }
+                if problems.count > 8 {
+                    Text("…and \(problems.count - 8) more.")
+                        .font(DGFont.footnote)
+                        .foregroundStyle(DGColor.danger)
+                }
+            }
         }
     }
 
@@ -120,13 +158,21 @@ struct DataSettingsSection: View {
     private func prepareExport() async {
         isBusy = true
         defer { isBusy = false }
-        let document = BackupService.export(context: store.context)
+        let result = BackupService.exportResult(
+            context: store.context, photoContext: store.photoContext,
+            healthContext: store.healthContext, preferences: preferences
+        )
+        let document = result.document
         do {
             let data = try await Task.detached(priority: .userInitiated) {
                 try BackupCodec.encode(document)
             }.value
             exportDocument = BackupFileDocument(data: data)
             showingExporter = true
+            // Anything the export couldn't carry faithfully (history on a deleted exercise, a
+            // photo too large for one file) is said out loud rather than left for the user to
+            // discover on a restore.
+            exportWarning = result.problems.isEmpty ? nil : result.problems.joined(separator: " ")
         } catch {
             errorMessage = "Couldn't create the backup file."
         }
@@ -177,10 +223,18 @@ struct DataSettingsSection: View {
         }
     }
 
+    /// The report is what the user gets told. It used to be discarded and replaced with a flat
+    /// "Imported", so a restore that dropped hundreds of rows (every workout on a seeded exercise,
+    /// after a reset) read exactly like a clean one.
     private func confirmImport(_ document: BackupDocument) {
-        BackupService.import(document: document, context: store.context, mode: .merge)
+        let report = BackupService.import(
+            document: document, context: store.context, mode: .merge,
+            photoContext: store.photoContext, healthContext: store.healthContext,
+            preferences: preferences
+        )
         pendingImport = nil
-        confirmationMessage = "Imported"
+        completedReport = report
+        confirmationMessage = report.summary
     }
 }
 

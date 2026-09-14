@@ -20,9 +20,12 @@ struct EquipmentProfileView: View {
     @State private var availableEquipment: Set<String>
     @State private var plateRows: [PlateRowDraft] = []
 
-    /// `profile.plateStock` keyed by weight, so the unit-dependent standard plate list (set up
-    /// once `preferences` is available, in `.task`) can carry over the counts already saved.
-    private let existingPlateCounts: [Double: Int]
+    /// The plate sizes already saved on this profile, with their counts. Kept as a list rather
+    /// than a `[Double: Int]` because kg keys never match lb ones exactly (45 lb is
+    /// 20.4116… kg): an lb lifter opening the kg-seeded "Gym" found every count reading 0 and
+    /// silently wiped the profile's plates on Save. `plateRows` now shows the union of this
+    /// profile's own sizes and the standard set for the lifter's unit.
+    private let existingPlates: [PlateStock]
 
     init(profile: EquipmentProfileInfo, isNew: Bool = false, onDelete: (() -> Void)? = nil) {
         self.profile = profile
@@ -32,9 +35,7 @@ struct EquipmentProfileView: View {
         _barKg = State(initialValue: profile.barKg)
         _collarsKg = State(initialValue: profile.collarsKg)
         _availableEquipment = State(initialValue: Set(profile.availableEquipment))
-        existingPlateCounts = Dictionary(
-            profile.plateStock.map { ($0.weightKg, $0.count) }, uniquingKeysWith: +
-        )
+        existingPlates = profile.plateStock
     }
 
     var body: some View {
@@ -58,9 +59,10 @@ struct EquipmentProfileView: View {
         }
         .task {
             guard plateRows.isEmpty else { return }
-            plateRows = EquipmentStep.standardWeightsKg(for: preferences.weightUnit).map {
-                PlateRowDraft(weightKg: $0, count: existingPlateCounts[$0] ?? 0)
-            }
+            plateRows = EquipmentStep.rows(
+                standard: EquipmentStep.standardWeightsKg(for: preferences.weightUnit),
+                existing: existingPlates
+            ).map { PlateRowDraft(weightKg: $0.weightKg, count: $0.count) }
         }
     }
 
@@ -267,6 +269,26 @@ enum EquipmentStep {
     /// pound.
     static func stepKg(for unit: WeightUnit) -> Double {
         unit == .kg ? 0.5 : unit.toKg(1)
+    }
+
+    /// Two plate weights the editor should treat as the same row. Wide enough to absorb the
+    /// float drift of a pound value stored in kg, far narrower than any real plate gap.
+    static let sameSizeToleranceKg = 0.01
+
+    /// The rows the editor shows: this profile's own plate sizes plus the standard set for the
+    /// lifter's unit, heaviest first, each carrying the count already saved.
+    ///
+    /// Matching by exact kg value dropped every saved size that wasn't in the standard list for
+    /// the *current* unit, and Save then wrote the profile back without them. Taking the union
+    /// means an lb lifter can see and keep the kg plates a kg-seeded profile came with.
+    static func rows(standard: [Double], existing: [PlateStock]) -> [PlateStock] {
+        var rows = existing
+        for weight in standard where !rows.contains(where: {
+            abs($0.weightKg - weight) < sameSizeToleranceKg
+        }) {
+            rows.append(PlateStock(weightKg: weight, count: 0))
+        }
+        return rows.sorted { $0.weightKg > $1.weightKg }
     }
 }
 

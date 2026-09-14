@@ -17,6 +17,10 @@ final class Preferences {
     var effortScale: Effort.Scale {
         didSet { defaults.set(effortScale.rawValue, forKey: Key.effortScale) }
     }
+    /// The fallback rest used whenever an exercise carries no rest of its own, and the master
+    /// switch for the rest timer: `0` ("Off" in Settings) means no rest timer ever starts, for
+    /// any exercise. Honoured by `WorkoutSession.restSeconds(after:set:)` — the one place every
+    /// real rest comes from — and by the Control Center "Rest timer" intent.
     var defaultRestSeconds: Int {
         didSet { defaults.set(defaultRestSeconds, forKey: Key.defaultRestSeconds) }
     }
@@ -126,14 +130,6 @@ final class Preferences {
         }
     }
 
-    /// Whether progress photos should sync through iCloud (plan.md §6.4 "don't sync photos").
-    /// Off by default — photos are the most sensitive thing in the app, so they stay local unless
-    /// the user opts in. Read by `ModelContainer.dagym(...)`'s caller when choosing whether to
-    /// point the photo store's CloudKit database at anything (currently always `.none`; wiring
-    /// this preference through to the container is future work — see `WorkoutStore+Photos.swift`).
-    var syncPhotos: Bool {
-        didSet { defaults.set(syncPhotos, forKey: Key.syncPhotos) }
-    }
     /// Face ID gate in front of the progress-photos grid (`PhotoLockGate`). Off by default.
     var lockPhotos: Bool {
         didSet { defaults.set(lockPhotos, forKey: Key.lockPhotos) }
@@ -144,10 +140,11 @@ final class Preferences {
     var hasCompletedOnboarding: Bool {
         didSet { defaults.set(hasCompletedOnboarding, forKey: Key.hasCompletedOnboarding) }
     }
-    /// The training goal picked on the onboarding Goal step: "strength", "muscle" or "general".
-    /// Empty until the user picks one (onboarding always sets it before finishing).
-    var trainingGoal: String {
-        didSet { defaults.set(trainingGoal, forKey: Key.trainingGoal) }
+    /// The training goal picked on onboarding's Goal step and editable in Settings. Read by
+    /// `applyTrainingGoalDefaults()`, which is what makes the answer matter: each goal carries
+    /// the rest length and weekly session count its own subtitle promises.
+    var trainingGoal: TrainingGoal {
+        didSet { defaults.set(trainingGoal.rawValue, forKey: Key.trainingGoal) }
     }
     /// Home's "why a deload?" card hides itself until this date (plan.md §6.5's "Not now",
     /// a 7-day snooze). Nil means never snoozed.
@@ -157,19 +154,6 @@ final class Preferences {
                 defaults.set(deloadSnoozedUntil, forKey: Key.deloadSnoozedUntil)
             } else {
                 defaults.removeObject(forKey: Key.deloadSnoozedUntil)
-            }
-        }
-    }
-
-    /// The evidence fingerprint (`GymCore.DeloadSuggestion.fingerprint`) of the last deload
-    /// suggestion the user dismissed with "Not now" — suppresses that exact evidence from
-    /// reappearing while still surfacing a newer reason (plan.md §6.5, A4c).
-    var deloadDismissedFingerprint: String? {
-        didSet {
-            if let deloadDismissedFingerprint {
-                defaults.set(deloadDismissedFingerprint, forKey: Key.deloadDismissedFingerprint)
-            } else {
-                defaults.removeObject(forKey: Key.deloadDismissedFingerprint)
             }
         }
     }
@@ -188,11 +172,13 @@ final class Preferences {
     var compactWorkoutLayout: Bool {
         didSet { defaults.set(compactWorkoutLayout, forKey: Key.compactWorkoutLayout) }
     }
-    /// ± buttons around weight/reps on a set row, stepping by the exercise increment.
+    /// ± buttons around weight/reps on a set row, stepping by the exercise increment. Toggled
+    /// from the active workout's "…" menu, next to Compact layout.
     var showSetSteppers: Bool {
         didSet { defaults.set(showSetSteppers, forKey: Key.showSetSteppers) }
     }
-    /// The short rest a rest-pause burst starts instead of the exercise's full rest.
+    /// The short rest a rest-pause burst starts instead of the exercise's full rest. Set from
+    /// Settings' Rest Timer card.
     var restPauseSeconds: Int {
         didSet { defaults.set(restPauseSeconds, forKey: Key.restPauseSeconds) }
     }
@@ -306,14 +292,20 @@ final class Preferences {
         weeklyRecapEnabled = Self.boolValue(suite, Key.weeklyRecapEnabled, default: false)
         reminderHour = Self.intValue(suite, Key.reminderHour, default: 18)
         bodyweightGoalKg = suite.object(forKey: Key.bodyweightGoalKg) as? Double
-        syncPhotos = Self.boolValue(suite, Key.syncPhotos, default: false)
         lockPhotos = Self.boolValue(suite, Key.lockPhotos, default: false)
         hasCompletedOnboarding = Self.boolValue(suite, Key.hasCompletedOnboarding, default: false)
-        trainingGoal = suite.string(forKey: Key.trainingGoal) ?? ""
+        trainingGoal = TrainingGoal(rawValue: suite.string(forKey: Key.trainingGoal) ?? "") ?? .general
         deloadSnoozedUntil = suite.object(forKey: Key.deloadSnoozedUntil) as? Date
-        deloadDismissedFingerprint = suite.string(forKey: Key.deloadDismissedFingerprint)
         accent = DGAccent(rawValue: suite.string(forKey: Key.accent) ?? "") ?? .coral
         DGColor.current = accent
+    }
+
+    /// Writes the current goal's training defaults into the preferences it implies. Called when
+    /// the goal is picked (onboarding) or changed (Settings) — never on launch, so a lifter who
+    /// later tunes rest or weekly goal by hand keeps their own numbers.
+    func applyTrainingGoalDefaults() {
+        defaultRestSeconds = trainingGoal.defaultRestSeconds
+        weeklyGoal = trainingGoal.weeklyGoal
     }
 
     /// A canonical kg value, formatted and rounded for the user's unit.

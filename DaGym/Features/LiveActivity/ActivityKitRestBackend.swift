@@ -28,14 +28,24 @@ final class ActivityKitRestBackend: RestActivityBackend {
     }
 
     func start(attributes: RestActivityAttributes, state: RestActivityAttributes.ContentState) {
-        let content = ActivityContent(state: state, staleDate: nil)
-        activity = (try? Activity.request(attributes: attributes, content: content)).map(ActivityHandle.init)
+        activity = (try? Activity.request(attributes: attributes, content: Self.content(state)))
+            .map(ActivityHandle.init)
     }
 
     func update(state: RestActivityAttributes.ContentState) {
         guard let handle = activity else { return }
-        let content = ActivityContent(state: state, staleDate: nil)
+        let content = Self.content(state)
         Task { await handle.activity.update(content) }
+    }
+
+    /// A `staleDate` shortly after the rest ends. Without one the banner claims to be live
+    /// forever: if the app is jetsammed mid-rest, nothing is left to end the activity, and the
+    /// countdown hits 0:00 and then just sits there looking current. With it, iOS dims the
+    /// content and stops presenting it as live even though no process is around to say so.
+    private static func content(
+        _ state: RestActivityAttributes.ContentState
+    ) -> ActivityContent<RestActivityAttributes.ContentState> {
+        ActivityContent(state: state, staleDate: state.endDate.addingTimeInterval(30))
     }
 
     func end(_ dismissal: RestActivityDismissal) {

@@ -20,8 +20,17 @@ final class ContainerProvider {
     enum Resolution: Equatable {
         case cloudKit
         case local
+        /// A deliberate in-memory store: a test or preview process. Nothing is expected to last.
         case inMemory
+        /// The on-disk store could **not** be opened and an in-memory one was substituted. The
+        /// app must say so rather than looking like a fresh install: everything logged into
+        /// this store is gone the moment the process exits.
+        case inMemoryFallback
         case unavailable
+
+        /// Whether a real, durable store was opened. `false` means the app must not let the
+        /// user train into it.
+        var isDurable: Bool { self == .cloudKit || self == .local }
     }
 
     static let shared = ContainerProvider(inMemory: LaunchFlags.isTesting)
@@ -108,7 +117,14 @@ final class ContainerProvider {
             if let container = try? ModelContainer.dagym(cloudKitEnabled: false) {
                 return (container, .local)
             }
-            containerLogger.error("Persistent store failed to load; falling back to an in-memory store.")
+            containerLogger.fault(
+                "Persistent store failed to load; substituting a throwaway in-memory store."
+            )
+            if let container = try? ModelContainer.dagym(inMemory: true) {
+                return (container, .inMemoryFallback)
+            }
+            containerLogger.fault("In-memory store also failed to load; DaGym has no store this launch.")
+            return (nil, .unavailable)
         }
         if let container = try? ModelContainer.dagym(inMemory: true) {
             return (container, .inMemory)

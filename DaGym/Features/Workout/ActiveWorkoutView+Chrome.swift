@@ -17,13 +17,19 @@ extension ActiveWorkoutView {
     }
 
     /// The "…" next to FINISH: layout and session-level additions that don't belong on any one
-    /// exercise. `compactWorkoutLayout` is remembered in `Preferences`.
+    /// exercise. Both layout toggles are remembered in `Preferences`.
     var headerMenu: some View {
         @Bindable var prefs = preferences
         return Menu {
             Toggle(
                 "Compact layout", systemImage: "rectangle.compress.vertical",
                 isOn: $prefs.compactWorkoutLayout
+            )
+            // `SetRow` has always read `showSetSteppers`, but nothing wrote it — the ± buttons
+            // were unreachable. This is its home, next to the other layout switch.
+            Toggle(
+                "Set steppers", systemImage: "plusminus",
+                isOn: $prefs.showSetSteppers
             )
             Button("Add routine…", systemImage: "list.bullet.rectangle") { activeSheet = .addRoutine }
         } label: {

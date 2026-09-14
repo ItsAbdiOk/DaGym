@@ -254,4 +254,60 @@ struct WorkoutStoreCoachTests {
         )
         #expect(store.coachCards(now: afterCooldown).contains { $0.fingerprint == stalled.fingerprint })
     }
+
+    // MARK: - "RPE at the same load" has to be at the same load
+
+    /// The rule fires when RPE rises a full point across the window. Reading the first working
+    /// set's RPE from the last sessions regardless of weight meant a lifter adding weight every
+    /// session — where RPE is *supposed* to climb — was told to deload for progressing.
+    @Test("RPE rising as the bar goes up is not a rise at the same load")
+    func rpeTrendIgnoresSessionsAtADifferentLoad() throws {
+        let store = try makeStore()
+        let routineID = try rpeRoutine(store)
+        for (weightKg, rpe) in [(100.0, 7.0), (102.5, 8.0), (105.0, 8.5)] {
+            logRPESession(store, routineID: routineID, weightKg: weightKg, rpe: rpe)
+        }
+
+        let snapshot = try #require(
+            store.coachLiftSnapshots(finishedWorkouts: store.finishedWorkoutModelsNewestFirst()).first
+        )
+        #expect(snapshot.rpeAtSameLoadTrend == nil)
+        #expect(store.deloadSuggestion(snoozedUntil: nil)?.reason.contains("RPE") != true)
+    }
+
+    @Test("RPE rising while the load stays put is still reported")
+    func rpeTrendKeepsSessionsAtTheSameLoad() throws {
+        let store = try makeStore()
+        let routineID = try rpeRoutine(store)
+        for rpe in [7.0, 8.0, 8.5] {
+            logRPESession(store, routineID: routineID, weightKg: 100, rpe: rpe)
+        }
+
+        let snapshot = try #require(
+            store.coachLiftSnapshots(finishedWorkouts: store.finishedWorkoutModelsNewestFirst()).first
+        )
+        #expect(snapshot.rpeAtSameLoadTrend == [7.0, 8.0, 8.5])
+    }
+
+    private func rpeRoutine(_ store: WorkoutStore) throws -> UUID {
+        let exercise = store.createCustomExercise(
+            name: "Squat", primary: [.quads], equipment: "Barbell", style: .weightReps
+        )
+        let draft = RoutineExerciseDraft(
+            exerciseID: exercise.id,
+            sets: [PlannedSetDraft(kind: .working, targetReps: 5, targetWeightKg: 100)]
+        )
+        return store.saveRoutine(
+            id: nil, name: "Lower", rule: .linear(incrementKg: 2.5), exercises: [draft]
+        ).id
+    }
+
+    private func logRPESession(_ store: WorkoutStore, routineID: UUID, weightKg: Double, rpe: Double) {
+        let session = store.startWorkout(routineID: routineID)
+        session.exercises[0].sets[0].weightKg = weightKg
+        session.exercises[0].sets[0].reps = 5
+        session.exercises[0].sets[0].effort = Effort(rpe: rpe)
+        session.exercises[0].sets[0].isDone = true
+        _ = store.finish(session: session)
+    }
 }

@@ -35,7 +35,8 @@ struct ImportSettingsSection: View {
         .sheet(item: $pendingImport) { pending in
             ImportCSVPreviewSheet(
                 preview: pending.preview, onConfirm: { confirmImport(pending.preview) },
-                onCancel: { pendingImport = nil }
+                onCancel: { pendingImport = nil },
+                onPickUnit: unitPicker(for: pending)
             )
         }
         .sheet(isPresented: $showingHevyKeySheet) {
@@ -150,7 +151,25 @@ struct ImportSettingsSection: View {
             errorMessage = "That doesn't look like a Strong, Hevy or FitNotes export."
             return
         }
-        pendingImport = PendingCSVImport(preview: preview)
+        pendingImport = PendingCSVImport(preview: preview, csv: csv)
+    }
+
+    /// The picker's action, or nil for a source with no re-parsable text (the Hevy API path,
+    /// whose weights are already unambiguously kg).
+    private func unitPicker(for pending: PendingCSVImport) -> ((WeightUnit) -> Void)? {
+        guard pending.csv != nil else { return nil }
+        return { unit in reparse(pending, unit: unit) }
+    }
+
+    /// Re-runs the parse with the unit the user picked, for a file whose weight column named none.
+    /// Re-parsing (rather than scaling the already-parsed numbers) keeps one code path honest
+    /// about per-row unit columns and rounding.
+    private func reparse(_ pending: PendingCSVImport, unit: WeightUnit) {
+        guard let csv = pending.csv,
+              let preview = WorkoutImportService.preview(
+                  csv: csv, store: store, assumedWeightUnit: unit
+              ) else { return }
+        pendingImport = PendingCSVImport(preview: preview, csv: csv)
     }
 
     private func readCSV(url: URL) async -> String? {
@@ -199,7 +218,9 @@ struct ImportSettingsSection: View {
             return
         }
         let result = ImportResult(source: .hevy, workouts: workouts, problems: problems)
-        pendingImport = PendingCSVImport(preview: WorkoutImportService.preview(result: result, store: store))
+        pendingImport = PendingCSVImport(
+            preview: WorkoutImportService.preview(result: result, store: store), csv: nil
+        )
     }
 }
 
@@ -264,6 +285,9 @@ private struct HevyAPIKeySheet: View {
 private struct PendingCSVImport: Identifiable {
     let id = UUID()
     var preview: ImportPreview
+    /// The file's text, kept so the preview can be re-parsed in a different weight unit. Nil for
+    /// the Hevy API path, whose weights are already unambiguously kg.
+    var csv: String?
 }
 
 /// Source badge, counts, unmatched exercises and problems for one parsed CSV, before the user
@@ -272,6 +296,14 @@ private struct ImportCSVPreviewSheet: View {
     var preview: ImportPreview
     var onConfirm: () -> Void
     var onCancel: () -> Void
+    /// Called when the user picks a weight unit for a file that named none; nil hides the picker.
+    var onPickUnit: ((WeightUnit) -> Void)?
+
+    /// The picker's own selection. Routing the choice through `@State` + `onChange` rather than a
+    /// `Binding(get:set:)` over `onPickUnit` keeps a non-`Sendable` closure out of `Binding`'s
+    /// `@Sendable` setter — which Swift 6 rejects, and which the compiler crashes on if you make
+    /// the closure type `@MainActor @Sendable` to satisfy it.
+    @State private var pickedUnit = WeightUnit.kg
 
     var body: some View {
         VStack(spacing: DGSpace.s5) {
@@ -285,6 +317,16 @@ private struct ImportCSVPreviewSheet: View {
             ScrollView {
                 VStack(spacing: DGSpace.s5) {
                     countsCard
+                    if preview.weightUnitAssumed, let onPickUnit {
+                        unitPicker(onPickUnit)
+                    }
+                    if !preview.matchedExercises.isEmpty {
+                        namesCard(
+                            title: "\(preview.matchedExercises.count) matched exercise"
+                                + (preview.matchedExercises.count == 1 ? "" : "s"),
+                            names: preview.matchedExercises.map { "\($0.sourceName) → \($0.libraryName)" }
+                        )
+                    }
                     if !preview.unmatchedExerciseNames.isEmpty {
                         namesCard(
                             title: "\(preview.unmatchedExerciseNames.count) new exercise"
@@ -330,11 +372,44 @@ private struct ImportCSVPreviewSheet: View {
     }
 
     private var countsCard: some View {
-        HStack(spacing: 0) {
-            StatTile(value: "\(preview.workouts.count)", label: "Workouts")
-            StatTile(value: "\(preview.setsCount)", label: "Sets")
+        VStack(spacing: DGSpace.s2) {
+            HStack(spacing: 0) {
+                StatTile(value: "\(preview.newWorkoutCount)", label: "Workouts")
+                StatTile(value: "\(preview.setsCount)", label: "Sets")
+            }
+            .dgCard(padding: 0)
+            if preview.alreadyImportedCount > 0 {
+                Text("\(preview.alreadyImportedCount) already in your history — they'll be skipped.")
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.ink4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
+    }
+
+    /// Shown only when the file's weight column named no unit. Assuming kg silently turns an
+    /// American lifter's 225 lb bench into a 225 kg one, so the guess is made visible and
+    /// changeable before anything is written.
+    private func unitPicker(_ onPick: @escaping (WeightUnit) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: DGSpace.s2) {
+            Text("Weight unit").dgLabel()
+            Text("This file doesn't say what unit its weights are in. Reading them as:")
+                .font(DGFont.footnote)
+                .foregroundStyle(DGColor.ink3)
+            Picker("Weight unit", selection: $pickedUnit) {
+                Text("Kilograms").tag(WeightUnit.kg)
+                Text("Pounds").tag(WeightUnit.lb)
+            }
+            .pickerStyle(.segmented)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DGSpace.s4)
         .dgCard(padding: 0)
+        .onAppear { pickedUnit = preview.weightUnit }
+        // Only a real change re-parses; the `onAppear` seed above must not kick one off.
+        .onChange(of: pickedUnit) { _, unit in
+            if unit != preview.weightUnit { onPick(unit) }
+        }
     }
 
     private func namesCard(title: String, names: [String]) -> some View {

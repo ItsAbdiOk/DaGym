@@ -1,17 +1,12 @@
 import SwiftUI
 
-/// "What's your main goal?" — stores `preferences.trainingGoal` ("strength",
-/// "muscle" or "general"), defaulting to "general" so Continue is always
-/// available without forcing a choice.
+/// "What's your main goal?" — stores `preferences.trainingGoal` and, crucially, *applies* it:
+/// `applyTrainingGoalDefaults()` writes the rest length and weekly session count each option's
+/// subtitle promises, so the answer changes the app instead of being filed away. "General
+/// fitness" is pre-selected so Continue is always available without forcing a choice.
 struct OnboardingGoalStep: View {
     var onNext: () -> Void
     @Environment(Preferences.self) private var preferences
-
-    private let options: [GoalOption] = [
-        GoalOption(key: "strength", title: "Strength", detail: "Heavier lifts, lower reps, longer rest."),
-        GoalOption(key: "muscle", title: "Muscle", detail: "More volume, moderate reps, shorter rest."),
-        GoalOption(key: "general", title: "General fitness", detail: "A balanced mix, no specific peak.")
-    ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s6) {
@@ -20,9 +15,10 @@ struct OnboardingGoalStep: View {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             VStack(spacing: DGSpace.s3) {
-                ForEach(options) { option in
-                    GoalRow(option: option, isSelected: preferences.trainingGoal == option.key) {
-                        preferences.trainingGoal = option.key
+                ForEach(Preferences.TrainingGoal.allCases, id: \.self) { goal in
+                    GoalRow(goal: goal, isSelected: preferences.trainingGoal == goal) {
+                        preferences.trainingGoal = goal
+                        preferences.applyTrainingGoalDefaults()
                         Haptics.step()
                     }
                 }
@@ -32,21 +28,11 @@ struct OnboardingGoalStep: View {
                 .accessibilityIdentifier(A11yID.onboardingNext)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onAppear {
-            if preferences.trainingGoal.isEmpty { preferences.trainingGoal = "general" }
-        }
     }
 }
 
-private struct GoalOption: Identifiable {
-    var key: String
-    var title: String
-    var detail: String
-    var id: String { key }
-}
-
 private struct GoalRow: View {
-    var option: GoalOption
+    var goal: Preferences.TrainingGoal
     var isSelected: Bool
     var onSelect: () -> Void
 
@@ -54,10 +40,10 @@ private struct GoalRow: View {
         Button(action: onSelect) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(option.title.uppercased())
+                    Text(goal.title.uppercased())
                         .font(DGFont.title3)
                         .foregroundStyle(DGColor.ink1)
-                    Text(option.detail)
+                    Text(goal.detail)
                         .font(DGFont.footnote)
                         .foregroundStyle(DGColor.ink3)
                 }

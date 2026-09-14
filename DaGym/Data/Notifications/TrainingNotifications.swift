@@ -50,7 +50,7 @@ final class TrainingNotificationScheduler {
             scheduleWeeklyRecap(store: store, preferences: preferences, now: now)
         }
         workoutDayReminderScheduler.rescheduleAll(
-            store: store, preferences: preferences, calendar: calendar(for: preferences)
+            store: store, preferences: preferences, calendar: calendar(for: preferences), now: now
         )
     }
 
@@ -90,10 +90,19 @@ final class TrainingNotificationScheduler {
         guard let fireDate = Self.nextSundayEvening(
             after: now, hour: preferences.reminderHour, calendar: calendar
         ) else { return }
-        let recap = store.weeklyRecap(for: now, weeklyGoal: preferences.weeklyGoal, calendar: calendar)
         let content = UNMutableNotificationContent()
         content.title = "Weekly recap"
-        content.body = Self.recapBody(recap, unit: preferences.weightUnit)
+        // The numbers are only allowed in when the notification fires for the week they describe.
+        // A recap scheduled after Sunday's hour has already passed lands *next* Sunday, and a
+        // one-shot request's body is frozen at schedule time — so a lifter who finished on Sunday
+        // evening and then skipped the whole next week got "This week: 3 workouts" for a week in
+        // which they trained nothing. When the fire date isn't in this week, say nothing specific.
+        if calendar.isDate(fireDate, equalTo: now, toGranularity: .weekOfYear) {
+            let recap = store.weeklyRecap(for: now, weeklyGoal: preferences.weeklyGoal, calendar: calendar)
+            content.body = Self.recapBody(recap, unit: preferences.weightUnit)
+        } else {
+            content.body = Self.pendingRecapBody
+        }
         content.sound = .default
         add(content: content, identifier: Self.recapIdentifier, fireDate: fireDate, now: now)
     }
@@ -137,6 +146,9 @@ final class TrainingNotificationScheduler {
         components.second = 0
         return calendar.date(from: components)
     }
+
+    /// Used when the recap can't honestly carry numbers yet — see `scheduleWeeklyRecap`.
+    static let pendingRecapBody = "Your training week is done. Open DaGym for the numbers."
 
     /// "This week: 3 workouts · 21 420 kg · 2 PRs (+12% vs last week)" — in the user's display
     /// unit (X2: a weight string built below the UI layer must still take `unit:`, not assume kg).

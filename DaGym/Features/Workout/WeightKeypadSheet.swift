@@ -70,7 +70,7 @@ struct WeightKeypadSheet: View {
     private var stepperRow: some View {
         HStack {
             Button {
-                step(by: -step)
+                step(by: -effectiveStep)
             } label: {
                 Image(systemName: "minus")
                     .font(.system(size: 18, weight: .bold))
@@ -88,7 +88,7 @@ struct WeightKeypadSheet: View {
                 .accessibilityValue(displayValue)
             Spacer(minLength: DGSpace.s4)
             Button {
-                step(by: step)
+                step(by: effectiveStep)
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 18, weight: .bold))
@@ -143,9 +143,11 @@ struct WeightKeypadSheet: View {
     }
 
     private var formattedStep: String {
-        guard let unit else { return WorkoutSession.format(step) }
-        return unit.format(kg: step)
+        guard let unit else { return WorkoutSession.format(effectiveStep) }
+        return unit.format(kg: effectiveStep)
     }
+
+    private var effectiveStep: Double { KeypadStep.kg(step, unit: unit) }
 
     /// The quick ± key's amount: the unit's own default increment for a weight field
     /// (2.5 kg, or 5 lb), 2.5 raw for reps — unchanged from the original quick-jump.
@@ -203,6 +205,21 @@ struct WeightKeypadSheet: View {
     }
 }
 
+/// The keypad's ± amount, pulled out so it's testable without SwiftUI.
+enum KeypadStep {
+    /// Exercise increments are stored in kg, so a 2.5 kg increment reads "5.5 lb" on the keypad
+    /// and walks a lb lifter off every round number — and off their plate grid — one tap at a
+    /// time. For a lb lifter the step is snapped to the nearest 2.5 lb (the lightest pair an lb
+    /// rack builds), never below that. Reps and kg are untouched.
+    static let poundQuantum = 2.5
+
+    static func kg(_ step: Double, unit: WeightUnit?) -> Double {
+        guard let unit, unit == .lb else { return step }
+        let pounds = max(poundQuantum, (unit.display(kg: step) / poundQuantum).rounded() * poundQuantum)
+        return unit.toKg(pounds)
+    }
+}
+
 private struct KeypadKey: View {
     var label: String
     var isAccent: Bool
@@ -232,10 +249,18 @@ private struct PlateLine: View {
     var bar: Bar
 
     @Environment(Preferences.self) private var preferences
+    /// Optional so the sheet still renders in a preview with no store.
+    @Environment(WorkoutStore.self) private var store: WorkoutStore?
 
+    /// The active equipment profile — the same inventory the plate chip and the progression
+    /// engine use. A generic standard set here is what made the keypad contradict the chip.
     private var result: PlateCalculator.Result {
-        let plates = WeightUnit.plateStock(for: preferences.weightUnit)
-        return PlateCalculator.load(target: target, bar: bar, plates: plates)
+        let inventory = store?.activeInventory()
+        return PlateCalculator.load(
+            target: target, bar: bar,
+            plates: inventory?.plates ?? WeightUnit.plateStock(for: preferences.weightUnit),
+            collarsKg: inventory?.collarsKg ?? 0
+        )
     }
 
     var body: some View {

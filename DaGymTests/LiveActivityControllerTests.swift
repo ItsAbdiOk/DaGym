@@ -52,6 +52,12 @@ private final class FakeNotificationCenter: RestNotificationCenter {
     }
 }
 
+/// A counter the intent fallback can bump from an escaping closure.
+@MainActor
+private final class CallRecorder {
+    var count = 0
+}
+
 private struct InstantAuthorizer: RestNotificationAuthorizing {
     func awaitAuthorization() async {}
 }
@@ -95,6 +101,41 @@ struct LiveActivityControllerTests {
 
         #expect(harness.backend.staleCleanups == 1)
         #expect(harness.backend.hasStaleActivity == false)
+    }
+
+    /// Finding 4: cleanup used to run *only* in `RestActivityController.shared`'s initialiser,
+    /// and `shared` is first touched from the workout screen — so a jetsam mid-rest left a dead
+    /// banner on the Lock Screen until the lifter opened a workout again. `DaGymAppDelegate` now
+    /// calls this at launch; this is the seam it calls through.
+    @Test("the launch hook ends stale activities again, not just the first time shared is built")
+    func launchHookEndsStaleActivities() {
+        let harness = Harness(stale: true)
+        #expect(harness.backend.staleCleanups == 1)
+
+        harness.backend.hasStaleActivity = true
+        RestActivityController.endStaleActivitiesAtLaunch(controller: harness.controller)
+
+        #expect(harness.backend.staleCleanups == 2)
+        #expect(harness.backend.hasStaleActivity == false)
+    }
+
+    /// Finding 4: after the app is killed, `RestIntentTarget`'s closures are gone, so `+30S` /
+    /// `SKIP` / `SET DONE` did nothing at all — the banner just sat there ignoring taps. A button
+    /// with no target now falls through to ending the activity.
+    @Test("a Lock Screen intent with no live session ends the banner instead of doing nothing")
+    func intentWithNoTargetFallsBack() {
+        let recorder = CallRecorder()
+        let original = RestIntentTarget.orphanFallback
+        RestIntentTarget.orphanFallback = { recorder.count += 1 }
+        defer { RestIntentTarget.orphanFallback = original }
+
+        RestIntentTarget.run(nil)
+        #expect(recorder.count == 1)
+
+        var targetRan = false
+        RestIntentTarget.run { targetRan = true }
+        #expect(targetRan)
+        #expect(recorder.count == 1) // a live target must not also tear the banner down
     }
 
     @Test("starting rest starts one activity and schedules the alert once permission resolves")

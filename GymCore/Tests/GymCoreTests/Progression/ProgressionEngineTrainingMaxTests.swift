@@ -48,7 +48,8 @@ struct ProgressionEngineTrainingMaxTests {
         #expect(week1.trainingMaxKg == 102.5)
         #expect(week1.stall.trainingMaxCycle == 2)
         let expected = [0.65, 0.75, 0.85].map {
-            WeightRounding.nearest(102.5 * $0, bar: .olympic, plates: PlateStock.standardKg, collarsKg: 0)
+            LoadGrid.plates(bar: .olympic, plates: PlateStock.standardKg, collarsKg: 0)
+                .nearest(102.5 * $0)
         }
         #expect(week1.sets.map(\.weightKg) == expected)
     }

@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import GymCore
 import SwiftData
@@ -37,7 +38,7 @@ enum PlanShareService {
             PlanProgramWeek(index: $0.index, kind: $0.kind)
         }
         let planProgram = PlanProgram(
-            id: program.id, name: program.name, weeks: program.weeks,
+            id: sharedID(for: program.id), name: program.name, weeks: program.weeks,
             routineIDs: orderedRoutines.map(\.id), programWeeks: weeks
         )
         return PlanDocument(
@@ -45,6 +46,22 @@ enum PlanShareService {
             exercises: Array(customExercises.values), routines: uniqueRoutines, program: planProgram
         )
     }
+
+    // MARK: - What a shared plan deliberately leaves behind
+    //
+    // A `.gymplan` goes to another person over Messages or AirDrop. What travels is the *plan*:
+    // which exercises, how many sets, what rep range, what rest. What does not travel:
+    //
+    // * the sender's own notes — `ExerciseModel.notes` and the per-slot `note` are a training
+    //   diary ("left shoulder still sore", "grip fails first"), not part of the plan;
+    // * the sender's working weights — `targetWeightKg` is what *they* lift, and it is both
+    //   personal and useless (often unsafe) to the recipient, who should start from their own
+    //   numbers. Rep, RPE and time targets are the prescription, so those do travel;
+    // * the sender's database identifiers — `RoutineModel.id`, `ProgramModel.id` and
+    //   `ExerciseModel.id` are stable, device-linked UUIDs that correlate one shared file with
+    //   another. `sharedID` replaces each with a salted hash: stable across re-exports of the
+    //   same routine (so the recipient's "already imported" check still works) and carrying
+    //   nothing back to the sender's store.
 
     private static func planRoutine(
         _ model: RoutineModel, customExercises: inout [UUID: PlanExercise]
@@ -57,11 +74,12 @@ enum PlanShareService {
             return PlanRoutineExercise(
                 order: slot.order, exerciseSeedID: exercise.seedID, exerciseName: exercise.name,
                 supersetGroup: slot.supersetGroup, restOverrideSeconds: slot.restOverrideSeconds,
-                note: slot.note, ruleJSON: slot.progressionRuleJSON, sets: sets
+                note: "", ruleJSON: slot.progressionRuleJSON, sets: sets
             )
         }
         return PlanRoutine(
-            id: model.id, name: model.name, notes: model.notes, progressionRule: model.progressionRule,
+            id: sharedID(for: model.id), name: model.name, notes: model.notes,
+            progressionRule: model.progressionRule,
             repRangeLow: model.repRangeLow, repRangeHigh: model.repRangeHigh,
             ruleJSON: model.progressionRuleJSON.isEmpty ? nil : model.progressionRuleJSON,
             sortOrder: model.sortOrder, exercises: exercises
@@ -70,20 +88,33 @@ enum PlanShareService {
 
     private static func planExercise(_ model: ExerciseModel) -> PlanExercise {
         PlanExercise(
-            id: model.id, name: model.name, primaryMuscles: model.primaryMuscles,
+            id: sharedID(for: model.id), name: model.name, primaryMuscles: model.primaryMuscles,
             secondaryMuscles: model.secondaryMuscles, equipment: model.equipment,
             mechanic: model.mechanic, loggingStyle: model.loggingStyle, isPerSide: model.isPerSide,
             barType: model.barType, incrementKg: model.incrementKg, restSeconds: model.restSeconds,
-            instructions: model.instructions, notes: model.notes
+            instructions: model.instructions, notes: ""
         )
     }
 
     private static func planSet(_ model: PlannedSetModel) -> PlanSet {
         PlanSet(
             order: model.order, kind: model.kind, targetReps: model.targetReps,
-            targetRepsHigh: model.targetRepsHigh, targetWeightKg: model.targetWeightKg,
+            targetRepsHigh: model.targetRepsHigh, targetWeightKg: nil,
             targetRPE: model.targetRPE, targetSeconds: model.targetSeconds
         )
+    }
+
+    /// A stable, one-way alias for a local identifier: `SHA256(salt + uuid)`, first 16 bytes.
+    /// Deterministic, so two exports of the same routine share an id and the recipient's
+    /// `importedFromID` dedupe still works; irreversible, so the file carries nothing that points
+    /// back at the sender's own rows.
+    static func sharedID(for id: UUID) -> UUID {
+        let digest = SHA256.hash(data: Data("dagym.plan.share.v1:\(id.uuidString)".utf8))
+        var bytes = (uuid_t)(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+        withUnsafeMutableBytes(of: &bytes) { buffer in
+            for (offset, byte) in digest.prefix(16).enumerated() { buffer[offset] = byte }
+        }
+        return UUID(uuid: bytes)
     }
 
     // MARK: - Fetch helpers

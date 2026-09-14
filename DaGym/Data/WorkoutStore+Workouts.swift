@@ -313,14 +313,34 @@ extension WorkoutStore {
         kind: .plan
     )
 
-    /// True when the routine was edited after the session the engine's baseline came from *and*
-    /// the plan actually names a working weight to use — an edit that only renamed the routine
-    /// must not blank the engine's numbers.
+    /// True when the plan's working target weight has *changed* since the engine last judged
+    /// this lift, and so should win for one session.
+    ///
+    /// `RoutineModel.updatedAt` alone cannot answer this: `saveRoutine` and
+    /// `addExercise(toRoutine:)` stamp it on every save — a rename, a reorder, a superset
+    /// change, a glyph, a note — and "some working set has a target weight" is a condition that,
+    /// once true, stays true for ever. Together they stranded a weight permanently: approve the
+    /// Coach's deload at 80 kg → the plan says 72.5; rebuild to 90 kg over two months through
+    /// the engine; rename the routine; next session is prescribed 72.5 kg "From your updated
+    /// plan", and `resetIfWeightChanged` then zeroes the miss streak for good measure. Approving
+    /// a deload on *one* lift bumped the routine's stamp, so every other lift in that routine
+    /// carrying a plan target reverted with it.
+    ///
+    /// So the stamp is only the cheap first gate; the answer is the number itself, compared
+    /// against `StallState.lastPlanTargetWeightKg` — what the plan said the last time
+    /// `persistProgression` committed a judgement for this lift. Equal means the save didn't
+    /// touch this target, and the engine keeps the floor. Different (or never recorded) means a
+    /// real edit, or an approved Coach deload, and the plan wins — exactly once, because
+    /// finishing that session records the new number and the two match again.
+    ///
+    /// The only edit made to this file for the progression/deload review: this function's body
+    /// and doc comment. Its signature and its single call site in `prescribedEntry` are
+    /// unchanged, and the comparison itself lives in `WorkoutStore+Progression.swift`.
     private static func planOverridesPrescription(
         plannedSets: [PlannedSetModel], planUpdatedAt: Date?, baselineDate: Date?
     ) -> Bool {
         guard let planUpdatedAt, let baselineDate, planUpdatedAt > baselineDate else { return false }
-        return plannedSets.contains { $0.setKind.countsTowardStats && $0.targetWeightKg != nil }
+        return planTargetWeightChanged(plannedSets)
     }
 
     /// The engine's prescription for each planned-set index, nil for warm-ups. Rules that size

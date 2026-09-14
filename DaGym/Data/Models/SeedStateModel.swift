@@ -32,8 +32,16 @@ enum SeedState {
     /// The store's seed-state row, creating it on first use. When CloudKit has merged several,
     /// the strongest values win (highest version, any `true`) and the extras are removed.
     static func row(in context: ModelContext) -> SeedStateModel {
-        let descriptor = FetchDescriptor<SeedStateModel>(sortBy: [SortDescriptor(\.updatedAt)])
-        let rows = (try? context.fetch(descriptor)) ?? []
+        let descriptor = FetchDescriptor<SeedStateModel>()
+        // Sorted in memory, not by the fetch: `updatedAt` alone is not a total order — two
+        // devices that seeded in the same second kept *different* rows and each deleted the
+        // other's, which bounced `routinesSeeded` back to false and re-seeded all 13 starters
+        // into a store whose owner had deliberately deleted every routine. `id` breaks the tie
+        // so every device converges on the same survivor.
+        let rows = ((try? context.fetch(descriptor)) ?? []).sorted { lhs, rhs in
+            if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt < rhs.updatedAt }
+            return lhs.id.uuidString < rhs.id.uuidString
+        }
         guard let survivor = rows.first else {
             let created = SeedStateModel()
             context.insert(created)

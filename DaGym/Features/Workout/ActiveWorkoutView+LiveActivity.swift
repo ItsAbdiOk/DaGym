@@ -19,6 +19,12 @@ private struct RestLiveActivityModifier: ViewModifier {
             .task {
                 RestActivityController.shared.bind(
                     to: session, weightUnit: { preferences.weightUnit },
+                    theme: {
+                        RestActivityTheme(
+                            accent: preferences.accent.rawValue,
+                            appearance: preferences.appearance.rawValue
+                        )
+                    },
                     onSessionMutation: onSessionMutation
                 )
             }

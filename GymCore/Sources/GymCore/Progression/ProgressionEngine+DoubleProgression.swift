@@ -39,13 +39,16 @@ extension ProgressionEngine {
         }
 
         let weakestReps = judged.map(\.reps).min() ?? low
-        // A session at this weight that didn't beat the run's best weakest set counts; the first
-        // session at a weight counts as one too, so "3 sessions without a rep" is literal.
+        // A session at this weight that didn't beat the run's best weakest set counts as a miss.
+        // The *first* session at a weight does not: it has nothing to beat, it sets the bar the
+        // following sessions have to clear. Counting it (as this did) meant
+        // `doubleProgressionMissesBeforeDeload` sessions really bought the lifter one fewer real
+        // chance to add a rep than the constant — and than the deload's own copy — claims.
         // State persisted before `bestWeakestReps` existed only knows last session's weakest set.
         let runBest = stall.bestWeakestReps ?? stall.lastWeakestReps
         let improved = runBest.map { weakestReps > $0 } ?? false
         let bestWeakestReps = improved ? weakestReps : (runBest ?? weakestReps)
-        let misses = improved ? 0 : stall.consecutiveMisses + 1
+        let misses = improved || runBest == nil ? 0 : stall.consecutiveMisses + 1
         if misses >= TrainingConstants.doubleProgressionMissesBeforeDeload {
             return doubleProgressionDeload(
                 context, high: high, weightKg: weightKg, incrementKg: incrementKg, stall: stall

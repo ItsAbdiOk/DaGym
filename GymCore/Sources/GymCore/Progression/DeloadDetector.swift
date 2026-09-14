@@ -73,8 +73,14 @@ public enum DeloadDetector {
         let stalled = lifts.filter { $0.stalls >= TrainingConstants.deloadStallCount }
         guard stalled.count >= TrainingConstants.deloadMinLiftsStalling else { return [] }
         let names = stalled.map(\.name).joined(separator: ", ")
+        // The counter is "sessions judged as misses", which is what the copy now claims. It used
+        // to say `deloadStallCount`+ *sessions*, which overstated the evidence by one because the
+        // persisted counter lags a session (see `TrainingConstants.deloadStallCount`).
         let streak = TrainingConstants.deloadStallCount
-        return ["\(stalled.count) lifts (\(names)) have stalled \(streak)+ sessions in a row"]
+        return [
+            "\(stalled.count) lifts (\(names)) have stalled — \(streak)+ sessions in a row missing "
+                + "their target"
+        ]
     }
 
     private static func trendReasons(_ lifts: [LiftSnapshot]) -> [String] {

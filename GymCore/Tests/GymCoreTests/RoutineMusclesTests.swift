@@ -24,14 +24,14 @@ struct RoutineMusclesTests {
         #expect(hit[.quads] == 0.5)
     }
 
-    @Test("secondary muscles count at half weight")
+    @Test("secondary muscles count at the shared secondary share")
     func secondaryHalfWeight() {
         let exercises: [Entry] = [
             (primary: [.chest], secondary: [.triceps], setCount: 4)
         ]
         let hit = RoutineMuscles.hitMap(exercises: exercises)
         #expect(hit[.chest] == 1.0)
-        #expect(hit[.triceps] == 0.5)
+        #expect(hit[.triceps] == SessionStats.secondaryMuscleShare)
     }
 
     @Test("set count weights each exercise's contribution")

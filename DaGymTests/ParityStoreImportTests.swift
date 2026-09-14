@@ -123,4 +123,138 @@ struct ParityStoreImportTests {
         )
         #expect(store.exercises(matching: "developpe").map(\.name) == ["Développé couché"])
     }
+
+    // MARK: - Dedupe, supersets and an honest preview
+
+    /// The dedupe key used to be `startedAt|title`. Rename an imported workout and re-import the
+    /// same file and it came straight back in as a second copy, because the key had moved.
+    @Test("re-importing after renaming an imported workout doesn't duplicate it")
+    func renamingDoesNotDefeatDedupe() throws {
+        let store = try makeStore()
+        let csv = Self.strongCSV([
+            ["2024-03-11 18:24:00", "Push Day", "1h 5m", "Bench Press", "1", "60", "8", "", "", "", "", ""]
+        ])
+        let first = try #require(WorkoutImportService.preview(csv: csv, store: store))
+        #expect(WorkoutImportService.apply(preview: first, store: store).workoutsImported == 1)
+
+        let workout = try #require(
+            try store.context.fetch(FetchDescriptor<WorkoutModel>()).first
+        )
+        workout.title = "Push A"
+        store.save()
+
+        let second = try #require(WorkoutImportService.preview(csv: csv, store: store))
+        let report = WorkoutImportService.apply(preview: second, store: store)
+        #expect(report.workoutsImported == 0)
+        #expect(report.workoutsSkipped == 1)
+        #expect(try store.context.fetchCount(FetchDescriptor<WorkoutModel>()) == 1)
+    }
+
+    @Test("the same workout arriving twice in one batch is inserted once")
+    func duplicateWithinOneBatchIsCollapsed() throws {
+        let store = try makeStore()
+        let startedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let exercise = ImportedExercise(
+            name: "Bench Press", sets: [ImportedSet(kind: .working, weightKg: 60, reps: 8)]
+        )
+        let workout = ImportedWorkout(
+            startedAt: startedAt, title: "Push A", externalID: "hevy-1", exercises: [exercise]
+        )
+        let result = ImportResult(source: .hevy, workouts: [workout, workout], problems: [])
+        let preview = WorkoutImportService.preview(result: result, store: store)
+        let report = WorkoutImportService.apply(preview: preview, store: store)
+        #expect(report.workoutsImported == 1)
+        #expect(report.workoutsSkipped == 1)
+    }
+
+    /// A Hevy CSV export writes "11 Mar 2024, 18:24" — no seconds — while the Hevy API returns the
+    /// real timestamp. Importing both used to give the lifter two copies of every session.
+    @Test("the same session from the CSV and from the API is imported once")
+    func csvAndAPIImportsDoNotDuplicate() throws {
+        let store = try makeStore()
+        let csv = ([
+            "title,start_time,end_time,exercise_title,set_index,set_type,weight_kg,reps",
+            "Push A,\"11 Mar 2024, 18:24\",\"11 Mar 2024, 19:05\",Bench Press,1,normal,60,8"
+        ]).joined(separator: "\n") + "\n"
+        let fromCSV = try #require(WorkoutImportService.preview(csv: csv, store: store))
+        #expect(WorkoutImportService.apply(preview: fromCSV, store: store).workoutsImported == 1)
+
+        let apiStart = try #require(
+            WorkoutImport.parse(csv: csv)?.workouts.first?.startedAt
+        ).addingTimeInterval(37)
+        let fromAPI = ImportResult(
+            source: .hevy,
+            workouts: [
+                ImportedWorkout(
+                    startedAt: apiStart, title: "Push A", externalID: "hevy-1",
+                    exercises: [
+                        ImportedExercise(
+                            name: "Bench Press",
+                            sets: [ImportedSet(kind: .working, weightKg: 60, reps: 8)]
+                        )
+                    ]
+                )
+            ],
+            problems: []
+        )
+        let preview = WorkoutImportService.preview(result: fromAPI, store: store)
+        #expect(preview.alreadyImportedCount == 1)
+        let report = WorkoutImportService.apply(preview: preview, store: store)
+        #expect(report.workoutsImported == 0)
+        #expect(try store.context.fetchCount(FetchDescriptor<WorkoutModel>()) == 1)
+    }
+
+    @Test("an imported superset keeps its grouping on the workout exercises")
+    func supersetGroupSurvivesImport() throws {
+        let store = try makeStore()
+        let sets = [ImportedSet(kind: .working, weightKg: 60, reps: 8)]
+        let workout = ImportedWorkout(
+            startedAt: Date(timeIntervalSince1970: 1_700_000_000), title: "Push A",
+            exercises: [
+                ImportedExercise(name: "Bench Press", supersetGroup: 0, sets: sets),
+                ImportedExercise(name: "Cable Fly", supersetGroup: 0, sets: sets),
+                ImportedExercise(name: "Triceps Pushdown", sets: sets)
+            ]
+        )
+        let result = ImportResult(source: .hevy, workouts: [workout], problems: [])
+        let preview = WorkoutImportService.preview(result: result, store: store)
+        _ = WorkoutImportService.apply(preview: preview, store: store)
+        let model = try #require(try store.context.fetch(FetchDescriptor<WorkoutModel>()).first)
+        let groups = (model.exercises ?? []).sorted { $0.order < $1.order }.map(\.supersetGroup)
+        #expect(groups == [0, 0, nil])
+    }
+
+    /// The preview used to say "12 workouts" even when all twelve were already in the store, and
+    /// never said what a matched name had been matched *to*.
+    @Test("the preview counts only what will actually be imported, and names every match")
+    func previewIsHonestAboutWhatWillHappen() throws {
+        let store = try makeStore()
+        ExerciseSeeder.seedIfNeeded(context: store.context)
+        let csv = Self.strongCSV([
+            ["2024-03-11 18:24:00", "Push Day", "1h 5m", "Squat", "1", "100", "5", "", "", "", "", ""]
+        ])
+        let first = try #require(WorkoutImportService.preview(csv: csv, store: store))
+        #expect(first.newWorkoutCount == 1)
+        #expect(first.alreadyImportedCount == 0)
+        let match = try #require(first.matchedExercises.first { $0.sourceName == "Squat" })
+        #expect(match.libraryName.localizedCaseInsensitiveContains("squat"))
+        _ = WorkoutImportService.apply(preview: first, store: store)
+
+        let second = try #require(WorkoutImportService.preview(csv: csv, store: store))
+        #expect(second.workouts.count == 1)
+        #expect(second.alreadyImportedCount == 1)
+        #expect(second.newWorkoutCount == 0)
+    }
+
+    /// "Squat (Bodyweight)" is a different lift from a barbell squat, and merging its history into
+    /// the barbell's rewrites that lift's personal records.
+    @Test("a known-but-absent qualifier becomes its own exercise, not the barbell seed")
+    func absentQualifierDoesNotStealTheBarbellSeed() throws {
+        let store = try makeStore()
+        ExerciseSeeder.seedIfNeeded(context: store.context)
+        let barbellID = store.exerciseID(seedID: "Barbell_Squat")
+        #expect(barbellID != nil)
+        #expect(WorkoutImportService.seededExerciseID(for: "Squat (Bodyweight)", store: store) == nil)
+        #expect(WorkoutImportService.seededExerciseID(for: "Squat", store: store) == barbellID)
+    }
 }

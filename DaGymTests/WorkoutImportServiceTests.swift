@@ -34,6 +34,8 @@ struct WorkoutImportServiceTests {
         #expect(preview.workouts.count == 1)
         #expect(preview.setsCount == 2)
         #expect(preview.unmatchedExerciseNames == ["Bench Press"])
+        #expect(preview.newWorkoutCount == 1)
+        #expect(preview.alreadyImportedCount == 0)
         #expect(preview.problems.isEmpty)
     }
 

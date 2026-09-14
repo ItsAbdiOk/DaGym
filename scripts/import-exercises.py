@@ -31,7 +31,10 @@ USER_AGENT = "DaGym-import-script/1.0 (+https://wger.de/api/v2/)"
 MUSCLE_MAP: dict[int, str] = {
     1: "biceps",       # Biceps brachii
     2: "delts",        # Anterior deltoid
-    3: "chest",        # Serratus anterior (approximation)
+    3: "obliques",     # Serratus anterior (approximation) -- the body map draws serratus as an
+                       # obliques sub-group (DaGym/Design/Components/BodyMapMuscleMapping.swift),
+                       # so mapping it to "chest" tinted a different region than the one the
+                       # figure itself labels serratus. The drawing wins.
     4: "chest",        # Pectoralis major
     5: "triceps",      # Triceps brachii
     6: "abs",          # Rectus abdominis
@@ -220,6 +223,7 @@ def merge(seed: dict[str, Any], wger_records: list[dict[str, Any]]) -> tuple[int
 
     matched = 0
     appended = 0
+    skipped_unmapped = 0
     for record in wger_records:
         alias_target = ALIASES.get(record["name"])
         target = by_norm.get(normalise_name(alias_target)) if alias_target else None
@@ -240,6 +244,17 @@ def merge(seed: dict[str, Any], wger_records: list[dict[str, Any]]) -> tuple[int
         if not record["instructions"]:
             continue  # skip stub-only unmatched entries, not worth appending
 
+        # No fallback muscle. The `primary` line below used to read
+        # `record["primary"] or ["abs"]`, which quietly turned every wger exercise whose
+        # muscles failed to map -- neck stretches, rotator-cuff work, running, rest timers --
+        # into an abs exercise, and made abs the most common primary mover in the library.
+        # An exercise we cannot tag is an exercise we do not append;
+        # DaGymTests/SeedMuscleDataTests.swift fails the build if one ever ships with an
+        # empty `primary` outside the curated non-muscular allowlist.
+        if not record["primary"]:
+            skipped_unmapped += 1
+            continue
+
         new_id = slugify(record["name"])
         suffix = 2
         while new_id in existing_ids:
@@ -250,7 +265,7 @@ def merge(seed: dict[str, Any], wger_records: list[dict[str, Any]]) -> tuple[int
         new_item = {
             "id": new_id,
             "name": record["name"],
-            "primary": record["primary"] or ["abs"],
+            "primary": record["primary"],
             "secondary": record["secondary"],
             "equipment": record["equipment"],
             "mechanic": None,
@@ -271,6 +286,8 @@ def merge(seed: dict[str, Any], wger_records: list[dict[str, Any]]) -> tuple[int
         by_norm[normalise_name(record["name"])] = new_item
         appended += 1
 
+    if skipped_unmapped:
+        print(f"skipped {skipped_unmapped} wger exercises with no mappable muscles")
     return matched, appended
 
 

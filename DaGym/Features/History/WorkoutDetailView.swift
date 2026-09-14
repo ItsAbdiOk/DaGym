@@ -187,7 +187,9 @@ private struct ReadOnlySetRow: View {
                 .font(DGFont.body)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
-            if let effort = set.effort {
+            // `effortTrackingEnabled` promises the effort column is hidden *everywhere*; this
+            // read-only history row was one of the two places still showing it.
+            if preferences.effortTrackingEnabled, let effort = set.effort {
                 Text(effort.displayValue(scale: preferences.effortScale))
                     .font(DGFont.footnote)
                     .foregroundStyle(effort.color)

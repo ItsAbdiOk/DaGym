@@ -8,12 +8,21 @@ public struct PlannedSetSpec: Hashable, Sendable {
     /// Tracked target RPE for this set, when the rule cares about effort
     /// (e.g. linear only counts a set as "hit" when RPE stayed at or below this).
     public var targetRPE: Double?
+    /// The plan's own target weight for this set, when one is set. No rule prescribes from
+    /// it — the engine works off history — but it is carried through so the judgement can
+    /// record what the plan said (`StallState.lastPlanTargetWeightKg`), which is how the app
+    /// layer tells a changed target apart from an unrelated routine save.
+    public var targetWeightKg: Double?
 
-    public init(kind: SetKind, targetReps: Int? = nil, targetSeconds: Int? = nil, targetRPE: Double? = nil) {
+    public init(
+        kind: SetKind, targetReps: Int? = nil, targetSeconds: Int? = nil, targetRPE: Double? = nil,
+        targetWeightKg: Double? = nil
+    ) {
         self.kind = kind
         self.targetReps = targetReps
         self.targetSeconds = targetSeconds
         self.targetRPE = targetRPE
+        self.targetWeightKg = targetWeightKg
     }
 }
 
@@ -118,6 +127,17 @@ public enum ProgressionEngine {
             trainingMaxIncrementKg: trainingMaxIncrementKg ?? TrainingConstants.trainingMaxUpperIncrementKg,
             perSide: perSide
         )
+        var result = dispatch(rule, context)
+        // Stamped centrally, for every rule: what the plan's working target weight said at the
+        // moment this judgement was made. The app layer compares the plan's *current* target
+        // against it to tell a real target edit (or an approved Coach deload) apart from an
+        // unrelated routine save, which used to be indistinguishable because both only moved
+        // `RoutineModel.updatedAt`.
+        result.stall.lastPlanTargetWeightKg = context.planTargetWeightKg
+        return result
+    }
+
+    private static func dispatch(_ rule: ProgressionRule, _ context: RuleContext) -> Prescribed {
         switch rule {
         case .linear(let incrementKg):
             return prescribeLinear(context, incrementKg: incrementKg)
@@ -156,6 +176,11 @@ struct RuleContext {
 
     /// Rep targets move one at a time, or two when reps are per-side totals.
     var repStep: Int { perSide ? 2 : 1 }
+
+    /// The plan's target weight for the first working set, when it names one.
+    var planTargetWeightKg: Double? {
+        planned.first { $0.kind.countsTowardStats }?.targetWeightKg
+    }
 
     /// Per-side totals stay even: 17 becomes 18. Identity otherwise.
     func evenReps(_ reps: Int) -> Int {

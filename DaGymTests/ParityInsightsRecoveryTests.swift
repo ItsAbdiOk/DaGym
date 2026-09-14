@@ -5,8 +5,8 @@ import Testing
 
 @testable import DaGym
 
-/// OpenGym parity (insights recs 2–3): 14-day scan with a causal per-muscle reference, and the
-/// graded strength-retention list in the recovery snapshot.
+/// OpenGym parity (insights recs 2–3): the shared 14-day recovery window, and the graded
+/// longest-without-work list in the recovery snapshot.
 @MainActor
 @Suite("Parity: recovery snapshot")
 struct ParityInsightsRecoveryTests {

@@ -39,113 +39,6 @@ struct ColumnMap {
     var isEmpty: Bool { index.isEmpty }
 }
 
-/// Numeric and duration parsing shared by the three importers.
-enum ImportParsing {
-    /// Locale-independent number parsing. The exports normally use `.` as the decimal separator;
-    /// a European export (FitNotes/spreadsheets) sometimes writes a bare comma instead ("82,5") —
-    /// accepted only when there's exactly one comma and no dot, since a thousands-grouped value
-    /// like "1,000.5" mixing both is ambiguous and left as a problem row instead of guessed at.
-    static func double(_ text: String?) -> Double? {
-        guard let text else { return nil }
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        if let value = Double(trimmed) { return value }
-        guard trimmed.filter({ $0 == "," }).count == 1, !trimmed.contains(".") else { return nil }
-        return Double(trimmed.replacingOccurrences(of: ",", with: "."))
-    }
-
-    static func int(_ text: String?) -> Int? {
-        guard let text else { return nil }
-        if let value = Int(text) { return value }
-        return double(text).map { Int($0.rounded()) }
-    }
-
-    /// Effort hygiene for an imported RPE column (recommendation 3): blank/non-numeric/≤0 is
-    /// unrated rather than a bogus low effort; anything above the 1–10 scale (Hevy sometimes
-    /// exports 0–100 "difficulty") clamps to the max instead of being stored verbatim.
-    static func rpe(_ text: String?) -> Double? {
-        guard let value = double(text), value > 0 else { return nil }
-        return min(value, 10)
-    }
-
-    /// The unit named by a per-row unit column ("Weight Unit"/"unit"), or `nil` when the text
-    /// names neither kg nor lb (missing column, unrecognised value).
-    static func weightUnit(from text: String?) -> WeightUnit? {
-        guard let text else { return nil }
-        switch text.trimmingCharacters(in: .whitespaces).lowercased() {
-        case "kg", "kgs", "kilogram", "kilograms": return .kg
-        case "lb", "lbs", "pound", "pounds": return .lb
-        default: return nil
-        }
-    }
-
-    /// A weight column's raw text, converted to kg. `columnUnit` is the unit the column header
-    /// itself named (e.g. "Weight (lbs)"); when the header is ambiguous (bare "Weight") a sibling
-    /// per-row unit column decides instead, and a file with neither is assumed to already be kg.
-    static func weightKg(_ text: String, columnUnit: WeightUnit?, perRowUnit: String?) -> Double? {
-        guard let value = double(text) else { return nil }
-        if let columnUnit { return columnUnit.toKg(value) }
-        if let rowUnit = weightUnit(from: perRowUnit) { return rowUnit.toKg(value) }
-        return value
-    }
-
-    /// "1h 5m", "65m", "45s" (Strong's free-text workout duration) → seconds.
-    static func durationSecondsFromFreeText(_ text: String?) -> Int? {
-        guard let text else { return nil }
-        var total = 0
-        var matched = false
-        for token in tokens(in: text) {
-            guard let value = Int(token.digits), !token.digits.isEmpty else { continue }
-            matched = true
-            switch token.unit {
-            case "h": total += value * 3600
-            case "m": total += value * 60
-            case "s": total += value
-            default: break
-            }
-        }
-        return matched ? total : nil
-    }
-
-    private static func tokens(in text: String) -> [(digits: String, unit: String)] {
-        var results: [(digits: String, unit: String)] = []
-        var digits = ""
-        for character in text.lowercased() {
-            if character.isNumber {
-                digits.append(character)
-            } else if character.isLetter, !digits.isEmpty {
-                results.append((digits, String(character)))
-                digits = ""
-            } else if !character.isNumber {
-                digits = ""
-            }
-        }
-        return results
-    }
-
-    /// "45", "0:45", "1:02:03" (FitNotes/Hevy-style clock durations) → seconds.
-    static func durationSecondsFromClock(_ text: String?) -> Int? {
-        guard let text else { return nil }
-        let parts = text.split(separator: ":").compactMap { Int($0) }
-        guard !parts.isEmpty else { return int(text) }
-        switch parts.count {
-        case 1: return parts[0]
-        case 2: return parts[0] * 60 + parts[1]
-        case 3: return parts[0] * 3600 + parts[1] * 60 + parts[2]
-        default: return nil
-        }
-    }
-
-    static func metersFromDistance(_ value: Double?, unit: String) -> Double? {
-        guard let value else { return nil }
-        switch unit.lowercased() {
-        case "mi", "mile", "miles": return value * 1609.344
-        case "km", "kilometers", "kilometres": return value * 1000
-        case "m", "meter", "meters", "metres": return value
-        default: return value * 1000
-        }
-    }
-}
-
 /// Date formatters for the three exports' timestamp formats. `DateFormatter` is not `Sendable`,
 /// so each is built fresh per call — these files parse at most a few thousand rows, so the cost
 /// is negligible.
@@ -198,5 +91,70 @@ enum ImportDateFormat {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = dateFormat
         return formatter
+    }
+}
+
+/// Validating readers for the measured columns of one CSV row, shared by the three importers.
+/// Each throws `ImportRowError` when a cell is *present but unusable* — unreadable, non-finite,
+/// negative or beyond `ImportLimits` — so the row is reported as a problem instead of silently
+/// dropping the value or storing something that breaks later. An absent (or blank) cell is `nil`.
+///
+/// A measured-zero (`0` distance, `0` seconds) reads as "not measured", because real exports —
+/// Strong in particular — write `0` rather than an empty cell in the `Distance`/`Seconds` columns
+/// of every ordinary weight set.
+enum ImportRow {
+    static func reps(_ text: String?) throws -> Int {
+        guard let text else { return 0 }
+        guard let value = ImportParsing.reps(text) else {
+            throw ImportRowError("Unreadable or out-of-range reps value \"\(text)\".")
+        }
+        return value
+    }
+
+    /// A clock-or-plain duration cell ("45", "1:02:03").
+    static func clockDuration(_ text: String?) throws -> Int? {
+        guard let text else { return nil }
+        guard let value = ImportParsing.durationSecondsFromClock(text) else {
+            throw ImportRowError("Unreadable or out-of-range duration value \"\(text)\".")
+        }
+        return value == 0 ? nil : value
+    }
+
+    /// A plain seconds cell (Strong's `Seconds`, Hevy's `duration_seconds`).
+    static func seconds(_ text: String?) throws -> Int? {
+        guard let text else { return nil }
+        guard let value = ImportParsing.duration(ImportParsing.int(text)) else {
+            throw ImportRowError("Unreadable or out-of-range duration value \"\(text)\".")
+        }
+        return value == 0 ? nil : value
+    }
+
+    static func distance(_ text: String?, unit: String) throws -> Double? {
+        guard let text else { return nil }
+        guard let raw = ImportParsing.double(text),
+              let meters = ImportParsing.metersFromDistance(raw, unit: unit) else {
+            throw ImportRowError("Unreadable or out-of-range distance value \"\(text)\".")
+        }
+        return meters == 0 ? nil : meters
+    }
+
+    static func weightKg(
+        _ text: String?, columnUnit: WeightUnit?, perRowUnit: String?, assumedUnit: WeightUnit?
+    ) throws -> Double {
+        guard let text else { return 0 }
+        guard let value = ImportParsing.weightKg(
+            text, columnUnit: columnUnit, perRowUnit: perRowUnit, assumedUnit: assumedUnit
+        ) else {
+            throw ImportRowError("Unreadable or out-of-range weight value \"\(text)\".")
+        }
+        return value
+    }
+
+    /// The `WeightUnit` a column header names ("Weight (lbs)", "weight_kg"), or `nil` when the
+    /// header is bare and a per-row unit column (or the user) has to decide.
+    static func columnUnit(named weightColumn: String) -> WeightUnit? {
+        if weightColumn.contains("lb") { return .lb }
+        if weightColumn.contains("kg") { return .kg }
+        return nil
     }
 }

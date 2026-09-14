@@ -156,13 +156,23 @@ struct StallStateDTO: Codable {
     /// the plan target it was set against.
     var lastTargetReps: Int?
     var lastPlanTargetReps: Int?
+    /// Bodyweight rule's set-ladder memory (`StallState.lastTargetSets`) and the plan's own
+    /// working-set count it was set against.
+    var lastTargetSets: Int?
+    var lastPlanTargetSets: Int?
+    /// The plan's working target weight at the last judgement (`StallState.lastPlanTargetWeightKg`)
+    /// — what `WorkoutStore.planOverridesPrescription` compares the plan's current target against
+    /// to tell a real target edit from an unrelated routine save.
+    var lastPlanTargetWeightKg: Double?
     /// Percent/TM rule's once-per-cycle bump gate (`StallState.trainingMaxCycle`).
     var trainingMaxCycle: Int?
 
     init(
         consecutiveMisses: Int = 0, lastWeightKg: Double? = nil, lastWeakestReps: Int? = nil,
         bestWeakestReps: Int? = nil, lastTargetSeconds: Int? = nil, lastPlanTargetSeconds: Int? = nil,
-        lastTargetReps: Int? = nil, lastPlanTargetReps: Int? = nil, trainingMaxCycle: Int? = nil
+        lastTargetReps: Int? = nil, lastPlanTargetReps: Int? = nil, lastTargetSets: Int? = nil,
+        lastPlanTargetSets: Int? = nil, lastPlanTargetWeightKg: Double? = nil,
+        trainingMaxCycle: Int? = nil
     ) {
         self.consecutiveMisses = consecutiveMisses
         self.lastWeightKg = lastWeightKg
@@ -172,6 +182,9 @@ struct StallStateDTO: Codable {
         self.lastPlanTargetSeconds = lastPlanTargetSeconds
         self.lastTargetReps = lastTargetReps
         self.lastPlanTargetReps = lastPlanTargetReps
+        self.lastTargetSets = lastTargetSets
+        self.lastPlanTargetSets = lastPlanTargetSets
+        self.lastPlanTargetWeightKg = lastPlanTargetWeightKg
         self.trainingMaxCycle = trainingMaxCycle
     }
 
@@ -184,6 +197,9 @@ struct StallStateDTO: Codable {
         lastPlanTargetSeconds = state.lastPlanTargetSeconds
         lastTargetReps = state.lastTargetReps
         lastPlanTargetReps = state.lastPlanTargetReps
+        lastTargetSets = state.lastTargetSets
+        lastPlanTargetSets = state.lastPlanTargetSets
+        lastPlanTargetWeightKg = state.lastPlanTargetWeightKg
         trainingMaxCycle = state.trainingMaxCycle
     }
 
@@ -193,6 +209,8 @@ struct StallStateDTO: Codable {
             lastWeakestReps: lastWeakestReps, bestWeakestReps: bestWeakestReps,
             lastTargetSeconds: lastTargetSeconds, lastPlanTargetSeconds: lastPlanTargetSeconds,
             lastTargetReps: lastTargetReps, lastPlanTargetReps: lastPlanTargetReps,
+            lastTargetSets: lastTargetSets, lastPlanTargetSets: lastPlanTargetSets,
+            lastPlanTargetWeightKg: lastPlanTargetWeightKg,
             trainingMaxCycle: trainingMaxCycle
         )
     }

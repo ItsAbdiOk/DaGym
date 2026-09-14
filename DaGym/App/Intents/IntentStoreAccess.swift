@@ -14,6 +14,11 @@ import SwiftData
 enum IntentStoreAccess {
     static func makeStore() -> WorkoutStore? {
         guard !LaunchFlags.isTesting else { return nil }
-        return ContainerProvider.shared.store(cloudKitEnabled: Preferences().iCloudSyncEnabled)
+        let provider = ContainerProvider.shared
+        let store = provider.store(cloudKitEnabled: Preferences().iCloudSyncEnabled)
+        // A throwaway in-memory fallback must not accept writes: a bodyweight logged through
+        // Siri into it would vanish with the process, silently.
+        guard provider.mainResolution?.isDurable == true else { return nil }
+        return store
     }
 }

@@ -29,8 +29,17 @@ extension WorkoutStore {
     /// ever see: the next session still prescribed the stalled weight. `AutoFill` already resolves
     /// this the right way round for the non-engine path ("a plan target edited after the previous
     /// session wins"), and `WorkoutStore+Workouts.swift`'s `prescribedEntry` now applies the same
-    /// precedence to the engine's path, keyed on `RoutineModel.updatedAt`. Bumping the stamp is
-    /// what makes "Approve" actually move the next session's numbers.
+    /// precedence to the engine's path. Bumping the stamp is what makes "Approve" move the next
+    /// session's numbers for a lift with no rule; for a lift the engine drives, what moves them
+    /// is that the plan's *number* has changed.
+    ///
+    /// **Why the override is one-shot.** `planOverridesPrescription` compares the new target
+    /// against `StallState.lastPlanTargetWeightKg` — what the plan said the last time a finished
+    /// session was judged. Finishing the deloaded session records 72.5, the two match again, and
+    /// the plan stops outranking the engine. Keyed on `RoutineModel.updatedAt` alone it was
+    /// permanent: every later routine save (a rename is enough — `saveRoutine` stamps `updatedAt`
+    /// unconditionally) re-applied a months-old deload weight to this lift, and to every other
+    /// lift in the same routine that happened to carry a plan target.
     ///
     /// **Why the stall state is left alone.** It used to be reset to `(misses: 0, weight: new)`.
     /// That is the one field the progression engine's own deload counts on: `resetIfWeightChanged`

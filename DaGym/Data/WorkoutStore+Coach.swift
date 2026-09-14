@@ -214,7 +214,19 @@ extension WorkoutStore {
         let e1rms = nonDeload.compactMap { entry in
             entry.workingSets.compactMap { OneRepMax.estimate(weight: $0.weightKg, reps: $0.reps) }.max()
         }
-        let rpes = nonDeload.compactMap { $0.workingSets.first?.effort?.rpe }
+        // "RPE at the same load" has to actually be at the same load. Taking the first working
+        // set's RPE from the last three sessions regardless of weight meant a lifter going
+        // 100 → 102.5 → 105 at RPE 7 → 8 → 8.5 tripped `deloadRpeRiseThreshold` and was told to
+        // deload while adding weight every single session — RPE is *supposed* to climb with the
+        // bar. Only sessions whose first working set was at the newest non-deload session's
+        // weight count, and fewer than two of those is no trend at all (nil, not a one-point
+        // array, so `DeloadDetector.rpeRise` stays quiet rather than reading a rise of 0).
+        let referenceWeightKg = nonDeload.last?.workingSets.first?.weightKg
+        let rpes = nonDeload.compactMap { entry -> Double? in
+            guard let set = entry.workingSets.first, let reference = referenceWeightKg,
+                  abs(set.weightKg - reference) < 0.01 else { return nil }
+            return set.effort?.rpe
+        }
         let lastWorking = history.first?.workingSets ?? []
         let info = exerciseInfo(for: exerciseModel)
         return CoachLiftSnapshot(
@@ -222,7 +234,7 @@ extension WorkoutStore {
             exerciseID: exerciseModel.id,
             stallState: routineExercise.stallStateValue,
             e1rmTrend: Array(e1rms.suffix(window)),
-            rpeAtSameLoadTrend: rpes.isEmpty ? nil : Array(rpes.suffix(window)),
+            rpeAtSameLoadTrend: rpes.count >= 2 ? Array(rpes.suffix(window)) : nil,
             loadGrid: loadGrid(for: info, equipment: equipment),
             lastWorkingWeightKg: lastWorking.first?.weightKg,
             lastWorkingSetCount: lastWorking.isEmpty ? nil : lastWorking.count,

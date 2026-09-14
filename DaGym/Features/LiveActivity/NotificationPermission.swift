@@ -7,9 +7,11 @@ import UserNotifications
 enum NotificationPermission {
     private static var request: Task<Void, Never>?
 
+    /// The delegate is *not* set here any more — `DaGymAppDelegate` does it once per launch. A
+    /// user who granted permission long ago never reaches this function, and used to get the
+    /// system banner over their own workout screen because nothing had installed the delegate.
     static func requestIfNeeded(center: UNUserNotificationCenter = .current()) {
         guard request == nil else { return }
-        center.delegate = RestNotificationDelegate.shared
         request = Task { _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge]) }
     }
 
@@ -18,6 +20,31 @@ enum NotificationPermission {
     static func awaitRequest(center: UNUserNotificationCenter = .current()) async {
         requestIfNeeded(center: center)
         await request?.value
+    }
+}
+
+/// Asking for, and reading back, notification permission — as a protocol so Settings can be
+/// tested against a granted, denied or not-yet-asked system without a device prompt.
+protocol NotificationAuthorizing: Sendable {
+    /// What iOS currently thinks, including a "denied" the user set in iOS Settings after
+    /// granting once.
+    func status() async -> UNAuthorizationStatus
+    /// Prompts if it has never been asked, then reports where that left things. A no-op prompt
+    /// (already determined) still returns the real status.
+    func request() async -> UNAuthorizationStatus
+}
+
+struct SystemNotificationAuthorization: NotificationAuthorizing {
+    func status() async -> UNAuthorizationStatus {
+        await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+    }
+
+    func request() async -> UNAuthorizationStatus {
+        let center = UNUserNotificationCenter.current()
+        if await center.notificationSettings().authorizationStatus == .notDetermined {
+            _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
+        }
+        return await center.notificationSettings().authorizationStatus
     }
 }
 

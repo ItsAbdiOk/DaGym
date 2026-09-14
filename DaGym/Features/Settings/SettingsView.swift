@@ -74,10 +74,28 @@ struct SettingsView: View {
     }
 
     private var restTimerCard: some View {
+        VStack(alignment: .leading, spacing: DGSpace.s3) {
+            restTimerRows
+            Text("Default rest is used for any exercise that has no rest of its own. \"Off\" turns"
+                + " the rest timer off completely — no countdown, no Lock Screen alert.")
+                .font(DGFont.footnote)
+                .foregroundStyle(DGColor.ink4)
+        }
+    }
+
+    private var restTimerRows: some View {
         SettingsSection(title: "Rest Timer") {
             SettingsRow(label: "Default rest") {
                 Stepper(value: binding(\.defaultRestSeconds), in: 0...300, step: 15) {
                     Text(restTimerLabel).font(DGFont.subhead).foregroundStyle(DGColor.ink3)
+                }
+            }
+            SettingsDivider()
+            SettingsRow(label: "Rest-pause rest") {
+                Stepper(value: binding(\.restPauseSeconds), in: 5...60, step: 5) {
+                    Text(WorkoutSession.clock(preferences.restPauseSeconds))
+                        .font(DGFont.subhead)
+                        .foregroundStyle(DGColor.ink3)
                 }
             }
             SettingsDivider()
@@ -106,6 +124,11 @@ struct SettingsView: View {
 
     private var trainingCard: some View {
         SettingsSection(title: "Training") {
+            TrainingGoalRow(onApply: {
+                preferences.applyTrainingGoalDefaults()
+                notificationScheduler.rescheduleAll(store: store, preferences: preferences)
+            })
+            SettingsDivider()
             SettingsRow(label: "Weekly goal") {
                 Stepper(value: weeklyGoalBinding, in: 1...7) {
                     Text("\(preferences.weeklyGoal)").font(DGFont.subhead).foregroundStyle(DGColor.ink3)
@@ -113,7 +136,7 @@ struct SettingsView: View {
             }
             SettingsDivider()
             SettingsRow(label: "Week starts") {
-                Picker("Week starts", selection: binding(\.weekStartsMonday)) {
+                Picker("Week starts", selection: weekStartsMondayBinding) {
                     Text("MON").tag(true)
                     Text("SUN").tag(false)
                 }
@@ -236,6 +259,19 @@ struct SettingsView: View {
         Binding(get: { preferences[keyPath: keyPath] }, set: { preferences[keyPath: keyPath] = $0 })
     }
 
+    /// "This week" moving changes which days the goal-at-risk and recap notifications belong to,
+    /// so the pending ones have to be rebuilt — otherwise the change only lands on next launch.
+    private var weekStartsMondayBinding: Binding<Bool> {
+        Binding(
+            get: { preferences.weekStartsMonday },
+            set: {
+                preferences.weekStartsMonday = $0
+                notificationScheduler.rescheduleAll(store: store, preferences: preferences)
+                WidgetSnapshotWriter.refresh(store: store, preferences: preferences)
+            }
+        )
+    }
+
     private var weeklyGoalBinding: Binding<Int> {
         Binding(
             get: { preferences.weeklyGoal },
@@ -276,6 +312,43 @@ struct SettingsRow<Trailing: View>: View {
         }
         .padding(.horizontal, DGSpace.s5)
         .frame(minHeight: 52)
+    }
+}
+
+/// The "Goal" row: the onboarding answer, made editable and made real. Changing it calls back so
+/// the caller can re-apply that goal's rest length and weekly session count — the two numbers its
+/// own subtitle promises — rather than leaving the answer as a stored string nobody reads.
+struct TrainingGoalRow: View {
+    var onApply: () -> Void
+    @Environment(Preferences.self) private var preferences
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            SettingsRow(label: "Goal") {
+                Picker("Goal", selection: goalBinding) {
+                    ForEach(Preferences.TrainingGoal.allCases, id: \.self) { goal in
+                        Text(goal.title).tag(goal)
+                    }
+                }
+                .pickerStyle(.menu)
+                .tint(DGColor.coral)
+            }
+            Text(preferences.trainingGoal.detail)
+                .font(DGFont.footnote)
+                .foregroundStyle(DGColor.ink4)
+                .padding(.horizontal, DGSpace.s5)
+                .padding(.bottom, DGSpace.s3)
+        }
+    }
+
+    private var goalBinding: Binding<Preferences.TrainingGoal> {
+        Binding(
+            get: { preferences.trainingGoal },
+            set: {
+                preferences.trainingGoal = $0
+                onApply()
+            }
+        )
     }
 }
 

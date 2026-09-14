@@ -7,9 +7,10 @@ import Foundation
 /// recently, it does not tell the lifter what is happening inside their body.
 extension CoachRules {
     static func recoveryDebtCards(input: CoachInput, now: Date) -> [CoachCard] {
-        // The fatigue reference is a downward-only EWMA seeded at `recoveryFatigueScale`, so a
-        // lifter's first few sessions read as an ever-larger share of a still-falling "normal".
-        // Wait for enough history for the reference to mean something.
+        // Not a correction for the fatigue maths — that is an absolute count of recent work and
+        // means the same thing on a lifter's first session as on their thousandth. This is a
+        // rate limit on the *advice*: "you've trained these hard recently" off one or two logged
+        // sessions is a claim about a lifter the app has barely seen.
         guard input.recentSessions.count >= TrainingConstants.coachRecoveryDebtMinSessions else {
             return []
         }

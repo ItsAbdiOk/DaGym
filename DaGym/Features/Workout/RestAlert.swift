@@ -10,11 +10,11 @@ import Synchronization
 /// system alert sounds do.
 @MainActor
 final class RestAlertPlayer {
-    /// Same `UserDefaults` key as `Preferences.playRestSoundOnSilent` (`DaGym/Design/
-    /// UnitEnvironment.swift`). This class isn't a view and has no `@Environment` access, so it
-    /// reads the flag directly rather than threading a `Preferences` reference through
-    /// `ActiveWorkoutView`'s `@State var restAlertPlayer = RestAlertPlayer()`.
-    private static let playOnSilentKey = "playRestSoundOnSilent"
+    /// Mirrors `Preferences.playRestSoundOnSilent`. Pushed in by `ActiveWorkoutView` (on appear
+    /// and on every change) rather than read back out of `UserDefaults` by raw key: this class
+    /// has no `@Environment` access, but reaching around `Preferences` to a string key meant a
+    /// renamed key would fail silently instead of failing to compile.
+    var playsOnSilent = false
 
     private let engine = AVAudioEngine()
     private let sampleRate = 44_100.0
@@ -48,8 +48,8 @@ final class RestAlertPlayer {
     /// `.ambient` mixes with whatever is playing and stays silent when the ringer switch is
     /// muted, the same way system alert sounds do. Opting into "Play on silent" switches to
     /// `.playback`, which pauses other audio but ignores the ringer switch — the Settings toggle
-    /// that flips this key says so. Re-checked (cheaply) on every bleep rather than once, so
-    /// toggling the setting mid-workout takes effect on the very next rest timer.
+    /// that flips `playsOnSilent` says so. Re-checked (cheaply) on every bleep rather than once,
+    /// so toggling the setting mid-workout takes effect on the very next rest timer.
     ///
     /// Two coordination rules, both learned the hard way:
     ///
@@ -62,8 +62,7 @@ final class RestAlertPlayer {
     ///   the next bleep re-applies what it needs instead of assuming it's still in force.
     private func updateSessionCategoryIfNeeded() {
         guard !VoiceAudioSession.isRecordingActive else { return }
-        let playOnSilent = UserDefaults.standard.bool(forKey: Self.playOnSilentKey)
-        let desired: AVAudioSession.Category = playOnSilent ? .playback : .ambient
+        let desired: AVAudioSession.Category = playsOnSilent ? .playback : .ambient
         let session = AVAudioSession.sharedInstance()
         guard session.category != desired else { return }
         try? session.setCategory(desired)

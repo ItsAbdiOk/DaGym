@@ -67,6 +67,8 @@ struct ActiveWorkoutView: View {
             session.onRestTick = handleRestTick
             session.restHaptics = preferences.restHaptics
             session.restPauseSeconds = preferences.restPauseSeconds
+            session.defaultRestSeconds = preferences.defaultRestSeconds
+            restAlertPlayer.playsOnSilent = preferences.playRestSoundOnSilent
             await runTimers()
         }
         .onChange(of: scenePhase) { _, phase in
@@ -74,6 +76,10 @@ struct ActiveWorkoutView: View {
         }
         .onChange(of: preferences.restHaptics) { _, enabled in session.restHaptics = enabled }
         .onChange(of: preferences.restPauseSeconds) { _, seconds in session.restPauseSeconds = seconds }
+        .onChange(of: preferences.defaultRestSeconds) { _, seconds in
+            session.defaultRestSeconds = seconds
+        }
+        .onChange(of: preferences.playRestSoundOnSilent) { _, on in restAlertPlayer.playsOnSilent = on }
         .onChange(of: session.hasUndoneSets) { _, hasUndone in
             if hasUndone { allDoneDismissed = false }
         }

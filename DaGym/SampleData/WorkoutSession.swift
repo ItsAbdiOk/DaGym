@@ -28,6 +28,17 @@ final class WorkoutSession {
     /// suspended: rest and hold state store dates, never accumulated ticks.
     @ObservationIgnored var now: () -> Date = Date.init
 
+    /// The rounding grid warm-ups are generated on, per exercise. Warm-ups have to land on
+    /// weights the lifter's own rack can build — rounding to a bare increment asks a rack with
+    /// no 1.25s for 42.5 kg — but this type is UI- and store-free, so the grid is injected.
+    /// Nil means "no equipment known": fall back to the exercise's increment, as before.
+    @ObservationIgnored var warmupGrid: ((ExerciseInfo) -> LoadGrid)?
+
+    /// Seeded into every new session's `warmupGrid`. Installed once at launch by `DaGymApp`,
+    /// which is the only place that has both the store (for the active equipment profile) and
+    /// a lifetime longer than any session. Left nil in tests and previews.
+    @MainActor static var defaultWarmupGrid: ((ExerciseInfo) -> LoadGrid)?
+
     // Rest timer
     /// When the current rest ends; nil when not resting. `restRemaining` is a cache of
     /// `endDate - now`, refreshed by `tickRest()` so views re-render once a second.
@@ -54,6 +65,10 @@ final class WorkoutSession {
     /// Mirrors `Preferences.restPauseSeconds`: the short pause a rest-pause set starts instead
     /// of the exercise's full rest. Set by `ActiveWorkoutView`.
     var restPauseSeconds = 20
+    /// Mirrors `Preferences.defaultRestSeconds`: the fallback rest for an exercise that carries
+    /// none of its own, and — at `0` — the master off switch for the rest timer. Set by
+    /// `ActiveWorkoutView`; see `restSeconds(after:set:)`.
+    var defaultRestSeconds = 150
     private var restExerciseName = ""
     private var restSetNumber = 0
     private var restSetCount = 0
@@ -74,6 +89,7 @@ final class WorkoutSession {
         self.startedAt = startedAt
         self.exercises = exercises
         self.isBackfilled = isBackfilled
+        warmupGrid = Self.defaultWarmupGrid
     }
 
     /// Timed-hold live timer, or nil when no hold is in progress.
@@ -242,7 +258,8 @@ final class WorkoutSession {
         let workingSet = entry.sets[workingIndex]
         let warmups = GymCore.WarmupGenerator.sets(
             workingWeightKg: workingSet.weightKg, style: entry.exercise.warmupLoadingStyle,
-            estimatedOneRepMax: entry.exercise.bestE1RM, increment: entry.exercise.incrementKg
+            estimatedOneRepMax: entry.exercise.bestE1RM, increment: entry.exercise.incrementKg,
+            grid: warmupGrid?(entry.exercise)
         )
         guard !warmups.isEmpty else { return }
         let newSets = warmups.map { SetEntry(kind: .warmup, weightKg: $0.weightKg, reps: $0.reps) }

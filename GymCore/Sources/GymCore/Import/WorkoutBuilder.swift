@@ -18,10 +18,7 @@ struct WorkoutBuilder {
                 notes: entry.workoutNotes
             )
         }
-        workouts[workoutKey]?.addSet(
-            set, exerciseName: entry.exerciseName, exerciseNote: entry.exerciseNote,
-            exerciseCategory: entry.exerciseCategory
-        )
+        workouts[workoutKey]?.addSet(set, entry: entry)
     }
 
     /// Workouts in the order their first row appeared, each sorted internally by exercise's
@@ -45,25 +42,31 @@ struct WorkoutBuilder {
             self.notes = notes
         }
 
-        mutating func addSet(
-            _ set: ImportedSet, exerciseName: String, exerciseNote: String, exerciseCategory: String?
-        ) {
-            if exercises[exerciseName] == nil {
-                exerciseOrder.append(exerciseName)
-                exercises[exerciseName] = ExerciseInProgress(name: exerciseName)
+        mutating func addSet(_ set: ImportedSet, entry: WorkoutRowInfo) {
+            let name = entry.exerciseName
+            if exercises[name] == nil {
+                exerciseOrder.append(name)
+                exercises[name] = ExerciseInProgress(name: name)
             }
-            exercises[exerciseName]?.sets.append(set)
-            if let existing = exercises[exerciseName], existing.note.isEmpty, !exerciseNote.isEmpty {
-                exercises[exerciseName]?.note = exerciseNote
+            exercises[name]?.sets.append(set)
+            if let existing = exercises[name], existing.note.isEmpty, !entry.exerciseNote.isEmpty {
+                exercises[name]?.note = entry.exerciseNote
             }
-            if let existing = exercises[exerciseName], existing.category == nil, let exerciseCategory {
-                exercises[exerciseName]?.category = exerciseCategory
+            let current = exercises[name]
+            if current?.category == nil, let category = entry.exerciseCategory {
+                exercises[name]?.category = category
+            }
+            if current?.supersetGroup == nil, let group = entry.supersetGroup {
+                exercises[name]?.supersetGroup = group
             }
         }
 
         func finish() -> ImportedWorkout {
             let entries = exerciseOrder.compactMap { exercises[$0] }.map {
-                ImportedExercise(name: $0.name, note: $0.note, category: $0.category, sets: $0.sets)
+                ImportedExercise(
+                    name: $0.name, note: $0.note, category: $0.category,
+                    supersetGroup: $0.supersetGroup, sets: $0.sets
+                )
             }
             return ImportedWorkout(
                 startedAt: startedAt, endedAt: endedAt, title: title, notes: notes, exercises: entries
@@ -75,6 +78,7 @@ struct WorkoutBuilder {
         var name: String
         var note = ""
         var category: String?
+        var supersetGroup: Int?
         var sets: [ImportedSet] = []
     }
 }
@@ -89,4 +93,5 @@ struct WorkoutRowInfo {
     var exerciseName: String
     var exerciseNote: String
     var exerciseCategory: String?
+    var supersetGroup: Int?
 }

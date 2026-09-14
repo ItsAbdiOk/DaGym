@@ -167,6 +167,40 @@ struct WorkoutStoreDeloadTests {
         #expect(store.hardWeekStreak(weeklyGoal: 1, now: Date()) >= 1)
     }
 
+    /// `hardWeeksInARow` is counted from calendar weeks, and the week in progress has not had a
+    /// chance to meet the goal yet. Anchoring the walk on it meant a lifter eight hard weeks deep
+    /// read 0 every Monday and Tuesday, so the deload rule's hard-weeks arm effectively only
+    /// existed at the end of a week.
+    @Test("an in-progress week short of the goal doesn't collapse the streak to zero")
+    func hardWeekStreakStartsFromTheLastCompleteWeek() throws {
+        let store = try makeStore()
+        let calendar = Calendar.current
+        let now = Date()
+        let exercise = store.createCustomExercise(
+            name: "Bench Press", primary: [.chest], equipment: "Barbell", style: .weightReps
+        )
+        let routine = store.saveRoutine(
+            id: nil, name: "Push A",
+            exercises: [RoutineExerciseDraft(
+                exerciseID: exercise.id,
+                sets: [PlannedSetDraft(kind: .working, targetReps: 8, targetWeightKg: 80)]
+            )]
+        )
+        let thisWeek = try #require(calendar.dateInterval(of: .weekOfYear, for: now)?.start)
+        let midWeek = try #require(calendar.date(byAdding: .day, value: 1, to: thisWeek))
+        // Three complete weeks, one session each, and nothing logged yet this week.
+        for weeksAgo in 1...3 {
+            let date = try #require(calendar.date(byAdding: .weekOfYear, value: -weeksAgo, to: midWeek))
+            let session = store.startBackfill(date: date, durationMinutes: 45, routineID: routine.id)
+            session.exercises[0].sets[0].weightKg = 80
+            session.exercises[0].sets[0].reps = 8
+            session.exercises[0].sets[0].isDone = true
+            _ = store.finish(session: session)
+        }
+
+        #expect(store.hardWeekStreak(weeklyGoal: 1, now: now) == 3)
+    }
+
     /// Like `stalledLift`'s session logging, but lets the caller flag the session as a planned
     /// deload and choose the load, for trend-exclusion tests.
     private func logDeloadable(

@@ -32,13 +32,23 @@ extension WorkoutSession {
     /// superset partner still owes a set this round, the group's longest rest once the round is
     /// over, the exercise's own rest for a singleton, the short `restPauseSeconds` after a
     /// rest-pause set, and nothing at all after the session's last set.
+    ///
+    /// `defaultRestSeconds` (Settings → "Default rest") governs two things here, and is the only
+    /// reason that stepper isn't decoration: at `0` it is "Off" and no rest ever starts, and
+    /// otherwise it is the fallback for an exercise whose own `restSeconds` is unset (`<= 0`).
     func restSeconds(after exerciseIndex: Int, set setIndex: Int) -> Int {
-        guard hasUndoneSets else { return 0 }
+        guard hasUndoneSets, defaultRestSeconds > 0 else { return 0 }
         if exercises[exerciseIndex].sets[setIndex].kind == .restPause { return restPauseSeconds }
         let members = supersetMembers(containing: exerciseIndex)
-        guard members.count > 1 else { return exercises[exerciseIndex].exercise.restSeconds }
+        guard members.count > 1 else { return rest(of: exerciseIndex) }
         if roundPartner(members: members, round: setIndex, excluding: exerciseIndex) != nil { return 0 }
-        return members.map { exercises[$0].exercise.restSeconds }.max() ?? 0
+        return members.map { rest(of: $0) }.max() ?? 0
+    }
+
+    /// One exercise's rest, falling back to `defaultRestSeconds` when it carries none.
+    private func rest(of exerciseIndex: Int) -> Int {
+        let own = exercises[exerciseIndex].exercise.restSeconds
+        return own > 0 ? own : defaultRestSeconds
     }
 
     func supersetMembers(containing exerciseIndex: Int) -> [Int] {

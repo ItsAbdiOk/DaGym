@@ -100,7 +100,10 @@ private struct ExercisePickerRow: View {
 
     var body: some View {
         HStack(spacing: DGSpace.s3) {
-            BodyMapView(side: .front, intensity: exercise.hitMap)
+            BodyMapView(
+                side: BodyMapMuscleMapping.thumbnailSide(forPrimary: exercise.primary),
+                intensity: exercise.hitMap
+            )
                 .padding(6)
                 .frame(width: 44, height: 44)
                 .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: 10, style: .continuous))

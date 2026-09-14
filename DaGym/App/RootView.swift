@@ -44,7 +44,12 @@ struct RootView: View {
             Haptics.step()
             refreshRoutine()
         }
-        .onChange(of: store.changeToken) { _, _ in refresh() }
+        // Deliberately *not* the full `refresh()`: `changeToken` bumps on every logged set, and
+        // `WidgetSnapshotWriter.refresh` behind it is a whole-history fetch plus a streak
+        // recompute — a visible hitch on every tap once history is large. The widget is already
+        // written on finish, routine saves and schedule saves, which is when it can change.
+        .onChange(of: store.changeToken) { _, _ in refreshRoutine() }
+        .onChange(of: PendingIntentHandoff.shared.pending) { _, _ in runPendingIntents() }
         .confirmationDialog(
             "Resume Workout?", isPresented: resumePromptBinding, titleVisibility: .visible,
             presenting: resumePrompt
@@ -99,11 +104,18 @@ struct RootView: View {
     private func refresh() {
         refreshRoutine()
         WidgetSnapshotWriter.refresh(store: store, preferences: preferences)
-        if PendingGymCardIntentAction.consumeShowGymCard() { showingGymCard = true }
+        runPendingIntents()
+    }
+
+    /// Acts on everything queued in `PendingIntentHandoff`. Called from the first mount, every
+    /// foreground, and directly from the `onChange` below — so an intent that lands after the
+    /// refresh has already run is still honoured immediately.
+    private func runPendingIntents() {
         for action in PendingIntentHandoff.consume(routineLoaded: true) {
             switch action {
             case .startWorkout: startPendingWorkout()
             case .startRestTimer: startPendingRestTimer()
+            case .showGymCard: showingGymCard = true
             }
         }
     }
@@ -198,6 +210,8 @@ struct RootView: View {
     /// attach the rest to, so a freestyle session (no exercises yet) has nothing to rest before
     /// and this is a no-op — starting a routine covers the common case.
     private func startPendingRestTimer() {
+        // "Default rest: Off" means no rest timer anywhere, this intent included.
+        guard preferences.defaultRestSeconds > 0 else { return }
         if session == nil {
             startFromScheduledRoutine()
         }
@@ -236,6 +250,9 @@ struct RootView: View {
               let routineID = UUID(uuidString: idString),
               let matched = store.routines().first(where: { $0.id == routineID })
         else { return }
+        // A calendar event tapped mid-workout must not replace the running session: `startWorkout`
+        // would overwrite `session`, and the old `WorkoutSession`'s unsaved sets would go with it.
+        guard session == nil else { return }
         startWorkout(matched)
     }
 
@@ -257,8 +274,11 @@ struct RootView: View {
         defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
         do {
             let data = try Data(contentsOf: url)
+            // `sanitised()` is not optional politeness: a `.gymplan` arrives from someone else's
+            // device and is written straight into routines, programs and custom exercises. Every
+            // clamp in `PlanSanitizing` only runs because of this call.
             let document = try await Task.detached(priority: .userInitiated) {
-                try PlanCodec.decode(data)
+                try PlanCodec.decode(data).sanitised()
             }.value
             pendingPlanReport = PlanShareService.importPlan(
                 document: document, context: store.context, preview: true
@@ -314,28 +334,6 @@ private extension RootView {
     func tabLabel(_ tab: DGTab) -> some View {
         Label(tab.title, systemImage: tab.symbol)
             .accessibilityIdentifier(tab.accessibilityID)
-    }
-}
-
-/// The Siri / Control Center flags (`PendingWorkoutIntentAction`, `PendingIntentAction`) are read
-/// in one place, and only once today's routine has been fetched: a flag set before `RootView`
-/// has a routine stays set (`routineLoaded: false`) rather than being burned against
-/// `routine == nil`, so the hand-off survives both a cold launch and a warm one.
-@MainActor
-enum PendingIntentHandoff {
-    enum Action: Equatable {
-        case startWorkout
-        case startRestTimer
-    }
-
-    /// The actions to run now, clearing their flags; empty (flags untouched) until
-    /// `routineLoaded`. Rest timer first: it starts today's routine itself if it must.
-    static func consume(routineLoaded: Bool) -> [Action] {
-        guard routineLoaded else { return [] }
-        var actions: [Action] = []
-        if PendingIntentAction.consumeStartRestTimer() { actions.append(.startRestTimer) }
-        if PendingWorkoutIntentAction.consumeStartWorkout() { actions.append(.startWorkout) }
-        return actions
     }
 }
 

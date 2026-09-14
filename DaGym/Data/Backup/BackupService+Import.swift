@@ -13,9 +13,15 @@ extension BackupService {
     @discardableResult
     static func `import`(
         document: BackupDocument, context: ModelContext, mode: ImportMode = .merge,
-        baseline: SeedBaseline = SeedBaseline()
+        baseline: SeedBaseline = SeedBaseline(), photoContext: ModelContext? = nil,
+        healthContext: ModelContext? = nil, preferences: Preferences? = nil
     ) -> ImportReport {
         var report = ImportReport()
+        // "Reset everything" deletes every `ExerciseModel`, and re-seeding otherwise only happens
+        // at launch. Without this, a restore in the same session resolves every seeded exercise
+        // against an empty library: each workout imports with its sets dropped and a "not found"
+        // problem for every row. Seed first, then resolve.
+        seedLibraryIfTheFileNeedsIt(document, context: context)
         let exerciseIndex = ExerciseIndex(context: context)
         importExercises(
             document.exercises, index: exerciseIndex, baseline: baseline, context: context, report: &report
@@ -29,16 +35,47 @@ extension BackupService {
         importPrograms(document.programs ?? [], context: context)
         importAchievements(document.achievements ?? [], context: context)
         importSchedule(document.schedule, context: context)
+        importExtras(
+            document, index: exerciseIndex, context: context, photoContext: photoContext,
+            healthContext: healthContext, report: &report
+        )
         do {
             try context.save()
         } catch {
             report.problems.append("Saving the import failed: \(error.localizedDescription)")
             return report
         }
+        applyPreferences(document.preferences, to: preferences ?? Preferences())
+        report.preferencesRestored = true
         if importedWorkouts > 0 {
             WorkoutStore(context: context, photoContext: nil).rebuildPersonalRecords()
         }
         return report
+    }
+
+    /// Seeds the bundled exercise library when the store has none.
+    ///
+    /// Called by `DataSettingsSection.performReset`, the only place `WorkoutStore.wipeAllData` is
+    /// invoked from: the wipe deletes every `ExerciseModel` and seeding otherwise only happens at
+    /// launch, so without this the app runs on an empty library until the next cold start. A
+    /// single count query, and a no-op in every normal case.
+    static func ensureExerciseLibrary(context: ModelContext) {
+        let count = (try? context.fetchCount(FetchDescriptor<ExerciseModel>())) ?? 0
+        guard count == 0 else { return }
+        ExerciseSeeder.seedIfNeeded(context: context)
+    }
+
+    /// The same guard, but only when the file actually references built-in exercises — a backup of
+    /// nothing but custom exercises has no use for 1,466 seeded rows, and pulling them in would
+    /// change what a merge means for every other caller.
+    private static func seedLibraryIfTheFileNeedsIt(
+        _ document: BackupDocument, context: ModelContext
+    ) {
+        let needsSeeds = document.exercises.contains { $0.seedID != nil }
+            || document.routines.contains { $0.exercises.contains { $0.exerciseSeedID != nil } }
+            || document.workouts.contains { $0.exercises.contains { $0.exerciseSeedID != nil } }
+        guard needsSeeds else { return }
+        ensureExerciseLibrary(context: context)
     }
 
     /// Looks up `ExerciseModel`s by seedID/id/name, kept in memory for the
@@ -193,21 +230,22 @@ extension BackupService {
         return inserted
     }
 
+    /// Logged history is irreplaceable, so an unresolvable exercise is *recreated* as a custom
+    /// one rather than taking the sets down with it — including the placeholder rows an export
+    /// writes for history whose custom exercise had already been deleted. Dropping the row (what
+    /// this used to do) silently deleted real training data during a restore.
     private static func makeWorkoutExercise(
         _ draft: BackupWorkoutExercise, index: ExerciseIndex, workout: WorkoutModel,
         context: ModelContext, report: inout ImportReport
     ) -> WorkoutExerciseModel? {
         let match = index.find(seedID: draft.exerciseSeedID, id: nil, name: draft.exerciseName)
-        guard let exercise = match else {
-            report.problems.append(
-                "Skipped \"\(draft.exerciseName)\" in workout \"\(workout.title)\": exercise not found."
-            )
-            return nil
-        }
+            ?? recreate(draft, workout: workout, index: index, context: context, report: &report)
+        guard let exercise = match else { return nil }
         let model = WorkoutExerciseModel(
             id: draft.id, order: draft.order, supersetGroup: draft.supersetGroup, note: draft.note,
             wasSubstitution: draft.wasSubstitution, wasPlannedDeload: draft.wasPlannedDeload ?? false,
-            exercise: exercise, workout: workout
+            excludedFromProgression: draft.excludedFromProgression ?? false,
+            routineID: draft.routineID, exercise: exercise, workout: workout
         )
         context.insert(model)
         model.sets = draft.sets.map { set in
@@ -221,6 +259,28 @@ extension BackupService {
             context.insert(setModel)
             return setModel
         }
+        return model
+    }
+
+    /// Recreates a missing exercise as a custom one so its sets survive. `nil` only for a draft
+    /// with no usable name at all, which has nothing to recreate from.
+    private static func recreate(
+        _ draft: BackupWorkoutExercise, workout: WorkoutModel, index: ExerciseIndex,
+        context: ModelContext, report: inout ImportReport
+    ) -> ExerciseModel? {
+        let name = draft.exerciseName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            report.problems.append("Skipped an unnamed exercise in workout \"\(workout.title)\".")
+            return nil
+        }
+        let model = ExerciseModel(name: name, isCustom: true)
+        context.insert(model)
+        index.register(model)
+        report.exercisesImported += 1
+        report.problems.append(
+            "\"\(name)\" wasn't in your library, so it was added as a custom exercise to keep the "
+                + "sets logged against it."
+        )
         return model
     }
 
@@ -242,13 +302,17 @@ extension BackupService {
     private static func importEquipmentProfiles(
         _ items: [BackupEquipmentProfile], context: ModelContext, report: inout ImportReport
     ) {
-        let existingIDs = Set(
-            ((try? context.fetch(FetchDescriptor<EquipmentProfileModel>())) ?? []).map(\.id)
-        )
+        let existing = (try? context.fetch(FetchDescriptor<EquipmentProfileModel>())) ?? []
+        let existingIDs = Set(existing.map(\.id))
+        // A restore onto a store with no active profile brings the active one back; a merge into a
+        // store that already has one never steals its place. Forcing `false` unconditionally, as
+        // this used to, left a freshly-restored phone with no active profile at all.
+        var hasActive = existing.contains(where: \.isActive)
         for item in items where !existingIDs.contains(item.id) {
-            // Never let an import silently switch the user's active profile.
+            let shouldActivate = item.isActive && !hasActive
+            if shouldActivate { hasActive = true }
             let model = EquipmentProfileModel(
-                id: item.id, name: item.name, isActive: false, barKg: item.barKg,
+                id: item.id, name: item.name, isActive: shouldActivate, barKg: item.barKg,
                 availableEquipment: item.availableEquipment, plateStockKg: item.plateStockKg,
                 plateCounts: item.plateCounts, collarsKg: item.collarsKg, createdAt: item.createdAt,
                 seedKey: item.seedKey
@@ -298,9 +362,31 @@ extension BackupService {
     }
 
     /// Only fills an empty schedule — an existing one is the user's current plan on this device.
+    ///
+    /// "Empty" means *no rows or no content*, not just no rows: `ScheduleModel` is created lazily
+    /// the first time anything reads the schedule, so merely opening the schedule screen before
+    /// restoring used to leave a blank row behind that silently swallowed the backup's schedule.
     private static func importSchedule(_ item: BackupSchedule?, context: ModelContext) {
-        let existing = (try? context.fetchCount(FetchDescriptor<ScheduleModel>())) ?? 0
-        guard let item, existing == 0 else { return }
-        context.insert(ScheduleModel(scheduleJSON: item.scheduleJSON, updatedAt: item.updatedAt))
+        guard let item else { return }
+        let existing = (try? context.fetch(FetchDescriptor<ScheduleModel>())) ?? []
+        guard let row = existing.first else {
+            context.insert(ScheduleModel(scheduleJSON: item.scheduleJSON, updatedAt: item.updatedAt))
+            return
+        }
+        guard existing.allSatisfy(isBlank) else { return }
+        row.scheduleJSON = item.scheduleJSON
+        row.updatedAt = item.updatedAt
+    }
+
+    /// A lazily-created row the user never filled in: no JSON, or JSON with no day entries.
+    private static func isBlank(_ model: ScheduleModel) -> Bool {
+        let trimmed = model.scheduleJSON.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed == "{}" || trimmed == "[]" { return true }
+        guard let data = trimmed.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) else { return false }
+        if let dictionary = object as? [String: Any] {
+            return dictionary.values.allSatisfy { ($0 as? [Any])?.isEmpty ?? false }
+        }
+        return (object as? [Any])?.isEmpty ?? false
     }
 }

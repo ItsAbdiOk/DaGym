@@ -19,8 +19,15 @@ enum LaunchFlags {
     /// `XCTestConfigurationFilePath` or `XCTestBundlePath`). The app then skips CloudKit, the
     /// App Group store and HealthKit so the host launches instantly and tests build their own
     /// in-memory containers.
+    /// The `-dgTestHost` arm is `#if DEBUG` like every other launch-argument flag here. In a
+    /// Release build it made the container in-memory, skipped seeding and the app delegate and
+    /// returned nil from every intent — a data-loss switch anyone could flip on a shipped
+    /// binary. The XCTest environment/class sniffing below needs no gate: neither can be true
+    /// in an App Store process.
     static var isUnitTestHost: Bool {
+        #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-dgTestHost") { return true }
+        #endif
         let env = ProcessInfo.processInfo.environment
         if env["XCTestConfigurationFilePath"] != nil || env["XCTestBundlePath"] != nil
             || env["XCTestSessionIdentifier"] != nil {

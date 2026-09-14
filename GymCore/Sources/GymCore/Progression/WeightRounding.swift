@@ -123,20 +123,3 @@ public enum LoadGrid: Hashable, Sendable {
         return .step(smallest.map { $0 * 2 } ?? TrainingConstants.defaultStepKg)
     }
 }
-
-/// Rounds a target weight onto the loadable plate grid, shared by every
-/// progression rule that needs to turn a computed number into a real weight.
-/// Kept for callers that still think in bar/plates; `LoadGrid` is the general form.
-enum WeightRounding {
-    static func nearest(_ target: Double, bar: Bar, plates: [PlateStock], collarsKg: Double) -> Double {
-        LoadGrid.plates(bar: bar, plates: plates, collarsKg: collarsKg).nearest(target)
-    }
-
-    static func nearestBelow(_ target: Double, bar: Bar, plates: [PlateStock], collarsKg: Double) -> Double {
-        LoadGrid.plates(bar: bar, plates: plates, collarsKg: collarsKg).nearestBelow(target)
-    }
-
-    static func nearestAbove(_ current: Double, bar: Bar, plates: [PlateStock], collarsKg: Double) -> Double {
-        LoadGrid.plates(bar: bar, plates: plates, collarsKg: collarsKg).nearestAbove(current)
-    }
-}

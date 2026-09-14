@@ -26,6 +26,8 @@ public enum TrainingConstants {
     /// §7 recovery model: raw fatigue (Σ effort × share, decayed) is divided by this before the
     /// saturating curve, so ~one hard session's worth of primary sets (6 at RIR 0) reads 50 % spent.
     /// Without it a single hard set already read 50 % and a 10-set day stayed "spent" for 4 days.
+    /// This is the *only* normalisation in the model, and it is the same constant for every
+    /// lifter — the map reads absolute recent work, not work relative to the lifter's habits.
     public static let recoveryFatigueScale = 6.0
 
     // MARK: - Progression
@@ -98,7 +100,23 @@ public enum TrainingConstants {
     // swiftlint:enable large_tuple
 
     /// Deload detection thresholds (plan.md §7).
-    public static let deloadStallCount = 3
+    ///
+    /// `DeloadDetector` is fed `StallState.consecutiveMisses` as the app persists it, and that
+    /// number cannot reach `linearMissesBeforeDeload`. Two things cap it: the persisted counter
+    /// lags a session (`WorkoutStore.finish` commits the judgement `startWorkout` already
+    /// computed, so the session just logged has not been judged yet), and every rule that
+    /// counts misses zeroes the counter on the miss that trips its own deload. The reachable
+    /// persisted values are therefore {0, 1, 2} for linear, double progression and timed,
+    /// {0, 1} for linear + AMRAP (`amrapMissesBeforeReset` is 2), and always 0 for
+    /// RPE / training-max / bodyweight / assisted, which never increment it at all.
+    ///
+    /// 3 was consequently dead: no lift ever reached it, so the stall arm of
+    /// `DeloadDetector.stallReasons` — and `CoachLiftSnapshot.drivesDeloadSuggestion`, which
+    /// shares this constant — could never fire. 2 is the top of the reachable range and means
+    /// what a deload suggestion should mean: two sessions judged short at the same weight, with
+    /// the engine's own deload as the next prescription. Requiring `deloadMinLiftsStalling` of
+    /// them keeps it a programme-wide signal rather than one bad lift.
+    public static let deloadStallCount = 2
     /// How many recent sessions `LiftSnapshot.e1rmTrend`/`rpeAtSameLoadTrend` carry for
     /// `DeloadDetector` — its regression check compares the last three points, and its
     /// `isNotProgressing` check compares the first against the last, so a longer array
@@ -114,16 +132,21 @@ public enum TrainingConstants {
     public static let deloadLoadFraction = 0.9
 }
 
-// MARK: - Recovery reference, retention and balance (OpenGym parity, insights recs 2–4)
+// MARK: - Recovery attribution, retention and balance (OpenGym parity, insights recs 2–4)
 
 extension TrainingConstants {
     /// §7 recovery model: two stimulus events on the same muscle further apart than this are
-    /// treated as separate sessions when scoring against the lifter's own reference.
+    /// treated as separate sessions in the per-session breakdown.
     public static let recoverySessionGapHours = 6.0
-    /// §7 recovery model: weight of the newest session in the downward-only running reference
-    /// (0.5 ≈ a 3-session horizon). The reference starts at `recoveryFatigueScale` and only
-    /// ever moves down toward the lifter's habitual session size.
-    public static let recoveryReferenceSmoothing = 0.5
+
+    /// §7 recovery model: how much of a set a drop or rest-pause chunk counts as. It continues
+    /// the set before it at a lower load (or after a few seconds), so a triple-drop is one set
+    /// plus two halves, not three sets. See `StimulusAttribution`.
+    public static let recoveryContinuationSetWeight = 0.5
+    /// §7 recovery model: effort assumed for a working set the lifter never rated — between
+    /// RIR 0 (1.0) and RIR ≥ 4 (0.5). `.failure`/`.amrap` sets don't use it: their kind already
+    /// says they were maximal.
+    public static let recoveryUnratedEffort = 0.75
 
     /// Strength retention: full (1.0) for this many days after a muscle's last counting set…
     public static let retentionFullDays = 14.0
@@ -177,22 +200,33 @@ extension TrainingConstants {
     public static let coachCoverageMaxNamedMuscles = 3
 
     /// Stalled lift: the persisted `StallState.consecutiveMisses` at which the per-lift card
-    /// fires. Deliberately *not* `linearMissesBeforeDeload`, and the arithmetic is not obvious:
+    /// fires. Deliberately *not* `linearMissesBeforeDeload`, and the arithmetic is not obvious.
     ///
     /// `WorkoutStore.finish` commits the stall that `startWorkout` already computed for the
-    /// session being finished, so the persisted counter is always one session behind reality —
-    /// after a session is logged, that session has not been judged yet. Persisted 1 means two
-    /// sessions short of target at the same weight; persisted 2 means three, and three is where
-    /// the linear rule deloads on its own, which also resets the counter to 0. So for any lift
-    /// the engine actually drives, the persisted value only ever takes 0, 1 or 2 — and at 2 the
-    /// engine's next prescription *is already the deload*, so a card there would offer the lifter
-    /// a number the app is about to show them anyway.
+    /// session being finished, so the persisted counter is always one session behind reality.
+    /// Read it precisely: **persisted `n` means `n` sessions in a row were judged as misses at
+    /// this weight, and one further session has been logged but not yet judged.** It does *not*
+    /// mean `n + 1` missed sessions — the unjudged session may well have been a hit. (The
+    /// previous wording here claimed persisted 1 meant "two sessions short of target"; it
+    /// doesn't, and the card is written on the weaker claim accordingly.)
     ///
-    /// 1 is therefore the only value at which this card says something the engine hasn't: two
-    /// missed sessions in, one session before the automatic deload, while the prescription on
-    /// offer is still "repeat the same weight". (Values of 3 and above do still occur, but only
-    /// via `RuleContext.lightestLoadPrescribed` — a lift with nothing lighter on the equipment,
-    /// which the card handles with no weight to suggest.)
+    /// The reachable persisted range is 0…2 for every rule that counts misses — see
+    /// `deloadStallCount` for why — and at 2 the engine's next prescription *is already* its own
+    /// deload, so a card there only repeats a number the app is about to show anyway. 1 is
+    /// therefore the only value at which this card says something the engine hasn't: at least one
+    /// judged miss, at most one session before the automatic deload, with "repeat the same
+    /// weight" still on offer.
+    ///
+    /// Known limit of the lag, not fixed by any value of this constant: if the unjudged session
+    /// was a hit, the counter still reads 1 while the next prescription is an increase, and the
+    /// card fires saying the lift has stalled. Removing that needs the rule to also see whether
+    /// the newest session cleared its target (`CoachLiftSnapshot.consecutiveFailedSessions`
+    /// already carries exactly that, judged over real history with no lag) — a change to
+    /// `CoachRules+StalledLift`, not to this number.
+    ///
+    /// (Values of 3 and above do still occur, but only via `RuleContext.lightestLoadPrescribed`
+    /// — a lift with nothing lighter on the equipment, which the card handles with no weight to
+    /// suggest.)
     public static let coachStalledLiftMisses = 1
     public static let coachStalledLiftCooldownDays = 7
 
@@ -224,10 +258,10 @@ extension TrainingConstants {
     public static let coachRecoveryDebtThreshold = 0.6
     public static let coachRecoveryDebtMinMuscles = 2
     public static let coachRecoveryDebtCooldownDays = 3
-    /// Recovery debt: logged sessions required before the rule is allowed to fire at all. The
-    /// fatigue reference is a downward-only EWMA seeded at `recoveryFatigueScale`, so in a
-    /// lifter's first week an ordinary session reads as a bigger and bigger share of their
-    /// (still-falling) normal — noise, not debt.
+    /// Recovery debt: logged sessions required before the rule is allowed to fire at all. Not a
+    /// correction for the fatigue math (which is absolute and meaningful from the first set) —
+    /// a rate limit on the advice: "you've trained these hard recently" off one or two logged
+    /// sessions is a guess about a lifter the app has barely seen.
     public static let coachRecoveryDebtMinSessions = 6
 
     /// PR / milestone: how recent an achievement or PR must be to still be worth a card. The

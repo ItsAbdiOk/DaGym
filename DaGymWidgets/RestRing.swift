@@ -6,12 +6,14 @@ import WidgetKit
 struct RestRing: View {
     let state: RestActivityAttributes.ContentState
 
+    @Environment(\.widgetPalette) private var palette
+
     var body: some View {
         ProgressView(
             timerInterval: state.startDate...state.endDate, countsDown: true,
             label: { EmptyView() }, currentValueLabel: { EmptyView() }
         )
         .progressViewStyle(.circular)
-        .tint(WidgetPalette.coral)
+        .tint(palette.accent)
     }
 }

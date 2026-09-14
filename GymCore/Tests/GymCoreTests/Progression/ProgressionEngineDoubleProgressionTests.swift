@@ -52,11 +52,15 @@ struct ProgressionEngineDoubleProgressionTests {
         #expect(result.stall.consecutiveMisses == 0)
     }
 
-    @Test("weakest reps 10, 9, 10 never beat the run's best, so the third session deloads")
+    /// The first session at a weight sets the bar rather than missing it: it has nothing to beat.
+    /// So `doubleProgressionMissesBeforeDeload` (3) real chances to add a rep means four sessions
+    /// at the weight, and the deload's own copy — "3 sessions … without adding a rep" — is now
+    /// literally true. Counting the first session made it three sessions and two real chances.
+    @Test("the first session sets the bar; three later sessions without a rep then deload")
     func stallAgainstBestOfRun() {
         var stall = StallState()
         var last: Prescribed?
-        for reps in [[10, 10, 10], [10, 9, 10], [10, 10, 10]] {
+        for reps in [[10, 10, 10], [10, 9, 10], [10, 10, 10], [10, 9, 9]] {
             last = ProgressionEngine.prescribe(
                 rule: rule, planned: planned, history: [entry(reps: reps, weightKg: 40)], stall: stall,
                 grid: .step(2.5)
@@ -83,7 +87,7 @@ struct ProgressionEngineDoubleProgressionTests {
         }
     }
 
-    @Test("a weight change resets the run's best before this session is scored")
+    @Test("a weight change resets the run's best, and the first session at the new weight is no miss")
     func weightChangeResetsBest() {
         let stall = StallState(
             consecutiveMisses: 1, lastWeightKg: 40, lastWeakestReps: 10, bestWeakestReps: 10
@@ -92,7 +96,9 @@ struct ProgressionEngineDoubleProgressionTests {
             rule: rule, planned: planned, history: [entry(reps: [8, 7, 6], weightKg: 42.5)], stall: stall,
             grid: .step(2.5)
         )
-        #expect(result.stall.consecutiveMisses == 1)
+        // 6 reps at 42.5 kg is not a "miss": there is no earlier session at 42.5 kg to have
+        // beaten. It records the bar (6) the next session has to clear.
+        #expect(result.stall.consecutiveMisses == 0)
         #expect(result.stall.bestWeakestReps == 6)
         #expect(result.stall.lastWeightKg == 42.5)
     }

@@ -147,6 +147,9 @@ struct ScheduleView: View {
     private func persist() {
         store.saveSchedule(schedule)
         WidgetSnapshotWriter.refresh(store: store, preferences: preferences)
+        // Workout-day reminders are dated, so a schedule edit invalidates every pending one.
+        // Without this they only caught up on the next launch.
+        TrainingNotificationScheduler().rescheduleAll(store: store, preferences: preferences)
         guard preferences.calendarSyncEnabled else { return }
         let snapshot = schedule
         let currentRoutines = routines

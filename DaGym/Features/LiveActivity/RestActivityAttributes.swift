@@ -28,4 +28,9 @@ struct RestActivityAttributes: ActivityAttributes {
     /// "dumbbell"/"coral" for a freestyle session with no routine.
     var routineSymbolName: String
     var routineTint: String
+    /// `DGAccent` / `Preferences.Appearance` raw values as of when this rest started, so the
+    /// Lock Screen banner and Dynamic Island follow the user's theme instead of hard-coding
+    /// coral-on-near-black. Optional: an activity started by an older build decodes without them.
+    var accent: String?
+    var appearance: String?
 }

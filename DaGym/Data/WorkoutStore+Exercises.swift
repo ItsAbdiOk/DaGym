@@ -13,6 +13,12 @@ struct CustomExerciseFields {
 }
 
 extension WorkoutStore {
+    /// Every library exercise except the tombstones a seed fold left behind
+    /// (`ExerciseSeeder.dedupe`) — the base of every "browse the library" read.
+    static func liveExercises() -> FetchDescriptor<ExerciseModel> {
+        FetchDescriptor<ExerciseModel>(predicate: #Predicate { $0.mergedIntoID == nil })
+    }
+
     /// Filtered, sorted (favorites first, then name) exercise list for the library screen. Best
     /// e1RM comes from one fetch of the PR cache shared by every row; `sessions` is left at 0 —
     /// the detail screen fills it in via `exerciseInfo(for:)`, which is the only place it's shown.
@@ -20,7 +26,7 @@ extension WorkoutStore {
         matching query: String = "", muscle: Muscle? = nil, equipment: String? = nil,
         favoritesOnly: Bool = false, customOnly: Bool = false
     ) -> [ExerciseInfo] {
-        let all = fetch(FetchDescriptor<ExerciseModel>())
+        let all = fetch(Self.liveExercises())
         let tokens = Self.searchTokens(query)
         let bestByExercise = bestE1RMRecordsByExercise()
         return all
@@ -219,7 +225,9 @@ extension WorkoutStore {
     /// The library exercise carrying this seed id, for the import alias table. Nil when the row
     /// was deleted or the id isn't in this seed version.
     func exerciseID(seedID: String) -> UUID? {
-        var descriptor = FetchDescriptor<ExerciseModel>(predicate: #Predicate { $0.seedID == seedID })
+        var descriptor = FetchDescriptor<ExerciseModel>(
+            predicate: #Predicate { $0.seedID == seedID && $0.mergedIntoID == nil }
+        )
         descriptor.fetchLimit = 1
         return fetchFirst(descriptor)?.id
     }

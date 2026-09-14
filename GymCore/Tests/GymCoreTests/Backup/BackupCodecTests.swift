@@ -45,7 +45,10 @@ struct BackupCodecTests {
         )
     }
 
-    @Test("round trip preserves every field")
+    /// Spot checks on a small document. The *exhaustive* "nothing is lost" guarantee lives in
+    /// `BackupCoverageTests`, which walks the model with `Mirror` instead of listing fields by
+    /// hand — this one only has to stay readable.
+    @Test("round trip preserves the headline fields")
     func roundTrip() throws {
         let document = sampleDocument()
         let data = try BackupCodec.encode(document)

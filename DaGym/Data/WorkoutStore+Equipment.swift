@@ -94,6 +94,33 @@ extension WorkoutStore {
         }
     }
 
+    /// The one bar/plate inventory every surface must agree on — the set row's plate chip, the
+    /// weight keypad's live plate line, the 1RM calculator's percent table and the progression
+    /// engine's rounding. It is the *active equipment profile*; a generic standard set is only
+    /// the fallback for a store that has no profile yet, and even then it follows the lifter's
+    /// unit. Before this, the chip used `WeightUnit.plateStock(for:)` while the engine used the
+    /// profile, so the app called its own prescription unloadable and named plates the lifter
+    /// does not own.
+    func activeInventory() -> ProgressionEquipment {
+        guard let profile = activeProfile() else {
+            let unit = preferredWeightUnit
+            return ProgressionEquipment(
+                bar: unit.defaultBar, plates: WeightUnit.plateStock(for: unit), collarsKg: 0
+            )
+        }
+        return ProgressionEquipment(
+            bar: Bar(name: profile.name, weightKg: profile.barKg), plates: profile.plateStock,
+            collarsKg: profile.collarsKg
+        )
+    }
+
+    /// `Preferences.weightUnit`, read straight from storage. The store has no `Preferences`
+    /// (it outlives and underlies the view tree), and this is only ever the fallback path.
+    var preferredWeightUnit: WeightUnit {
+        let raw = UserDefaults.standard.string(forKey: Preferences.Key.weightUnit) ?? ""
+        return WeightUnit(rawValue: raw) ?? .kg
+    }
+
     /// The plate inventory for a profile, ready for `PlateCalculator`.
     func plateStock(for profile: EquipmentProfileInfo) -> [PlateStock] { profile.plateStock }
 
@@ -153,15 +180,18 @@ extension RoutineInfo {
 /// were seeded and never mistake a user's own "Gym" for one of these.
 @MainActor
 enum EquipmentSeeder {
-    static func seedIfNeeded(store: WorkoutStore) {
+    /// - Parameter unit: the unit the lifter picked during onboarding. "Gym" is seeded with
+    ///   that unit's bar and plates, so a lb lifter's prescriptions land on weights an American
+    ///   rack can build instead of on kg-loadable numbers like 62.5 kg ("137.8 lb").
+    static func seedIfNeeded(store: WorkoutStore, unit: WeightUnit = .kg) {
         let state = SeedState.row(in: store.context)
         defer { store.dedupeEquipmentProfiles() }
         guard !state.equipmentSeeded else { return }
         if store.equipmentProfiles().isEmpty {
             for seed in SeededEquipmentProfile.allCases {
                 store.createProfile(
-                    name: seed.name, isActive: seed.isActiveWhenSeeded, barKg: seed.barKg,
-                    availableEquipment: seed.availableEquipment, plateStock: seed.plateStock,
+                    name: seed.name, isActive: seed.isActiveWhenSeeded, barKg: seed.barKg(for: unit),
+                    availableEquipment: seed.availableEquipment, plateStock: seed.plateStock(for: unit),
                     collarsKg: seed.collarsKg, seedKey: seed.key
                 )
             }

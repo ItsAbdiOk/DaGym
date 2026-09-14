@@ -153,9 +153,9 @@ public enum BalanceWindow: Sendable, Hashable {
 
 /// Body-wide chart series (plan.md §6.4): weekly volume, sets per muscle, session durations.
 public enum BodySeries {
-    /// A secondary mover counts at this fraction of a primary mover — our own weight, the same
-    /// convention `SessionStats.musclesHit` uses.
-    private static let secondaryMuscleShare = 0.5
+    /// A secondary mover counts at this fraction of a primary mover — see
+    /// `SessionStats.secondaryMuscleShare`, the one place that weight is defined.
+    private static let secondaryMuscleShare = SessionStats.secondaryMuscleShare
     /// Total volume per calendar week, bucketed by `calendar.dateInterval(of: .weekOfYear:)` —
     /// honours the caller's `calendar.firstWeekday`. Only weeks with at least one workout appear,
     /// sorted oldest first.
@@ -173,14 +173,16 @@ public enum BodySeries {
     }
 
     /// Sets per muscle over the trailing `days` days ending at `now`: primary movers count 1,
-    /// secondary movers 0.5. Raw totals, not normalised — callers scale for display.
+    /// secondary movers `SessionStats.secondaryMuscleShare`. Raw totals, not normalised —
+    /// callers scale for display.
     public static func setsPerMuscle(
         workouts: [BodyWorkout], days: Int, now: Date, calendar: Calendar
     ) -> [Muscle: Double] {
         setsPerMuscle(workouts: workouts, window: .days(days), now: now, calendar: calendar)
     }
 
-    /// Sets per muscle inside `window` (primary 1, secondary 0.5). With `hardOnly` only sets
+    /// Sets per muscle inside `window` (primary 1, secondary
+    /// `SessionStats.secondaryMuscleShare`). With `hardOnly` only sets
     /// rated RIR ≤ `TrainingConstants.hardSetMaxRIR`, or taken to failure / AMRAP, count —
     /// "where did the near-failure work go" rather than "where did the volume go".
     public static func setsPerMuscle(
@@ -192,8 +194,12 @@ public enum BodySeries {
             for entry in workout.entries {
                 let count = Double(hardOnly ? entry.hardSetCount : entry.countingSetCount)
                 guard count > 0 else { continue }
+                let primary = Set(entry.primary)
                 for muscle in entry.primary { totals[muscle, default: 0] += count }
-                for muscle in entry.secondary { totals[muscle, default: 0] += count * secondaryMuscleShare }
+                // Primary wins: a muscle listed in both lists counts once, as a primary.
+                for muscle in entry.secondary where !primary.contains(muscle) {
+                    totals[muscle, default: 0] += count * secondaryMuscleShare
+                }
             }
         }
         return totals

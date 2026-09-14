@@ -24,6 +24,22 @@ struct ProgressionEngineAssistedTests {
         #expect(result.reason.title == "−2.5 kg assist")
     }
 
+    /// `Prescription` writes the assistance into both `weightKg` and `assistanceKg`; the log
+    /// screen's weight field only writes `weightKg`. So when the two disagree, the weight is what
+    /// the lifter actually typed and `assistanceKg` is the stale prescription — reading the stale
+    /// one stepped down from a number the lifter never used.
+    @Test("a retyped weight wins over a stale assistanceKg")
+    func retypedWeightWinsOverStaleAssistance() {
+        let logged = ExerciseHistoryEntry(
+            date: .now,
+            sets: [HistorySet(kind: .working, weightKg: 30, reps: 8, assistanceKg: 20)]
+        )
+        let result = ProgressionEngine.prescribe(
+            rule: .assisted(stepKg: 2.5), planned: planned, history: [logged], stall: StallState()
+        )
+        #expect(result.sets.allSatisfy { $0.assistanceKg == 27.5 })
+    }
+
     @Test("assistance never drops below the floor")
     func clampsToFloor() {
         let result = ProgressionEngine.prescribe(

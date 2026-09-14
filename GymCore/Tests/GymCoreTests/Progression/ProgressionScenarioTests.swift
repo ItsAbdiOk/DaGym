@@ -260,13 +260,16 @@ struct ProgressionScenarioTests {
 
     // MARK: F14 — double progression stall
 
+    /// Four sessions, not three: the first one at a weight has no earlier session to beat, so it
+    /// sets the bar instead of missing it. `doubleProgressionMissesBeforeDeload` then buys three
+    /// genuine chances to add a rep, which is what the constant and the deload's copy both say.
     @Test("F14: three sessions without a rep gained at the same weight deloads one increment")
     func doubleProgressionStalls() {
         let rule = ProgressionRule.doubleProgression(low: 8, high: 12, incrementKg: 2.5)
         let planned = (0..<3).map { _ in PlannedSetSpec(kind: .working, targetReps: 12) }
         var stall = StallState()
         var last: Prescribed?
-        for reps in [[8, 7, 6], [8, 7, 6], [7, 7, 6]] {
+        for reps in [[8, 7, 6], [8, 7, 6], [7, 7, 6], [8, 7, 6]] {
             last = ProgressionEngine.prescribe(
                 rule: rule, planned: planned, history: [entry(reps, at: 52.5)], stall: stall
             )

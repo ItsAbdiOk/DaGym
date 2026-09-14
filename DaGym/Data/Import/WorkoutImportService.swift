@@ -11,7 +11,26 @@ struct ImportPreview {
     /// Exercise names in the file that don't confidently match anything in the library — these
     /// become custom exercises on `apply`.
     var unmatchedExerciseNames: [String]
+    /// What every *matched* name will actually be logged against. A wrong match ("Deadlift
+    /// (Dumbbell)" landing on the barbell deadlift) is invisible until the history is already
+    /// merged, so the preview names both sides and lets the user back out first.
+    var matchedExercises: [MatchedExercise] = []
+    /// How many of `workouts` are already in the store and will be skipped. Showing a flat
+    /// "12 workouts" when all twelve will be skipped is a lie the user only discovers afterwards.
+    var alreadyImportedCount = 0
+    /// The file's weight column named no unit; `weightUnit` is what the parse assumed.
+    var weightUnitAssumed = false
+    var weightUnit: WeightUnit = .kg
     var problems: [ImportProblem]
+
+    /// Workouts that will actually be inserted.
+    var newWorkoutCount: Int { max(workouts.count - alreadyImportedCount, 0) }
+}
+
+/// One source name and the library exercise it resolved to, for the preview list.
+struct MatchedExercise: Hashable {
+    var sourceName: String
+    var libraryName: String
 }
 
 /// Counts from `WorkoutImportService.apply`, named distinctly from `Data/Backup`'s
@@ -52,27 +71,44 @@ enum WorkoutImportService {
     /// reported as unmatched (preview) and created as custom (apply).
     static let matchThreshold = 0.85
 
-    static func preview(csv: String, store: WorkoutStore) -> ImportPreview? {
-        guard let result = WorkoutImport.parse(csv: csv) else { return nil }
-        return preview(result: result, store: store)
+    static func preview(
+        csv: String, store: WorkoutStore, assumedWeightUnit: WeightUnit? = nil
+    ) -> ImportPreview? {
+        guard let result = WorkoutImport.parse(csv: csv, assumedWeightUnit: assumedWeightUnit) else {
+            return nil
+        }
+        return preview(result: result, store: store, assumedWeightUnit: assumedWeightUnit)
     }
 
     /// Shared by the CSV path above and `HevyAPIClient`'s network path — either way, once the
     /// import is in `ImportResult` shape, building the preview (unmatched names, set counts) is
     /// identical.
-    static func preview(result: ImportResult, store: WorkoutStore) -> ImportPreview {
+    static func preview(
+        result: ImportResult, store: WorkoutStore, assumedWeightUnit: WeightUnit? = nil
+    ) -> ImportPreview {
         let context = matchContext(store: store)
-        let names = Set(result.workouts.flatMap { $0.exercises.map(\.name) })
-        let unmatched = names
-            .filter { seededExerciseID(for: $0, store: store) == nil }
-            .filter { matchedExerciseID($0, context: context) == nil }
-            .sorted()
+        let names = Set(result.workouts.flatMap { $0.exercises.map(\.name) }).sorted()
+        var unmatched: [String] = []
+        var matched: [MatchedExercise] = []
+        for name in names {
+            guard let id = seededExerciseID(for: name, store: store)
+                ?? matchedExerciseID(name, context: context) else {
+                unmatched.append(name)
+                continue
+            }
+            let libraryName = store.fetchExerciseModel(id: id)?.name ?? name
+            matched.append(MatchedExercise(sourceName: name, libraryName: libraryName))
+        }
         let setsCount = result.workouts.reduce(0) { total, workout in
             total + workout.exercises.reduce(0) { $0 + $1.sets.count }
         }
+        let existingKeys = existingWorkoutKeys(store: store)
+        let alreadyImported = result.workouts.filter { existingKeys.contains(workoutKey($0)) }.count
         return ImportPreview(
             source: result.source, workouts: result.workouts, setsCount: setsCount,
-            unmatchedExerciseNames: unmatched, problems: result.problems
+            unmatchedExerciseNames: unmatched, matchedExercises: matched,
+            alreadyImportedCount: alreadyImported, weightUnitAssumed: result.weightUnitAssumed,
+            weightUnit: assumedWeightUnit ?? .kg, problems: result.problems
         )
     }
 
@@ -87,13 +123,19 @@ enum WorkoutImportService {
         let environment = ImportEnvironment(
             store: store, context: matchContext(store: store), source: preview.source
         )
-        let existingKeys = existingWorkoutKeys(store: store)
+        var seenKeys = existingWorkoutKeys(store: store)
+        var seenExternalIDs: Set<String> = []
 
         for imported in preview.workouts.sorted(by: { $0.startedAt < $1.startedAt }) {
-            guard !existingKeys.contains(workoutKey(imported)) else {
+            let key = workoutKey(imported)
+            let isDuplicate = seenKeys.contains(key)
+                || imported.externalID.map { seenExternalIDs.contains($0) } ?? false
+            guard !isDuplicate else {
                 report.workoutsSkipped += 1
                 continue
             }
+            seenKeys.insert(key)
+            if let externalID = imported.externalID { seenExternalIDs.insert(externalID) }
             _ = insertWorkout(
                 imported, environment: environment, exerciseCache: &exerciseCache, report: &report
             )
@@ -178,12 +220,24 @@ enum WorkoutImportService {
 
     // MARK: - Dedupe
 
+    /// The start time, to the minute — and deliberately *not* the title.
+    ///
+    /// Keying on `startedAt|title` meant renaming an imported workout ("Push Day" → "Push A") and
+    /// re-importing the same file inserted it a second time, because the key had moved under the
+    /// store's feet. The minute (rather than the second) is what makes a CSV export and the Hevy
+    /// API agree about the same session: the CSV writes "11 Mar 2024, 18:24" with no seconds while
+    /// the API returns the real timestamp, so a second-precision key would import both. Two
+    /// genuinely different sessions starting in the same minute is not a thing.
     private static func workoutKey(_ workout: ImportedWorkout) -> String {
-        "\(workout.startedAt.timeIntervalSinceReferenceDate)|\(workout.title)"
+        key(for: workout.startedAt)
+    }
+
+    private static func key(for date: Date) -> String {
+        String(Int((date.timeIntervalSinceReferenceDate / 60).rounded(.down)))
     }
 
     private static func existingWorkoutKeys(store: WorkoutStore) -> Set<String> {
         let models = (try? store.context.fetch(FetchDescriptor<WorkoutModel>())) ?? []
-        return Set(models.map { "\($0.startedAt.timeIntervalSinceReferenceDate)|\($0.title)" })
+        return Set(models.map { key(for: $0.startedAt) })
     }
 }

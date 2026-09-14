@@ -52,5 +52,7 @@ extension BackupService {
                 report.workoutsImported += 1
             }
         }
+        report.photosImported = (document.progressPhotos ?? []).count
+        report.exerciseNotesImported = (document.exerciseNotes ?? []).count
     }
 }

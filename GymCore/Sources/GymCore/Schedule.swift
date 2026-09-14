@@ -110,14 +110,25 @@ public struct WeeklySchedule: Codable, Hashable, Sendable {
     }
 
     /// Applies a single-routine edit to the list-valued storage: keys that vanished are
-    /// dropped, keys whose first routine is unchanged keep their full list, anything else is
-    /// replaced by the new single-item list.
+    /// dropped, keys whose first routine is unchanged keep their full list, anything else has
+    /// only its *first* entry replaced so the rest of a multi-routine day survives.
+    ///
+    /// Replacing the whole list here is what made a "Push A + Arms" day lose "Arms" every time
+    /// something re-pointed the day's first routine through the single-routine `days` view
+    /// (`WorkoutStore.dedupeRoutines()` does exactly that when a starter routine folds).
     private static func merged<Key: Hashable>(
         _ singles: [Key: [UUID]], into lists: [Key: [UUID]]
     ) -> [Key: [UUID]] {
         singles.reduce(into: [:]) { result, pair in
             let existing = lists[pair.key] ?? []
-            result[pair.key] = existing.first == pair.value.first ? existing : pair.value
+            if existing.first == pair.value.first {
+                result[pair.key] = existing
+            } else if let replacement = pair.value.first, existing.count > 1 {
+                // The replacement may already be planned later in the same day; keep it once.
+                result[pair.key] = [replacement] + existing.dropFirst().filter { $0 != replacement }
+            } else {
+                result[pair.key] = pair.value
+            }
         }
     }
 

@@ -83,4 +83,19 @@ struct DeloadDetectorTests {
         #expect(plan.sets == 3)
         #expect(plan.loadKg == 90)
     }
+
+    /// The stall arm is fed `StallState.consecutiveMisses` exactly as the app persists it, and
+    /// that counter can never reach `linearMissesBeforeDeload` (see `deloadStallCount`). Pinned
+    /// against the reachable ceiling so nobody raises the threshold back out of reach.
+    @Test("the stall threshold is reachable by the counter the app actually persists")
+    func stallThresholdIsReachable() {
+        #expect(TrainingConstants.deloadStallCount <= TrainingConstants.linearMissesBeforeDeload - 1)
+        let reachable = TrainingConstants.deloadStallCount
+        let lifts = [
+            LiftSnapshot(name: "Bench", stalls: reachable, e1rmTrend: [100, 100, 100]),
+            LiftSnapshot(name: "Squat", stalls: reachable, e1rmTrend: [150, 150, 150])
+        ]
+        let suggestion = DeloadDetector.evaluate(lifts: lifts, hardWeeks: 0)
+        #expect(suggestion?.reason.contains("stalled") == true)
+    }
 }

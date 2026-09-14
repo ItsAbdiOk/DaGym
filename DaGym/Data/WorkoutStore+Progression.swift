@@ -104,7 +104,11 @@ extension WorkoutStore {
             bar: exerciseInfo.bar ?? equipment.bar, plates: equipment.plates, collarsKg: equipment.collarsKg,
             grid: loadGrid(for: exerciseInfo, equipment: equipment),
             cycleIndex: shared.cycleIndex,
-            trainingMaxIncrementKg: trainingMaxIncrementKg(for: exerciseInfo)
+            trainingMaxIncrementKg: trainingMaxIncrementKg(for: exerciseInfo),
+            // Unilateral work logs both sides as one total, so rep targets step by 2 and stay
+            // even. GymCore has always taken this; the store never passed it, so every per-side
+            // exercise in the app stepped by 1 and odd rep ranges were never evened.
+            perSide: exerciseInfo.isPerSide
         )
     }
 
@@ -167,29 +171,77 @@ extension WorkoutStore {
     /// session that's actually finishing (the "next" prescription's baseline only ever advances
     /// once a session is committed, matching the engine's own stall/baseline model). Called only
     /// here — never at start — so an abandoned (never-finished) workout can't burn a stall.
+    ///
+    /// Only exercises whose row *will* become the next baseline are committed. A planned-deload
+    /// row and a row with nothing completed are both skipped by `exerciseHistory`, so they never
+    /// become a baseline — committing them re-judged the baseline the previous session had
+    /// already been judged against, and the next start judged it a third time. A lifter on
+    /// linear who missed twice and then took a planned deload week reached the engine's
+    /// three-miss deload with only two real misses behind it.
+    ///
+    /// A multi-routine day (`appendRoutine`) is committed per entry, against the routine the
+    /// entry actually came from, not against `WorkoutModel.routineID` — which names only the
+    /// first routine, so every lift appended from a second one used to accumulate no misses at
+    /// all and could never deload.
     func persistProgression(session: WorkoutSession) {
-        guard let workoutID = session.workoutID, let workout = fetchWorkoutModel(id: workoutID),
-              let routineID = workout.routineID, let routine = fetchRoutineModel(id: routineID) else {
+        guard let workoutID = session.workoutID, let workout = fetchWorkoutModel(id: workoutID) else {
             return
         }
-        let routineExercises = routine.exercises ?? []
-        // Fetched once and shared: every exercise's `computeProgression` below would otherwise
-        // re-query the finished-workout list, the equipment profile, the latest bodyweight and
-        // the active program — none of which can differ between the exercises of one session.
-        let facts = makeSessionFacts(routineID: routineID)
-        for entry in session.exercises {
-            guard let routineExercise = matchingRoutineExercise(entry: entry, in: routineExercises) else {
-                continue
+        // `SessionFacts` is per routine (the program week/cycle is), and cached: the common
+        // single-routine session still pays for exactly one build, as it did before.
+        var factsByRoutine: [UUID: SessionFacts] = [:]
+        for entry in session.exercises where Self.becomesNextBaseline(entry) {
+            guard let routineID = entry.routineID ?? workout.routineID,
+                  let routine = fetchRoutineModel(id: routineID) else { continue }
+            let facts: SessionFacts
+            if let cached = factsByRoutine[routineID] {
+                facts = cached
+            } else {
+                facts = makeSessionFacts(routineID: routineID)
+                factsByRoutine[routineID] = facts
             }
-            guard let plannedSets = routineExercise.plannedSets, let result = computeProgression(
-                routine: routine, routineExercise: routineExercise, exerciseInfo: entry.exercise,
-                plannedSets: plannedSets, facts: facts
-            ) else {
-                continue
-            }
-            routineExercise.stallStateValue = result.stall
-            routineExercise.trainingMaxKg = result.trainingMaxKg
+            persistProgression(entry: entry, routine: routine, facts: facts)
         }
+    }
+
+    /// Commits one finished entry's judgement onto its routine slot. Nothing is written when the
+    /// slot is excluded from progression or has no rule — `computeProgression` returns nil and
+    /// the lift keeps whatever state it had.
+    private func persistProgression(entry: WorkoutExerciseEntry, routine: RoutineModel, facts: SessionFacts) {
+        guard let routineExercise = matchingRoutineExercise(entry: entry, in: routine.exercises ?? []),
+              let plannedSets = routineExercise.plannedSets,
+              let result = computeProgression(
+                  routine: routine, routineExercise: routineExercise, exerciseInfo: entry.exercise,
+                  plannedSets: plannedSets, facts: facts
+              ) else { return }
+        routineExercise.stallStateValue = result.stall
+        routineExercise.trainingMaxKg = result.trainingMaxKg
+    }
+
+    /// Whether this finished row becomes the baseline the *next* session's prescription is
+    /// judged against — the exact test `exerciseHistory` applies when it builds the engine's
+    /// history, mirrored here so a row that will never be a baseline is never judged from.
+    /// `excludedFromProgression` needs no test: `matchingRoutineExercise` already skips those
+    /// slots, and `exerciseHistory` already skips their rows.
+    static func becomesNextBaseline(_ entry: WorkoutExerciseEntry) -> Bool {
+        !entry.wasPlannedDeload && entry.sets.contains(where: \.isDone)
+    }
+
+    /// Whether this exercise's plan names a working target weight that is *different* from the
+    /// one recorded the last time the engine judged it (`StallState.lastPlanTargetWeightKg`).
+    ///
+    /// This is the whole of `WorkoutStore.planOverridesPrescription`'s decision beyond the
+    /// `RoutineModel.updatedAt` gate, and it lives here because the stamp alone cannot answer it:
+    /// `saveRoutine` bumps `updatedAt` on every save — a rename, a reorder, a glyph — while "some
+    /// working set has a target weight" is permanently true once it is true at all. Comparing the
+    /// number instead makes a plan override (a hand edit, or an approved Coach deload) last
+    /// exactly one session: finishing that session records the new target, and the two match.
+    /// No recorded target at all means the engine has never judged this lift, so the plan wins.
+    static func planTargetWeightChanged(_ plannedSets: [PlannedSetModel]) -> Bool {
+        let working = plannedSets.first { $0.setKind.countsTowardStats && $0.targetWeightKg != nil }
+        guard let target = working?.targetWeightKg else { return false }
+        let seen = working?.routineExercise?.stallStateValue.lastPlanTargetWeightKg
+        return seen.map { !StallState.sameWeight($0, target) } ?? true
     }
 
     /// Up to the last 6 finished workouts' sets for this exercise, newest first, as
@@ -216,17 +268,10 @@ extension WorkoutStore {
         return result
     }
 
-    /// The equipment the engine should round against — the active profile's bar/plates/collars,
-    /// falling back to the Olympic bar and a standard kg set when no profile exists yet.
-    func activeEquipment() -> ProgressionEquipment {
-        guard let profile = activeProfile() else {
-            return ProgressionEquipment(bar: .olympic, plates: PlateStock.standardKg, collarsKg: 0)
-        }
-        return ProgressionEquipment(
-            bar: Bar(name: profile.name, weightKg: profile.barKg), plates: profile.plateStock,
-            collarsKg: profile.collarsKg
-        )
-    }
+    /// The equipment the engine should round against. One line so there is exactly one answer
+    /// in the app: see `WorkoutStore.activeInventory()`, which every weight-loading surface
+    /// (plate chip, keypad plate line, 1RM percent table) now reads too.
+    func activeEquipment() -> ProgressionEquipment { activeInventory() }
 
     func finishedWorkoutModelsNewestFirst() -> [WorkoutModel] {
         let predicate = #Predicate<WorkoutModel> { $0.endedAt != nil }
@@ -242,7 +287,7 @@ extension WorkoutStore {
         plannedSets.sorted { $0.order < $1.order }.map { model in
             PlannedSetSpec(
                 kind: model.setKind, targetReps: model.targetReps, targetSeconds: model.targetSeconds,
-                targetRPE: model.targetRPE
+                targetRPE: model.targetRPE, targetWeightKg: model.targetWeightKg
             )
         }
     }

@@ -63,12 +63,20 @@ public struct ImportedExercise: Hashable, Sendable {
     /// used as a hint for `ExerciseHints.primaryMuscles` when the name doesn't match anything in
     /// the library.
     public var category: String?
+    /// The source's own superset grouping for this slot (Hevy's `superset_id`), so exercises
+    /// trained as a superset stay grouped after the import instead of arriving as separate
+    /// blocks. `nil` when the row wasn't in a superset, or the format carries no such column.
+    public var supersetGroup: Int?
     public var sets: [ImportedSet]
 
-    public init(name: String, note: String = "", category: String? = nil, sets: [ImportedSet]) {
+    public init(
+        name: String, note: String = "", category: String? = nil, supersetGroup: Int? = nil,
+        sets: [ImportedSet]
+    ) {
         self.name = name
         self.note = note
         self.category = category
+        self.supersetGroup = supersetGroup
         self.sets = sets
     }
 }
@@ -80,16 +88,21 @@ public struct ImportedWorkout: Hashable, Sendable {
     public var endedAt: Date?
     public var title: String
     public var notes: String
+    /// The source's own stable identifier for this session (the Hevy API's workout `id`), when it
+    /// has one. Used to collapse the same workout arriving twice within one import — e.g. a paged
+    /// API response that overlaps — rather than inserting it twice.
+    public var externalID: String?
     public var exercises: [ImportedExercise]
 
     public init(
         startedAt: Date, endedAt: Date? = nil, title: String, notes: String = "",
-        exercises: [ImportedExercise]
+        externalID: String? = nil, exercises: [ImportedExercise]
     ) {
         self.startedAt = startedAt
         self.endedAt = endedAt
         self.title = title
         self.notes = notes
+        self.externalID = externalID
         self.exercises = exercises
     }
 }
@@ -103,14 +116,20 @@ public struct ImportResult: Sendable {
     /// Rows with nothing measured at all (no weight, reps, time or distance) — skipped rather
     /// than imported as a 0×0 set, and counted here instead of being silently dropped.
     public var emptyRows: Int
+    /// True when the file's weight column named no unit and no per-row unit column resolved one,
+    /// so the parse had to assume one. The Settings preview surfaces this and lets the user pick,
+    /// instead of quietly reading an American lifter's 225 lb bench as 225 kg.
+    public var weightUnitAssumed: Bool
 
     public init(
-        source: ImportSource, workouts: [ImportedWorkout], problems: [ImportProblem], emptyRows: Int = 0
+        source: ImportSource, workouts: [ImportedWorkout], problems: [ImportProblem],
+        emptyRows: Int = 0, weightUnitAssumed: Bool = false
     ) {
         self.source = source
         self.workouts = workouts
         self.problems = problems
         self.emptyRows = emptyRows
+        self.weightUnitAssumed = weightUnitAssumed
     }
 }
 
@@ -136,16 +155,19 @@ public enum ImportDetector {
 /// per-source importer. Returns `nil` only when the header matches no known format at all —
 /// individual bad rows within a recognized file become `ImportProblem`s instead.
 public enum WorkoutImport {
-    public static func parse(csv: String) -> ImportResult? {
+    /// `assumedWeightUnit` is the unit to read a unit-less weight column in — what the user picked
+    /// in the preview after `ImportResult.weightUnitAssumed` flagged the ambiguity. `nil` keeps the
+    /// historical behaviour (kg) for the first, un-prompted parse.
+    public static func parse(csv: String, assumedWeightUnit: WeightUnit? = nil) -> ImportResult? {
         let rows = CSVParser.parse(csv)
         guard let header = rows.first, !header.isEmpty else { return nil }
         guard let source = ImportDetector.detect(headerLine: header.joined(separator: ",")) else {
             return nil
         }
         switch source {
-        case .strong: return StrongCSVImporter.parse(rows: rows)
-        case .hevy: return HevyCSVImporter.parse(rows: rows)
-        case .fitNotes: return FitNotesCSVImporter.parse(rows: rows)
+        case .strong: return StrongCSVImporter.parse(rows: rows, assumedUnit: assumedWeightUnit)
+        case .hevy: return HevyCSVImporter.parse(rows: rows, assumedUnit: assumedWeightUnit)
+        case .fitNotes: return FitNotesCSVImporter.parse(rows: rows, assumedUnit: assumedWeightUnit)
         }
     }
 }

@@ -28,12 +28,10 @@ extension Preferences {
         static let weeklyRecapEnabled = "weeklyRecapEnabled"
         static let reminderHour = "reminderHour"
         static let bodyweightGoalKg = "bodyweightGoalKg"
-        static let syncPhotos = "syncPhotos"
         static let lockPhotos = "lockPhotos"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         static let trainingGoal = "trainingGoal"
         static let deloadSnoozedUntil = "deloadSnoozedUntil"
-        static let deloadDismissedFingerprint = "deloadDismissedFingerprint"
         static let accent = "accent"
         static let compactWorkoutLayout = "compactWorkoutLayout"
         static let showSetSteppers = "showSetSteppers"
@@ -56,5 +54,49 @@ extension Preferences {
 
     static func boolValue(_ suite: UserDefaults, _ key: String, default value: Bool) -> Bool {
         suite.object(forKey: key) as? Bool ?? value
+    }
+
+    /// The answer to onboarding's "What's your main goal?". It is not decoration: picking one
+    /// applies that goal's training defaults (`defaultRestSeconds`, `weeklyGoal`) right then, and
+    /// Settings' "Goal" row re-applies them when it changes — which is exactly what each option's
+    /// subtitle promises ("longer rest", "more volume").
+    enum TrainingGoal: String, CaseIterable, Codable, Sendable {
+        case strength
+        case muscle
+        case general
+
+        var title: String {
+            switch self {
+            case .strength: "Strength"
+            case .muscle: "Muscle"
+            case .general: "General fitness"
+            }
+        }
+
+        var detail: String {
+            switch self {
+            case .strength: "Heavier lifts, lower reps, longer rest."
+            case .muscle: "More volume, moderate reps, shorter rest."
+            case .general: "A balanced mix, no specific peak."
+            }
+        }
+
+        /// Rest between sets this goal implies, used as the app-wide fallback rest.
+        var defaultRestSeconds: Int {
+            switch self {
+            case .strength: 210
+            case .muscle: 90
+            case .general: 150
+            }
+        }
+
+        /// Sessions per week this goal implies.
+        var weeklyGoal: Int {
+            switch self {
+            case .strength: 4
+            case .muscle: 5
+            case .general: 3
+            }
+        }
     }
 }

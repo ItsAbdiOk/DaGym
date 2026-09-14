@@ -117,6 +117,10 @@ extension PlanShareService {
         var existingByImportID: [UUID: RoutineModel] = [:]
         for model in existing {
             existingByImportID[model.id] = model
+            // A file the user exported from this very device carries the *masked* id (see
+            // `PlanShareService.sharedID`), so re-importing your own plan has to match on that too
+            // or it would arrive as a duplicate.
+            existingByImportID[PlanShareService.sharedID(for: model.id)] = model
             if let importedFromID = model.importedFromID { existingByImportID[importedFromID] = model }
         }
         var idMap: [UUID: UUID] = [:]
@@ -187,7 +191,9 @@ extension PlanShareService {
         report: inout PlanImportReport
     ) {
         guard let item else { return }
-        let existingIDs = Set(((try? context.fetch(FetchDescriptor<ProgramModel>())) ?? []).map(\.id))
+        let existingPrograms = (try? context.fetch(FetchDescriptor<ProgramModel>())) ?? []
+        let existingIDs = Set(existingPrograms.map(\.id))
+            .union(existingPrograms.map { PlanShareService.sharedID(for: $0.id) })
         guard !existingIDs.contains(item.id) else { return }
         report.programImported = true
         guard !preview else { return }

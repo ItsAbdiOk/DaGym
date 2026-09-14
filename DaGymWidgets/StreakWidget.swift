@@ -8,7 +8,7 @@ struct StreakWidget: Widget {
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: WidgetSnapshotProvider()) { entry in
-            StreakWidgetView(snapshot: entry.snapshot)
+            StreakWidgetView(day: entry.day)
                 .containerBackground(.clear, for: .widget)
         }
         .configurationDisplayName("Streak")
@@ -18,7 +18,7 @@ struct StreakWidget: Widget {
 }
 
 private struct StreakWidgetView: View {
-    let snapshot: WidgetSnapshot
+    let day: ResolvedWidgetDay
     @Environment(\.widgetFamily) private var family
 
     var body: some View {
@@ -27,16 +27,16 @@ private struct StreakWidgetView: View {
             HStack(spacing: 6) {
                 Image(systemName: "flame.fill")
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("\(snapshot.streakWeeks) week\(snapshot.streakWeeks == 1 ? "" : "s")")
+                    Text("\(day.streakWeeks) week\(day.streakWeeks == 1 ? "" : "s")")
                         .font(.headline)
-                    Text("Current streak")
+                    Text(day.hasData ? "Current streak" : "Open DaGym")
                         .font(.caption2)
                 }
             }
         default:
             VStack(spacing: 2) {
                 Image(systemName: "flame.fill")
-                Text("\(snapshot.streakWeeks)")
+                Text("\(day.streakWeeks)")
                     .font(WidgetFont.condensed(size: 20))
             }
         }

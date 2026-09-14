@@ -78,21 +78,44 @@ struct ExerciseInfo: Identifiable, Hashable {
             .joined(separator: " · ")
     }
 
-    /// Intensity map for the body map thumbnail.
+    /// Intensity map for the body map thumbnail. A primary mover always reads 1; a secondary
+    /// one reads `SessionStats.secondaryMuscleShare`.
+    ///
+    /// Primary wins unconditionally. Writing primary first and secondary second let a muscle
+    /// listed in both lists be overwritten by the lower value — a barbell curl tagged
+    /// `biceps`/`biceps` drew its biceps at the secondary step instead of full.
     var hitMap: [Muscle: Double] {
         var map: [Muscle: Double] = [:]
+        secondary.forEach { map[$0] = SessionStats.secondaryMuscleShare }
         primary.forEach { map[$0] = 1 }
-        secondary.forEach { map[$0] = 0.45 }
         return map
     }
 
-    /// `GymCore.LoadingStyle` inferred from `equipment`/`bar`, for `WarmupGenerator`.
+    /// `GymCore.LoadingStyle` for `WarmupGenerator`.
+    ///
+    /// `loggingStyle` decides first, because it says what the logged number *means*: an
+    /// assisted pull-up is usually filed under "machine", and ramping its assistance up makes
+    /// every warm-up harder than the working set; a timed hold filed under "barbell" would get
+    /// rep-based warm-ups with no duration. Only once the number is known to be a load does the
+    /// kit decide the ramp — and then every kind is mapped, so a kettlebell or an EZ-bar lift
+    /// gets a ramp instead of silently getting none.
     var warmupLoadingStyle: LoadingStyle {
+        switch loggingStyle {
+        case .assisted: return .assisted
+        case .timedHold, .cardio: return .timed
+        case .bodyweightReps, .weightedBodyweight: return .bodyweight
+        case .weightReps: break
+        }
         switch equipment.lowercased() {
-        case "barbell": return .barbell(bar: bar ?? .olympic)
-        case "dumbbell": return .dumbbell
-        case "machine", "cable", "smith machine": return .machine
-        default: return .bodyweight
+        case "barbell", "ezbar", "ez bar", "smith machine", "trap bar":
+            return .barbell(bar: bar ?? .olympic)
+        case "dumbbell", "kettlebell":
+            return .dumbbell
+        case "bodyweight", "bands":
+            return .bodyweight
+        default:
+            // Machine, cable, "other": a fixed-step ramp with no empty-bar set.
+            return .machine
         }
     }
 }

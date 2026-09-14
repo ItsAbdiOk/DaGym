@@ -198,14 +198,25 @@ enum StoreMigration {
         ModelConfiguration(schema: schema)
     }
 
-    /// Tests point the on-disk stores at a temporary directory so the real App Group is untouched.
+    /// Tests point the on-disk stores at a temporary directory so the real App Group is
+    /// untouched. Debug-only: a settable, process-wide redirect of the *whole store location*
+    /// has no business in a shipped binary.
+    #if DEBUG
     nonisolated(unsafe) static var containerDirectoryOverride: URL?
+    #else
+    static var containerDirectoryOverride: URL? { nil }
+    #endif
 
     /// Tests point the *legacy* (pre-App-Group) store location at a temporary directory too, so a
     /// migration test never touches the test host's real Application Support directory — where a
     /// pre-App-Group `default.store` may genuinely exist on a simulator that once ran an old
-    /// build, and get moved (then deleted) by the act of running the test.
+    /// build, and get moved (then deleted) by the act of running the test. Debug-only, for the
+    /// same reason as `containerDirectoryOverride`.
+    #if DEBUG
     nonisolated(unsafe) static var legacyDirectoryOverride: URL?
+    #else
+    static var legacyDirectoryOverride: URL? { nil }
+    #endif
 
     private static func containerDirectory() -> URL {
         if let containerDirectoryOverride { return containerDirectoryOverride }

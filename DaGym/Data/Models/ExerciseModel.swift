@@ -35,6 +35,16 @@ final class ExerciseModel {
     var licence: String = ""
     /// Attribution names for `instructions`, when the source requires them.
     var authors: [String] = []
+    /// Set when this row lost a `seedID` fold (`ExerciseSeeder.dedupe`): the `id` of the row
+    /// that won. A merged row is a tombstone — hidden from every read, kept alive so a
+    /// `WorkoutExerciseModel`/`RoutineExerciseModel`/PR row that CloudKit delivers *after* the
+    /// fold still has something to link to and can be re-pointed by the next dedupe pass.
+    /// Deleting the loser outright (what this replaced) nulled those late arrivals on both
+    /// devices and lost the history behind them permanently.
+    var mergedIntoID: UUID?
+    /// When `mergedIntoID` was first stamped. A tombstone is only really deleted once it has
+    /// been merged for `ExerciseSeeder.tombstoneGracePeriod` and still has no children.
+    var mergedAt: Date?
 
     /// Inverse declared on `RoutineExerciseModel.exercise`.
     var routineExercises: [RoutineExerciseModel]?
@@ -72,6 +82,9 @@ final class ExerciseModel {
         self.licence = licence
         self.authors = authors
     }
+
+    /// True for a row that lost a seed fold. Every read path filters these out.
+    var isMergedAway: Bool { mergedIntoID != nil }
 
     var primary: [Muscle] { primaryMuscles.compactMap(Muscle.init(rawValue:)) }
     var secondary: [Muscle] { secondaryMuscles.compactMap(Muscle.init(rawValue:)) }

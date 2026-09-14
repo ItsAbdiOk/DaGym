@@ -58,8 +58,11 @@ extension WorkoutImportService {
         _ exercise: ImportedExercise, order: Int, model exerciseModel: ExerciseModel,
         workout: WorkoutModel, store: WorkoutStore
     ) -> WorkoutExerciseModel {
+        // `supersetGroup` carries the source's own grouping (Hevy's `superset_id`) through, so a
+        // superset imports as a superset instead of two unrelated blocks.
         let entryModel = WorkoutExerciseModel(
-            order: order, note: exercise.note, exercise: exerciseModel, workout: workout
+            order: order, supersetGroup: exercise.supersetGroup, note: exercise.note,
+            exercise: exerciseModel, workout: workout
         )
         store.context.insert(entryModel)
         let sets = makeSetModels(exercise.sets, workoutExercise: entryModel, at: workout.startedAt)

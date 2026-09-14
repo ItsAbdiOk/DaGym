@@ -2,26 +2,40 @@ import Foundation
 
 /// Parses a Strong app CSV export. One row per set; `Weight (kg)`/`Weight (lbs)` in the header
 /// says which unit the `Weight` column is in — a bare `Weight` header instead falls back to a
-/// per-row `Weight Unit` column when present. `Set Order` carries "W1"/"W2" for warm-ups and
-/// "Dropset"/"Failure" for those kinds; anything else is a working set.
+/// per-row `Weight Unit` column when present, then to the unit the user picked in the preview.
+/// `Set Order` carries "W1"/"W2" for warm-ups and "Dropset"/"Failure" for those kinds; anything
+/// else is a working set.
+///
+/// Real exports write a literal `0` in `Distance` and `Seconds` on every ordinary weight set
+/// rather than leaving them blank, so both are read through `ImportRow`, which treats a measured
+/// zero as "not measured" — otherwise every bench press would be stored as a 0-second, 0-metre
+/// set, and an all-zero row would slip past the nothing-measured guard as a 0 kg × 0 set.
+///
+/// The workout duration is `Duration` in older exports and `Workout Duration` in newer ones; both
+/// are read, so a recent file doesn't fall back to the one-hour default for every session.
 enum StrongCSVImporter {
-    static func parse(rows: [[String]]) -> ImportResult {
+    static func parse(rows: [[String]], assumedUnit: WeightUnit? = nil) -> ImportResult {
         guard let header = rows.first else {
             return ImportResult(source: .strong, workouts: [], problems: [])
         }
         let columns = ColumnMap(header: header)
         let weightColumn = columns.columnName(containing: ["weight"]) ?? "weight"
         let unitColumns = UnitColumns(
-            weightColumn: weightColumn, weightColumnUnit: columnUnit(named: weightColumn),
-            distanceUnitColumn: columns.columnName(containing: ["distance", "unit"])
+            weightColumn: weightColumn, weightColumnUnit: ImportRow.columnUnit(named: weightColumn),
+            distanceUnitColumn: columns.columnName(containing: ["distance", "unit"]),
+            assumedUnit: assumedUnit
         )
 
         var builder = WorkoutBuilder()
         var problems: [ImportProblem] = []
         var emptyRows = 0
+        var sawPerRowUnit = false
         for (offset, row) in rows.dropFirst().enumerated() {
             let line = offset + 2
             guard !row.isEmpty, row.contains(where: { !$0.isEmpty }) else { continue }
+            if ImportParsing.weightUnit(from: columns.value(row, "Weight Unit")) != nil {
+                sawPerRowUnit = true
+            }
             do {
                 let wasEmpty = try appendRow(row, columns: columns, unitColumns: unitColumns, into: &builder)
                 if wasEmpty { emptyRows += 1 }
@@ -32,16 +46,18 @@ enum StrongCSVImporter {
             }
         }
         return ImportResult(
-            source: .strong, workouts: builder.finish(), problems: problems, emptyRows: emptyRows
+            source: .strong, workouts: builder.finish(), problems: problems, emptyRows: emptyRows,
+            weightUnitAssumed: unitColumns.weightColumnUnit == nil && !sawPerRowUnit
         )
     }
 
     /// The weight column's name/header-inferred unit and the distance-unit column's name, bundled
-    /// so `appendRow` doesn't thread three separate parameters for them.
+    /// so `appendRow` doesn't thread four separate parameters for them.
     private struct UnitColumns {
         var weightColumn: String
         var weightColumnUnit: WeightUnit?
         var distanceUnitColumn: String?
+        var assumedUnit: WeightUnit?
     }
 
     /// Returns `true` when the row had nothing measured and was skipped instead of appended.
@@ -55,59 +71,37 @@ enum StrongCSVImporter {
         guard let exerciseName = columns.value(row, "Exercise Name") else {
             throw ImportRowError("Missing exercise name.")
         }
-        let weight = try weightKg(
-            row, columns: columns, weightColumn: unitColumns.weightColumn,
-            columnUnit: unitColumns.weightColumnUnit
+        let weight = try ImportRow.weightKg(
+            columns.value(row, unitColumns.weightColumn), columnUnit: unitColumns.weightColumnUnit,
+            perRowUnit: columns.value(row, "Weight Unit") ?? columns.value(row, "unit"),
+            assumedUnit: unitColumns.assumedUnit
         )
-        let reps = try reps(row, columns: columns)
-        let durationSeconds = ImportParsing.int(columns.value(row, "Seconds"))
+        let reps = try ImportRow.reps(columns.value(row, "Reps"))
+        let durationSeconds = try ImportRow.seconds(columns.value(row, "Seconds"))
         let distanceUnit = unitColumns.distanceUnitColumn.flatMap { columns.value(row, $0) } ?? "m"
-        let distance = ImportParsing.metersFromDistance(
-            ImportParsing.double(columns.value(row, "Distance")), unit: distanceUnit
-        )
+        let distance = try ImportRow.distance(columns.value(row, "Distance"), unit: distanceUnit)
         guard weight != 0 || reps != 0 || durationSeconds != nil || distance != nil else { return true }
         let workoutName = columns.value(row, "Workout Name") ?? "Workout"
-        let freeTextDuration = ImportParsing.durationSecondsFromFreeText(columns.value(row, "Duration"))
         let set = ImportedSet(
             kind: setKind(columns.value(row, "Set Order")), weightKg: weight, reps: reps,
             durationSeconds: durationSeconds, distanceMeters: distance,
             rpe: reps == 0 ? nil : ImportParsing.rpe(columns.value(row, "RPE"))
         )
         let entry = WorkoutRowInfo(
-            startedAt: startedAt,
-            endedAt: freeTextDuration.map { startedAt.addingTimeInterval(TimeInterval($0)) },
-            title: workoutName, workoutNotes: columns.value(row, "Workout Notes") ?? "",
-            exerciseName: exerciseName, exerciseNote: columns.value(row, "Notes") ?? ""
+            startedAt: startedAt, endedAt: endedAt(from: startedAt, row: row, columns: columns),
+            title: workoutName, workoutNotes: ImportParsing.text(columns.value(row, "Workout Notes")),
+            exerciseName: exerciseName, exerciseNote: ImportParsing.text(columns.value(row, "Notes"))
         )
         builder.addSet(set, workoutKey: "\(dateText)|\(workoutName)", entry: entry)
         return false
     }
 
-    /// The unit named by the weight column's own header (e.g. "Weight (lbs)"), or `nil` when the
-    /// header is ambiguous (bare "Weight") and a per-row unit column should decide instead.
-    private static func columnUnit(named weightColumn: String) -> WeightUnit? {
-        if weightColumn.contains("lb") { return .lb }
-        if weightColumn.contains("kg") { return .kg }
-        return nil
-    }
-
-    private static func weightKg(
-        _ row: [String], columns: ColumnMap, weightColumn: String, columnUnit: WeightUnit?
-    ) throws -> Double {
-        guard let text = columns.value(row, weightColumn) else { return 0 }
-        let perRowUnit = columns.value(row, "Weight Unit") ?? columns.value(row, "unit")
-        guard let value = ImportParsing.weightKg(text, columnUnit: columnUnit, perRowUnit: perRowUnit) else {
-            throw ImportRowError("Unreadable weight value \"\(text)\".")
-        }
-        return value
-    }
-
-    private static func reps(_ row: [String], columns: ColumnMap) throws -> Int {
-        guard let text = columns.value(row, "Reps") else { return 0 }
-        guard let value = ImportParsing.int(text) else {
-            throw ImportRowError("Unreadable reps value \"\(text)\".")
-        }
-        return value
+    /// Strong writes the session length as free text ("1h 5m") under `Duration`; newer exports
+    /// name that column `Workout Duration` instead, so both are consulted.
+    private static func endedAt(from startedAt: Date, row: [String], columns: ColumnMap) -> Date? {
+        let text = columns.value(row, "Duration") ?? columns.value(row, "Workout Duration")
+        guard let seconds = ImportParsing.durationSecondsFromFreeText(text) else { return nil }
+        return startedAt.addingTimeInterval(TimeInterval(seconds))
     }
 
     private static func setKind(_ raw: String?) -> SetKind {

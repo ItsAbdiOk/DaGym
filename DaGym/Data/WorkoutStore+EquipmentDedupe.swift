@@ -22,7 +22,10 @@ enum SeededEquipmentProfile: String, CaseIterable {
 
     var isActiveWhenSeeded: Bool { self == .gym }
 
-    var barKg: Double { Bar.olympic.weightKg }
+    /// The bar, in the unit the lifter picked during onboarding: a 20 kg Olympic bar, or the
+    /// 45 lb bar every American rack actually holds. Seeding kg regardless of the choice is
+    /// what put lb lifters on kg-loadable prescriptions ("137.8 lb") no gym can build.
+    func barKg(for unit: WeightUnit) -> Double { unit.defaultBar.weightKg }
 
     var availableEquipment: [String] {
         switch self {
@@ -31,9 +34,10 @@ enum SeededEquipmentProfile: String, CaseIterable {
         }
     }
 
-    var plateStock: [PlateStock] {
+    /// The plate inventory, in the lifter's own unit (`WeightUnit.plateStock`).
+    func plateStock(for unit: WeightUnit) -> [PlateStock] {
         switch self {
-        case .gym: PlateStock.standardKg
+        case .gym: WeightUnit.plateStock(for: unit)
         case .home: []
         }
     }
@@ -48,12 +52,19 @@ enum SeededEquipmentProfile: String, CaseIterable {
     /// list, plates and collars. The moment the user changes any of that (or creates their own
     /// profile that happens to be called "Gym"), this is false and the row is treated as the
     /// user's, never as a seeded duplicate.
+    /// Checked against *both* units' seed values: a row seeded in lb is just as untouched as
+    /// one seeded in kg, and the lifter may have switched units since.
     func isUntouchedSeededRow(_ model: EquipmentProfileModel) -> Bool {
-        model.name == name
-            && model.barKg == barKg
+        WeightUnit.allCases.contains { isUntouchedSeededRow(model, unit: $0) }
+    }
+
+    private func isUntouchedSeededRow(_ model: EquipmentProfileModel, unit: WeightUnit) -> Bool {
+        let stock = plateStock(for: unit)
+        return model.name == name
+            && model.barKg == barKg(for: unit)
             && model.availableEquipment == availableEquipment
-            && model.plateStockKg == plateStock.map(\.weightKg)
-            && model.plateCounts == plateStock.map(\.count)
+            && model.plateStockKg == stock.map(\.weightKg)
+            && model.plateCounts == stock.map(\.count)
             && model.collarsKg == collarsKg
     }
 }

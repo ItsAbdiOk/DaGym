@@ -7,15 +7,20 @@ extension ProgressionEngine {
     /// (`stall.lastTargetReps`, else the plan's target): every set at or above
     /// them climbs, any set below repeats the same ask. A plan edited since
     /// outranks that memory. A new set starts back at the plan's base reps. The
-    /// set count is sized from the plan, not from however many sets were logged:
-    /// a partial session holds, extra sets don't count. Per-side totals step by 2.
+    /// set count is sized from the ladder the engine is itself on
+    /// (`stall.lastTargetSets`, else the plan's count), not from however many sets
+    /// were logged: a partial session holds, extra sets don't count. A plan re-sized
+    /// since outranks that memory too. Remembering the count is what makes the ladder
+    /// climb at all — sized from the plan alone, "+1 set" was re-proposed off the
+    /// plan's own count every session, so `maxSets` was unreachable and the
+    /// harder-variation hand-off never fired. Per-side totals step by 2.
     static func prescribeBodyweight(_ context: RuleContext, repCeiling: Int, maxSets: Int) -> Prescribed {
         guard let baseline = context.baseline else { return context.firstTimePrescribed() }
         let workingSets = context.baselineWorkingSets
         guard !workingSets.isEmpty else { return context.firstTimePrescribed() }
         let addedWeightKg = workingSets.first?.weightKg ?? 0
         let workingPlanned = context.planned.filter { $0.kind.countsTowardStats }
-        let plannedCount = workingPlanned.isEmpty ? workingSets.count : workingPlanned.count
+        let planSets = workingPlanned.isEmpty ? nil : workingPlanned.count
         let ceiling = context.evenReps(repCeiling)
 
         let planTarget = workingPlanned.first?.targetReps
@@ -23,10 +28,16 @@ extension ProgressionEngine {
         let planEdited = planTarget != nil && seenPlanTarget != nil && planTarget != seenPlanTarget
         let remembered = planEdited ? nil : context.stall.lastTargetReps
         let asked = remembered ?? planTarget ?? workingSets.map(\.reps).min() ?? ceiling
+        // The rung of the set ladder the engine last asked for, unless the plan itself has been
+        // re-sized since — then the plan wins, the same way it does for the rep target.
+        let seenPlanSets = context.stall.lastPlanTargetSets
+        let planSetsEdited = planSets != nil && seenPlanSets != nil && planSets != seenPlanSets
+        let rememberedSets = planSetsEdited ? nil : context.stall.lastTargetSets
+        let plannedCount = max(1, rememberedSets ?? planSets ?? workingSets.count)
         var outcome = BodyweightOutcome(
             addedWeightKg: addedWeightKg, setCount: plannedCount, reps: asked,
             reason: PrescriptionReason(title: "Repeat \(plannedCount)×\(asked)", body: "", kind: .repeat),
-            planTarget: planTarget, baselineDate: baseline.date
+            planTarget: planTarget, planSets: planSets, baselineDate: baseline.date
         )
 
         if workingSets.count < plannedCount {
@@ -82,6 +93,8 @@ extension ProgressionEngine {
         var stall = context.stall
         stall.lastTargetReps = outcome.reps
         stall.lastPlanTargetReps = outcome.planTarget
+        stall.lastTargetSets = outcome.setCount
+        stall.lastPlanTargetSets = outcome.planSets
         return Prescribed(
             sets: sets, reason: outcome.reason, stall: stall, trainingMaxKg: context.trainingMaxKg,
             previousDate: outcome.baselineDate
@@ -96,5 +109,6 @@ private struct BodyweightOutcome {
     var reps: Int
     var reason: PrescriptionReason
     var planTarget: Int?
+    var planSets: Int?
     var baselineDate: Date?
 }

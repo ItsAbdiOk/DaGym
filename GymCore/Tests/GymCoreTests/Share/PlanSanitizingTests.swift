@@ -29,11 +29,13 @@ struct PlanSanitizingTests {
     }
 
     @Test("a non-positive rest override, target seconds, or target reps-high is dropped")
-    func nonPositiveDrops() {
-        let exercise = PlanRoutineExercise(
-            order: 0, exerciseName: "Plank", restOverrideSeconds: -30,
-            sets: [PlanSet(order: 0, kind: "working", targetRepsHigh: -1, targetSeconds: 0)]
-        ).sanitised()
+    func nonPositiveDrops() throws {
+        let exercise = try #require(
+            PlanRoutineExercise(
+                order: 0, exerciseName: "Plank", restOverrideSeconds: -30,
+                sets: [PlanSet(order: 0, kind: "working", targetRepsHigh: -1, targetSeconds: 0)]
+            ).sanitised()
+        )
         #expect(exercise.restOverrideSeconds == nil)
         #expect(exercise.sets[0].targetSeconds == nil)
         #expect(exercise.sets[0].targetRepsHigh == nil)
@@ -79,5 +81,140 @@ struct PlanSanitizingTests {
         #expect(document.routines[0].repRangeLow == 1)
         #expect(document.routines[0].repRangeHigh == 20)
         #expect(document.routines[0].exercises[0].restOverrideSeconds == nil)
+    }
+
+    // MARK: - Programs
+
+    @Test("an absurd or negative program length is clamped to 1...52 weeks")
+    func programWeeksClamped() {
+        let long = PlanProgram(id: UUID(), name: "Forever", weeks: 10_000).sanitised(routineIDs: [])
+        #expect(long.weeks == PlanLimits.maxProgramWeeks)
+        let negative = PlanProgram(id: UUID(), name: "Backwards", weeks: -4).sanitised(routineIDs: [])
+        #expect(negative.weeks == 1)
+    }
+
+    @Test("programWeeks is reconciled with weeks: out-of-range dropped, missing filled in")
+    func programWeeksReconciled() {
+        let program = PlanProgram(
+            id: UUID(), name: "PPL", weeks: 4,
+            programWeeks: [
+                PlanProgramWeek(index: 1, kind: "normal"),
+                PlanProgramWeek(index: 4, kind: "deload"),
+                PlanProgramWeek(index: 99, kind: "normal"),
+                PlanProgramWeek(index: -1, kind: "normal"),
+                PlanProgramWeek(index: 1, kind: "rest")
+            ]
+        ).sanitised(routineIDs: [])
+        #expect(program.programWeeks.map(\.index) == [1, 2, 3, 4])
+        #expect(program.programWeeks[0].kind == "normal")
+        #expect(program.programWeeks[3].kind == "deload")
+    }
+
+    @Test("an unknown week kind becomes a normal week")
+    func unknownWeekKind() {
+        let program = PlanProgram(
+            id: UUID(), name: "PPL", weeks: 1,
+            programWeeks: [PlanProgramWeek(index: 1, kind: "apocalypse")]
+        ).sanitised(routineIDs: [])
+        #expect(program.programWeeks[0].kind == "normal")
+    }
+
+    @Test("a day cycle referencing a routine the file doesn't carry is dropped")
+    func danglingRoutineReferenceDropped() {
+        let known = UUID()
+        let program = PlanProgram(
+            id: UUID(), name: "PPL", weeks: 1, routineIDs: [known, UUID(), known]
+        ).sanitised(routineIDs: [known])
+        #expect(program.routineIDs == [known, known])
+    }
+
+    @Test("the document sanitises its program against its own routines")
+    func documentSanitisesProgram() {
+        let routine = PlanRoutine(id: UUID(), name: "Push")
+        let document = PlanDocument(
+            exportedAt: Date(timeIntervalSince1970: 0), appVersion: "1.0", routines: [routine],
+            program: PlanProgram(
+                id: UUID(), name: "PPL", weeks: 999, routineIDs: [routine.id, UUID()]
+            )
+        ).sanitised()
+        #expect(document.program?.weeks == PlanLimits.maxProgramWeeks)
+        #expect(document.program?.routineIDs == [routine.id])
+    }
+
+    // MARK: - Exercises
+
+    @Test("a nameless exercise is dropped rather than creating an unnamed custom")
+    func namelessExerciseDropped() {
+        let document = PlanDocument(
+            exportedAt: Date(timeIntervalSince1970: 0), appVersion: "1.0",
+            exercises: [
+                PlanExercise(id: UUID(), name: "   "),
+                PlanExercise(id: UUID(), name: "Zercher Squat")
+            ]
+        ).sanitised()
+        #expect(document.exercises.map(\.name) == ["Zercher Squat"])
+    }
+
+    @Test("a nameless routine slot is dropped rather than resolving to nothing")
+    func namelessSlotDropped() {
+        let routine = PlanRoutine(
+            id: UUID(), name: "Push",
+            exercises: [
+                PlanRoutineExercise(order: 0, exerciseName: ""),
+                PlanRoutineExercise(order: 1, exerciseName: "Bench Press")
+            ]
+        ).sanitised()
+        #expect(routine.exercises.map(\.exerciseName) == ["Bench Press"])
+    }
+
+    @Test("a negative or absurd incrementKg and restSeconds are repaired")
+    func exerciseNumbersRepaired() throws {
+        let negative = try #require(
+            PlanExercise(id: UUID(), name: "Squat", incrementKg: -5, restSeconds: -30).sanitised()
+        )
+        #expect(negative.incrementKg == 2.5)
+        #expect(negative.restSeconds == 150)
+
+        let absurd = try #require(
+            PlanExercise(
+                id: UUID(), name: "Squat", incrementKg: 1_000_000, restSeconds: 999_999
+            ).sanitised()
+        )
+        #expect(absurd.incrementKg == PlanLimits.maxIncrementKg)
+        #expect(absurd.restSeconds == PlanLimits.maxRestSeconds)
+
+        let nonFinite = try #require(
+            PlanExercise(id: UUID(), name: "Squat", incrementKg: .nan).sanitised()
+        )
+        #expect(nonFinite.incrementKg == 2.5)
+    }
+
+    @Test("unbounded instructions and notes are truncated")
+    func unboundedTextTruncated() throws {
+        let huge = String(repeating: "x", count: 200_000)
+        let exercise = try #require(
+            PlanExercise(id: UUID(), name: "Squat", instructions: huge, notes: huge).sanitised()
+        )
+        #expect(exercise.instructions.count == PlanLimits.maxInstructionsLength)
+        #expect(exercise.notes.count == PlanLimits.maxNotesLength)
+
+        let routine = PlanRoutine(id: UUID(), name: huge, notes: huge).sanitised()
+        #expect(routine.name.count == PlanLimits.maxNameLength)
+        #expect(routine.notes.count == PlanLimits.maxNotesLength)
+    }
+
+    @Test("a non-finite target RPE is dropped rather than clamped to a number")
+    func nonFiniteRPEDropped() {
+        #expect(PlanSet(order: 0, kind: "working", targetRPE: .nan).sanitised().targetRPE == nil)
+    }
+
+    @Test("an absurd rest override is capped instead of being written verbatim")
+    func absurdRestOverrideCapped() throws {
+        let slot = try #require(
+            PlanRoutineExercise(
+                order: 0, exerciseName: "Plank", restOverrideSeconds: 10_000_000
+            ).sanitised()
+        )
+        #expect(slot.restOverrideSeconds == PlanLimits.maxRestSeconds)
     }
 }

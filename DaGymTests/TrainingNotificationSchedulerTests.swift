@@ -138,6 +138,34 @@ struct TrainingNotificationSchedulerTests {
         #expect(center.addedRequests.contains { $0.identifier == "weekly-recap" } == false)
     }
 
+    /// Finding 6: the recap body is frozen at schedule time, but a one-shot scheduled *after*
+    /// Sunday's hour has passed fires a whole week later — so a lifter who finished on Sunday
+    /// evening and then trained nothing all week got "This week: 3 workouts" for a week with none.
+    /// When the fire date isn't in the week the numbers describe, the body stops claiming numbers.
+    @Test("a recap landing next week carries no frozen counts")
+    func recapForALaterWeekDropsTheNumbers() throws {
+        let store = try makeStore()
+        let preferences = Preferences(suite: makeSuite(#function))
+        preferences.weeklyRecapEnabled = true
+        preferences.reminderHour = 18
+        let center = FakeNotificationCenter()
+        let scheduler = TrainingNotificationScheduler(center: center, calendar: calendar)
+        // Sunday 2026-09-13 at 19:00: this week's 18:00 recap has already gone.
+        let sundayEvening = try #require(
+            calendar.date(from: DateComponents(year: 2026, month: 9, day: 13, hour: 19))
+        )
+
+        scheduler.rescheduleAll(store: store, preferences: preferences, now: sundayEvening)
+
+        let recap = try #require(center.addedRequests.first { $0.identifier == "weekly-recap" })
+        #expect(recap.content.body == TrainingNotificationScheduler.pendingRecapBody)
+        #expect(!recap.content.body.contains("This week:"))
+        let trigger = try #require(recap.trigger as? UNTimeIntervalNotificationTrigger)
+        let fireDate = sundayEvening.addingTimeInterval(trigger.timeInterval)
+        #expect(calendar.component(.weekday, from: fireDate) == 1)
+        #expect(!calendar.isDate(fireDate, equalTo: sundayEvening, toGranularity: .weekOfYear))
+    }
+
     // MARK: - No duplicates
 
     @Test("rescheduling twice cancels both identifiers each time, never leaving duplicates")

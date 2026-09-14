@@ -127,8 +127,8 @@ struct WorkoutStoreRoutineTests {
         // muscle so it normalises to 1.0, and every other muscle scales
         // relative to bench's 4 sets.
         #expect(hitMap[.chest] == 1.0)
-        #expect(hitMap[.triceps] == 0.5)
+        #expect(hitMap[.triceps] == SessionStats.secondaryMuscleShare)
         #expect(abs((hitMap[.quads] ?? 0) - 0.25) < 0.0001)
-        #expect(abs((hitMap[.glutes] ?? 0) - 0.125) < 0.0001)
+        #expect(abs((hitMap[.glutes] ?? 0) - SessionStats.secondaryMuscleShare / 4) < 0.0001)
     }
 }

@@ -9,6 +9,9 @@ struct PlateChip: View {
     var action: () -> Void
 
     @Environment(Preferences.self) private var preferences
+    /// Optional so the chip can be rendered in a preview or a snapshot host with no store; the
+    /// fallback is the same one `WorkoutStore.activeInventory()` uses.
+    @Environment(WorkoutStore.self) private var store: WorkoutStore?
 
     var body: some View {
         Button(action: action) {
@@ -31,9 +34,22 @@ struct PlateChip: View {
         .accessibilityLabel("Plates, \(text)")
     }
 
+    /// The lifter's *own* rack: the active equipment profile, not a generic standard set. The
+    /// chip used to assume the standard set, so it called the engine's own prescription
+    /// unloadable and offered "20 + 10 per side" to someone who owns neither plate.
+    /// `bar` still wins — it is this exercise's bar (an EZ bar, say).
+    private var inventory: ProgressionEquipment {
+        var equipment = store?.activeInventory() ?? ProgressionEquipment(
+            bar: bar, plates: WeightUnit.plateStock(for: preferences.weightUnit), collarsKg: 0
+        )
+        equipment.bar = bar
+        return equipment
+    }
+
     private var result: PlateCalculator.Result {
         PlateCalculator.load(
-            target: weightKg, bar: bar, plates: WeightUnit.plateStock(for: preferences.weightUnit)
+            target: weightKg, bar: inventory.bar, plates: inventory.plates,
+            collarsKg: inventory.collarsKg
         )
     }
 

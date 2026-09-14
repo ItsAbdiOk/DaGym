@@ -9,21 +9,29 @@ import GymCore
 /// ankles, neck). Anything not listed in `slugToMuscle` renders as inert body silhouette
 /// rather than an addressable, tintable region.
 enum BodyMapMuscleMapping {
-    /// Upstream `BodySlug` → our `Muscle`. Many-to-one: e.g. `.upperTrapezius` and
-    /// `.lowerTrapezius` (drawn only as always-visible sub-groups upstream, unused by our
-    /// data files, kept here for completeness) both feed `.traps`, same as the parent
-    /// `.trapezius` region itself.
+    /// Upstream `BodySlug` → our `Muscle`. Many-to-one: several upstream regions can feed one
+    /// of ours (`.obliques` and `.serratus`, or the four thigh regions that all feed `.quads`).
+    ///
+    /// Only slugs that `BodyPathProvider` actually draws appear here. `.rearDeltoid`,
+    /// `.upperTrapezius` and `.lowerTrapezius` were listed and have no paths in any of the four
+    /// figures (male/female × front/back), so they could never tint anything; they are gone
+    /// rather than left as rows that look meaningful and aren't. `.rhomboids` and
+    /// `.rotatorCuff` exist in the upstream enum and are likewise undrawn — deliberately absent.
     ///
     /// | Our `Muscle` | Upstream `BodySlug` region(s)                                  |
     /// |---------------|-----------------------------------------------------------------|
-    /// | `.traps`      | trapezius, upperTrapezius, lowerTrapezius                       |
-    /// | `.delts`      | deltoids, frontDeltoid, rearDeltoid                             |
+    /// | `.traps`      | trapezius                                                       |
+    /// | `.delts`      | deltoids, frontDeltoid                                          |
     /// | `.chest`      | chest, upperChest, lowerChest                                   |
     /// | `.abs`        | abs, upperAbs, lowerAbs                                         |
-    /// | `.obliques`   | obliques, serratus (upstream models serratus as an obliques sub-group) |
+    /// | `.obliques`   | obliques, serratus — upstream models serratus as an obliques sub-group |
+    /// |               | and draws it on the ribcage. `scripts/import-exercises.py` maps wger's |
+    /// |               | "serratus anterior" to `obliques` to match; the two used to disagree.  |
     /// | `.biceps`     | biceps                                                          |
     /// | `.forearms`   | forearm                                                         |
-    /// | `.quads`      | quadriceps, innerQuad, outerQuad, hipFlexors                    |
+    /// | `.quads`      | quadriceps, innerQuad, outerQuad, hipFlexors — the hip-flexor region   |
+    /// |               | is the upper thigh, where rectus femoris (a quad *and* a hip flexor)   |
+    /// |               | sits, so hip-flexor work tinting the quads is the intended reading.    |
     /// | `.calves`     | calves (the shin, `.tibialis`, is left inert — see the table below) |
     /// | `.lats`       | upperBack — upstream has no dedicated "lats"/"latissimus" region; |
     /// |               | `upperBack` is the broad region drawn in that anatomical spot on the back |
@@ -34,12 +42,9 @@ enum BodyMapMuscleMapping {
     /// |               | not a quad one — followed here rather than overridden)          |
     static let slugToMuscle: [BodySlug: Muscle] = [
         .trapezius: .traps,
-        .upperTrapezius: .traps,
-        .lowerTrapezius: .traps,
 
         .deltoids: .delts,
         .frontDeltoid: .delts,
-        .rearDeltoid: .delts,
 
         .chest: .chest,
         .upperChest: .chest,
@@ -100,5 +105,24 @@ enum BodyMapMuscleMapping {
         if sharedAcrossSides.contains(muscle) { return true }
         if backOnly.contains(muscle) { return side == .back }
         return muscle.isFront == (side == .front)
+    }
+
+    /// Which single side a one-figure thumbnail should draw for an exercise with these primary
+    /// movers.
+    ///
+    /// Six of our fourteen groups (`lats`, `triceps`, `lowerBack`, `glutes`, `hams` and — via
+    /// `backOnly` — `calves`) are only addressable from behind. A thumbnail hard-coded to
+    /// `.front` therefore drew nothing at all for a Romanian deadlift, and drew a lat pulldown
+    /// as two light secondaries with no 100% muscle anywhere. Picking the side from the first
+    /// side-specific primary mover guarantees the muscle the exercise is *for* is the one the
+    /// reader sees. (Screens with room for two figures use `BodyMapPair` and show both.)
+    ///
+    /// Muscles in `sharedAcrossSides` are skipped when choosing, since they read the same either
+    /// way; an exercise with no primary movers at all, or only shared ones, draws the front.
+    static func thumbnailSide(forPrimary muscles: [Muscle]) -> BodyMapView.Side {
+        for muscle in muscles where !sharedAcrossSides.contains(muscle) {
+            return isAddressable(muscle, on: .front) ? .front : .back
+        }
+        return .front
     }
 }

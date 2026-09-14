@@ -175,10 +175,115 @@ struct WorkoutStoreEquipmentTests {
     private func legacyGym(named name: String, createdAt: Date) -> EquipmentProfileModel {
         let seed = SeededEquipmentProfile.gym
         return EquipmentProfileModel(
-            name: name, isActive: false, barKg: seed.barKg,
+            name: name, isActive: false, barKg: seed.barKg(for: .kg),
             availableEquipment: seed.availableEquipment,
-            plateStockKg: seed.plateStock.map(\.weightKg), plateCounts: seed.plateStock.map(\.count),
+            plateStockKg: seed.plateStock(for: .kg).map(\.weightKg),
+            plateCounts: seed.plateStock(for: .kg).map(\.count),
             collarsKg: seed.collarsKg, createdAt: createdAt, seedKey: nil
         )
+    }
+}
+
+/// One inventory, three surfaces. The plate chip, the keypad's plate line and the progression
+/// engine all used to answer from different plate sets, so the app could call its own
+/// prescription unloadable and name plates the lifter does not own.
+@MainActor
+@Suite("Equipment: one source of truth")
+struct EquipmentSourceOfTruthTests {
+    private func makeStore() throws -> WorkoutStore {
+        let container = try ModelContainer.dagym(inMemory: true)
+        return WorkoutStore(context: ModelContext(container))
+    }
+
+    @Test("a lb lifter is seeded a lb bar and lb plates, not a 20 kg bar and kg plates")
+    func seedsInTheChosenUnit() throws {
+        let store = try makeStore()
+        EquipmentSeeder.seedIfNeeded(store: store, unit: .lb)
+        let gym = try #require(store.equipmentProfiles().first { $0.name == "Gym" })
+
+        #expect(abs(gym.barKg - WeightUnit.lb.toKg(45)) < 0.001)
+        let pounds = gym.plateStock.map { (WeightUnit.lb.display(kg: $0.weightKg) * 2).rounded() / 2 }
+        #expect(pounds == [45, 35, 25, 10, 5, 2.5])
+        // Every weight the engine can prescribe is one this rack can build.
+        let equipment = store.activeEquipment()
+        for step in 0...200 {
+            let target = Double(step) * 2.5
+            let rounded = LoadGrid.plates(
+                bar: equipment.bar, plates: equipment.plates, collarsKg: equipment.collarsKg
+            ).nearest(target)
+            guard case .exact = PlateCalculator.load(
+                target: rounded, bar: equipment.bar, plates: equipment.plates,
+                collarsKg: equipment.collarsKg
+            ) else {
+                Issue.record("\(rounded) kg is not loadable on the seeded lb rack")
+                continue
+            }
+        }
+    }
+
+    @Test("seeding stays idempotent and dedupe-safe whichever unit seeded it")
+    func lbSeedIsNotADuplicate() throws {
+        let store = try makeStore()
+        EquipmentSeeder.seedIfNeeded(store: store, unit: .lb)
+        EquipmentSeeder.seedIfNeeded(store: store, unit: .lb)
+        #expect(store.equipmentProfiles().count == 2)
+        #expect(store.dedupeEquipmentProfiles() == 0)
+    }
+
+    @Test("chip, keypad and engine all read the active profile's inventory")
+    func surfacesAgree() throws {
+        let store = try makeStore()
+        // A rack with 25s and 10s and nothing else — the standard set would disagree loudly.
+        let coarse = [PlateStock(weightKg: 25, count: 4), PlateStock(weightKg: 10, count: 2)]
+        store.createProfile(
+            name: "Coarse", isActive: true, barKg: 20, availableEquipment: ["barbell"],
+            plateStock: coarse, collarsKg: 0
+        )
+
+        let inventory = store.activeInventory()
+        #expect(inventory.plates == coarse)
+        // `activeEquipment()` (the engine) and `activeInventory()` (chip + keypad) are one call.
+        #expect(store.activeEquipment().plates == inventory.plates)
+        #expect(store.activeEquipment().bar.weightKg == inventory.bar.weightKg)
+
+        // The engine's own next step from 40 kg, and what the chip would say about it.
+        let grid = LoadGrid.plates(bar: inventory.bar, plates: inventory.plates, collarsKg: 0)
+        let next = grid.nearestAbove(40)
+        #expect(next == 70)
+        let chip = PlateChip.text(
+            for: PlateCalculator.load(target: next, bar: inventory.bar, plates: inventory.plates),
+            format: { WorkoutSession.format($0) }
+        )
+        #expect(chip == "Bar 20 · 25 per side")
+    }
+
+    @Test("with no profile at all the fallback still follows the lifter's unit")
+    func fallbackFollowsUnit() throws {
+        let store = try makeStore()
+        // The store reads `UserDefaults.standard`, so assert the shape of the fallback rather
+        // than mutating global defaults from a test.
+        #expect(store.equipmentProfiles().isEmpty)
+        let fallback = store.activeInventory()
+        #expect(fallback.plates == WeightUnit.plateStock(for: store.preferredWeightUnit))
+        #expect(fallback.bar.weightKg == store.preferredWeightUnit.defaultBar.weightKg)
+    }
+
+    @Test("opening a kg-seeded profile as a lb lifter keeps its plates")
+    func editorKeepsForeignUnitPlates() {
+        let kgStock = PlateStock.standardKg
+        let rows = EquipmentStep.rows(
+            standard: EquipmentStep.standardWeightsKg(for: .lb), existing: kgStock
+        )
+        // Every saved kg plate survives with its count …
+        for plate in kgStock {
+            let row = rows.first { abs($0.weightKg - plate.weightKg) < 0.001 }
+            #expect(row?.count == plate.count)
+        }
+        // … and the lb sizes are offered alongside, at zero.
+        for weight in EquipmentStep.standardWeightsKg(for: .lb) {
+            #expect(rows.contains { abs($0.weightKg - weight) < EquipmentStep.sameSizeToleranceKg })
+        }
+        // Saving keeps only stocked rows, so nothing is silently wiped.
+        #expect(rows.filter { $0.count >= 1 }.count == kgStock.count)
     }
 }

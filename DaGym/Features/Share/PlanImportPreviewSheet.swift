@@ -18,9 +18,16 @@ struct PlanImportPreviewSheet: View {
                 .frame(width: 36, height: 5)
                 .padding(.top, DGSpace.s2)
             header
-            countsCard
-            if !report.problems.isEmpty {
-                problemsCard
+            // The problems list is unbounded (one entry per unresolved exercise slot), so it
+            // scrolls inside a fixed sheet instead of overflowing a hard-coded height and pushing
+            // the Import button off-screen — which is what a plan with four bad slots used to do.
+            ScrollView {
+                VStack(spacing: DGSpace.s5) {
+                    countsCard
+                    if !report.problems.isEmpty {
+                        problemsCard
+                    }
+                }
             }
             actions
         }
@@ -29,11 +36,9 @@ struct PlanImportPreviewSheet: View {
         .frame(maxWidth: .infinity, alignment: .top)
         .background(DGColor.surface1)
         .clipShape(RoundedRectangle(cornerRadius: DGRadius.sheet, style: .continuous))
-        .presentationDetents([.height(detentHeight)])
+        .presentationDetents(report.problems.isEmpty ? [.height(320)] : [.medium, .large])
         .presentationDragIndicator(.hidden)
     }
-
-    private var detentHeight: CGFloat { report.problems.isEmpty ? 320 : 440 }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: DGSpace.s2) {

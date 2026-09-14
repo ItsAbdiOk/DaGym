@@ -1,13 +1,66 @@
 import Foundation
 import SwiftData
+import UserNotifications
+
+/// The non-SwiftData things "Reset everything" also has to clear, injected so tests can run a
+/// full wipe without touching the developer's real notification centre, calendar, widget or
+/// Keychain. `.live` is what the app uses.
+@MainActor
+struct ResetSideEffects {
+    // `@MainActor` on each closure type, not just on the struct: a closure formed inside a
+    // `@MainActor` member is main-actor-isolated, and Swift 6 refuses to drop that isolation
+    // when storing it in a plain `() -> Void`.
+    var cancelNotifications: @MainActor () -> Void
+    var clearWidgetSnapshot: @MainActor () -> Void
+    var removeSecrets: @MainActor () -> Void
+    var deleteCalendarEvents: @MainActor ([String]) -> Void
+
+    /// Inert in a test process, like `WidgetSnapshotWriter.live`: unit tests must not clear the
+    /// developer's real notifications, calendar events, widget snapshot or Keychain.
+    static var live: ResetSideEffects {
+        guard !LaunchFlags.isTesting else { return .inert }
+        return ResetSideEffects(
+            cancelNotifications: {
+                let center = UNUserNotificationCenter.current()
+                center.removeAllPendingNotificationRequests()
+                center.removeAllDeliveredNotifications()
+            },
+            clearWidgetSnapshot: {
+                guard let suite = WidgetSnapshotStore.appGroupSuite else { return }
+                WidgetSnapshotStore.write(.empty, to: suite)
+            },
+            removeSecrets: { KeychainStore.remove(account: HevyAPIClient.keychainAccount) },
+            deleteCalendarEvents: { ids in
+                guard !ids.isEmpty else { return }
+                let store = EventKitStore()
+                for id in ids { try? store.deleteEvent(id: id) }
+            }
+        )
+    }
+
+    /// Does nothing — the default for tests and previews.
+    static var inert: ResetSideEffects {
+        ResetSideEffects(
+            cancelNotifications: {}, clearWidgetSnapshot: {}, removeSecrets: {},
+            deleteCalendarEvents: { _ in }
+        )
+    }
+}
 
 extension WorkoutStore {
     /// Deletes every persisted model — routines, workouts, exercises, schedule, equipment
     /// profiles, achievements, programs, progress photos, imported Apple Health sessions,
-    /// everything in `DaGymSchema.models` —
-    /// and resets `preferences` back to its shipped defaults. Used by the Settings "Reset
-    /// everything" destructive row, which only calls this after a typed "DELETE" confirmation.
-    func wipeAllData(preferences: Preferences) {
+    /// everything in `DaGymSchema.models` — clears everything the app left *outside* the store
+    /// (pending notifications, the App Group widget snapshot, the calendar events the schedule
+    /// sync created, the Hevy Keychain key), resets `preferences` back to its shipped defaults,
+    /// and re-seeds the library so the user lands on a fresh install rather than an empty app.
+    /// Used by the Settings "Reset everything" destructive row, which only calls this after a
+    /// typed "DELETE" confirmation.
+    func wipeAllData(preferences: Preferences, effects: ResetSideEffects = .live) {
+        effects.cancelNotifications()
+        // Read *before* the schedule rows go: these ids are the only handle on the events the
+        // calendar sync created, so deleting the rows first orphaned every event forever.
+        effects.deleteCalendarEvents(Array(scheduleEventIDs().values))
         deleteAllMainModels()
         save()
         if let photoContext {
@@ -20,37 +73,70 @@ extension WorkoutStore {
             saveHealth()
         }
         Self.resetToDefaults(preferences)
+        effects.clearWidgetSnapshot()
+        effects.removeSecrets()
+        reseedAfterWipe()
     }
 
-    /// One `ModelContext.delete(model:)` batch delete per main-store type. Written out
-    /// explicitly (rather than looping `DaGymSchema.mainModels`) so this stays a plain generic
-    /// call on a concrete type — `FeatureSettingsTests` asserts the count matches
-    /// `DaGymSchema.mainModels` so a model added to the schema without a line here fails loudly.
+    /// Re-runs the first-launch seeders so the user gets the exercise library, starter routines
+    /// and equipment profiles straight back. Without this the app sat completely empty until
+    /// the next cold launch, which reads as "the reset broke it".
+    private func reseedAfterWipe() {
+        ExerciseSeeder.seedIfNeeded(context: context)
+        RoutineSeeder.seedStarterRoutinesIfNeeded(store: self)
+        EquipmentSeeder.seedIfNeeded(store: self)
+        save()
+    }
+
+    /// Deletes every row of every main-store type, **one object at a time**.
+    ///
+    /// This used to be `ModelContext.delete(model:)` per type, which issues an
+    /// `NSBatchDeleteRequest`. `NSPersistentCloudKitContainer` does not export batch operations
+    /// — it mirrors changes it sees in the persistent history as object-level changes — so with
+    /// iCloud sync on, a "reset everything" deleted nothing in CloudKit and every row imported
+    /// straight back minutes later, from the cloud and from the user's other device.
     private func deleteAllMainModels() {
-        try? context.delete(model: ExerciseModel.self, includeSubclasses: true)
-        try? context.delete(model: RoutineModel.self, includeSubclasses: true)
-        try? context.delete(model: RoutineExerciseModel.self, includeSubclasses: true)
-        try? context.delete(model: PlannedSetModel.self, includeSubclasses: true)
-        try? context.delete(model: WorkoutModel.self, includeSubclasses: true)
-        try? context.delete(model: WorkoutExerciseModel.self, includeSubclasses: true)
-        try? context.delete(model: SetLogModel.self, includeSubclasses: true)
-        try? context.delete(model: BodyMeasurementModel.self, includeSubclasses: true)
-        try? context.delete(model: PersonalRecordModel.self, includeSubclasses: true)
-        try? context.delete(model: PersonalRecordEventModel.self, includeSubclasses: true)
-        try? context.delete(model: EquipmentProfileModel.self, includeSubclasses: true)
-        try? context.delete(model: ScheduleModel.self, includeSubclasses: true)
-        try? context.delete(model: AchievementModel.self, includeSubclasses: true)
-        try? context.delete(model: ProgramModel.self, includeSubclasses: true)
-        try? context.delete(model: ProgramWeekModel.self, includeSubclasses: true)
-        try? context.delete(model: SeedStateModel.self, includeSubclasses: true)
-        try? context.delete(model: ExerciseNoteModel.self, includeSubclasses: true)
-        try? context.delete(model: GymCardModel.self, includeSubclasses: true)
-        try? context.delete(model: CoachInteractionModel.self, includeSubclasses: true)
+        for erase in Self.mainModelErasers { erase(context) }
+    }
+
+    /// One eraser per main-store type. `FeatureSettingsTests` asserts this list covers
+    /// `DaGymSchema.mainModels`, so a model added to the schema without a line here fails loudly.
+    static let mainModelErasers: [@MainActor (ModelContext) -> Void] = [
+        eraser(ExerciseModel.self),
+        eraser(RoutineModel.self),
+        eraser(RoutineExerciseModel.self),
+        eraser(PlannedSetModel.self),
+        eraser(WorkoutModel.self),
+        eraser(WorkoutExerciseModel.self),
+        eraser(SetLogModel.self),
+        eraser(BodyMeasurementModel.self),
+        eraser(PersonalRecordModel.self),
+        eraser(PersonalRecordEventModel.self),
+        eraser(EquipmentProfileModel.self),
+        eraser(ScheduleModel.self),
+        eraser(AchievementModel.self),
+        eraser(ProgramModel.self),
+        eraser(ProgramWeekModel.self),
+        eraser(SeedStateModel.self),
+        eraser(ExerciseNoteModel.self),
+        eraser(GymCardModel.self),
+        eraser(CoachInteractionModel.self)
+    ]
+
+    private static func eraser<Model: PersistentModel>(
+        _ type: Model.Type
+    ) -> @MainActor (ModelContext) -> Void {
+        { context in
+            for model in (try? context.fetch(FetchDescriptor<Model>())) ?? [] {
+                context.delete(model)
+            }
+        }
     }
 
     /// Every `Preferences` property, written back to the same default each `init(suite:)` uses.
-    /// Listed explicitly (rather than a `Preferences.resetToDefaults()` method) since
-    /// `DaGym/Design/UnitEnvironment.swift` isn't part of this change.
+    /// Listed explicitly (rather than a `Preferences.resetToDefaults()` method) so a preference
+    /// nobody adds a line for here fails `resetRestoresEveryPreference` instead of surviving a
+    /// "Reset everything".
     private static func resetToDefaults(_ preferences: Preferences) {
         preferences.weightUnit = .kg
         preferences.effortScale = .rpe
@@ -75,12 +161,10 @@ extension WorkoutStore {
         preferences.weeklyRecapEnabled = false
         preferences.reminderHour = 18
         preferences.bodyweightGoalKg = nil
-        preferences.syncPhotos = false
         preferences.lockPhotos = false
         preferences.hasCompletedOnboarding = false
-        preferences.trainingGoal = ""
+        preferences.trainingGoal = .general
         preferences.deloadSnoozedUntil = nil
-        preferences.deloadDismissedFingerprint = nil
         preferences.accent = .coral
         preferences.compactWorkoutLayout = false
         preferences.showSetSteppers = false
@@ -93,5 +177,7 @@ extension WorkoutStore {
         preferences.playRestSoundOnSilent = false
         preferences.weighInBeforeWorkout = false
         preferences.sampleDataMode = false
+        preferences.voiceSpeakBackOnHeadphones = true
+        preferences.voiceAutoLogEnabled = false
     }
 }

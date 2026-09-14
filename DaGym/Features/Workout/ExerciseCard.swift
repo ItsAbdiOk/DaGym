@@ -318,7 +318,11 @@ private struct ExerciseThumbnail: View {
     var size: CGFloat = 44
 
     var body: some View {
-        BodyMapView(side: .front, mode: .hit, intensity: exercise.hitMap)
+        BodyMapView(
+            side: BodyMapMuscleMapping.thumbnailSide(forPrimary: exercise.primary),
+            mode: .hit,
+            intensity: exercise.hitMap
+        )
             .padding(6)
             .frame(width: size, height: size)
             .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous))

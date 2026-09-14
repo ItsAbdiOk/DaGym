@@ -84,7 +84,8 @@ extension WorkoutStore {
     static let deloadProgramName = "Deload Week"
     static let deloadPreviousProgramIDKey = "deloadPreviousProgramID"
 
-    /// Consecutive recent weeks (working back from this week) that met `weeklyGoal` with no
+    /// Consecutive recent weeks (working back from this week, or from the last complete one when
+    /// this week hasn't met the goal yet) that met `weeklyGoal` with no
     /// planned deload session in them — a simple proxy for "accumulated weeks of hard training
     /// without a lighter week" (A4b: a deload week breaks the streak even if it also hit the
     /// workout count, and the count is the user's actual `Preferences.weeklyGoal`, not a
@@ -110,7 +111,18 @@ extension WorkoutStore {
         }
         var streak = 0
         var cursor = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
-        while (weekCounts[cursor] ?? 0) >= max(1, weeklyGoal), !weeksWithDeload.contains(cursor) {
+        // The week in progress has not had a chance to meet the goal yet. Starting the walk on it
+        // unconditionally meant eight hard weeks read as 0 every Monday and Tuesday, so the
+        // deload rule's `hardWeeksInARow` arm could only ever fire on the last day or two of a
+        // week — count it when it has already met the goal, otherwise start from the last
+        // complete week. A deload logged this week still breaks the streak (the loop's own
+        // condition), which is the whole point of the check.
+        let goal = max(1, weeklyGoal)
+        if (weekCounts[cursor] ?? 0) < goal, !weeksWithDeload.contains(cursor),
+           let previous = calendar.date(byAdding: .weekOfYear, value: -1, to: cursor) {
+            cursor = previous
+        }
+        while (weekCounts[cursor] ?? 0) >= goal, !weeksWithDeload.contains(cursor) {
             streak += 1
             guard let previous = calendar.date(byAdding: .weekOfYear, value: -1, to: cursor) else { break }
             cursor = previous

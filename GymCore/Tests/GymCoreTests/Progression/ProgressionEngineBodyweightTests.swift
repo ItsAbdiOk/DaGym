@@ -125,4 +125,40 @@ struct ProgressionEngineBodyweightTests {
         )
         #expect(result.reason.kind == .firstTime)
     }
+
+    /// The ladder has to actually climb. The plan's set count never moves, so sizing the ask from
+    /// the plan alone meant "+1 set" was re-proposed off the plan's own count every session: the
+    /// prescription sat at plan + 1 for ever, `maxSets` was unreachable and the harder-variation
+    /// hand-off never fired. The engine now remembers the rung it asked for.
+    @Test("the set ladder climbs past plan + 1 and reaches maxSets, then hands off")
+    func setLadderClimbsToMaxSets() {
+        var stall = StallState()
+        var counts: [Int] = []
+        var lastReason = PrescriptionReason.Kind.repeat
+        // The plan always says 3 sets; the lifter always hits the ceiling on every set they are
+        // asked for. 3 → 4 → 5 sets, then "go harder".
+        for asked in [3, 4, 5] {
+            let result = ProgressionEngine.prescribe(
+                rule: rule, planned: planned(3),
+                history: [entry(reps: Array(repeating: 15, count: asked))], stall: stall
+            )
+            counts.append(result.sets.count)
+            lastReason = result.reason.kind
+            stall = result.stall
+        }
+        #expect(counts == [4, 5, 5])
+        #expect(lastReason == .plan)
+        #expect(stall.lastTargetSets == 5)
+    }
+
+    @Test("re-sizing the plan outranks the remembered rung")
+    func planResizeOutranksMemory() {
+        let stall = StallState(
+            lastTargetReps: 15, lastPlanTargetReps: 15, lastTargetSets: 4, lastPlanTargetSets: 3
+        )
+        let result = ProgressionEngine.prescribe(
+            rule: rule, planned: planned(2), history: [entry(reps: [10, 10])], stall: stall
+        )
+        #expect(result.sets.count == 2)
+    }
 }

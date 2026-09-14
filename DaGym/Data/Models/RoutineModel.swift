@@ -26,6 +26,16 @@ final class RoutineModel {
     /// `RoutineTint` raw value. Both default to the brand look so older rows need no migration.
     var symbolName: String = "dumbbell"
     var tint: String = "coral"
+    /// Set when this routine lost an `importedFromID` fold (`WorkoutStore.dedupeRoutines()`):
+    /// the `id` of the routine that won. Same tombstone contract as
+    /// `ExerciseModel.mergedIntoID` — kept alive (but hidden from every read) so slots CloudKit
+    /// delivers after the fold still have a parent and can be folded into the survivor.
+    var mergedIntoID: UUID?
+    /// When `mergedIntoID` was first stamped.
+    var mergedAt: Date?
+
+    /// True for a routine that lost a fold. Every read path filters these out.
+    var isMergedAway: Bool { mergedIntoID != nil }
 
     @Relationship(deleteRule: .cascade, inverse: \RoutineExerciseModel.routine)
     var exercises: [RoutineExerciseModel]?

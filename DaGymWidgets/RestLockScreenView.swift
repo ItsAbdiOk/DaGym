@@ -8,6 +8,8 @@ struct RestLockScreenView: View {
     let attributes: RestActivityAttributes
     let state: RestActivityAttributes.ContentState
 
+    @Environment(\.widgetPalette) private var palette
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
@@ -16,10 +18,10 @@ struct RestLockScreenView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(timerInterval: state.startDate...state.endDate, countsDown: true)
                         .font(WidgetFont.condensed(size: 34))
-                        .foregroundStyle(WidgetPalette.ink)
+                        .foregroundStyle(palette.ink)
                     Text("Next: \(state.nextSetLabel)")
                         .font(.footnote)
-                        .foregroundStyle(WidgetPalette.inkMuted)
+                        .foregroundStyle(palette.inkMuted)
                         .lineLimit(1)
                 }
                 Spacer()
@@ -38,12 +40,12 @@ struct RestLockScreenView: View {
                 Text("DAGYM · REST")
                     .font(.caption2.weight(.bold))
                     .tracking(1.2)
-                    .foregroundStyle(WidgetPalette.inkMuted)
+                    .foregroundStyle(palette.inkMuted)
             }
             Spacer()
             Text(attributes.workoutTitle.uppercased())
                 .font(.caption2.weight(.bold))
-                .foregroundStyle(WidgetPalette.inkMuted)
+                .foregroundStyle(palette.inkMuted)
         }
     }
 }

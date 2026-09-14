@@ -57,12 +57,14 @@ struct SeedDedupeTests {
         let folded = store.dedupeSeededRows()
         #expect(folded == survivorIDs.count + 1)
 
-        let exercises = try context.fetch(FetchDescriptor<ExerciseModel>())
+        // The losers are tombstoned, not deleted (see `ExerciseSeeder.dedupe`), so the *live*
+        // library is what collapses back to one row per seedID.
+        let exercises = try context.fetch(FetchDescriptor<ExerciseModel>()).filter { !$0.isMergedAway }
         #expect(exercises.count == survivorIDs.count)
         #expect(Set(exercises.compactMap(\.seedID)).count == exercises.count)
         #expect(Set(exercises.map(\.id)) == survivorIDs)
 
-        let routines = try context.fetch(FetchDescriptor<RoutineModel>())
+        let routines = try context.fetch(FetchDescriptor<RoutineModel>()).filter { !$0.isMergedAway }
         #expect(routines.count == RoutineSeeder.starterIDs.count)
         #expect(routines.filter { $0.name == "Push A" }.count == 1)
         for slot in routines.flatMap({ $0.exercises ?? [] }) {
@@ -212,5 +214,232 @@ struct SeedDedupeTests {
         #expect(store.dedupeScheduleRows() == 1)
         #expect(try context.fetchCount(FetchDescriptor<ScheduleModel>()) == 1)
         #expect(store.schedule().days[.monday] == routine.id)
+    }
+}
+
+/// A fresh in-memory store with the exercise library, starter routines and equipment profiles
+/// seeded — the shape a real first launch leaves behind. Shared by both suites in this file.
+@MainActor
+private func makeSeededStore() throws -> (store: WorkoutStore, context: ModelContext) {
+    let container = try ModelContainer.dagym(inMemory: true)
+    let context = ModelContext(container)
+    ExerciseSeeder.seedIfNeeded(context: context)
+    let store = WorkoutStore(context: context)
+    RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+    EquipmentSeeder.seedIfNeeded(store: store)
+    return (store, context)
+}
+
+/// The fold's tombstone contract (finding 1), the multi-routine schedule re-point (finding 2),
+/// the `SeedState` tiebreak, and the CloudKit-legality of the mirrored schema.
+@MainActor
+@Suite("Seed fold tombstones and schema legality")
+struct SeedTombstoneTests {
+    private func seededStore() throws -> (store: WorkoutStore, context: ModelContext) {
+        try makeSeededStore()
+    }
+
+    /// Finding 1: CloudKit imports a record *before* its children. This delivers the other
+    /// device's `ExerciseModel` copy on its own, lets the fold run, and only then delivers the
+    /// workout entry / PR rows that name it — the ordering `simulateRemoteImport` (one atomic
+    /// graph) can never produce, and the ordering that used to lose the lot. The loser is kept
+    /// as a tombstone so the late arrivals still resolve, and the next pass re-points them.
+    @Test("rows that arrive after the fold are re-pointed, not orphaned")
+    func lateArrivingChildrenAreRepointed() throws {
+        let (_, context) = try seededStore()
+        let bench = try #require(
+            try context.fetch(FetchDescriptor<ExerciseModel>()).first {
+                $0.seedID == "Barbell_Bench_Press_-_Medium_Grip"
+            }
+        )
+        let remote = ExerciseModel(
+            seedID: bench.seedID, name: bench.name, primaryMuscles: bench.primaryMuscles,
+            equipment: bench.equipment, loggingStyle: bench.loggingStyle,
+            createdAt: bench.createdAt.addingTimeInterval(60)
+        )
+        context.insert(remote)
+        try context.save()
+
+        // The fold runs while only the parent has synced.
+        #expect(ExerciseSeeder.dedupe(in: context) > 0)
+        try context.save()
+        #expect(remote.mergedIntoID == bench.id)
+
+        // Now the other device's children land.
+        let workout = WorkoutModel(title: "Push A", endedAt: Date())
+        context.insert(workout)
+        let entry = WorkoutExerciseModel(order: 0, exercise: remote, workout: workout)
+        context.insert(entry)
+        let record = PersonalRecordModel(exerciseID: remote.id, kind: "e1rm", value: 120)
+        context.insert(record)
+        let event = PersonalRecordEventModel(exerciseID: remote.id, kind: "e1rm", value: 120)
+        context.insert(event)
+        let note = ExerciseNoteModel(exerciseID: remote.id, text: "Pause on chest", scope: "always")
+        context.insert(note)
+        try context.save()
+        // The loser still exists, so nothing arrived parentless.
+        #expect(entry.exercise != nil)
+
+        #expect(ExerciseSeeder.dedupe(in: context) > 0)
+        try context.save()
+        #expect(entry.exercise?.id == bench.id)
+        #expect(record.exerciseID == bench.id)
+        #expect(event.exerciseID == bench.id)
+        #expect(note.exerciseID == bench.id)
+        // Settled: a further pass has nothing left to do.
+        #expect(ExerciseSeeder.dedupe(in: context) == 0)
+    }
+
+    /// A tombstone is never handed out as a library exercise.
+    @Test("a folded-away exercise is hidden from every read")
+    func tombstonesAreHiddenFromReads() throws {
+        let (store, context) = try seededStore()
+        let liveCount = store.exercises().count
+        let bench = try #require(
+            try context.fetch(FetchDescriptor<ExerciseModel>()).first {
+                $0.seedID == "Barbell_Bench_Press_-_Medium_Grip"
+            }
+        )
+        let remote = ExerciseModel(
+            seedID: bench.seedID, name: bench.name, primaryMuscles: bench.primaryMuscles,
+            equipment: bench.equipment, loggingStyle: bench.loggingStyle,
+            createdAt: bench.createdAt.addingTimeInterval(60)
+        )
+        context.insert(remote)
+        try context.save()
+        store.dedupeSeededRows()
+
+        #expect(store.exercises().count == liveCount)
+        #expect(store.fetchExerciseModel(id: remote.id) == nil)
+        #expect(store.exerciseID(seedID: "Barbell_Bench_Press_-_Medium_Grip") == bench.id)
+    }
+
+    /// Finding 6: the loser may hold the edits. Only fields the survivor still has at their
+    /// seeded value are taken over, so a real edit on the survivor is never clobbered.
+    @Test("rest time, increment and bar edited on the losing copy survive the fold")
+    func foldCarriesExerciseEdits() throws {
+        let (store, context) = try seededStore()
+        let bench = try #require(
+            try context.fetch(FetchDescriptor<ExerciseModel>()).first {
+                $0.seedID == "Barbell_Bench_Press_-_Medium_Grip"
+            }
+        )
+        let remote = ExerciseModel(
+            seedID: bench.seedID, name: bench.name, primaryMuscles: bench.primaryMuscles,
+            equipment: bench.equipment, loggingStyle: bench.loggingStyle, barType: "ezBar",
+            incrementKg: bench.incrementKg + 1.5, restSeconds: bench.restSeconds + 45,
+            createdAt: bench.createdAt.addingTimeInterval(60)
+        )
+        context.insert(remote)
+        try context.save()
+
+        store.dedupeSeededRows()
+        #expect(bench.restSeconds == remote.restSeconds)
+        #expect(bench.incrementKg == remote.incrementKg)
+        #expect(bench.barType == "ezBar")
+    }
+
+    /// Finding 6: `persistProgression` writes `stallJSON`/`trainingMaxKg` without bumping
+    /// `updatedAt`, so the device that actually trained can lose the fold to one that only
+    /// renamed the routine. The engine's memory is merged across rather than dropped.
+    @Test("the losing routine's progression state is merged into the survivor")
+    func foldMergesProgressionState() throws {
+        let (store, context) = try seededStore()
+        let legs = try #require(store.routines().first { $0.name == "Legs" })
+        let trained = try #require(store.fetchRoutineModel(id: legs.id))
+        let trainedSlot = try #require(trained.exercises?.first)
+        trainedSlot.stallJSON = #"{"missStreak":2}"#
+        trainedSlot.trainingMaxKg = 142.5
+        let exercise = try #require(trainedSlot.exercise)
+
+        // A newer row that only carries a rename — and its own untouched slot for the same lift.
+        let renamed = RoutineModel(
+            name: "Leg Day", updatedAt: Date().addingTimeInterval(600),
+            importedFromID: RoutineSeeder.starterIDs["Legs"]
+        )
+        context.insert(renamed)
+        let renamedSlot = RoutineExerciseModel(order: 0, exercise: exercise, routine: renamed)
+        context.insert(renamedSlot)
+        try context.save()
+
+        store.dedupeSeededRows()
+        #expect(store.fetchRoutineModel(id: trained.id) == nil)
+        #expect(renamedSlot.stallJSON == #"{"missStreak":2}"#)
+        #expect(renamedSlot.trainingMaxKg == 142.5)
+    }
+
+    /// Finding 2: the re-point used to go through the single-routine `days` view, which only
+    /// ever sees — and only ever writes — a day's first routine.
+    @Test("a folded routine on a two-routine day keeps the day's other routine")
+    func foldedRoutineKeepsMultiRoutineDay() throws {
+        let (store, context) = try seededStore()
+        let legs = try #require(store.routines().first { $0.name == "Legs" })
+        let arms = try #require(store.routines().first { $0.name == "Pull B" })
+        var schedule = WeeklySchedule()
+        schedule.setRoutines([legs.id, arms.id], on: .monday)
+        store.saveSchedule(schedule)
+
+        let remote = RoutineModel(
+            name: "Legs", updatedAt: Date().addingTimeInterval(600),
+            importedFromID: RoutineSeeder.starterIDs["Legs"]
+        )
+        context.insert(remote)
+        try context.save()
+
+        store.dedupeSeededRows()
+        #expect(store.schedule().dayRoutines[.monday] == [remote.id, arms.id])
+    }
+
+    /// The `WeeklySchedule.days` setter itself: writing a day's first routine must not throw
+    /// away the rest of that day's list.
+    @Test("setting a day's first routine keeps the routines planned behind it")
+    func daysSetterKeepsTrailingRoutines() {
+        let first = UUID()
+        let second = UUID()
+        let replacement = UUID()
+        var schedule = WeeklySchedule()
+        schedule.setRoutines([first, second], on: .monday)
+        schedule.days[.monday] = replacement
+        #expect(schedule.dayRoutines[.monday] == [replacement, second])
+        schedule.days[.monday] = nil
+        #expect(schedule.dayRoutines[.monday] == nil)
+    }
+
+    /// Finding 6: `updatedAt` alone is not a total order. Two rows stamped in the same instant
+    /// let each device keep a different one and delete the other's, which bounced
+    /// `routinesSeeded` back to false and re-seeded all 13 starters into a deliberately
+    /// emptied store.
+    @Test("seed-state rows with identical timestamps pick the same survivor on every device")
+    func seedStateTiebreakIsDeterministic() throws {
+        let stamp = Date()
+        let ids = [UUID(), UUID(), UUID()]
+        var survivors: [UUID] = []
+        for ordering in [ids, Array(ids.reversed())] {
+            let container = try ModelContainer.dagym(inMemory: true)
+            let context = ModelContext(container)
+            for id in ordering {
+                context.insert(SeedStateModel(id: id, routinesSeeded: true, updatedAt: stamp))
+            }
+            try context.save()
+            survivors.append(SeedState.row(in: context).id)
+        }
+        #expect(survivors[0] == survivors[1])
+        #expect(survivors[0] == ids.min { $0.uuidString < $1.uuidString })
+    }
+
+    /// CloudKit's two hard rules for a mirrored schema: every relationship must be optional and
+    /// no attribute may be unique. Breaking either stops the container loading at all — on a
+    /// user's device, not here — so the schema is asserted rather than reviewed.
+    @Test("the mirrored schema stays CloudKit-legal: optional relationships, no unique attributes")
+    func mirroredSchemaIsCloudKitLegal() {
+        let schema = Schema(DaGymSchema.mainModels)
+        for entity in schema.entities {
+            for relationship in entity.relationships {
+                #expect(relationship.isOptional, "\(entity.name).\(relationship.name) is not optional")
+            }
+            for attribute in entity.attributes {
+                #expect(!attribute.isUnique, "\(entity.name).\(attribute.name) is unique")
+            }
+        }
     }
 }

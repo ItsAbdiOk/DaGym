@@ -137,6 +137,7 @@ struct ScheduleTests {
         let calendar = Self.makeCalendar(mondayFirst: true)
         let pushA = UUID()
         let arms = UUID()
+        let legs = UUID()
         let monday = Self.referenceMonday()
         var schedule = WeeklySchedule()
 
@@ -150,9 +151,19 @@ struct ScheduleTests {
         // A legacy-style write that doesn't change the first routine keeps the whole list …
         schedule.days[.wednesday] = arms
         #expect(schedule.routineIDs(on: monday, calendar: calendar) == [pushA, arms])
-        // … while changing the first routine replaces the day.
+        // … while changing the first routine replaces only that first entry, keeping anything
+        // planned behind it (a duplicate the swap creates collapses). Replacing the whole list
+        // here is what silently dropped "Arms" from a "Push A + Arms" day every time a starter
+        // routine folded (`WorkoutStore.dedupeRoutines()` re-points through this view).
         schedule.days[.monday] = arms
         #expect(schedule.routineIDs(on: monday, calendar: calendar) == [arms])
+
+        var twoRoutines = WeeklySchedule()
+        twoRoutines.setRoutines([pushA, arms], on: .monday)
+        twoRoutines.days[.monday] = legs
+        #expect(twoRoutines.routineIDs(on: monday, calendar: calendar) == [legs, arms])
+        twoRoutines.days[.monday] = nil
+        #expect(twoRoutines.dayRoutines[.monday] == nil)
 
         schedule.removeRoutine(arms, from: .monday)
         #expect(schedule.routineIDs(on: monday, calendar: calendar).isEmpty)

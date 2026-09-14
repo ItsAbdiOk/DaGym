@@ -25,14 +25,14 @@ struct SessionStatsTests {
         #expect(SessionStats.volumeKg(sets) == 0)
     }
 
-    @Test("muscles hit normalises 0 to 1 with secondary at half weight")
+    @Test("muscles hit normalises 0 to 1, with secondary movers at the shared secondary share")
     func musclesHit() {
         let sets: [(primary: [Muscle], secondary: [Muscle], completedCount: Int)] = [
             (primary: [.chest], secondary: [.triceps], completedCount: 4)
         ]
         let hit = SessionStats.musclesHit(sets: sets)
         #expect(hit[.chest] == 1.0)
-        #expect(hit[.triceps] == 0.5)
+        #expect(hit[.triceps] == SessionStats.secondaryMuscleShare)
     }
 
     @Test("multiple exercises combine, capped at 1")

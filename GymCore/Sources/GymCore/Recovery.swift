@@ -6,7 +6,7 @@ import Foundation
 public struct StimulusEvent: Sendable {
     /// The muscle this stimulus lands on.
     public var muscle: Muscle
-    /// 1.0 for a primary mover, 0.5 for a secondary one.
+    /// 1.0 for a primary mover, `Recovery.secondaryShare` for a secondary one.
     public var share: Double
     /// Effort factor: RIR 0 → 1.0, RIR ≥ 4 → 0.5, unknown effort → 0.75.
     public var effort: Double
@@ -21,45 +21,96 @@ public struct StimulusEvent: Sendable {
     }
 }
 
+/// How one logged set becomes a `StimulusEvent`: how much of a set it counts as, and how hard
+/// it was. The single place those two conventions are decided, so every caller agrees.
+///
+/// Two judgement calls are settled here:
+///
+/// 1. **A drop or rest-pause chunk is not a whole extra set.** It is a continuation of the set
+///    before it at a lower load or after a few seconds' rest, so it counts as
+///    `recoveryContinuationSetWeight` (½) of one. Counting each drop in full made a
+///    triple-drop read as three primary sets — half a "hard session" from one exercise entry.
+///    Stats elsewhere (`SetKind.countsTowardStats`) still count it as a logged set; this weight
+///    is only about stimulus.
+/// 2. **`.failure` and `.amrap` with no rating are maximal.** The kind already says the set was
+///    taken to failure, so it gets the RIR-0 effort of 1.0 rather than the 0.75 used for a set
+///    nobody rated — matching `PerformedSet.isHard`, which counts those kinds as hard without
+///    a rating. Everything else unrated stays at `recoveryUnratedEffort`.
+public enum StimulusAttribution {
+    /// How much of a set this kind counts as: 0 for a warm-up, ½ for a drop/rest-pause
+    /// continuation, 1 for a real working set.
+    public static func setWeight(kind: SetKind) -> Double {
+        switch kind {
+        case .warmup: 0
+        case .drop, .restPause: TrainingConstants.recoveryContinuationSetWeight
+        case .working, .amrap, .failure: 1
+        }
+    }
+
+    /// `setWeight` scaled by the mover's role: a secondary mover takes `Recovery.secondaryShare`
+    /// of what a primary one does — the same weight the volume charts use, not a second opinion.
+    public static func share(kind: SetKind, isPrimary: Bool) -> Double {
+        setWeight(kind: kind) * (isPrimary ? 1 : Recovery.secondaryShare)
+    }
+
+    /// Effort factor: RIR 0 → 1.0, RIR ≥ 4 → 0.5, linear in between; unrated `.failure`/`.amrap`
+    /// → 1.0 (the kind is the rating); anything else unrated → `recoveryUnratedEffort`.
+    public static func effort(kind: SetKind, rpe: Double?) -> Double {
+        guard let rpe else {
+            return kind == .failure || kind == .amrap ? 1.0 : TrainingConstants.recoveryUnratedEffort
+        }
+        let rir = Effort(rpe: rpe).rir
+        guard rir > 0 else { return 1.0 }
+        guard rir < 4 else { return 0.5 }
+        return 1.0 - Double(rir) * 0.125
+    }
+}
+
 /// Muscle-fatigue math (§7 of the plan): exponential decay per muscle, mapped to the body map's
 /// recovery display and to plain-language copy.
 public enum Recovery {
-    /// One session's worth of stimulus on a muscle, scored against the lifter's own reference.
+    /// What a secondary mover contributes relative to a primary one, for callers building
+    /// `StimulusEvent`s. Aliases `SessionStats.secondaryMuscleShare` so fatigue, the body map
+    /// and the volume charts cannot drift apart again.
+    public static let secondaryShare = SessionStats.secondaryMuscleShare
+
+    /// One session's worth of stimulus on a muscle: what it was worth when it was logged, and
+    /// what is left of it now.
     public struct SessionStimulus: Sendable {
         /// When the session's last set on this muscle was performed.
         public var date: Date
-        /// `Σ effort × share` over the session's sets, before any normalisation.
+        /// `Σ effort × share` over the session's sets, in primary-set-equivalents.
         public var raw: Double
-        /// The reference (in primary-set-equivalents) this session was scored against.
-        public var reference: Double
-        /// `raw × recoveryFatigueScale / reference` — what `fatigue` decays from.
-        public var normalised: Double
+        /// What this session still contributes to `fatigue` at `now`, i.e. `raw` after decay.
+        public var remaining: Double
     }
 
-    /// `fatigue_m(now) = Σ normalised_session × e^(−Δt/τ_m)` over every session that touched
-    /// `m`. Each session is scored against a *causal*, downward-only reference: it starts at
-    /// `TrainingConstants.recoveryFatigueScale` and after each session moves toward that
-    /// session's raw size (EWMA, `recoveryReferenceSmoothing`) only when that is lower — so a
-    /// lifter whose sessions are habitually small feels a normal session as a normal session,
-    /// a first-ever big one as a shock, and deleting a workout can never *raise* fatigue.
+    /// `fatigue_m(now) = Σ_sets effort × share × e^(−Δt/τ_m)` over every set that touched `m`.
+    ///
+    /// The unit is the **primary-set-equivalent**: one set of a primary mover taken to failure,
+    /// logged this instant, is 1.0. A secondary mover is half a set (`share`), an easy set is
+    /// half a hard one (`effort`), and everything decays with the muscle's own time constant.
+    /// The scale is absolute — `TrainingConstants.recoveryFatigueScale` (6) of them undecayed
+    /// reads 50 % on the map — so the number carries volume information: twice the work reads
+    /// higher, always, for every lifter.
+    ///
+    /// Deliberately **not** normalised against the lifter's own habits. An earlier version
+    /// divided every session by a downward-only running average of session size, which made a
+    /// later session read as much as 2× more fatiguing because a *lighter* one preceded it, and
+    /// converged so that any habitually small stimulus (a single calf set, any secondary-only
+    /// muscle) read the same ~50 % as a full primary day — the map stopped carrying volume and
+    /// only showed "bigger than usual". Each set now contributes exactly what it is worth,
+    /// independent of every other set, which also means nothing steps when an old workout
+    /// leaves the caller's window: a session only ever loses influence by decaying.
+    ///
     /// Events dated after `now` are ignored rather than contributing negative decay.
     public static func fatigue(events: [StimulusEvent], now: Date) -> [Muscle: Double] {
         var result: [Muscle: Double] = [:]
         let byMuscle = Dictionary(grouping: events.filter { $0.date <= now }, by: \.muscle)
         for (muscle, muscleEvents) in byMuscle {
-            let tau = muscle.recoveryTimeConstantHours
-            var reference = TrainingConstants.recoveryFatigueScale
-            var total = 0.0
-            for session in sessions(muscleEvents) {
-                let raw = session.reduce(0.0) { $0 + $1.effort * $1.share }
-                let factor = TrainingConstants.recoveryFatigueScale / reference
-                for event in session {
-                    let deltaHours = now.timeIntervalSince(event.date) / 3600
-                    total += event.effort * event.share * factor * exp(-deltaHours / tau)
-                }
-                reference = nextReference(after: raw, current: reference)
+            result[muscle] = muscleEvents.reduce(0.0) { total, event in
+                total + remaining(of: event, at: now, tau: muscle.recoveryTimeConstantHours)
             }
-            result[muscle] = total
         }
         return result
     }
@@ -70,20 +121,21 @@ public enum Recovery {
         var result: [Muscle: [SessionStimulus]] = [:]
         let byMuscle = Dictionary(grouping: events.filter { $0.date <= now }, by: \.muscle)
         for (muscle, muscleEvents) in byMuscle {
-            var reference = TrainingConstants.recoveryFatigueScale
-            var stimuli: [SessionStimulus] = []
-            for session in sessions(muscleEvents) {
-                let raw = session.reduce(0.0) { $0 + $1.effort * $1.share }
-                let date = session.map(\.date).max() ?? now
-                stimuli.append(SessionStimulus(
-                    date: date, raw: raw, reference: reference,
-                    normalised: raw * TrainingConstants.recoveryFatigueScale / reference
-                ))
-                reference = nextReference(after: raw, current: reference)
+            let tau = muscle.recoveryTimeConstantHours
+            result[muscle] = sessions(muscleEvents).map { session in
+                SessionStimulus(
+                    date: session.map(\.date).max() ?? now,
+                    raw: session.reduce(0.0) { $0 + $1.effort * $1.share },
+                    remaining: session.reduce(0.0) { $0 + remaining(of: $1, at: now, tau: tau) }
+                )
             }
-            result[muscle] = stimuli
         }
         return result
+    }
+
+    private static func remaining(of event: StimulusEvent, at now: Date, tau: Double) -> Double {
+        let deltaHours = now.timeIntervalSince(event.date) / 3600
+        return event.effort * event.share * exp(-deltaHours / tau)
     }
 
     /// Strength retention per muscle, 1.0 (fully retained) down to `retentionFloor`: full for
@@ -154,14 +206,6 @@ public enum Recovery {
         return sessions
     }
 
-    /// Downward-only EWMA step: the reference never rises above where it already is, and a
-    /// session with no real stimulus (warm-ups only) leaves it alone.
-    private static func nextReference(after raw: Double, current: Double) -> Double {
-        guard raw > 0 else { return current }
-        let alpha = TrainingConstants.recoveryReferenceSmoothing
-        return min(current, alpha * raw + (1 - alpha) * current)
-    }
-
     /// Saturating 0…1 "how recovered is it" score, 1 = fully fresh (no fatigue), approaching 0
     /// as fatigue grows without bound: `1 / (1 + fatigue / k)` with
     /// `k = TrainingConstants.recoveryFatigueScale`. Raw fatigue is an (effort-weighted) set
@@ -202,7 +246,9 @@ public enum Recovery {
         let sorted = map.sorted { $0.value > $1.value }
         let threshold = TrainingConstants.recoveryHeadlineThreshold
         guard let mostSpent = sorted.first, mostSpent.value > threshold else {
-            return ("Everything's fresh", "No muscle group is carrying meaningful fatigue right now.")
+            // Descriptive, like the rest of the recovery copy: what was logged, not what it did
+            // to the lifter.
+            return ("Everything's fresh", "No muscle group has taken much work recently.")
         }
         let title = "\(mostSpent.key.displayName) still spent"
         let freshNames = sorted.filter { $0.value <= threshold }.map(\.key.displayName)

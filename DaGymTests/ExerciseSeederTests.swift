@@ -91,3 +91,173 @@ struct ExerciseSeederTests {
         }
     }
 }
+
+/// Data-integrity tests over the *shipped* seed file (`DaGym/Resources/Seed/exercises.json`),
+/// not over hand-built fixtures. Every rule here corresponds to a real defect that shipped to
+/// lifters: an importer fallback that made 157 unrelated exercises abs-primary, rows tagged
+/// traps-primary because free-exercise-db calls the lats "middle back", exercises listing the
+/// same muscle as both a primary and a secondary mover, and secondary lists so long they said
+/// nothing. Regenerating the seed has to keep passing these.
+@Suite("Seed muscle data")
+struct SeedMuscleDataTests {
+    /// Exercises that genuinely train no muscle we model, and therefore ship with empty
+    /// `primary` *and* `secondary`: rest timers, breathing and meditation drills, self-massage,
+    /// pure neck/wrist/ankle mobility (the neck, hands and ankles are drawn inert on the body
+    /// map), and work on the tibialis anterior — the shin, which `BodyMapMuscleMapping`
+    /// deliberately leaves inert so a clean stops looking like it trains the shins.
+    ///
+    /// This list is exhaustive and exact on purpose. An exercise that falls out of the muscle
+    /// mapping must be named here by a human, so a future seed regeneration cannot quietly
+    /// reintroduce a blanket fallback (the bug this whole suite exists for).
+    static let nonMuscularSeedIDs: Set<String> = [
+        "90_90_Breathing", "Ankle_Roll", "Banded_Ankle_Mobility", "Blackroll",
+        "Bobbing_Exhale_Drill", "Chin_tuck", "Clockwise_neck_circles",
+        "Counterclockwise_neck_circles", "Deep_breathing_standing_or_seated",
+        "Diaphragmatic_Breathing", "Exercise_Band_Dorsiflexion", "Foam_Roller_Anterior_tibialis",
+        "Front_neck_stretch", "Guided_or_free_meditation", "Head_tilts", "Head_turns",
+        "Kegel_Exercise", "Neck_CARs", "Neck_half_circles", "Plantarflexion_Stretch_with_Band",
+        "Recovery_Bobbing", "Rest_for_timed_workouts", "Single_leg_BOSU_balance",
+        "Tibialis_raises", "Wrist_circles"
+    ]
+
+    /// The only abs-primary exercises whose *name* doesn't say "core". Anything else that wants
+    /// to be abs-primary has to look like core work from its name, which is what makes the
+    /// "everything unmappable became abs" fallback impossible to reintroduce silently.
+    static let absPrimaryNameExceptions: Set<String> = ["Kettlebell_Pass_Between_The_Legs"]
+
+    /// Words that make "this is core work" plausible from the name alone.
+    private static let coreNameHints = [
+        "crunch", "sit-up", "sit up", "situp", "sit-ups", "ab ", "abs", "abdomin", "plank",
+        "core", "leg raise", "knee raise", "knee tuck", "hollow", "dead bug", "deadbug",
+        "rollout", "roll out", "roll-over", "l-sit", "l sit", "l hold", "v-sit", "jackknife",
+        "scissor", "flutter", "pike", "toes to bar", "wipers", "pull-in", "pull in", "oblique",
+        "windshield", "pallof", "leg pull", "leg tuck", "hip raise", "tuck", "fallout",
+        "dragon-flag", "dragon flag", "toe tap", "sit out", "ab wheel", "corkscrew",
+        "knee slide", "draw-in", "pelvic tilt", "spider crawl", "cobra", "sphinx", "butt-up",
+        "bottoms up", "cocoon", "elbow to knee", "air bike", "otis", "leg wheel",
+        "mountain climber", "shoulder tap"
+    ]
+
+    private static func seed() throws -> [ExerciseSeeder.SeedExercise] {
+        try ExerciseSeeder.loadSeed(bundle: Bundle(for: BundleAnchor.self)).exercises
+    }
+
+    @Test("no exercise lists the same muscle as both a primary and a secondary mover")
+    func noPrimarySecondaryOverlap() throws {
+        for exercise in try Self.seed() {
+            let overlap = Set(exercise.primary).intersection(exercise.secondary)
+            #expect(overlap.isEmpty, "\(exercise.id) lists \(overlap.sorted()) twice")
+        }
+    }
+
+    @Test("every exercise has at least one primary mover, or is a named non-muscular entry")
+    func everyExerciseHasAPrimary() throws {
+        let seed = try Self.seed()
+        let empty = Set(seed.filter { $0.primary.isEmpty }.map(\.id))
+        #expect(
+            empty == Self.nonMuscularSeedIDs,
+            """
+            untagged exercises must be listed in nonMuscularSeedIDs by hand.
+            unexpected: \(empty.subtracting(Self.nonMuscularSeedIDs).sorted())
+            stale: \(Self.nonMuscularSeedIDs.subtracting(empty).sorted())
+            """
+        )
+    }
+
+    @Test("a non-muscular entry has no secondary movers either")
+    func nonMuscularEntriesAreFullyUntagged() throws {
+        for exercise in try Self.seed() where exercise.primary.isEmpty {
+            #expect(exercise.secondary.isEmpty, "\(exercise.id) has secondaries but no primary")
+        }
+    }
+
+    @Test("no exercise claims more than two primary movers, or more than four secondaries")
+    func moverCountsStayReadable() throws {
+        for exercise in try Self.seed() {
+            #expect(exercise.primary.count <= 2, "\(exercise.id) has \(exercise.primary.count) primaries")
+            #expect(
+                exercise.secondary.count <= 4,
+                "\(exercise.id) has \(exercise.secondary.count) secondaries"
+            )
+        }
+    }
+
+    @Test("abs is only a primary mover where the name reads like core work")
+    func absPrimaryIsPlausible() throws {
+        for exercise in try Self.seed() where exercise.primary.contains(Muscle.abs.rawValue) {
+            if Self.absPrimaryNameExceptions.contains(exercise.id) { continue }
+            let name = exercise.name.lowercased()
+            // One literal, not two concatenated: `Comment` is expressible by a string literal,
+            // but `"a" + "b"` is a `String` expression and won't convert.
+            let hint: Comment = """
+                \(exercise.id) is abs-primary but its name doesn't read like core work — add it \
+                to absPrimaryNameExceptions on purpose, or tag it correctly
+                """
+            #expect(Self.coreNameHints.contains(where: name.contains), hint)
+        }
+    }
+
+    @Test("every muscle raw value in the seed is a real Muscle case")
+    func muscleRawValuesAreValid() throws {
+        for exercise in try Self.seed() {
+            for raw in exercise.primary + exercise.secondary {
+                #expect(Muscle(rawValue: raw) != nil, "\(exercise.id) references unknown muscle \(raw)")
+            }
+        }
+    }
+
+    /// Well-known lifts whose primary movers are not a matter of opinion. If a regenerated seed
+    /// moves any of these, the regeneration is wrong — this is the list that would have caught
+    /// rows tagged traps-primary, deadlifts tagged lowerBack-primary and bench tagged
+    /// triceps-primary before any of it reached a lifter.
+    @Test("well-known lifts have the primary movers everyone agrees on")
+    func spotCheckPrimaryMovers() throws {
+        let expected: [String: Set<String>] = [
+            "Barbell_Bench_Press_-_Medium_Grip": ["chest"],
+            "Bench_Press_-_Powerlifting": ["chest"],
+            "Bent_Over_Barbell_Row": ["lats"],
+            "Seated_Cable_Rows": ["lats"],
+            "One-Arm_Dumbbell_Row": ["lats"],
+            "Wide-Grip_Lat_Pulldown": ["lats"],
+            "Pullups": ["lats"],
+            "Barbell_Deadlift": ["hams", "glutes"],
+            "Romanian_Deadlift": ["hams"],
+            "Rack_Pulls": ["hams", "glutes"],
+            "Trap_Bar_Deadlift": ["hams", "glutes"],
+            "Barbell_Squat": ["quads"],
+            "Front_Squats": ["quads"],
+            "Leg_Press": ["quads"],
+            "Standing_Military_Press": ["delts"],
+            "Barbell_Curl": ["biceps"],
+            "Overhead_Triceps_Extension": ["triceps"],
+            "Shrugs_Barbells": ["traps"],
+            "Barbell_Hip_Thrust": ["glutes"],
+            "Standing_Calf_Raises": ["calves"],
+            "Face_Pull": ["delts"],
+            "Plank": ["abs"],
+            "Jogging": ["quads", "hams"]
+        ]
+        let byID = Dictionary(uniqueKeysWithValues: try Self.seed().map { ($0.id, $0) })
+        for (id, primary) in expected {
+            let exercise = try #require(byID[id], "seed is missing \(id)")
+            #expect(Set(exercise.primary) == primary, "\(id) primary is \(exercise.primary)")
+        }
+    }
+
+    @Test("a lift's thumbnail always shows the side its primary mover is drawn on")
+    func thumbnailSideShowsThePrimaryMover() throws {
+        for exercise in try Self.seed() {
+            let primary = exercise.primary.compactMap(Muscle.init(rawValue:))
+            guard let first = primary.first else { continue }
+            let side = BodyMapMuscleMapping.thumbnailSide(forPrimary: primary)
+            #expect(
+                BodyMapMuscleMapping.isAddressable(first, on: side),
+                "\(exercise.id)'s primary \(first) isn't drawn on the \(side) view"
+            )
+        }
+    }
+}
+
+/// Bundle anchor: Swift Testing structs have no `Bundle(for:)` peer, and the seed resource
+/// lives in the host app bundle, so the tests need a class to hang `Bundle(for:)` off.
+private final class BundleAnchor {}

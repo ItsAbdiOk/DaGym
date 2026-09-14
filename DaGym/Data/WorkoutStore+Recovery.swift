@@ -11,8 +11,8 @@ struct MuscleRecovery: Identifiable {
     var fatigue: Double
     /// 0 (fresh) … 1 (spent) — `GymCore.Recovery.map`'s value for this muscle.
     var spent: Double
-    /// When this muscle drops back under the "still spent" threshold. Nil
-    /// means it's already there.
+    /// When this muscle's reading drops back under the "worked hard recently" line. Nil means
+    /// it's already there.
     var recoveredBy: Date?
     /// Up to the 3 most recent contributing exercises, newest first.
     var contributors: [Contributor]
@@ -25,8 +25,48 @@ struct MuscleRecovery: Identifiable {
     }
 }
 
-/// One muscle's strength-retention state for the "Balance" section: how much of its trained
-/// strength is still there (`GymCore.Recovery.retention`), 1.0 fresh → 0.5 detrained floor.
+/// The words both recovery screens put on a `MuscleRecovery`. Deliberately descriptive: the
+/// score is an effort-weighted count of recent sets decaying over time, so the copy talks about
+/// how much work the muscle has taken and when that reading eases off — never about what is
+/// happening inside the lifter's body, and never as a "% recovered" the number can't support.
+extension MuscleRecovery {
+    /// How much recent work this muscle has taken. The two band edges are the same constants the
+    /// rest of the app already acts on: the recovery headline's "still spent" line and the
+    /// coach's recovery-debt line.
+    var workloadLabel: String {
+        if spent >= TrainingConstants.coachRecoveryDebtThreshold { return "Heavy recent work" }
+        if spent >= TrainingConstants.recoveryHeadlineThreshold { return "A lot of recent work" }
+        if spent >= TrainingConstants.recoveryHeadlineThreshold / 2 { return "Some recent work" }
+        return "Little recent work"
+    }
+
+    /// Short form for the muscle list row.
+    var easesOffLabel: String {
+        guard let recoveredBy else { return "Eased off" }
+        return "Eases off \(Self.timingLabel(recoveredBy))"
+    }
+
+    /// Long form for the detail sheet.
+    var easesOffSentence: String {
+        guard let recoveredBy else { return "This reading has eased off" }
+        return "Eases off around \(Self.timingLabel(recoveredBy))"
+    }
+
+    /// Locale-aware, and never an ambiguous bare weekday: a weekday plus time reads as "this
+    /// week", so past six days out it switches to a dated form. The old `"EEE HH:mm"` forced
+    /// 24-hour on every locale and printed "Thu" for a Thursday nine days away.
+    static func timingLabel(_ date: Date, now: Date = .now) -> String {
+        guard date.timeIntervalSince(now) < 6 * 86_400 else {
+            return date.formatted(date: .abbreviated, time: .shortened)
+        }
+        return date.formatted(.dateTime.weekday(.abbreviated).hour().minute())
+    }
+}
+
+/// One muscle's place in the "Balance" section's longest-untrained list. `retention` is
+/// `GymCore.Recovery.retention` — a 1.0 → 0.5 function of time since the last counting set, used
+/// here purely as the sort key ("3 weeks off ranks above 8 days off"). It is never shown as a
+/// number: the screen prints how long it has been, which is the part that is actually known.
 struct MuscleRetention: Identifiable, Hashable {
     var id: Muscle { muscle }
     var muscle: Muscle
@@ -35,8 +75,9 @@ struct MuscleRetention: Identifiable, Hashable {
     var lastTrained: Date?
 }
 
-/// Recovery + balance snapshot for `RecoveryMapView`, built from the last 14
-/// days of finished, non-warm-up sets (plus all-time "last trained" dates for retention).
+/// Recovery + balance snapshot for `RecoveryMapView`, built from the last
+/// `WorkoutStore.recoveryWindowDays` days of finished, non-warm-up sets (plus all-time
+/// "last trained" dates for the balance list).
 struct RecoverySnapshot {
     /// Fresh → spent, 0…1, for the body map. Only muscles with events appear.
     var map: [Muscle: Double]
@@ -44,28 +85,50 @@ struct RecoverySnapshot {
     var perMuscle: [MuscleRecovery]
     /// Muscles with zero events in the last 7 days, for the "Balance" section.
     var untrainedMuscles: [Muscle]
-    /// Muscles not fully retained (`retention < 1`), least retained first, ties in body order —
-    /// the graded "detraining" list: 3 weeks off ranks above 8 days off.
+    /// Muscles untrained long enough to rank (`retention < 1`), longest first, ties in body
+    /// order — the graded list behind Balance's "Longest without work".
     var detrainedMuscles: [MuscleRetention] = []
-    /// Every muscle's retention score, 1.0 → 0.5.
+    /// Every muscle's time-since-training score, 1.0 → 0.5 — the sort key behind
+    /// `detrainedMuscles`, not something any screen prints.
     var retention: [Muscle: Double] = [:]
 }
 
 extension WorkoutStore {
-    /// Days of history the fatigue scan covers — long enough that the slowest muscle's (τ = 48 h)
-    /// residual is under 0.1 % at the cutoff, so no muscle steps when a workout ages out.
-    static let recoveryScanDays = 14
-    /// Days of history behind the "untrained" list.
+    /// **The** recovery window: days of history every fatigue reading in the app is built from —
+    /// Home's card, the Recovery screen, the coach's `CoachInput.recoveryMap` and the
+    /// substitution scorer all go through `recoveryMap(now:calendar:)` or `recoverySnapshot`, so
+    /// the same muscle can never show two numbers on two screens. Long enough that the slowest
+    /// muscle's (τ = 48 h) residual is under 0.1 % of a set at the cutoff: a workout leaving the
+    /// window changes nothing anyone can see. `RecoveryMapView` prints this number, so the copy
+    /// and the maths can't drift apart.
+    static let recoveryWindowDays = 14
+    /// Days of history behind the "not trained this week" list. Deliberately *not* the recovery
+    /// window: that answers "how much work has this muscle taken", this one answers "did I train
+    /// it this week", and the section says "this week" in so many words.
     static let untrainedWindowDays = 7
 
-    /// Builds `RecoverySnapshot` from `recoveryEvents(since:)` (last 14 days) plus a direct
-    /// query for which exercises contributed to each muscle. Warm-ups never contribute —
+    /// Start of the recovery window — the one place `now − recoveryWindowDays` is computed.
+    static func recoveryWindowStart(now: Date, calendar: Calendar) -> Date {
+        calendar.date(byAdding: .day, value: -recoveryWindowDays, to: now) ?? now
+    }
+
+    /// Fresh (0) → spent (1) per trained muscle, over the shared recovery window. Home's
+    /// recovery card and anything else that only needs the map use this rather than building
+    /// their own window: `recoverySnapshot` is the same map plus the per-muscle detail and two
+    /// extra fetches Home has no use for.
+    func recoveryMap(now: Date = Date(), calendar: Calendar = .current) -> [Muscle: Double] {
+        let since = Self.recoveryWindowStart(now: now, calendar: calendar)
+        return Recovery.map(events: recoveryEvents(since: since), now: now)
+    }
+
+    /// Builds `RecoverySnapshot` from `recoveryEvents(since:)` (the shared recovery window)
+    /// plus a direct query for which exercises contributed to each muscle. Warm-ups never contribute —
     /// `recoveryEvents` and the contributor lookup both skip them the same way.
     /// `calendar` is passed in rather than read: the coach adapter feeds this straight into
     /// `CoachInput.recoveryMap`, and a helper that reaches for `Calendar.current` behind a
     /// caller-supplied one makes the "pure over (store, now, calendar)" promise false.
     func recoverySnapshot(now: Date = Date(), calendar: Calendar = .current) -> RecoverySnapshot {
-        let since = calendar.date(byAdding: .day, value: -Self.recoveryScanDays, to: now) ?? now
+        let since = Self.recoveryWindowStart(now: now, calendar: calendar)
         let untrainedSince = calendar.date(byAdding: .day, value: -Self.untrainedWindowDays, to: now)
         let events = recoveryEvents(since: since)
         let fatigueByMuscle = Recovery.fatigue(events: events, now: now)

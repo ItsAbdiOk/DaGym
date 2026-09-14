@@ -159,6 +159,13 @@ targets:
         # stripped by a manual signing pass), and it changes the provisioning profile: a profile
         # regenerated/downloaded before this change won't have it.
         com.apple.developer.healthkit.background-delivery: true
+        # Time-sensitive notifications. `RestNotificationScheduler` sets
+        # `interruptionLevel = .timeSensitive` on the "Rest over" alert — without this entitlement
+        # iOS silently demotes it to `.active`, which a gym Focus swallows, so a locked phone gets
+        # no rest alert at all. NOTE (owner action): this is a capability grant — "Time Sensitive
+        # Notifications" must be enabled for the App ID in the Developer portal / App Store
+        # Connect, and the provisioning profile regenerated, or device builds will fail to sign.
+        com.apple.developer.usernotifications.time-sensitive: true
         com.apple.developer.icloud-services: [CloudKit]
         com.apple.developer.icloud-container-identifiers:
           - iCloud.dev.abdirahmanmohamed.dagym

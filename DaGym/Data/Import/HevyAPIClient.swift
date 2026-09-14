@@ -104,17 +104,21 @@ enum HevyAPIClient {
 
     // MARK: - Mapping (unit-tested against a fixture in `FeatureHomeImportTests` — no network)
 
+    /// Hevy's own workout `id` travels as `externalID`: it is the only stable identity the API
+    /// gives us, and without it a paged fetch that overlaps (or a second run of the same import)
+    /// has nothing but the start time to dedupe on.
     static func map(_ workout: HevyWorkout) -> ImportedWorkout {
         ImportedWorkout(
             startedAt: workout.startTime, endedAt: workout.endTime,
-            title: workout.title, notes: workout.description ?? "",
+            title: workout.title, notes: workout.description ?? "", externalID: workout.id,
             exercises: workout.exercises.map(map)
         )
     }
 
     private static func map(_ exercise: HevyExercise) -> ImportedExercise {
         ImportedExercise(
-            name: exercise.title, note: exercise.notes ?? "", category: nil, sets: exercise.sets.map(map)
+            name: exercise.title, note: exercise.notes ?? "", category: nil,
+            supersetGroup: exercise.supersetId, sets: exercise.sets.map(map)
         )
     }
 
@@ -166,6 +170,8 @@ struct HevyWorkout: Decodable {
 struct HevyExercise: Decodable {
     var title: String
     var notes: String?
+    /// Hevy's superset grouping for this slot within the workout; nil when it wasn't a superset.
+    var supersetId: Int?
     var sets: [HevySet]
 }
 

@@ -180,4 +180,113 @@ struct WorkoutStoreCoachApproveTests {
         #expect(applied == nil)
         #expect(routineModel.exercises?.first?.plannedSets?.first?.targetWeightKg == 80)
     }
+
+    // MARK: - The override is one-shot
+
+    /// The headline defect. `applyCoachDeload` writes the deloaded weight onto the plan and
+    /// stamps `RoutineModel.updatedAt`; `planOverridesPrescription` used to fire on nothing more
+    /// than "the routine was saved after the baseline session *and* some working set carries a
+    /// target weight" — a condition that, once true, is true for ever. `saveRoutine` stamps
+    /// `updatedAt` on every save, a rename included, so a months-old deload weight came back
+    /// whenever the lifter touched the routine at all.
+    @Test("the approved weight applies to exactly one session, then the engine takes over again")
+    func approvedDeloadIsOneShot() throws {
+        let store = try makeStore()
+        let (routine, card) = try stalledRoutineAndCard(store)
+        let applied = try approve(store, card: card)
+
+        // Session 1 after approving: the plan wins, as promised.
+        let overridden = store.startWorkout(routineID: routine.id)
+        #expect(overridden.exercises[0].sets[0].weightKg == applied.weightKg)
+        #expect(overridden.exercises[0].whyTitle == "From your updated plan")
+        overridden.exercises[0].sets[0].weightKg = applied.weightKg
+        overridden.exercises[0].sets[0].reps = 8
+        overridden.exercises[0].sets[0].isDone = true
+        _ = store.finish(session: overridden)
+
+        // Session 2: the plan still says the deloaded weight, but it has been used. The engine
+        // is back in charge and adds its increment to what was actually logged.
+        let next = store.startWorkout(routineID: routine.id)
+        #expect(next.exercises[0].whyTitle != "From your updated plan")
+        #expect(next.exercises[0].sets[0].weightKg == applied.weightKg + 2.5)
+        store.discard(session: next)
+    }
+
+    /// Rebuild past the deloaded weight, then rename the routine. The rename bumps `updatedAt`
+    /// exactly as a real `saveRoutine` does, and must change nothing.
+    @Test("renaming the routine months later never re-applies the deloaded weight")
+    func renamingNeverReAppliesTheDeload() throws {
+        let store = try makeStore()
+        let (routine, card) = try stalledRoutineAndCard(store)
+        let applied = try approve(store, card: card)
+
+        // Log the deloaded session, then climb back above where the stall was.
+        var weight = applied.weightKg
+        for _ in 0..<7 {
+            let session = store.startWorkout(routineID: routine.id)
+            weight = session.exercises[0].sets[0].weightKg
+            session.exercises[0].sets[0].reps = 8
+            session.exercises[0].sets[0].isDone = true
+            _ = store.finish(session: session)
+        }
+        #expect(weight > 80, "expected the lifter to have rebuilt past the stall")
+
+        // A rename: `saveRoutine` stamps `updatedAt` on every save, whatever changed.
+        let routineModel = try #require(store.fetchRoutineModel(id: routine.id))
+        routineModel.name = "Push A (heavy)"
+        routineModel.updatedAt = Date()
+        store.save()
+
+        let next = store.startWorkout(routineID: routine.id)
+        #expect(next.exercises[0].whyTitle != "From your updated plan")
+        #expect(next.exercises[0].sets[0].weightKg > applied.weightKg)
+        store.discard(session: next)
+    }
+
+    /// The same stamp is shared by every exercise in the routine, so approving a deload on one
+    /// lift used to drag every *other* lift in that routine carrying a plan target back to its
+    /// plan weight too.
+    @Test("approving a deload on one lift leaves the routine's other lifts alone")
+    func approvingOneLiftDoesNotRevertTheOthers() throws {
+        let store = try makeStore()
+        let squat = store.createCustomExercise(
+            name: "Squat", primary: [.quads], equipment: "Barbell", style: .weightReps
+        )
+        let row = store.createCustomExercise(
+            name: "Barbell Row", primary: [.lats], equipment: "Barbell", style: .weightReps
+        )
+        let drafts = [squat, row].map {
+            RoutineExerciseDraft(
+                exerciseID: $0.id,
+                sets: [PlannedSetDraft(kind: .working, targetReps: 8, targetWeightKg: 80)]
+            )
+        }
+        let routine = store.saveRoutine(
+            id: nil, name: "Lower", rule: .linear(incrementKg: 2.5), exercises: drafts
+        )
+        // Two sessions: the squat stalls at 80, the row keeps hitting and climbs.
+        for reps in [8, 8] {
+            let session = store.startWorkout(routineID: routine.id)
+            session.exercises[0].sets[0].weightKg = 80
+            session.exercises[0].sets[0].reps = 6
+            session.exercises[0].sets[0].isDone = true
+            session.exercises[1].sets[0].reps = reps
+            session.exercises[1].sets[0].isDone = true
+            _ = store.finish(session: session)
+        }
+        let preview = store.startWorkout(routineID: routine.id)
+        let rowWeightBefore = preview.exercises[1].sets[0].weightKg
+        store.discard(session: preview)
+        #expect(rowWeightBefore > 80)
+
+        let card = try #require(store.coachCards().first {
+            $0.rule == .stalledLift && $0.title.contains("Squat")
+        })
+        _ = try approve(store, card: card)
+
+        let next = store.startWorkout(routineID: routine.id)
+        #expect(next.exercises[1].sets[0].weightKg == rowWeightBefore)
+        #expect(next.exercises[1].whyTitle != "From your updated plan")
+        store.discard(session: next)
+    }
 }

@@ -1,3 +1,4 @@
+import ActivityKit
 import AppIntents
 
 /// Runtime hook the app wires up in `RestActivityController.bind(to:)` so these intents can reach
@@ -13,6 +14,40 @@ enum RestIntentTarget {
     static var addTime: (() -> Void)?
     static var skip: (() -> Void)?
     static var markSetDone: (() -> Void)?
+
+    /// Runs `target` if the session that registered it is still around, and otherwise takes the
+    /// banner down.
+    ///
+    /// These closures only exist in the process that started the rest. If iOS jetsams the app
+    /// mid-rest, the Lock Screen banner survives but every closure is gone — and `+30S` / `SKIP` /
+    /// `SET DONE` used to do nothing at all, silently, with the banner still sitting there. A
+    /// button that cannot do its job must at least clear the thing it is attached to.
+    static func run(_ target: (() -> Void)?) {
+        if let target {
+            target()
+        } else {
+            orphanFallback()
+        }
+    }
+
+    /// What a button does when its session is gone. Overridable so `LiveActivityControllerTests`
+    /// can watch the fallback fire without a real Live Activity.
+    static var orphanFallback: @MainActor () -> Void = { endAllActivities() }
+
+    private static func endAllActivities() {
+        for activity in Activity<RestActivityAttributes>.activities {
+            let handle = ActivityEndHandle(activity)
+            Task { await handle.activity.end(nil, dismissalPolicy: .immediate) }
+        }
+    }
+
+    /// `Activity` is documented as safe to use from any context but is not marked `Sendable`;
+    /// boxing it lets the async `end` leave the main actor without a diagnostic (same trick as
+    /// `ActivityKitRestBackend.ActivityHandle`, which this file can't see from the widget target).
+    private final class ActivityEndHandle: @unchecked Sendable {
+        let activity: Activity<RestActivityAttributes>
+        init(_ activity: Activity<RestActivityAttributes>) { self.activity = activity }
+    }
 }
 
 /// "+30S" on the Lock Screen / Dynamic Island rest timer.
@@ -21,7 +56,7 @@ struct AddRestTimeIntent: LiveActivityIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        RestIntentTarget.addTime?()
+        RestIntentTarget.run(RestIntentTarget.addTime)
         return .result()
     }
 }
@@ -32,7 +67,7 @@ struct SkipRestIntent: LiveActivityIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        RestIntentTarget.skip?()
+        RestIntentTarget.run(RestIntentTarget.skip)
         return .result()
     }
 }
@@ -44,7 +79,7 @@ struct MarkSetDoneIntent: LiveActivityIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        RestIntentTarget.markSetDone?()
+        RestIntentTarget.run(RestIntentTarget.markSetDone)
         return .result()
     }
 }

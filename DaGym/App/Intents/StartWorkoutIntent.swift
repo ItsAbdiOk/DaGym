@@ -1,21 +1,18 @@
 import AppIntents
 
 /// Set by `StartWorkoutIntent.perform()` once it opens the app, consumed by `RootView` on
-/// appear — the same "flag now, act after launch" pattern `PendingIntentAction`
+/// appear — the same "queue now, act after launch" pattern `PendingIntentAction`
 /// (`StartRestTimerIntent.swift`) uses, kept as a sibling type since that file "stays" per the
 /// intents brief rather than being extended.
 @MainActor
 enum PendingWorkoutIntentAction {
-    private static var startWorkoutRequested = false
-
     static func requestStartWorkout() {
-        startWorkoutRequested = true
+        PendingIntentHandoff.shared.request(.startWorkout)
     }
 
-    /// Returns whether a workout start was requested, clearing the flag so it only fires once.
+    /// Returns whether a workout start was requested, clearing it so it only fires once.
     static func consumeStartWorkout() -> Bool {
-        defer { startWorkoutRequested = false }
-        return startWorkoutRequested
+        PendingIntentHandoff.shared.consume(.startWorkout)
     }
 }
 

@@ -21,7 +21,8 @@ struct ProgressChartsSection: View {
             if let bundle, !bundle.weeklyVolume.isEmpty {
                 ThisWeekStrip(thisWeek: bundle.thisWeek, lastWeek: bundle.lastWeek)
                 WeeklyVolumeCard(weeks: bundle.weeklyVolume)
-                if let effort, effort.ratedSets > 0 {
+                // Hidden with effort tracking off, like every other effort surface.
+                if preferences.effortTrackingEnabled, let effort, effort.ratedSets > 0 {
                     EffortCard(bundle: effort)
                 }
                 SetsPerMuscleCard(setsPerMuscle: bundle.setsPerMuscle)

@@ -26,6 +26,13 @@ public struct BackupDocument: Codable, Sendable {
     public var programs: [BackupProgram]?
     public var achievements: [BackupAchievement]?
     public var schedule: BackupSchedule?
+    /// Added after the format-1 gaps were found; all optional so older exports still decode, and
+    /// so an export that deliberately leaves photos out is distinguishable from one with none.
+    public var exerciseNotes: [BackupExerciseNote]?
+    public var progressPhotos: [BackupProgressPhoto]?
+    public var gymCards: [BackupGymCard]?
+    public var coachInteractions: [BackupCoachInteraction]?
+    public var healthImports: BackupHealthImport?
 
     public init(
         formatVersion: Int = BackupDocument.currentFormatVersion,
@@ -39,7 +46,12 @@ public struct BackupDocument: Codable, Sendable {
         preferences: BackupPreferences,
         programs: [BackupProgram]? = nil,
         achievements: [BackupAchievement]? = nil,
-        schedule: BackupSchedule? = nil
+        schedule: BackupSchedule? = nil,
+        exerciseNotes: [BackupExerciseNote]? = nil,
+        progressPhotos: [BackupProgressPhoto]? = nil,
+        gymCards: [BackupGymCard]? = nil,
+        coachInteractions: [BackupCoachInteraction]? = nil,
+        healthImports: BackupHealthImport? = nil
     ) {
         self.formatVersion = formatVersion
         self.exportedAt = exportedAt
@@ -53,6 +65,11 @@ public struct BackupDocument: Codable, Sendable {
         self.programs = programs
         self.achievements = achievements
         self.schedule = schedule
+        self.exerciseNotes = exerciseNotes
+        self.progressPhotos = progressPhotos
+        self.gymCards = gymCards
+        self.coachInteractions = coachInteractions
+        self.healthImports = healthImports
     }
 }
 
@@ -267,13 +284,21 @@ public struct BackupWorkoutExercise: Codable, Sendable, Identifiable {
     /// exported before this field existed doesn't fail on a missing key; nil means "not a planned
     /// deload", same as `DaGym.WorkoutExerciseModel.wasPlannedDeload`'s `false` default.
     public var wasPlannedDeload: Bool?
+    /// Mirrors `DaGym.WorkoutExerciseModel.excludedFromProgression` — a rehab or accessory session
+    /// that must stay out of progression history after a restore. Optional: nil (an older export)
+    /// means false.
+    public var excludedFromProgression: Bool?
+    /// Mirrors `DaGym.WorkoutExerciseModel.routineID`, so a session built from more than one
+    /// routine still groups by routine in History after a restore. Optional for the same reason.
+    public var routineID: UUID?
     public var exerciseSeedID: String?
     public var exerciseName: String
     public var sets: [BackupSetLog]
 
     public init(
         id: UUID, order: Int, supersetGroup: Int? = nil, note: String = "",
-        wasSubstitution: Bool = false, wasPlannedDeload: Bool? = nil, exerciseSeedID: String? = nil,
+        wasSubstitution: Bool = false, wasPlannedDeload: Bool? = nil,
+        excludedFromProgression: Bool? = nil, routineID: UUID? = nil, exerciseSeedID: String? = nil,
         exerciseName: String, sets: [BackupSetLog] = []
     ) {
         self.id = id
@@ -282,6 +307,8 @@ public struct BackupWorkoutExercise: Codable, Sendable, Identifiable {
         self.note = note
         self.wasSubstitution = wasSubstitution
         self.wasPlannedDeload = wasPlannedDeload
+        self.excludedFromProgression = excludedFromProgression
+        self.routineID = routineID
         self.exerciseSeedID = exerciseSeedID
         self.exerciseName = exerciseName
         self.sets = sets
@@ -371,36 +398,6 @@ public struct BackupEquipmentProfile: Codable, Sendable, Identifiable {
         self.collarsKg = collarsKg
         self.createdAt = createdAt
         self.seedKey = seedKey
-    }
-}
-
-/// Snapshot of `DaGym.Preferences`, duplicated here (rather than depending
-/// on the app target) so `GymCore` stays UI/app-free.
-public struct BackupPreferences: Codable, Sendable {
-    public var weightUnit: String
-    public var effortScale: String
-    public var defaultRestSeconds: Int
-    public var weeklyGoal: Int
-    public var keepScreenAwake: Bool
-    public var restSound: Bool
-    public var restHaptics: Bool
-    public var restScreenFlash: Bool
-    public var weekStartsMonday: Bool
-
-    public init(
-        weightUnit: String = "kg", effortScale: String = "rpe", defaultRestSeconds: Int = 150,
-        weeklyGoal: Int = 4, keepScreenAwake: Bool = true, restSound: Bool = true,
-        restHaptics: Bool = true, restScreenFlash: Bool = false, weekStartsMonday: Bool = true
-    ) {
-        self.weightUnit = weightUnit
-        self.effortScale = effortScale
-        self.defaultRestSeconds = defaultRestSeconds
-        self.weeklyGoal = weeklyGoal
-        self.keepScreenAwake = keepScreenAwake
-        self.restSound = restSound
-        self.restHaptics = restHaptics
-        self.restScreenFlash = restScreenFlash
-        self.weekStartsMonday = weekStartsMonday
     }
 }
 

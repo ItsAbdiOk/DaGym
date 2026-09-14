@@ -1,8 +1,11 @@
 import GymCore
 import SwiftUI
 
-/// Detail card for one muscle, opened by tapping the map or a list row: recovered
-/// percentage, what fatigued it, and when it'll be fresh again.
+/// Detail card for one muscle, opened by tapping the map or a list row: how much recent work
+/// it has taken, when that reading eases off, and which exercises put it there. The header used
+/// to print "N % recovered" — false precision, and a claim about the lifter's body that an
+/// effort-weighted set count decaying on a fixed curve cannot support. See
+/// `MuscleRecovery.workloadLabel`.
 struct MuscleDetailSheet: View {
     var recovery: MuscleRecovery
 
@@ -34,7 +37,7 @@ struct MuscleDetailSheet: View {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
-            Text("\(Int((1 - recovery.spent) * 100))% recovered")
+            Text(recovery.workloadLabel)
                 .font(DGFont.subhead)
                 .foregroundStyle(DGColor.ink3)
         }
@@ -49,12 +52,7 @@ struct MuscleDetailSheet: View {
         .foregroundStyle(DGColor.coralText)
     }
 
-    private var recoveredByText: String {
-        guard let recoveredBy = recovery.recoveredBy else { return "Fresh now" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE HH:mm"
-        return "Recovered by \(formatter.string(from: recoveredBy))"
-    }
+    private var recoveredByText: String { recovery.easesOffSentence }
 
     private var contributors: some View {
         VStack(alignment: .leading, spacing: DGSpace.s2) {

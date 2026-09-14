@@ -32,6 +32,13 @@ struct RestState {
     var setLabel: String { "Set \(setNumber) of \(setCount)" }
 }
 
+/// The user's theme, as the Live Activity needs it: `DGAccent` and `Preferences.Appearance` raw
+/// values. A plain struct so the controller (and its tests) never import the design system.
+struct RestActivityTheme {
+    var accent: String = "coral"
+    var appearance: String = "system"
+}
+
 /// How a rest activity leaves the Lock Screen — mirrors the two `ActivityUIDismissalPolicy`
 /// cases the app uses, without pulling ActivityKit into the controller or its tests.
 enum RestActivityDismissal: Equatable {
@@ -72,6 +79,8 @@ final class RestActivityController {
     private let authorizer: any RestNotificationAuthorizing
     private weak var boundSession: WorkoutSession?
     private var weightUnit: () -> WeightUnit = { .kg }
+    /// The accent/appearance the Lock Screen banner is drawn in, read at each rest start.
+    private var theme: () -> RestActivityTheme = { RestActivityTheme() }
     private var onSessionMutation: (() -> Void)?
     /// End date of the rest whose notification is (being) scheduled; a skip or finish that lands
     /// while the permission prompt is still up clears it so the late schedule is dropped.
@@ -90,6 +99,20 @@ final class RestActivityController {
         backend.endStaleActivities()
     }
 
+    /// Clears any rest banner a previous process left on the Lock Screen. Called from
+    /// `DaGymAppDelegate.application(_:didFinishLaunchingWithOptions:)` — this used to happen only
+    /// in `shared`'s initialiser, which is first touched from the workout screen, so a jetsam
+    /// mid-rest left a banner counting to 0:00 and sitting there until the lifter happened to open
+    /// a workout again. Launch is the moment we know the old process is gone.
+    static func endStaleActivitiesAtLaunch(controller: RestActivityController = .shared) {
+        controller.endStaleActivities()
+    }
+
+    /// Ends every rest activity left over from a previous process.
+    func endStaleActivities() {
+        backend.endStaleActivities()
+    }
+
     /// Wires `session`'s rest-state hook to this controller and registers the App Intent
     /// callbacks those Lock Screen / Dynamic Island buttons invoke. `weightUnit` is read at each
     /// rest so the Lock Screen speaks the user's unit; `onSessionMutation` runs after a Lock
@@ -97,10 +120,12 @@ final class RestActivityController {
     /// Active Workout screen — see `ActiveWorkoutView+LiveActivity.swift`.
     func bind(
         to session: WorkoutSession, weightUnit: @escaping () -> WeightUnit = { .kg },
+        theme: @escaping () -> RestActivityTheme = { RestActivityTheme() },
         onSessionMutation: (() -> Void)? = nil
     ) {
         boundSession = session
         self.weightUnit = weightUnit
+        self.theme = theme
         self.onSessionMutation = onSessionMutation
         session.onRestStateChange = { [weak self] state in self?.handle(state) }
         RestIntentTarget.addTime = { [weak session] in session?.adjustRest(by: 30) }
@@ -142,9 +167,11 @@ final class RestActivityController {
         if backend.hasActivity {
             backend.update(state: content)
         } else {
+            let theme = theme()
             let attributes = RestActivityAttributes(
                 workoutTitle: state.workoutTitle, exerciseName: state.exerciseName,
-                routineSymbolName: state.routineSymbolName, routineTint: state.routineTint
+                routineSymbolName: state.routineSymbolName, routineTint: state.routineTint,
+                accent: theme.accent, appearance: theme.appearance
             )
             backend.start(attributes: attributes, state: content)
         }
