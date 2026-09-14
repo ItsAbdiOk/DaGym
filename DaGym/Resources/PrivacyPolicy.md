@@ -67,4 +67,4 @@ your progress photos.
 
 ## Contact
 
-Questions about this policy or your data: mo.abdirahmanmohamed99@gmail.com
+Questions about this policy or your data: mo.abdirahman99@gmail.com
