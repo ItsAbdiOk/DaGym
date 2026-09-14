@@ -10,6 +10,6 @@ struct PrivacyPolicyViewTests {
         let rendered = PrivacyPolicyView.loadMarkdown()
         let plain = String(rendered.characters)
         #expect(plain.contains("Privacy Policy"))
-        #expect(plain.contains("mo.abdirahmanmohamed99@gmail.com"))
+        #expect(plain.contains("mo.abdirahman99@gmail.com"))
     }
 }
