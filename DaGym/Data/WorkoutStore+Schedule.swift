@@ -96,14 +96,14 @@ extension WorkoutStore {
     private func fetchScheduleModel() -> ScheduleModel? {
         var descriptor = Self.newestScheduleFirst()
         descriptor.fetchLimit = 1
-        return (try? context.fetch(descriptor))?.first
+        return fetchFirst(descriptor)
     }
 
     /// Keeps only the most recently updated schedule row, folding each older row's calendar
     /// event ids into it so a re-sync can still find events the other device created.
     @discardableResult
     func dedupeScheduleRows() -> Int {
-        let rows = (try? context.fetch(Self.newestScheduleFirst())) ?? []
+        let rows = fetch(Self.newestScheduleFirst())
         guard let survivor = rows.first, rows.count > 1 else { return 0 }
         var eventIDs = scheduleEventIDs()
         for extra in rows.dropFirst() {

@@ -117,7 +117,7 @@ extension WorkoutStore {
     private func recoveryContributors(since: Date) -> [Muscle: [MuscleRecovery.Contributor]] {
         let predicate = #Predicate<WorkoutModel> { $0.endedAt != nil && $0.startedAt >= since }
         let descriptor = FetchDescriptor<WorkoutModel>(predicate: predicate)
-        let workouts = (try? context.fetch(descriptor)) ?? []
+        let workouts = fetch(descriptor)
         let raw = workouts.flatMap(rawContributions)
 
         var grouped: [Muscle: [MuscleRecovery.Contributor]] = [:]
@@ -141,7 +141,7 @@ extension WorkoutStore {
             sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
         )
         descriptor.fetchLimit = 400
-        let workouts = (try? context.fetch(descriptor)) ?? []
+        let workouts = fetch(descriptor)
         var result: [Muscle: Date] = [:]
         for workout in workouts {
             for contribution in rawContributions(in: workout) where result[contribution.muscle] == nil {

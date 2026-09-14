@@ -70,7 +70,7 @@ extension WorkoutStore {
     /// kept active at the end. Returns the number removed.
     @discardableResult
     func dedupeEquipmentProfiles() -> Int {
-        let models = (try? context.fetch(FetchDescriptor<EquipmentProfileModel>())) ?? []
+        let models = fetch(FetchDescriptor<EquipmentProfileModel>())
         backfillLegacyEquipmentSeedKeys(models)
         var removed = foldSeededEquipmentProfiles(models)
         removed += foldEquipmentProfiles(groupedByFieldsEquality: models.filter { $0.seedKey == nil })
@@ -144,7 +144,7 @@ extension WorkoutStore {
     /// active row wins. Returns whether anything changed.
     @discardableResult
     func normaliseActiveEquipmentProfile() -> Bool {
-        let active = ((try? context.fetch(FetchDescriptor<EquipmentProfileModel>())) ?? [])
+        let active = fetch(FetchDescriptor<EquipmentProfileModel>())
             .filter(\.isActive)
             .sorted(by: Self.olderFirst)
         guard active.count > 1 else { return false }

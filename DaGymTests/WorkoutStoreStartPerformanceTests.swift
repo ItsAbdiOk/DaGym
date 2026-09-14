@@ -5,14 +5,19 @@ import Testing
 
 @testable import DaGym
 
-/// Pins the fix for the N+1 that made `startWorkout` visibly stall on a many-exercise routine:
-/// every exercise's progression baseline, ghost, last-sessions strip and sparkline used to
-/// re-fetch the whole finished-workout list from the store separately. `finishedWorkoutsQueryCount`
-/// (test-only instrumentation on `WorkoutStore`, bumped once per real `context.fetch` of that
-/// list) lets this assert the query count stays bounded as the routine grows, instead of timing
-/// wall-clock — which would be flaky under CI load.
+/// Pins the fix for the N+1s in the session-building paths: every exercise used to re-derive
+/// facts that belong to the *session* — the finished-workout list, the equipment profile, the
+/// latest bodyweight, the active program's week and cycle, the PR cache — each costing its own
+/// round trip to the store. `WorkoutStore.queryCount` counts every SwiftData read the store
+/// issues (they all funnel through `fetch`/`fetchFirst`/`fetchCount`), so these tests can assert
+/// the real query count rather than one instrumented helper's.
+///
+/// The load-bearing assertion in each test is `small == big`: a 2-exercise and a 12-exercise
+/// routine must issue the *same* number of queries. "Under some constant" would pass with a
+/// per-exercise query still in place; equality cannot. No wall-clock assertions — they'd be
+/// flaky under CI load.
 @MainActor
-@Suite("WorkoutStore start-workout query count")
+@Suite("WorkoutStore session-build query counts")
 struct WorkoutStoreStartPerformanceTests {
     private func makeStore() throws -> WorkoutStore {
         let container = try ModelContainer.dagym(inMemory: true)
@@ -23,7 +28,7 @@ struct WorkoutStoreStartPerformanceTests {
     /// of planned sets, then a few finished sessions of history behind it — the same shape
     /// `computeProgression`/`withHistoryStrip` read from for prescriptions, ghosts, the
     /// last-sessions strip and the sparkline.
-    private func makeRoutineWithHistory(store: WorkoutStore, exerciseCount: Int) throws -> UUID {
+    private func makeRoutineWithHistory(store: WorkoutStore, exerciseCount: Int) -> UUID {
         var drafts: [RoutineExerciseDraft] = []
         for index in 0..<exerciseCount {
             let exercise = store.createCustomExercise(
@@ -58,43 +63,93 @@ struct WorkoutStoreStartPerformanceTests {
         return routine.id
     }
 
-    @Test("starting an 8-exercise routine issues a bounded number of finished-workout queries")
-    func startWorkoutQueryCountIsBounded() throws {
+    /// Runs `body` against a freshly seeded store of `exerciseCount` exercises and reports how
+    /// many queries it issued — the setup itself is never measured.
+    private func queries(
+        exerciseCount: Int, _ body: (WorkoutStore, UUID) -> Void
+    ) throws -> Int {
         let store = try makeStore()
-        let routineID = try makeRoutineWithHistory(store: store, exerciseCount: 8)
-
-        store.discard(session: store.startWorkout(routineID: routineID)) // warm-up, not measured
-        let before = store.finishedWorkoutsQueryCount
-        let session = store.startWorkout(routineID: routineID)
-        let queries = store.finishedWorkoutsQueryCount - before
-
-        #expect(session.exercises.count == 8)
-        // The old N+1 shape issued ~4 queries per exercise (progression baseline, ghost,
-        // last-sessions strip, sparkline) — 32+ for 8 exercises. Batched, it's one fetch for the
-        // whole routine regardless of size; allow a little headroom without re-opening the door
-        // to per-exercise scaling.
-        #expect(queries <= 2, "expected a bounded query count, got \(queries) for 8 exercises")
+        let routineID = makeRoutineWithHistory(store: store, exerciseCount: exerciseCount)
+        let before = store.queryCount
+        body(store, routineID)
+        return store.queryCount - before
     }
 
-    @Test("query count does not scale with routine size")
-    func startWorkoutQueryCountDoesNotScaleWithExerciseCount() throws {
-        let smallStore = try makeStore()
-        let smallRoutineID = try makeRoutineWithHistory(store: smallStore, exerciseCount: 2)
-        smallStore.discard(session: smallStore.startWorkout(routineID: smallRoutineID))
-        let smallBefore = smallStore.finishedWorkoutsQueryCount
-        _ = smallStore.startWorkout(routineID: smallRoutineID)
-        let smallQueries = smallStore.finishedWorkoutsQueryCount - smallBefore
-
-        let bigStore = try makeStore()
-        let bigRoutineID = try makeRoutineWithHistory(store: bigStore, exerciseCount: 12)
-        bigStore.discard(session: bigStore.startWorkout(routineID: bigRoutineID))
-        let bigBefore = bigStore.finishedWorkoutsQueryCount
-        _ = bigStore.startWorkout(routineID: bigRoutineID)
-        let bigQueries = bigStore.finishedWorkoutsQueryCount - bigBefore
-
+    /// `small == big` for one path, plus the count itself so a regression report says what it
+    /// actually cost.
+    private func expectFlat(
+        _ label: String, _ body: (WorkoutStore, UUID) -> Void
+    ) throws -> Int {
+        let small = try queries(exerciseCount: 2, body)
+        let big = try queries(exerciseCount: 12, body)
         #expect(
-            smallQueries == bigQueries,
-            "query count grew with exercise count: \(smallQueries) vs \(bigQueries)"
+            small == big,
+            "\(label): query count grew with exercise count — \(small) for 2, \(big) for 12"
         )
+        return big
+    }
+
+    @Test("startWorkout issues the same number of queries for 2 and for 12 exercises")
+    func startWorkoutQueryCountDoesNotScale() throws {
+        let count = try expectFlat("startWorkout") { store, routineID in
+            _ = store.startWorkout(routineID: routineID)
+        }
+        // Exactly: the routine, the finished-workout list, the equipment profile, the latest
+        // bodyweight, the PR cache, and the active program (whose own lookup is two). The old
+        // shape added ~10 per exercise on top — equipment, bodyweight, two `activeProgramModel`
+        // pairs, the PR row, the session count and two `ExerciseModel` fetches for the history
+        // strip — so an 8-exercise routine cost 80+. Exact, not a ceiling: a new constant query
+        // on this path should be a deliberate change, not a silent one.
+        #expect(count == 7, "startWorkout issued \(count) queries for a 12-exercise routine")
+    }
+
+    @Test("an 8-exercise routine starts in a handful of queries, and all 8 exercises are built")
+    func startWorkoutOnEightExercises() throws {
+        let store = try makeStore()
+        let routineID = makeRoutineWithHistory(store: store, exerciseCount: 8)
+        let before = store.queryCount
+        let session = store.startWorkout(routineID: routineID)
+        #expect(session.exercises.count == 8)
+        #expect(store.queryCount - before == 7)
+    }
+
+    @Test("appendRoutine issues the same number of queries for 2 and for 12 exercises")
+    func appendRoutineQueryCountDoesNotScale() throws {
+        let count = try expectFlat("appendRoutine") { store, routineID in
+            let session = store.startFreestyle()
+            store.appendRoutine(id: routineID, to: session)
+        }
+        // The build above (7) plus `sync`: the workout, one batched library-exercise
+        // lookup for the new rows, and the routine their exclusion flags come from.
+        #expect(count == 11, "appendRoutine issued \(count) queries for a 12-exercise routine")
+    }
+
+    @Test("resumeSession issues the same number of queries for 2 and for 12 exercises")
+    func resumeSessionQueryCountDoesNotScale() throws {
+        let count = try expectFlat("resumeSession") { store, routineID in
+            let session = store.startWorkout(routineID: routineID)
+            store.sync(session: session)
+            guard let workoutID = session.workoutID else { return }
+            let resumed = store.resumeSession(for: workoutID)
+            #expect(resumed?.exercises.count == session.exercises.count)
+        }
+        // `startWorkout` (7) and `sync` (3) are setup inside the body; `resumeSession`
+        // itself is the remaining 8 — the workout, its session facts, and the routine
+        // behind the glyph.
+        #expect(count == 18, "resumeSession issued \(count) queries for a 12-exercise routine")
+    }
+
+    /// Adding one exercise mid-workout is a per-add cost by nature, so what must not scale here
+    /// is the size of the session it is added to — and, with it, the amount of history behind it.
+    @Test("adding an exercise mid-workout costs the same in a 2- and a 12-exercise session")
+    func autoFilledEntryQueryCountDoesNotScale() throws {
+        let count = try expectFlat("autoFilledEntry") { store, routineID in
+            let session = store.startWorkout(routineID: routineID)
+            guard let existing = session.exercises.first?.exercise else { return }
+            session.exercises.append(store.autoFilledEntry(for: existing))
+        }
+        // `startWorkout` (7) is setup inside the body; the add itself is 4 — one session
+        // facts build. It was 6, four of them repeats of the finished-workout list.
+        #expect(count == 11, "one mid-workout add issued \(count) queries")
     }
 }

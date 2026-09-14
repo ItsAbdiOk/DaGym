@@ -20,7 +20,7 @@ extension WorkoutStore {
         matching query: String = "", muscle: Muscle? = nil, equipment: String? = nil,
         favoritesOnly: Bool = false, customOnly: Bool = false
     ) -> [ExerciseInfo] {
-        let all = (try? context.fetch(FetchDescriptor<ExerciseModel>())) ?? []
+        let all = fetch(FetchDescriptor<ExerciseModel>())
         let tokens = Self.searchTokens(query)
         let bestByExercise = bestE1RMRecordsByExercise()
         return all
@@ -78,12 +78,20 @@ extension WorkoutStore {
     }
 
     /// Maps a model plus its computed stats (best e1RM, best set line, session count).
-    func exerciseInfo(for model: ExerciseModel) -> ExerciseInfo {
+    /// `facts`, when passed, already holds both stats for every exercise — one query each for
+    /// the whole session rather than two per exercise (see `SessionFacts`).
+    func exerciseInfo(for model: ExerciseModel, facts: SessionFacts? = nil) -> ExerciseInfo {
         var info = ExerciseInfo(model: model)
-        let best = bestE1RMRecord(exerciseID: model.id)
+        let best: PersonalRecordModel?
+        if let facts {
+            best = facts.bestE1RM[model.id]
+            info.sessions = facts.sessionCounts[model.id] ?? 0
+        } else {
+            best = bestE1RMRecord(exerciseID: model.id)
+            info.sessions = sessionCount(exerciseID: model.id)
+        }
         info.bestE1RM = best?.value
         info.bestSet = best.map(Self.bestSetLine)
-        info.sessions = sessionCount(exerciseID: model.id)
         return info
     }
 
@@ -181,14 +189,14 @@ extension WorkoutStore {
     /// Swap for a `GymCore.PersonalRecords` cache read once the shared module lands (lead's note).
     func bestE1RMRecord(exerciseID: UUID) -> PersonalRecordModel? {
         let predicate = #Predicate<PersonalRecordModel> { $0.exerciseID == exerciseID && $0.kind == "e1rm" }
-        let records = (try? context.fetch(FetchDescriptor(predicate: predicate))) ?? []
+        let records = fetch(FetchDescriptor(predicate: predicate))
         return records.max { $0.value < $1.value }
     }
 
-    /// The best cached e1RM row per exercise, in one fetch, for list screens.
-    private func bestE1RMRecordsByExercise() -> [UUID: PersonalRecordModel] {
+    /// The best cached e1RM row per exercise, in one fetch, for list screens and `SessionFacts`.
+    func bestE1RMRecordsByExercise() -> [UUID: PersonalRecordModel] {
         let predicate = #Predicate<PersonalRecordModel> { $0.kind == "e1rm" }
-        let records = (try? context.fetch(FetchDescriptor(predicate: predicate))) ?? []
+        let records = fetch(FetchDescriptor(predicate: predicate))
         var best: [UUID: PersonalRecordModel] = [:]
         for record in records {
             guard let exerciseID = record.exerciseID else { continue }
@@ -203,7 +211,7 @@ extension WorkoutStore {
         let predicate = #Predicate<WorkoutExerciseModel> {
             $0.exercise?.id == exerciseID && $0.workout?.endedAt != nil
         }
-        return (try? context.fetchCount(FetchDescriptor(predicate: predicate))) ?? 0
+        return fetchCount(FetchDescriptor(predicate: predicate))
     }
 }
 
@@ -213,6 +221,6 @@ extension WorkoutStore {
     func exerciseID(seedID: String) -> UUID? {
         var descriptor = FetchDescriptor<ExerciseModel>(predicate: #Predicate { $0.seedID == seedID })
         descriptor.fetchLimit = 1
-        return (try? context.fetch(descriptor))?.first?.id
+        return fetchFirst(descriptor)?.id
     }
 }

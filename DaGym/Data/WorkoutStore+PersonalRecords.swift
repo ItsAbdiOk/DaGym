@@ -22,7 +22,7 @@ extension WorkoutStore {
     /// Records within an exercise are ordered by kind, then newest first. `unit` controls how
     /// each line is formatted; defaults to kg for callers that haven't gone unit-aware yet.
     func personalRecords(unit: WeightUnit = .kg) -> [ExerciseRecords] {
-        let models = (try? context.fetch(FetchDescriptor<PersonalRecordModel>())) ?? []
+        let models = fetch(FetchDescriptor<PersonalRecordModel>())
         let grouped = Dictionary(grouping: models) { $0.exerciseID }
         return grouped
             .compactMap { exerciseID, models -> ExerciseRecords? in
@@ -76,7 +76,7 @@ extension WorkoutStore {
         let predicate = #Predicate<PersonalRecordEventModel> {
             $0.workoutID == workoutID && $0.kind == headline
         }
-        return (try? context.fetchCount(FetchDescriptor(predicate: predicate))) ?? 0
+        return fetchCount(FetchDescriptor(predicate: predicate))
     }
 
     /// Headline (e1RM) records set by workouts started in `[from, to)`, from the event log.
@@ -85,7 +85,7 @@ extension WorkoutStore {
         let predicate = #Predicate<PersonalRecordEventModel> {
             $0.kind == headline && $0.date >= from && $0.date < to
         }
-        return (try? context.fetchCount(FetchDescriptor(predicate: predicate))) ?? 0
+        return fetchCount(FetchDescriptor(predicate: predicate))
     }
 
     // MARK: - Personal records (GymCore.PersonalRecords)
@@ -151,7 +151,7 @@ extension WorkoutStore {
     }
 
     private func deleteAll<Model: PersistentModel>(_ type: Model.Type) {
-        let models = (try? context.fetch(FetchDescriptor<Model>())) ?? []
+        let models = fetch(FetchDescriptor<Model>())
         models.forEach(context.delete)
     }
 
@@ -187,7 +187,7 @@ extension WorkoutStore {
     /// `PersonalRecords.evaluate` checks each new set against.
     private func existingRecords(exerciseID: UUID) -> [PersonalRecord] {
         let predicate = #Predicate<PersonalRecordModel> { $0.exerciseID == exerciseID }
-        let models = (try? context.fetch(FetchDescriptor(predicate: predicate))) ?? []
+        let models = fetch(FetchDescriptor(predicate: predicate))
         return models.compactMap { model in
             guard let kind = PRKind(rawValue: model.kind) else { return nil }
             return PersonalRecord(
@@ -205,7 +205,7 @@ extension WorkoutStore {
         let predicate = #Predicate<PersonalRecordModel> {
             $0.exerciseID == exerciseID && $0.kind == kind && (!byWeightToo || $0.weightKg == weight)
         }
-        let existing = (try? context.fetch(FetchDescriptor(predicate: predicate)))?.first
+        let existing = fetchFirst(FetchDescriptor(predicate: predicate))
         let model = existing ?? PersonalRecordModel(exerciseID: exerciseID, kind: kind)
         if existing == nil { context.insert(model) }
         model.value = record.value

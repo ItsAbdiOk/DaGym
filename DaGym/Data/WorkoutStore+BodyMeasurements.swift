@@ -27,7 +27,7 @@ extension WorkoutStore {
             )
         }
         descriptor.fetchLimit = 1
-        return (try? context.fetch(descriptor))?.first
+        return fetchFirst(descriptor)
     }
 
     /// Logs one bodyweight reading and persists it immediately.
@@ -52,7 +52,7 @@ extension WorkoutStore {
         let descriptor = FetchDescriptor<BodyMeasurementModel>(
             predicate: predicate, sortBy: [SortDescriptor(\.date, order: .forward)]
         )
-        return ((try? context.fetch(descriptor)) ?? []).compactMap(Self.measurementInfo)
+        return fetch(descriptor).compactMap(Self.measurementInfo)
     }
 
     /// Manual-only bodyweight readings from the last `days`, oldest first — the local half of
@@ -66,7 +66,7 @@ extension WorkoutStore {
         let descriptor = FetchDescriptor<BodyMeasurementModel>(
             predicate: predicate, sortBy: [SortDescriptor(\.date, order: .forward)]
         )
-        return ((try? context.fetch(descriptor)) ?? []).compactMap(Self.measurementInfo)
+        return fetch(descriptor).compactMap(Self.measurementInfo)
     }
 
     /// The most recent readings, newest first, for the "recent measurements" list.
@@ -75,7 +75,7 @@ extension WorkoutStore {
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
         descriptor.fetchLimit = limit
-        return ((try? context.fetch(descriptor)) ?? []).compactMap(Self.measurementInfo)
+        return fetch(descriptor).compactMap(Self.measurementInfo)
     }
 
     private static func measurementInfo(_ model: BodyMeasurementModel) -> BodyMeasurementInfo? {

@@ -17,7 +17,7 @@ extension WorkoutStore {
     /// in the library qualifies.
     func substitutes(for exerciseID: UUID, reason: SwapReason) -> [SubstitutionSuggestion] {
         guard let subjectModel = fetchExerciseModel(id: exerciseID) else { return [] }
-        let libraryModels = (try? context.fetch(FetchDescriptor<ExerciseModel>())) ?? []
+        let libraryModels = fetch(FetchDescriptor<ExerciseModel>())
         let equipment = Set(activeProfile()?.availableEquipment ?? [])
 
         let scored = Substitutions.candidates(
@@ -37,7 +37,7 @@ extension WorkoutStore {
     /// rule's substitution pool (`CoachInput.substitutionLibrary`), the same mapping `substitutes`
     /// already applies per mid-workout swap.
     func substitutionCandidates() -> [SubstitutionCandidate] {
-        let models = (try? context.fetch(FetchDescriptor<ExerciseModel>())) ?? []
+        let models = fetch(FetchDescriptor<ExerciseModel>())
         return models.map(substitutionCandidate(for:))
     }
 

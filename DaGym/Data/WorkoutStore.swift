@@ -82,14 +82,32 @@ final class WorkoutStore {
     /// edit or a photo delete shows up without a tab switch. Never decrements.
     private(set) var changeToken = 0
 
-    // Not `private(set)`: the only writer is `finishedWorkoutModelsNewestFirst()`, which
-    // lives in WorkoutStore+Progression.swift, and a private setter is file-scoped.
-    /// Test-only instrumentation: bumped once per actual `context.fetch` of the finished-workout
-    /// list inside `finishedWorkoutModelsNewestFirst()` — the single query every progression and
-    /// history lookup (prescriptions, ghosts, last-sessions strip, sparkline) now funnels through.
-    /// A regression test asserts this stays bounded when starting an N-exercise routine, rather
-    /// than growing with N — see `WorkoutStoreStartPerformanceTests`.
-    var finishedWorkoutsQueryCount = 0
+    // Not `private(set)`: the writers are the `fetch`/`fetchFirst`/`fetchCount` helpers below
+    // *and* nothing else — a private setter would be file-scoped and every store extension
+    // lives in its own file.
+    /// Test-only instrumentation: bumped once per SwiftData round trip against the main
+    /// `context` — every store read goes through `fetch(_:)`, `fetchFirst(_:)` or
+    /// `fetchCount(_:)` so this is the real query count, not one hand-picked helper's.
+    /// `WorkoutStoreStartPerformanceTests` asserts a 2-exercise and a 12-exercise routine issue
+    /// the *same* number of queries, which is what makes an N+1 impossible to reintroduce.
+    var queryCount = 0
+
+    /// The one place the main context is read. Every `WorkoutStore+*` extension calls these
+    /// rather than `context.fetch` directly, so `queryCount` can't drift out of date.
+    func fetch<Model: PersistentModel>(_ descriptor: FetchDescriptor<Model>) -> [Model] {
+        queryCount += 1
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    func fetchFirst<Model: PersistentModel>(_ descriptor: FetchDescriptor<Model>) -> Model? {
+        queryCount += 1
+        return (try? context.fetch(descriptor))?.first
+    }
+
+    func fetchCount<Model: PersistentModel>(_ descriptor: FetchDescriptor<Model>) -> Int {
+        queryCount += 1
+        return (try? context.fetchCount(descriptor)) ?? 0
+    }
 
     init(context: ModelContext, photoContext: ModelContext?, healthContext: ModelContext? = nil) {
         self.context = context
@@ -139,18 +157,28 @@ final class WorkoutStore {
     func fetchExerciseModel(id: UUID) -> ExerciseModel? {
         var descriptor = FetchDescriptor<ExerciseModel>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
-        return (try? context.fetch(descriptor))?.first
+        return fetchFirst(descriptor)
+    }
+
+    /// Every library exercise in `ids`, keyed by id, in one query — the batched form of
+    /// `fetchExerciseModel(id:)` for callers that would otherwise loop over it once per
+    /// exercise in a routine.
+    func fetchExerciseModels(ids: Set<UUID>) -> [UUID: ExerciseModel] {
+        guard !ids.isEmpty else { return [:] }
+        let wanted = Array(ids)
+        let descriptor = FetchDescriptor<ExerciseModel>(predicate: #Predicate { wanted.contains($0.id) })
+        return Dictionary(fetch(descriptor).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     func fetchWorkoutModel(id: UUID) -> WorkoutModel? {
         var descriptor = FetchDescriptor<WorkoutModel>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
-        return (try? context.fetch(descriptor))?.first
+        return fetchFirst(descriptor)
     }
 
     func fetchRoutineModel(id: UUID) -> RoutineModel? {
         var descriptor = FetchDescriptor<RoutineModel>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
-        return (try? context.fetch(descriptor))?.first
+        return fetchFirst(descriptor)
     }
 }

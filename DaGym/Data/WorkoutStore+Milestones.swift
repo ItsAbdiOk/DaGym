@@ -58,7 +58,7 @@ extension WorkoutStore {
         let descriptor = FetchDescriptor<AchievementModel>(
             sortBy: [SortDescriptor(\.earnedAt, order: .reverse)]
         )
-        let models = (try? context.fetch(descriptor)) ?? []
+        let models = fetch(descriptor)
         return models.compactMap { model -> AchievementInfo? in
             guard let tier = Self.tier(from: model.tier),
                   let definition = Milestones.definitions.first(where: { $0.id == model.milestoneID }) else {
@@ -80,7 +80,7 @@ extension WorkoutStore {
 
     /// The highest earned tier per milestone id, from every persisted `AchievementModel`.
     private func earnedTiers() -> [String: Tier] {
-        let models = (try? context.fetch(FetchDescriptor<AchievementModel>())) ?? []
+        let models = fetch(FetchDescriptor<AchievementModel>())
         var result: [String: Tier] = [:]
         for model in models {
             guard let tier = Self.tier(from: model.tier) else { continue }
@@ -106,7 +106,7 @@ extension WorkoutStore {
     private func bestE1RMByExerciseKey() -> [String: Double] {
         let kind = PRKind.e1rm.rawValue
         let predicate = #Predicate<PersonalRecordModel> { $0.kind == kind }
-        let models = (try? context.fetch(FetchDescriptor(predicate: predicate))) ?? []
+        let models = fetch(FetchDescriptor(predicate: predicate))
         var result: [String: Double] = [:]
         for model in models {
             guard let exerciseID = model.exerciseID, let exercise = fetchExerciseModel(id: exerciseID),

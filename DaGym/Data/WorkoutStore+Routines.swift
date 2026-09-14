@@ -71,7 +71,7 @@ extension WorkoutStore {
         let descriptor = FetchDescriptor<RoutineModel>(
             predicate: #Predicate { !$0.isArchived }, sortBy: [SortDescriptor(\.sortOrder)]
         )
-        let models = (try? context.fetch(descriptor)) ?? []
+        let models = fetch(descriptor)
         return models.map(routineInfo)
     }
 
@@ -140,7 +140,7 @@ extension WorkoutStore {
     func routineDrafts(id: UUID) -> (info: RoutineInfo, drafts: [RoutineExerciseDraft])? {
         guard let model = fetchRoutineModel(id: id) else { return nil }
         let routineExercises = (model.exercises ?? []).sorted { $0.order < $1.order }
-        let exerciseInfos = routineExercises.compactMap { $0.exercise.map(exerciseInfo(for:)) }
+        let exerciseInfos = routineExercises.compactMap { $0.exercise.map { exerciseInfo(for: $0) } }
         let setCount = routineExercises.reduce(0) { $0 + ($1.plannedSets?.count ?? 0) }
         let exerciseSetCounts = routineExercises.map { $0.plannedSets?.count ?? 0 }
         let info = RoutineInfo(
@@ -184,7 +184,7 @@ extension WorkoutStore {
     /// so copying a copy doesn't nest "(Copy) (Copy)". Archived routines hold their names too.
     private func copyName(for name: String) -> String {
         let base = Self.copyBaseName(name)
-        let taken = Set(((try? context.fetch(FetchDescriptor<RoutineModel>())) ?? []).map(\.name))
+        let taken = Set(fetch(FetchDescriptor<RoutineModel>()).map(\.name))
         let first = "\(base) (Copy)"
         guard taken.contains(first) else { return first }
         var index = 2
@@ -202,7 +202,7 @@ extension WorkoutStore {
     }
 
     private func nextRoutineSortOrder() -> Int {
-        let all = (try? context.fetch(FetchDescriptor<RoutineModel>())) ?? []
+        let all = fetch(FetchDescriptor<RoutineModel>())
         return (all.map(\.sortOrder).max() ?? -1) + 1
     }
 

@@ -58,7 +58,7 @@ enum StarterPrograms {
 extension WorkoutStore {
     func programs() -> [ProgramInfo] {
         let descriptor = FetchDescriptor<ProgramModel>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
-        let models = (try? context.fetch(descriptor)) ?? []
+        let models = fetch(descriptor)
         return models.map(programInfo)
     }
 
@@ -85,7 +85,7 @@ extension WorkoutStore {
     @discardableResult
     func startProgram(id: UUID) -> ProgramInfo? {
         guard let model = fetchProgramModel(id: id) else { return nil }
-        for other in (try? context.fetch(FetchDescriptor<ProgramModel>())) ?? [] { other.isActive = false }
+        for other in fetch(FetchDescriptor<ProgramModel>()) { other.isActive = false }
         model.isActive = true
         model.startedAt = Date()
         model.completedAt = nil
@@ -117,14 +117,26 @@ extension WorkoutStore {
     /// The active program's current week index for `routineID`, or nil when no active program
     /// includes it — the `weekInCycle` the TM rule needs.
     func weekInCycle(forRoutineID routineID: UUID) -> Int? {
-        guard let program = activeProgramModel(), program.routineIDs.contains(routineID) else { return nil }
-        return currentWeek(for: program)
+        weekInCycle(forRoutineID: routineID, activeProgram: activeProgramModel())
     }
 
     /// The active program's current week kind for `routineID`, or nil when no active program
     /// includes it. `startWorkout` uses this to flag/prescribe a planned deload week.
     func currentWeekKind(forRoutineID routineID: UUID) -> ProgramWeekKind? {
-        guard let program = activeProgramModel(), program.routineIDs.contains(routineID) else { return nil }
+        currentWeekKind(forRoutineID: routineID, activeProgram: activeProgramModel())
+    }
+
+    /// The same three program lookups against an `activeProgramModel()` the caller already
+    /// holds. `startWorkout` and friends fetch the active program once for the whole session and
+    /// call these, rather than paying `activeProgramModel()`'s two queries per exercise for an
+    /// answer that cannot differ between them.
+    func weekInCycle(forRoutineID routineID: UUID, activeProgram: ProgramModel?) -> Int? {
+        guard let program = activeProgram, program.routineIDs.contains(routineID) else { return nil }
+        return currentWeek(for: program)
+    }
+
+    func currentWeekKind(forRoutineID routineID: UUID, activeProgram: ProgramModel?) -> ProgramWeekKind? {
+        guard let program = activeProgram, program.routineIDs.contains(routineID) else { return nil }
         let week = currentWeek(for: program)
         return (program.programWeeks ?? []).first { $0.index == week }?.weekKind
     }
@@ -132,7 +144,7 @@ extension WorkoutStore {
     func activeProgramModel() -> ProgramModel? {
         resumeProgramIfDeloadExpired()
         let descriptor = FetchDescriptor<ProgramModel>(predicate: #Predicate { $0.isActive })
-        return (try? context.fetch(descriptor))?.first
+        return fetchFirst(descriptor)
     }
 
     /// A planned deload week (`planDeloadWeek()`) is a 2-week program — week 1 deload, week 2
@@ -142,7 +154,7 @@ extension WorkoutStore {
     /// user's real program resumes without them having to do anything.
     private func resumeProgramIfDeloadExpired() {
         let descriptor = FetchDescriptor<ProgramModel>(predicate: #Predicate { $0.isActive })
-        guard let active = (try? context.fetch(descriptor))?.first,
+        guard let active = fetchFirst(descriptor),
               active.name == WorkoutStore.deloadProgramName, currentWeek(for: active) > 1 else { return }
         active.isActive = false
         active.completedAt = Date()
@@ -158,7 +170,7 @@ extension WorkoutStore {
     private func fetchProgramModel(id: UUID) -> ProgramModel? {
         var descriptor = FetchDescriptor<ProgramModel>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
-        return (try? context.fetch(descriptor))?.first
+        return fetchFirst(descriptor)
     }
 
     private func programInfo(_ model: ProgramModel) -> ProgramInfo {

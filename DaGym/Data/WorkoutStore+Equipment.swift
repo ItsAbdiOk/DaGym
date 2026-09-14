@@ -31,7 +31,7 @@ struct EquipmentProfileDraft {
 extension WorkoutStore {
     func equipmentProfiles() -> [EquipmentProfileInfo] {
         let descriptor = FetchDescriptor<EquipmentProfileModel>(sortBy: [SortDescriptor(\.createdAt)])
-        let models = (try? context.fetch(descriptor)) ?? []
+        let models = fetch(descriptor)
         return models.map(equipmentProfileInfo)
     }
 
@@ -45,7 +45,7 @@ extension WorkoutStore {
 
     /// Marks exactly one profile active, deactivating every other one.
     func setActive(id: UUID) {
-        let models = (try? context.fetch(FetchDescriptor<EquipmentProfileModel>())) ?? []
+        let models = fetch(FetchDescriptor<EquipmentProfileModel>())
         for model in models {
             model.isActive = model.id == id
         }
@@ -106,11 +106,11 @@ extension WorkoutStore {
     func fetchEquipmentProfileModel(id: UUID) -> EquipmentProfileModel? {
         var descriptor = FetchDescriptor<EquipmentProfileModel>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
-        return (try? context.fetch(descriptor))?.first
+        return fetchFirst(descriptor)
     }
 
     private func deactivateAll() {
-        let models = (try? context.fetch(FetchDescriptor<EquipmentProfileModel>())) ?? []
+        let models = fetch(FetchDescriptor<EquipmentProfileModel>())
         for model in models { model.isActive = false }
     }
 

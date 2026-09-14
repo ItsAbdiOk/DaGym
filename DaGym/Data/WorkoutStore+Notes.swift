@@ -35,7 +35,7 @@ extension WorkoutStore {
 
     func deleteExerciseNote(id: UUID) {
         let predicate = #Predicate<ExerciseNoteModel> { $0.id == id }
-        guard let model = (try? context.fetch(FetchDescriptor(predicate: predicate)))?.first else { return }
+        guard let model = fetchFirst(FetchDescriptor(predicate: predicate)) else { return }
         context.delete(model)
         save()
     }
@@ -47,7 +47,7 @@ extension WorkoutStore {
         let predicate = #Predicate<WorkoutExerciseModel> {
             $0.exercise?.id == exerciseID && $0.workout?.endedAt != nil && !$0.note.isEmpty
         }
-        let rows = (try? context.fetch(FetchDescriptor(predicate: predicate))) ?? []
+        let rows = fetch(FetchDescriptor(predicate: predicate))
         let sessionNotes = rows.compactMap { row -> ExerciseNoteInfo? in
             guard let workout = row.workout else { return nil }
             return ExerciseNoteInfo(
@@ -72,7 +72,7 @@ extension WorkoutStore {
         let predicate = #Predicate<WorkoutExerciseModel> {
             $0.exercise?.id == exerciseID && $0.workout?.endedAt != nil
         }
-        let trained = (try? context.fetch(FetchDescriptor(predicate: predicate))) ?? []
+        let trained = fetch(FetchDescriptor(predicate: predicate))
         let spentBy = trained.compactMap(\.workout)
             .filter { $0.startedAt > since && $0.id != authorWorkoutID && $0.id != workoutID }
         return spentBy.isEmpty ? Self.noteInfo(next) : nil
@@ -84,7 +84,7 @@ extension WorkoutStore {
             predicate: #Predicate { $0.exerciseID == exerciseID },
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
-        return (try? context.fetch(descriptor)) ?? []
+        return fetch(descriptor)
     }
 
     private static func noteInfo(_ model: ExerciseNoteModel) -> ExerciseNoteInfo {

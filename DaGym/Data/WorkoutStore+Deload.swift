@@ -61,7 +61,7 @@ extension WorkoutStore {
     /// active before — see `resumeProgramIfDeloadExpired()`.
     func planDeloadWeek() {
         let previous = activeProgramModel()
-        for other in (try? context.fetch(FetchDescriptor<ProgramModel>())) ?? [] { other.isActive = false }
+        for other in fetch(FetchDescriptor<ProgramModel>()) { other.isActive = false }
         if let previous, previous.name != Self.deloadProgramName {
             UserDefaults.standard.set(previous.id.uuidString, forKey: Self.deloadPreviousProgramIDKey)
         } else {

@@ -128,7 +128,7 @@ extension WorkoutStore {
         let descriptor = FetchDescriptor<WorkoutModel>(
             predicate: predicate, sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
         )
-        return (try? context.fetch(descriptor)) ?? []
+        return fetch(descriptor)
     }
 
     /// Deletes every unfinished workout started before `date` (and, by cascade, its sets).
@@ -147,11 +147,11 @@ extension WorkoutStore {
     /// Nil once the workout has been finished or deleted.
     func resumeSession(for workoutID: UUID) -> WorkoutSession? {
         guard let model = fetchWorkoutModel(id: workoutID), model.endedAt == nil else { return nil }
-        let session = WorkoutSession(model: model, exerciseInfo: exerciseInfo(for:))
-        // Fetched once and shared across every exercise's history strip, rather than each one
-        // re-querying the whole finished-workout list.
-        let finishedWorkouts = finishedWorkoutModelsNewestFirst()
-        session.exercises = session.exercises.map { withHistoryStrip($0, finishedWorkouts: finishedWorkouts) }
+        // Fetched once and shared: every exercise's `exerciseInfo` stats and history strip would
+        // otherwise re-query the finished-workout list, the PR cache and its own `ExerciseModel`.
+        let facts = makeSessionFacts(routineID: model.routineID)
+        let session = WorkoutSession(model: model, exerciseInfo: { self.exerciseInfo(for: $0, facts: facts) })
+        session.exercises = session.exercises.map { withHistoryStrip($0, facts: facts) }
         session.routineGlyphs = routineGlyphs(for: session.exercises)
         return session
     }
@@ -165,7 +165,7 @@ extension WorkoutStore {
         let descriptor = FetchDescriptor<WorkoutModel>(
             predicate: predicate, sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
         )
-        let models = (try? context.fetch(descriptor)) ?? []
+        let models = fetch(descriptor)
         let own = models.map { WorkoutRecord(model: $0, prCount: prCount(for: $0.id)) }
         let imported = importedHealthWorkouts().map(Self.record(imported:))
         return (own + imported).sorted { $0.date > $1.date }
@@ -272,7 +272,7 @@ extension WorkoutStore {
             return WorkoutDetail(title: "", startedAt: Date())
         }
         let entries = (model.exercises ?? []).sorted { $0.order < $1.order }.map { exerciseModel in
-            let info = exerciseModel.exercise.map(exerciseInfo(for:))
+            let info = exerciseModel.exercise.map { exerciseInfo(for: $0) }
                 ?? ExerciseInfo(name: "Deleted exercise", primary: [], equipment: "other")
             return WorkoutExerciseEntry(model: exerciseModel, exercise: info)
         }
@@ -287,8 +287,14 @@ extension WorkoutStore {
     /// for a timed hold, "12, 12, 10" for unloaded reps (see `sessionLine`). Pass
     /// `finishedWorkouts` (newest first) to reuse an already-fetched list instead of querying
     /// the store again.
-    func lastSessions(exerciseID: UUID, limit: Int = 3, finishedWorkouts: [WorkoutModel]? = nil) -> [String] {
-        let style = fetchExerciseModel(id: exerciseID)?.style ?? .weightReps
+    /// `style`, when passed, is used as-is instead of re-fetching the `ExerciseModel` just to
+    /// read it — a caller holding the `ExerciseInfo` already has it (`ExerciseInfo.loggingStyle`
+    /// *is* `ExerciseModel.style`; the `.weightReps` default matches the deleted-exercise case).
+    func lastSessions(
+        exerciseID: UUID, limit: Int = 3, finishedWorkouts: [WorkoutModel]? = nil,
+        style: ExerciseInfo.LoggingStyle? = nil
+    ) -> [String] {
+        let style = style ?? fetchExerciseModel(id: exerciseID)?.style ?? .weightReps
         var lines: [String] = []
         for workout in finishedWorkouts ?? finishedWorkoutModelsNewestFirst() {
             guard let line = sessionLine(exerciseID: exerciseID, style: style, in: workout) else { continue }
@@ -308,21 +314,22 @@ extension WorkoutStore {
 
     /// The card sparkline's per-session value, oldest first, by how the exercise is logged:
     /// best hold for a timed exercise, best reps for unloaded reps, else best e1RM. Pass
-    /// `finishedWorkouts` (newest first) to reuse an already-fetched list.
-    func sparklineSeries(exerciseID: UUID, finishedWorkouts: [WorkoutModel]? = nil) -> [(Date, Double)] {
-        let style = fetchExerciseModel(id: exerciseID)?.style ?? .weightReps
-        switch style {
-        case .timedHold, .cardio:
-            return bestPerSession(exerciseID: exerciseID, finishedWorkouts: finishedWorkouts) {
-                Double($0.durationSeconds ?? 0)
-            }
-        case .bodyweightReps:
-            return bestPerSession(exerciseID: exerciseID, finishedWorkouts: finishedWorkouts) {
-                Double($0.reps)
-            }
-        case .weightReps, .assisted, .weightedBodyweight:
+    /// `finishedWorkouts` (newest first) to reuse an already-fetched list, and `style` to skip
+    /// the `ExerciseModel` fetch that only reads it (see `lastSessions`).
+    func sparklineSeries(
+        exerciseID: UUID, finishedWorkouts: [WorkoutModel]? = nil,
+        style: ExerciseInfo.LoggingStyle? = nil
+    ) -> [(Date, Double)] {
+        let best: ((SetLogModel) -> Double)?
+        switch style ?? fetchExerciseModel(id: exerciseID)?.style ?? .weightReps {
+        case .timedHold, .cardio: best = { Double($0.durationSeconds ?? 0) }
+        case .bodyweightReps: best = { Double($0.reps) }
+        case .weightReps, .assisted, .weightedBodyweight: best = nil
+        }
+        guard let best else {
             return e1rmSeries(exerciseID: exerciseID, finishedWorkouts: finishedWorkouts)
         }
+        return bestPerSession(exerciseID: exerciseID, finishedWorkouts: finishedWorkouts, value: best)
     }
 
     private func bestPerSession(
@@ -350,7 +357,7 @@ extension WorkoutStore {
     func recoveryEvents(since: Date) -> [StimulusEvent] {
         let predicate = #Predicate<WorkoutModel> { $0.endedAt != nil && $0.startedAt >= since }
         let descriptor = FetchDescriptor<WorkoutModel>(predicate: predicate)
-        let workouts = (try? context.fetch(descriptor)) ?? []
+        let workouts = fetch(descriptor)
         return workouts.flatMap(recoveryEvents(in:))
     }
 

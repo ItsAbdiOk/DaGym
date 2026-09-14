@@ -153,7 +153,7 @@ extension WorkoutStore {
         let descriptor = FetchDescriptor<WorkoutModel>(
             predicate: predicate, sortBy: [SortDescriptor(\.startedAt, order: .forward)]
         )
-        let models = (try? context.fetch(descriptor)) ?? []
+        let models = fetch(descriptor)
         return models.map(bodyWorkout(from:))
     }
 
@@ -198,6 +198,6 @@ extension WorkoutStore {
         let descriptor = FetchDescriptor<WorkoutModel>(
             predicate: predicate, sortBy: [SortDescriptor(\.startedAt, order: .forward)]
         )
-        return (try? context.fetch(descriptor)) ?? []
+        return fetch(descriptor)
     }
 }

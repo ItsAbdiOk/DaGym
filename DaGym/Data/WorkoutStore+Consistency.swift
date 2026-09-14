@@ -38,7 +38,7 @@ extension WorkoutStore {
         // swiftlint:enable large_tuple
         let predicate = #Predicate<WorkoutModel> { $0.endedAt != nil && $0.startedAt >= since }
         let descriptor = FetchDescriptor<WorkoutModel>(predicate: predicate)
-        let workouts = (try? context.fetch(descriptor)) ?? []
+        let workouts = fetch(descriptor)
         return workouts.map { workout in
             (date: workout.startedAt, sets: countedSets(in: workout).count, minutes: minutes(of: workout))
         }
@@ -49,7 +49,7 @@ extension WorkoutStore {
             $0.endedAt != nil && $0.startedAt >= from && $0.startedAt < to
         }
         let descriptor = FetchDescriptor<WorkoutModel>(predicate: predicate)
-        let workouts = (try? context.fetch(descriptor)) ?? []
+        let workouts = fetch(descriptor)
         let sets = workouts.reduce(0) { total, workout in total + countedSets(in: workout).count }
         let volumeTotal = workouts.reduce(0.0) { total, workout in total + volume(of: workout) }
         let minutesTotal = workouts.reduce(0) { total, workout in total + minutes(of: workout) }
