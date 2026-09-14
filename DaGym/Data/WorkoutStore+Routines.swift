@@ -120,8 +120,10 @@ extension WorkoutStore {
             sortOrder: nextRoutineSortOrder(), symbolName: source.symbolName, tint: source.tint
         )
         context.insert(copy)
-        copy.exercises = drafts.enumerated().map { index, draft in
-            makeRoutineExercise(draft, order: index, routine: copy)
+        // The init sets `routine:`, which is the inverse — assigning `copy.exercises` as well
+        // is the SwiftData trap `restoreWorkout` was rewritten to avoid.
+        for (index, draft) in drafts.enumerated() {
+            _ = makeRoutineExercise(draft, order: index, routine: copy)
         }
         save()
         WidgetSnapshotWriter.refresh(store: self)
@@ -237,16 +239,24 @@ extension WorkoutStore {
             }
             context.delete(existing)
         }
-        routine.exercises = drafts.enumerated().map { index, draft in
-            makeRoutineExercise(draft, order: index, routine: routine, carriedState: carriedState)
+        for (index, draft) in drafts.enumerated() {
+            _ = makeRoutineExercise(draft, order: index, routine: routine, carriedState: carriedState)
         }
     }
 
     private func makeRoutineExercise(
         _ draft: RoutineExerciseDraft, order: Int, routine: RoutineModel,
         carriedState: [UUID: (stallJSON: String, trainingMaxKg: Double?)] = [:]
-    ) -> RoutineExerciseModel {
-        let exerciseModel = fetchExerciseModel(id: draft.exerciseID)
+    ) -> RoutineExerciseModel? {
+        // A slot with no exercise is silently dropped by `buildEntries`, so persisting one turns
+        // a missing library row into a routine that quietly lost a lift — and into an index that
+        // traps a caller expecting the exercise it just saved. Refuse to make one.
+        guard let exerciseModel = fetchExerciseModel(id: draft.exerciseID) else {
+            storeLogger.error(
+                "Routine slot skipped: no library exercise \(draft.exerciseID.uuidString, privacy: .public)"
+            )
+            return nil
+        }
         let carried = carriedState[draft.exerciseID]
         let routineExercise = RoutineExerciseModel(
             order: order, supersetGroup: draft.supersetGroup, restOverrideSeconds: draft.restOverrideSeconds,

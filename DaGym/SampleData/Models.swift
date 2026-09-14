@@ -164,10 +164,16 @@ struct SetEntry: Identifiable, Hashable {
     /// Converted for the shared `GymCore` stats helpers. `date` isn't tracked
     /// per set here, so a placeholder is used — callers that need it (PR
     /// evaluation) build `PerformedSet` directly with the workout's date.
-    var performed: GymCore.PerformedSet {
+    ///
+    /// The style is required rather than optional because `weightKg` alone does not say what it
+    /// means: on an assisted row it is the machine's assistance, and a style-blind conversion
+    /// banked 30 kg of help as 30 kg lifted. Goes through the same two conversions the PR cache
+    /// uses — `WorkoutStore.loadedWeightKg(_:style:)` and `WorkoutStore.assistanceKg(_:style:)`.
+    func performed(style: ExerciseInfo.LoggingStyle) -> GymCore.PerformedSet {
         GymCore.PerformedSet(
-            kind: kind, weightKg: weightKg, reps: reps, durationSeconds: durationSeconds,
-            assistanceKg: assistanceKg, date: Date()
+            kind: kind, weightKg: WorkoutStore.loadedWeightKg(self, style: style), reps: reps,
+            durationSeconds: durationSeconds,
+            assistanceKg: WorkoutStore.assistanceKg(self, style: style), date: Date()
         )
     }
 }
@@ -337,9 +343,15 @@ struct WorkoutDetail: Identifiable {
         return max(0, Int(endedAt.timeIntervalSince(startedAt) / 60))
     }
 
+    /// Σ (load lifted × reps) over completed working sets — the same convention, and so the same
+    /// number, as `WorkoutModel.loadedVolumeKg` on the persisted side and `WorkoutSession
+    /// .volumeKg` live. An assisted row's logged weight is the machine's help and adds nothing.
     var volumeKg: Double {
-        exercises.flatMap(\.sets).filter { $0.isDone && $0.kind.countsTowardStats }
-            .reduce(0) { $0 + $1.weightKg * Double($1.reps) }
+        exercises.reduce(0) { total, entry in
+            total + GymCore.SessionStats.volumeKg(
+                entry.sets.filter(\.isDone).map { $0.performed(style: entry.exercise.loggingStyle) }
+            )
+        }
     }
 
     /// Completed working sets — warm-ups excluded, matching the History row and weekly recap.

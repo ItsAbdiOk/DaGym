@@ -118,8 +118,17 @@ final class WorkoutSession {
         var isPaused: Bool { pausedAt != nil }
     }
 
+    /// Σ (load lifted × reps) over completed working sets. Built per exercise because the logging
+    /// style is what says whether a row's weight is load at all: an assisted row logs the
+    /// machine's help, which is not lifted, so it adds nothing — the same convention History and
+    /// the Finish summary use (`WorkoutModel.loadedVolumeKg`), so the number on screen mid-workout
+    /// and the one in History for those same sets agree.
     var volumeKg: Double {
-        GymCore.SessionStats.volumeKg(exercises.flatMap(\.sets).filter(\.isDone).map(\.performed))
+        exercises.reduce(0) { total, entry in
+            total + GymCore.SessionStats.volumeKg(
+                entry.sets.filter(\.isDone).map { $0.performed(style: entry.exercise.loggingStyle) }
+            )
+        }
     }
 
     /// Working sets only — the same definition the summary card, the History row, the weekly

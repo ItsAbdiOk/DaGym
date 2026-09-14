@@ -272,11 +272,29 @@ extension RoutineExerciseModel {
     }
 }
 
+extension WorkoutModel {
+    /// Σ (load lifted × reps) over completed working sets — **the** total for a persisted
+    /// workout. An assisted row contributes 0, because its logged weight is the machine's help;
+    /// see `ExerciseInfo.LoggingStyle.loadedWeightKg(logged:)` for why that is the convention.
+    ///
+    /// Every persisted-side total reads this one property — the History row, the History
+    /// header's lifetime tonnage (and so the "Lifetime Tonnage" milestone), the weekly recap
+    /// and the Apple Health write — so they cannot quote different numbers for the same sets.
+    /// The live session's `WorkoutSession.volumeKg` is the same sum over the same convention.
+    var loadedVolumeKg: Double {
+        (exercises ?? []).reduce(0.0) { total, exerciseModel in
+            let style = exerciseModel.exercise?.style ?? .weightReps
+            return total + (exerciseModel.sets ?? [])
+                .filter { $0.isCompleted && $0.setKind.countsTowardStats }
+                .reduce(0.0) { $0 + style.loadedWeightKg(logged: $1.weightKg) * Double($1.reps) }
+        }
+    }
+}
+
 extension WorkoutRecord {
     init(model: WorkoutModel, prCount: Int = 0) {
         let sets = (model.exercises ?? []).flatMap { $0.sets ?? [] }
-        let volume = sets.filter { $0.isCompleted && $0.setKind.countsTowardStats }
-            .reduce(0.0) { $0 + $1.weightKg * Double($1.reps) }
+        let volume = model.loadedVolumeKg
         let minutes: Int
         if let endedAt = model.endedAt {
             minutes = max(0, Int(endedAt.timeIntervalSince(model.startedAt) / 60))

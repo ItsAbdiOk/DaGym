@@ -513,10 +513,12 @@ extension WorkoutStore {
 
     // MARK: - Helpers
 
+    /// Weight × reps over counting sets, reading each row's **lifted** load — an assisted row's
+    /// logged weight is the machine's help, not load, so it adds nothing. One expression, shared
+    /// with the History rows, the weekly recap and the Health write: see `WorkoutModel
+    /// .loadedVolumeKg`.
     private func workoutVolume(_ workout: WorkoutModel) -> Double {
-        (workout.exercises ?? []).flatMap { $0.sets ?? [] }
-            .filter { $0.isCompleted && $0.setKind.countsTowardStats }
-            .reduce(0.0) { $0 + $1.weightKg * Double($1.reps) }
+        workout.loadedVolumeKg
     }
 
     private func sessionLine(

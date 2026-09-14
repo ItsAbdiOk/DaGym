@@ -84,7 +84,9 @@ final class HealthSyncService {
               let endedAt = workout.endedAt else { return }
         let sets = (workout.exercises ?? []).flatMap { $0.sets ?? [] }
             .filter { $0.isCompleted && $0.setKind.countsTowardStats }
-        let volumeKg = sets.reduce(0.0) { $0 + $1.weightKg * Double($1.reps) }
+        // Assisted rows log the machine's help, which is not weight lifted — the same total
+        // History and the weekly recap show (`WorkoutModel.loadedVolumeKg`).
+        let volumeKg = workout.loadedVolumeKg
         let workoutID = workout.id
         let energyKcal = preferences.healthEstimateCalories
             ? estimatedEnergyKcal(start: workout.startedAt, end: endedAt, bodyweightKg: workout.bodyweightKg)

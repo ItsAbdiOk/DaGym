@@ -329,9 +329,9 @@ extension WorkoutStore {
     /// Tombstones `duplicate` rather than deleting it, for the same reason
     /// `ExerciseSeeder.dedupe` does: CloudKit delivers a routine's slots after the routine, and
     /// a hard delete left the other device's slots parentless *and* synced the delete back.
-    /// The loser's slots are merged into the survivor's — see `mergeProgressionState` — and
-    /// then removed, so the tombstone eventually becomes childless and sweepable.
-    /// Returns whether anything changed, so a settled tombstone stops counting as work.
+    /// The loser's slots are merged into the survivor's — see `mergeProgressionState` — but are
+    /// left attached here; the sweep reclaims them with the tombstone once the grace period is
+    /// up. Returns whether anything changed, so a settled tombstone stops counting as work.
     private func foldRoutine(_ duplicate: RoutineModel, into survivor: RoutineModel) -> Bool {
         let merged = mergeProgressionState(from: duplicate.exercises ?? [], into: survivor)
         let changed = duplicate.mergedIntoID != survivor.id || merged
@@ -381,8 +381,14 @@ extension WorkoutStore {
         let cutoff = Date().addingTimeInterval(-ExerciseSeeder.tombstoneGracePeriod)
         var swept = 0
         for model in models {
-            guard model.isMergedAway, let mergedAt = model.mergedAt, mergedAt < cutoff,
-                  (model.exercises ?? []).isEmpty else { continue }
+            // Deliberately NOT gated on being childless, unlike the exercise sweep. A folded
+            // routine keeps its own slots (the exercise fold moves children onto the survivor
+            // instead), so a childless test would never pass and every folded routine — with
+            // its slots and planned sets — would live in the store and in CloudKit forever.
+            // The grace period is what makes this safe: by then the progression has been merged
+            // and CloudKit has long delivered anything that was in flight.
+            guard model.isMergedAway, let mergedAt = model.mergedAt, mergedAt < cutoff
+            else { continue }
             context.delete(model)
             swept += 1
         }

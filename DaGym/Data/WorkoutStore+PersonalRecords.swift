@@ -215,8 +215,10 @@ extension WorkoutStore {
     /// made 30 kg of help into 30 kg lifted: "Heaviest 30 kg", "Best set 30 × 8 (240 kg)",
     /// 240 kg of lifetime tonnage, and a top-set chart that *fell* as the lifter got stronger.
     /// Assistance is not load, so it is 0 here and travels in `assistanceKg` instead.
-    static func loadedWeightKg(_ setEntry: SetEntry, style: ExerciseInfo.LoggingStyle) -> Double {
-        style == .assisted ? 0 : setEntry.weightKg
+    nonisolated static func loadedWeightKg(
+        _ setEntry: SetEntry, style: ExerciseInfo.LoggingStyle
+    ) -> Double {
+        style.loadedWeightKg(logged: setEntry.weightKg)
     }
 
     /// The assistance for an assisted row: what was **logged**, not what was prescribed.
@@ -232,7 +234,9 @@ extension WorkoutStore {
     /// Resolution order matches `ProgressionEngine+AssistedTimed`, the other reader of these
     /// rows: the logged weight when there is one, the prescribed assistance otherwise. Never
     /// nil for an assisted set — its absence is what makes a set *not* assisted.
-    static func assistanceKg(_ setEntry: SetEntry, style: ExerciseInfo.LoggingStyle) -> Double? {
+    nonisolated static func assistanceKg(
+        _ setEntry: SetEntry, style: ExerciseInfo.LoggingStyle
+    ) -> Double? {
         guard style == .assisted else { return nil }
         return setEntry.weightKg > 0 ? setEntry.weightKg : (setEntry.assistanceKg ?? 0)
     }
@@ -267,5 +271,26 @@ extension WorkoutStore {
         model.reps = record.reps
         model.date = record.date
         model.workoutID = workoutID
+    }
+}
+
+extension ExerciseInfo.LoggingStyle {
+    /// **The** rule, in one expression: the external load a logged row's weight represents.
+    /// An assisted row's weight is the machine's help, and help is not load, so it is 0 — which
+    /// also settles what an assisted set is worth in *volume*: `0 × reps = 0`.
+    ///
+    /// Zero reads harshly ("that set didn't count"), and bodyweight-minus-assistance would read
+    /// better. It was rejected: it needs a bodyweight on file, so two identical lifters would
+    /// see different tonnage (and a lifter with no weigh-in would see none); it only makes sense
+    /// if bodyweight-only sets start counting their bodyweight too, which is a far bigger change;
+    /// and it would contradict `PerformedSet.weightKg`, which the PR cache, the top-set chart and
+    /// the e1RM already define as external load and nothing else. One convention everywhere beats
+    /// a kinder number in some places. Assisted work still shows up as sets, reps, a falling
+    /// least-assistance PR and a rising e1RM — volume is simply not where it is measured.
+    ///
+    /// Both row shapes funnel through here: `WorkoutStore.loadedWeightKg(_:style:)` for a live
+    /// `SetEntry`, `WorkoutModel.loadedVolumeKg` for persisted `SetLogModel`s.
+    func loadedWeightKg(logged weightKg: Double) -> Double {
+        self == .assisted ? 0 : weightKg
     }
 }
