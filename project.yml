@@ -55,6 +55,9 @@ targets:
         product: GymCore
       - target: DaGymWidgets
         embed: true
+      # The standalone watch app ships inside the iOS bundle so TestFlight/App Store carry it.
+      - target: DaGymWatch
+        embed: true
     info:
       path: DaGym/Info.plist
       properties:
@@ -119,6 +122,10 @@ targets:
             LSItemContentTypes: [dev.abdirahmanmohamed.dagym.plan]
             CFBundleTypeRole: Editor
             LSHandlerRank: Owner
+        # A shared .gymplan is imported into the store, never edited where it sits, so "open in
+        # place" is off. Declaring one or the other is required once CFBundleDocumentTypes exists
+        # (App Store Connect warning ITMS-90737 on build 6 otherwise).
+        LSSupportsOpeningDocumentsInPlace: false
         NSCalendarsFullAccessUsageDescription: >-
           DaGym keeps your scheduled workouts in a "DaGym" calendar of its own, so they show up
           alongside the rest of your day. It needs full access to update and remove the sessions
@@ -260,17 +267,48 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: NO
 
-  # Standalone Apple Watch app. Not yet embedded in the iOS app: that wiring
-  # lands with Phase 5 (watch), so the iOS build never waits on a watchOS
-  # simulator runtime until the watch app has something to show.
+  # Standalone Apple Watch app (plan.md Phase 5). Shares the phone's SwiftData models AND its
+  # `WorkoutStore` (the store is pure Foundation/GymCore/SwiftData apart from four files listed
+  # under `excludes`), so a workout finished on the wrist is persisted, PR-checked and
+  # progression-committed by the exact code the phone runs. The three app-layer hooks the store
+  # reaches for — `Haptics`, `WidgetSnapshotWriter.refresh(store:)` and `Preferences.Key` — have
+  # small watch-side stand-ins under DaGymWatch/Shared/. Design system stays watch-only
+  # (`DaGymWatch/Design`): the phone's is UIKit-adjacent.
   DaGymWatch:
     type: application
     platform: watchOS
     sources:
       - path: DaGymWatch
+        excludes:
+          - Widgets
+      - path: DaGym/Data/Models
+      - path: DaGym/Data/Mapping.swift
+      - path: DaGym/Data/ModelContainer+DaGym.swift
+      - path: DaGym/Data/Health/HealthExternalWorkout.swift
+      - path: DaGym/Features/Library/EquipmentOption.swift
+      # The seeders carry the CloudKit fold (`dedupeSeededRows`) the watch runs after remote
+      # imports; the watch never calls their seed entry points — rows arrive from the phone.
+      - path: DaGym/Data/ExerciseSeeder.swift
+      - path: DaGym/Data/RoutineSeeder.swift
+      - path: DaGym/Data/RoutineSeeder+Programs.swift
+      - path: DaGym/Data
+        includes:
+          - "WorkoutStore*.swift"
+        excludes:
+          - "WorkoutStore+Photos.swift"
+          - "WorkoutStore+Reset.swift"
+      - path: DaGym/SampleData
+      - path: DaGym/Features/Workout/WorkoutSession+Supersets.swift
+      - path: DaGym/Features/Workout/WorkoutSession+TimedHold.swift
+      - path: DaGym/Features/LiveActivity/RestState.swift
+      - path: DaGym/Features/Routines/RoutineGlyphInfo.swift
+      - path: DaGym/Design/Components/BodyMapMuscleMapping.swift
+      - path: DaGym/Vendor/MuscleMap
     dependencies:
       - package: GymCore
         product: GymCore
+      - target: DaGymWatchWidgets
+        embed: true
     info:
       path: DaGymWatch/Info.plist
       properties:
@@ -278,14 +316,68 @@ targets:
         WKApplication: true
         WKRunsIndependentlyOfCompanionApp: true
         WKCompanionAppBundleIdentifier: dev.abdirahmanmohamed.dagym
+        # Voice logging on the wrist goes through the system dictation sheet (watchOS has no
+        # Speech framework); the text never leaves the device.
+        NSHealthShareUsageDescription: >-
+          DaGym reads your heart rate during a workout so the timer keeps running with your
+          wrist down. Nothing read from Health is stored in iCloud.
+        NSHealthUpdateUsageDescription: >-
+          DaGym saves your strength workouts to Apple Health so your rings get credit.
+        WKBackgroundModes:
+          - workout-processing
+        UIBackgroundModes:
+          - remote-notification
+    entitlements:
+      path: DaGymWatch/DaGymWatch.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+        com.apple.developer.icloud-services: [CloudKit]
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.dev.abdirahmanmohamed.dagym
+        com.apple.security.application-groups:
+          - group.dev.abdirahmanmohamed.dagym
+        aps-environment: development
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.dagym.watchkitapp
+        PRODUCT_NAME: DaGymWatch
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "4"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  # Watch complications + Smart Stack card. Reads the `WatchSnapshot` the watch app writes to
+  # the App Group; never opens the store.
+  DaGymWatchWidgets:
+    type: app-extension
+    platform: watchOS
+    sources:
+      - path: DaGymWatch/Widgets
+      - path: DaGymWatch/Shared/WatchSnapshot.swift
+    dependencies:
+      - package: GymCore
+        product: GymCore
+    info:
+      path: DaGymWatch/Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: DaGym
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: DaGymWatch/Widgets/DaGymWatchWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.dev.abdirahmanmohamed.dagym
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.dagym.watchkitapp.widgets
+        PRODUCT_NAME: DaGymWatchWidgets
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "4"
 
 schemes:
   DaGym:

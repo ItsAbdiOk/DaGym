@@ -101,7 +101,7 @@ enum BodyMapMuscleMapping {
     /// Whether `muscle`'s region should be addressable (tintable + tappable) when drawing
     /// the given `side`. Matches the previous rectangle-based `BodyMapView`: e.g. `.triceps`
     /// is back-only even though the vendored front paths happen to sketch a sliver of it.
-    static func isAddressable(_ muscle: Muscle, on side: BodyMapView.Side) -> Bool {
+    static func isAddressable(_ muscle: Muscle, on side: BodySide) -> Bool {
         if sharedAcrossSides.contains(muscle) { return true }
         if backOnly.contains(muscle) { return side == .back }
         return muscle.isFront == (side == .front)
@@ -119,7 +119,7 @@ enum BodyMapMuscleMapping {
     ///
     /// Muscles in `sharedAcrossSides` are skipped when choosing, since they read the same either
     /// way; an exercise with no primary movers at all, or only shared ones, draws the front.
-    static func thumbnailSide(forPrimary muscles: [Muscle]) -> BodyMapView.Side {
+    static func thumbnailSide(forPrimary muscles: [Muscle]) -> BodySide {
         for muscle in muscles where !sharedAcrossSides.contains(muscle) {
             return isAddressable(muscle, on: .front) ? .front : .back
         }

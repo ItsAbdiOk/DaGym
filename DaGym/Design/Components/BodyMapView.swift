@@ -14,9 +14,9 @@ struct BodyMapView: View {
         case recovery
     }
 
-    enum Side {
-        case front, back
-    }
+    /// The vendored `BodySide` — the same two cases, so `BodyMapMuscleMapping` (which the watch
+    /// app compiles without this view) can name a side without depending on it.
+    typealias Side = BodySide
 
     /// A fixed width-for-height for thumbnail-sized maps. The figures' own aspect ratios differ
     /// (727:1280 male, 650:1450 female), so sizing a thumbnail by height alone makes its width —

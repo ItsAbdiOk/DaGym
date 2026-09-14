@@ -15,28 +15,15 @@
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
-	<string>APPL</string>
+	<string>XPC!</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>NSHealthShareUsageDescription</key>
-	<string>DaGym reads your heart rate during a workout so the timer keeps running with your wrist down. Nothing read from Health is stored in iCloud.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>DaGym saves your strength workouts to Apple Health so your rings get credit.</string>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>remote-notification</string>
-	</array>
-	<key>WKApplication</key>
-	<true/>
-	<key>WKBackgroundModes</key>
-	<array>
-		<string>workout-processing</string>
-	</array>
-	<key>WKCompanionAppBundleIdentifier</key>
-	<string>dev.abdirahmanmohamed.dagym</string>
-	<key>WKRunsIndependentlyOfCompanionApp</key>
-	<true/>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.widgetkit-extension</string>
+	</dict>
 </dict>
 </plist>

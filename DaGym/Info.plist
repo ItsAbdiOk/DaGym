@@ -48,6 +48,8 @@
 	<string>1</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<false/>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>DaGym keeps your scheduled workouts in a "DaGym" calendar of its own, so they show up alongside the rest of your day. It needs full access to update and remove the sessions it created when you change your plan; it never reads your other calendars.</string>
 	<key>NSCameraUsageDescription</key>
