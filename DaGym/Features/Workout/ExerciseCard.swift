@@ -14,6 +14,8 @@ struct ExerciseCard: View {
     var onToggleDone: (SetEntry) -> Void
     var onMore: () -> Void
     var onStartTimed: (UUID) -> Void
+    /// A cardio row's time / distance / incline tap: opens the keypad on that field.
+    var onTapCardioField: (UUID, ActiveSheet.KeypadField) -> Void = { _, _ in }
     /// Note button in the on-deck header, and the set-row swipe actions.
     var onNote: () -> Void = {}
     var onDeleteSet: (UUID) -> Void = { _ in }
@@ -30,8 +32,9 @@ struct ExerciseCard: View {
             OnDeckExerciseCard(
                 entry: entry, effortScale: effortScale,
                 onTapWeight: onTapWeight, onTapReps: onTapReps, onTapEffort: onTapEffort,
-                onToggleDone: onToggleDone, onMore: onMore, onStartTimed: onStartTimed, onNote: onNote,
-                onDeleteSet: onDeleteSet, onChangeSetKind: onChangeSetKind, onInsertSet: onInsertSet,
+                onToggleDone: onToggleDone, onMore: onMore, onStartTimed: onStartTimed,
+                onTapCardioField: onTapCardioField, onNote: onNote, onDeleteSet: onDeleteSet,
+                onChangeSetKind: onChangeSetKind, onInsertSet: onInsertSet,
                 onAdjustWeight: onAdjustWeight, onAdjustReps: onAdjustReps
             )
         } else {
@@ -40,18 +43,26 @@ struct ExerciseCard: View {
     }
 }
 
-/// Which rows the on-deck card lays out: weight × reps `SetRow`s, or one `TimedSetRow` per hold
-/// with Start on the next open one. Pure so it can be asserted without rendering the card.
+/// Which rows the on-deck card lays out: weight × reps `SetRow`s, one `TimedSetRow` per hold
+/// with Start on the next open one, or one `CardioSetRow` per run. Pure so it can be asserted
+/// without rendering the card.
 enum OnDeckRows: Equatable {
     case loaded
     case timed(startSetID: UUID?)
+    case cardio(startSetID: UUID?)
 }
 
 extension WorkoutExerciseEntry {
     var nextOpenSetID: UUID? { sets.first { !$0.isDone }?.id }
 
     var onDeckRows: OnDeckRows {
-        isTimed ? .timed(startSetID: nextOpenSetID) : .loaded
+        if isCardio { return .cardio(startSetID: nextOpenSetID) }
+        return isTimed ? .timed(startSetID: nextOpenSetID) : .loaded
+    }
+
+    /// The incline column shows for treadmill/stair kit, or once any row carries an incline.
+    var showsInclineByDefault: Bool {
+        exercise.hasInclineByDefault || sets.contains { $0.inclinePercent != nil }
     }
 }
 
@@ -65,6 +76,7 @@ private struct OnDeckExerciseCard: View {
     var onToggleDone: (SetEntry) -> Void
     var onMore: () -> Void
     var onStartTimed: (UUID) -> Void
+    var onTapCardioField: (UUID, ActiveSheet.KeypadField) -> Void
     var onNote: () -> Void
     var onDeleteSet: (UUID) -> Void
     var onChangeSetKind: (UUID, SetKind) -> Void
@@ -73,6 +85,8 @@ private struct OnDeckExerciseCard: View {
     var onAdjustReps: (UUID, Int) -> Void
 
     @Environment(Preferences.self) private var preferences
+    /// "Add incline" on a cardio card whose kit has no incline dial.
+    @State private var inclineRevealed = false
 
     /// `Preferences.compactWorkoutLayout`: just the header and the rows — no on-deck pill,
     /// last-3 strip, why-card or plate chip.
@@ -106,6 +120,9 @@ private struct OnDeckExerciseCard: View {
             case .timed(let startSetID):
                 timedColumnHeader.padding(.top, DGSpace.s4)
                 timedRows(startSetID: startSetID).padding(.top, DGSpace.s2)
+            case .cardio(let startSetID):
+                cardioColumnHeader.padding(.top, DGSpace.s4)
+                cardioRows(startSetID: startSetID).padding(.top, DGSpace.s2)
             }
         }
         .dgCard()
@@ -132,11 +149,11 @@ private struct OnDeckExerciseCard: View {
         }
     }
 
-    /// The set the plate chip describes: the next open loaded set, once it has a weight.
+    /// The set the plate chip describes: the next open loaded set, once it has a weight. A hold
+    /// or a run has no bar to load.
     private var plateSet: SetEntry? {
-        guard !entry.isTimed, let set = entry.sets.first(where: { !$0.isDone }), set.weightKg > 0 else {
-            return nil
-        }
+        guard !entry.isTimed, !entry.isCardio, let set = entry.sets.first(where: { !$0.isDone }),
+              set.weightKg > 0 else { return nil }
         return set
     }
 
@@ -148,6 +165,11 @@ private struct OnDeckExerciseCard: View {
         let step = entry.doneCount + 1 <= entry.sets.count ? entry.doneCount + 1 : entry.sets.count
         let restSeconds = entry.exercise.restSeconds(defaultingTo: preferences.defaultRestSeconds)
         let rest = restSeconds > 0 ? WorkoutSession.clock(restSeconds) : "off"
+        if entry.isCardio {
+            // Last session's distance and time instead of a load increment a run doesn't have.
+            let last = entry.lastSessions.first.map { "last \($0)" } ?? "first time"
+            return "Set \(step) of \(entry.sets.count) · rest \(rest) · \(last)"
+        }
         // The same snapped step the ± steppers and keypad actually move by.
         let stepKg = SetRow.weightStepKg(entry.exercise.incrementKg, unit: preferences.weightUnit)
         let incrementValue = preferences.formatWeight(kg: stepKg)
@@ -189,6 +211,43 @@ private struct OnDeckExerciseCard: View {
             Text("Held").frame(minWidth: 44, alignment: .leading)
         }
         .dgLabel()
+    }
+
+    private var showsIncline: Bool { inclineRevealed || entry.showsInclineByDefault }
+
+    private var cardioColumnHeader: some View {
+        HStack(spacing: DGSpace.s3) {
+            Text("Set").frame(width: 28, alignment: .leading)
+            Text("").frame(width: 28)
+            Text("Time").frame(minWidth: 44, alignment: .leading)
+            Text(preferences.distanceUnit.symbol.uppercased()).frame(minWidth: 44, alignment: .leading)
+            if showsIncline {
+                Text("Incl").frame(minWidth: 44, alignment: .leading)
+            } else {
+                Button("Add incline") { inclineRevealed = true }
+                    .buttonStyle(.dgControl)
+                    .foregroundStyle(DGColor.coralText)
+            }
+        }
+        .dgLabel()
+    }
+
+    private func cardioRows(startSetID: UUID?) -> some View {
+        VStack(spacing: DGSpace.s2) {
+            ForEach(Array(entry.sets.enumerated()), id: \.element.id) { index, set in
+                CardioSetRow(
+                    setEntry: set, badgeIndex: workingIndex(upTo: index), rowIndex: index,
+                    isCurrent: set.id == startSetID, showsIncline: showsIncline,
+                    onStart: { onStartTimed(set.id) },
+                    onTapTime: { onTapCardioField(set.id, .minutes) },
+                    onTapDistance: { onTapCardioField(set.id, .distance) },
+                    onTapIncline: { onTapCardioField(set.id, .incline) },
+                    onToggleDone: { onToggleDone(set) },
+                    onDelete: { onDeleteSet(set.id) },
+                    onChangeKind: { kind in onChangeSetKind(set.id, kind) }
+                )
+            }
+        }
     }
 
     private func timedRows(startSetID: UUID?) -> some View {
@@ -274,6 +333,9 @@ private struct CollapsedExerciseRow: View {
 
     private var summaryLine: String {
         guard let first = entry.sets.first else { return entry.exercise.equipment }
+        if entry.isCardio {
+            return "\(entry.sets.count) × \(first.cardioSummary(unit: preferences.distanceUnit))"
+        }
         if entry.isTimed {
             let target = first.targetSeconds ?? 0
             return "\(entry.sets.count) holds · target \(WorkoutSession.clock(target))"
@@ -306,6 +368,13 @@ private struct CompletedExerciseRow: View {
     private var summary: String {
         let name = entry.exercise.name.uppercased()
         guard let first = entry.sets.first else { return name }
+        if entry.isCardio {
+            let meters = entry.distanceMeters
+            let seconds = entry.sets.compactMap(\.durationSeconds).reduce(0, +)
+            let line = SetEntry(weightKg: 0, reps: 0, durationSeconds: seconds, distanceMeters: meters)
+                .cardioSummary(unit: preferences.distanceUnit)
+            return "\(name) · \(line)"
+        }
         if entry.isTimed {
             let best = entry.sets.compactMap(\.durationSeconds).max() ?? 0
             return "\(name) · \(entry.sets.count) holds · best \(WorkoutSession.clock(best))"

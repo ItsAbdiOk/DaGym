@@ -10,7 +10,11 @@ enum ActiveSheet: Identifiable {
     case notes(exerciseID: UUID)
     case addRoutine
 
-    enum KeypadField: String { case weight, reps }
+    enum KeypadField: String {
+        case weight, reps
+        /// Cardio: minutes (decimal), distance in the display unit, incline %.
+        case minutes, distance, incline
+    }
 
     var id: String {
         switch self {

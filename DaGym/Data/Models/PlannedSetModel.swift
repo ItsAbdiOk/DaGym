@@ -14,6 +14,8 @@ final class PlannedSetModel {
     var targetWeightKg: Double?
     var targetRPE: Double?
     var targetSeconds: Int?
+    /// Cardio target, canonical metres. Optional (lightweight migration).
+    var targetDistanceMeters: Double?
 
     /// Inverse declared on `RoutineExerciseModel.plannedSets`.
     var routineExercise: RoutineExerciseModel?
@@ -21,7 +23,8 @@ final class PlannedSetModel {
     init(
         id: UUID = UUID(), order: Int = 0, kind: String = "working", targetReps: Int? = nil,
         targetRepsHigh: Int? = nil, targetWeightKg: Double? = nil, targetRPE: Double? = nil,
-        targetSeconds: Int? = nil, routineExercise: RoutineExerciseModel? = nil
+        targetSeconds: Int? = nil, targetDistanceMeters: Double? = nil,
+        routineExercise: RoutineExerciseModel? = nil
     ) {
         self.id = id
         self.order = order
@@ -31,6 +34,7 @@ final class PlannedSetModel {
         self.targetWeightKg = targetWeightKg
         self.targetRPE = targetRPE
         self.targetSeconds = targetSeconds
+        self.targetDistanceMeters = targetDistanceMeters
         self.routineExercise = routineExercise
     }
 

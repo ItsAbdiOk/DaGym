@@ -155,7 +155,7 @@ struct RoutineBuilderView: View {
     private func addExercise(_ exercise: ExerciseInfo) {
         items.append(
             EditableExercise(
-                exercise: exercise, sets: [PlannedSetDraft(kind: .working, targetReps: 8)],
+                exercise: exercise, sets: [PlannedSetDraft.initial(for: exercise.loggingStyle)],
                 overrideState: RuleState.exerciseOverride(
                     of: ruleState.rule, for: exercise, unit: preferences.weightUnit
                 )
@@ -259,7 +259,11 @@ private struct BuilderExerciseCard: View {
             }
             VStack(spacing: DGSpace.s2) {
                 ForEach(item.sets.indices, id: \.self) { index in
-                    BuilderSetRow(set: $item.sets[index])
+                    if item.exercise.loggingStyle == .cardio {
+                        BuilderCardioSetRow(set: $item.sets[index])
+                    } else {
+                        BuilderSetRow(set: $item.sets[index])
+                    }
                 }
             }
             setsCountStepper
@@ -371,7 +375,7 @@ private struct BuilderExerciseCard: View {
             get: { item.sets.count },
             set: { newCount in
                 if newCount > item.sets.count {
-                    let template = item.sets.last ?? PlannedSetDraft(kind: .working, targetReps: 8)
+                    let template = item.sets.last ?? PlannedSetDraft.initial(for: item.exercise.loggingStyle)
                     let added = newCount - item.sets.count
                     item.sets.append(contentsOf: Array(repeating: template, count: added))
                 } else if newCount < item.sets.count, newCount >= 1 {

@@ -52,10 +52,16 @@ struct WorkoutSummaryView: View {
     private var statRow: some View {
         HStack(spacing: DGSpace.s3) {
             StatTile(value: WorkoutSession.clock(summary.durationSeconds), label: "Time").dgCard(radius: 14)
-            StatTile(value: preferences.formatVolume(kg: summary.volumeKg), label: "Volume")
-                .dgCard(radius: 14)
+            StatTile(value: volumeText, label: "Volume").dgCard(radius: 14)
             StatTile(value: "\(summary.setsDone)", label: "Sets").dgCard(radius: 14)
         }
+    }
+
+    /// "7 400 · 5.0 km" once a run is in the session; the plain tonnage otherwise.
+    private var volumeText: String {
+        let volume = preferences.formatVolume(kg: summary.volumeKg)
+        guard summary.distanceMeters > 0 else { return volume }
+        return "\(volume) · \(preferences.formatDistance(meters: summary.distanceMeters, decimals: 1))"
     }
 
     private var actionRow: some View {

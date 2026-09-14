@@ -24,6 +24,7 @@ public enum ValidationError: Error, Sendable, Equatable {
     case repsOutOfBounds
     case weightOutOfBounds
     case durationOutOfBounds
+    case distanceOutOfBounds
     case setsCountOutOfBounds
     case implausibleWeight
     case trackingStyleMismatch
@@ -208,8 +209,13 @@ public enum LogCommandValidator {
         var flags: [ValidationFlag] = []
 
         if let reps = values.reps, !(1...100).contains(reps) { return .failure(.repsOutOfBounds) }
-        if let duration = values.durationSeconds, !(1...3600).contains(duration) {
+        // A plank tops out at an hour; a run does not.
+        let longest = target.loggingStyle == .cardio ? 24 * 3600 : 3600
+        if let duration = values.durationSeconds, !(1...longest).contains(duration) {
             return .failure(.durationOutOfBounds)
+        }
+        if let meters = values.distanceMeters, !(1...500_000).contains(meters) {
+            return .failure(.distanceOutOfBounds)
         }
 
         if let styleError = validateStyle(&values, style: target.loggingStyle) {
@@ -240,6 +246,15 @@ public enum LogCommandValidator {
     ) -> ValidationError? {
         if style == .timedHold, values.durationSeconds == nil, values.reps != nil {
             return .trackingStyleMismatch
+        }
+        if style == .cardio {
+            // "Eight at sixty" on a treadmill row is not a run: a cardio set needs a time or a
+            // distance, and never carries reps or load.
+            guard values.durationSeconds != nil || values.distanceMeters != nil else {
+                return .trackingStyleMismatch
+            }
+            values.reps = nil
+            values.weightKg = nil
         }
         if style == .bodyweightReps { values.isBodyweight = true; values.weightKg = 0 }
         if style == .assisted, values.assistanceKg == nil {

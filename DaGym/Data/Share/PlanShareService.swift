@@ -100,7 +100,8 @@ enum PlanShareService {
         PlanSet(
             order: model.order, kind: model.kind, targetReps: model.targetReps,
             targetRepsHigh: model.targetRepsHigh, targetWeightKg: nil,
-            targetRPE: model.targetRPE, targetSeconds: model.targetSeconds
+            targetRPE: model.targetRPE, targetSeconds: model.targetSeconds,
+            targetDistanceMeters: model.targetDistanceMeters
         )
     }
 

@@ -10,7 +10,16 @@ public enum UnitParser {
         case .kg: return number
         case .lb: return WeightUnit.lb.toKg(number)
         case .plates: return platesToKg(perSide: number, context: context)
-        case .seconds, .minutes, .none: return context.unit.toKg(number)
+        case .seconds, .minutes, .km, .miles, .none: return context.unit.toKg(number)
+        }
+    }
+
+    /// Converts a spoken distance number to canonical metres; nil for a non-distance unit.
+    public static func distanceMeters(number: Double, unit: UnitKind?) -> Double? {
+        switch unit {
+        case .km: return DistanceUnit.km.toMeters(number)
+        case .miles: return DistanceUnit.mi.toMeters(number)
+        case .kg, .lb, .plates, .seconds, .minutes, .none: return nil
         }
     }
 

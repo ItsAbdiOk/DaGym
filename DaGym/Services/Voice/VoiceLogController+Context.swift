@@ -91,7 +91,7 @@ extension VoiceLogController {
         case .bodyweightReps, .weightedBodyweight: .bodyweightReps
         case .assisted: .assisted
         case .timedHold: .timedHold
-        case .cardio: nil
+        case .cardio: .cardio
         }
     }
 
@@ -148,5 +148,11 @@ extension VoiceLogController {
         exerciseName: String, weightKg: Double, reps: Int, unit: WeightUnit
     ) -> String {
         "\(exerciseName) · \(unit.format(kg: weightKg)) \(unit.symbol) × \(reps)"
+    }
+
+    /// "Treadmill Run · 5.00 km · 25:30 · 5:06 /km" — the confirmation for a cardio set, in the
+    /// lifter's distance unit (the store's, since this is called off the session).
+    static func cardioSummary(exerciseName: String, set: SetEntry, unit: DistanceUnit) -> String {
+        "\(exerciseName) · \(set.cardioSummary(unit: unit))"
     }
 }

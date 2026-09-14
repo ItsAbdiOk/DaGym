@@ -110,10 +110,17 @@ struct WorkoutDetailView: View {
     private func statRow(_ detail: WorkoutDetail) -> some View {
         HStack(spacing: DGSpace.s3) {
             StatTile(value: "\(detail.durationMinutes)", label: "Minutes").dgCard(radius: 14)
-            StatTile(value: preferences.formatWeight(kg: detail.volumeKg), label: "Volume").dgCard(radius: 14)
+            StatTile(value: volumeText(detail), label: "Volume").dgCard(radius: 14)
             StatTile(value: "\(detail.setsDone)", label: "Sets").dgCard(radius: 14)
             StatTile(value: "\(detail.prCount)", label: "PRs", tint: DGColor.prGoldText).dgCard(radius: 14)
         }
+    }
+
+    /// Tonnage, with "· 5.0 km" beside it once the workout had a run in it.
+    private func volumeText(_ detail: WorkoutDetail) -> String {
+        let volume = preferences.formatWeight(kg: detail.volumeKg)
+        guard detail.distanceMeters > 0 else { return volume }
+        return "\(volume) · \(preferences.formatDistance(meters: detail.distanceMeters, decimals: 1))"
     }
 
     private func groupHeader(_ glyph: RoutineGlyphInfo) -> some View {
@@ -165,7 +172,7 @@ private struct ExerciseEntryCard: View {
             }
             VStack(spacing: DGSpace.s2) {
                 ForEach(Array(entry.sets.enumerated()), id: \.element.id) { index, set in
-                    ReadOnlySetRow(set: set, index: index + 1)
+                    ReadOnlySetRow(set: set, index: index + 1, isCardio: entry.isCardio)
                 }
             }
         }
@@ -177,13 +184,20 @@ private struct ExerciseEntryCard: View {
 private struct ReadOnlySetRow: View {
     var set: SetEntry
     var index: Int
+    var isCardio = false
 
     @Environment(Preferences.self) private var preferences
+
+    /// "5.00 km · 25:30 · 5:06 /km" for a run, "80 × 8" for a lift.
+    private var line: String {
+        isCardio ? set.cardioSummary(unit: preferences.distanceUnit)
+            : "\(preferences.formatWeight(kg: set.weightKg)) × \(set.reps)"
+    }
 
     var body: some View {
         HStack(spacing: DGSpace.s3) {
             SetKindBadge(kind: set.kind, index: index)
-            Text("\(preferences.formatWeight(kg: set.weightKg)) × \(set.reps)")
+            Text(line)
                 .font(DGFont.body)
                 .foregroundStyle(DGColor.ink1)
             Spacer()

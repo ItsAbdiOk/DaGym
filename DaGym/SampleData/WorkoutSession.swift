@@ -168,6 +168,7 @@ final class WorkoutSession {
         guard let ei = exercises.firstIndex(where: { $0.id == exerciseID }),
               let si = exercises[ei].sets.firstIndex(where: { $0.id == setID }) else { return }
         exercises[ei].sets[si].isDone = true
+        if exercises[ei].isCardio { exercises[ei].sets[si].adoptCardioTargets() }
         if let effort { exercises[ei].sets[si].effort = effort }
         let isRecheck = !everCompletedSetIDs.insert(setID).inserted
         if isRecheck, isResting { return }
@@ -304,7 +305,7 @@ final class WorkoutSession {
     func addWarmups(exerciseID: UUID) {
         guard let ei = exercises.firstIndex(where: { $0.id == exerciseID }) else { return }
         let entry = exercises[ei]
-        guard !entry.sets.contains(where: { $0.kind == .warmup }),
+        guard !entry.isCardio, !entry.sets.contains(where: { $0.kind == .warmup }),
               let workingIndex = entry.sets.firstIndex(where: { $0.kind == .working }) else { return }
         let workingSet = entry.sets[workingIndex]
         let warmups = GymCore.WarmupGenerator.sets(

@@ -19,6 +19,8 @@ struct WorkoutSummary {
     var previous: PreviousWorkoutSummary?
     /// Best e1RM this session vs the previous one, per exercise this session trained.
     var e1rmChanges: [ExerciseE1RMChange] = []
+    /// Σ metres over completed cardio sets — shown beside the volume when non-zero.
+    var distanceMeters: Double = 0
 }
 
 /// The headline numbers of the workout `WorkoutSummary.previous` compares against.

@@ -19,6 +19,7 @@ public enum VoiceCommandParser {
             { RestPattern.match(words) },
             { SwapAddRemovePattern.match(words, context: context) },
             { NoteQueryPattern.matchQuery(words, context: context) },
+            { CardioPattern.match(words, context: context) },
             { CompoundSplitPattern.match(words, context: context) },
             { MultiSetPattern.match(words, context: context) },
             { TimedPattern.match(words, context: context) },

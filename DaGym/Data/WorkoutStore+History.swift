@@ -97,7 +97,8 @@ extension WorkoutStore {
             durationSeconds: max(0, Int(endedAt.timeIntervalSince(workout.startedAt))),
             volumeKg: session.volumeKg, setsDone: setsDone, prs: prs, musclesHit: session.musclesHit,
             achievements: achievements, previous: previous.map(previousWorkoutSummary),
-            e1rmChanges: e1rmChanges(session: session, previous: previous)
+            e1rmChanges: e1rmChanges(session: session, previous: previous),
+            distanceMeters: session.distanceMeters
         )
     }
 
@@ -370,9 +371,9 @@ extension WorkoutStore {
                 let setModel = SetLogModel(
                     id: set.id, order: set.order, kind: set.kind, weightKg: set.weightKg, reps: set.reps,
                     durationSeconds: set.durationSeconds, distanceMeters: set.distanceMeters,
-                    assistanceKg: set.assistanceKg, rpe: set.rpe, isCompleted: set.isCompleted,
-                    completedAt: set.completedAt, prescriptionReason: set.prescriptionReason,
-                    workoutExercise: exerciseModel
+                    inclinePercent: set.inclinePercent, assistanceKg: set.assistanceKg, rpe: set.rpe,
+                    isCompleted: set.isCompleted, completedAt: set.completedAt,
+                    prescriptionReason: set.prescriptionReason, workoutExercise: exerciseModel
                 )
                 context.insert(setModel)
             }
@@ -472,7 +473,8 @@ extension WorkoutStore {
     ) -> [(Date, Double)] {
         let best: ((SetLogModel) -> Double)?
         switch style ?? fetchExerciseModel(id: exerciseID)?.style ?? .weightReps {
-        case .timedHold, .cardio: best = { Double($0.durationSeconds ?? 0) }
+        case .timedHold: best = { Double($0.durationSeconds ?? 0) }
+        case .cardio: best = cardioSparklineValue(exerciseID: exerciseID, finishedWorkouts: finishedWorkouts)
         case .bodyweightReps: best = { Double($0.reps) }
         case .weightReps, .assisted, .weightedBodyweight: best = nil
         }
@@ -528,8 +530,10 @@ extension WorkoutStore {
         let sets = match.filter { $0.isCompleted && $0.setKind.countsTowardStats }
         guard let first = sets.first else { return nil }
         switch style {
-        case .timedHold, .cardio:
+        case .timedHold:
             return sets.map { WorkoutSession.clock($0.durationSeconds ?? 0) }.joined(separator: ", ")
+        case .cardio:
+            return cardioSessionLine(sets: sets, unit: preferredDistanceUnit)
         case .bodyweightReps:
             return sets.map { String($0.reps) }.joined(separator: ", ")
         case .weightReps, .assisted, .weightedBodyweight:
@@ -552,7 +556,7 @@ extension WorkoutStore {
     /// It used to take `.first`, so an exercise logged twice in one session (bench 80 × 8 early,
     /// bench 100 × 3 at the end) was half-invisible: the history line, the card sparkline and
     /// the exercise's best-e1RM all read the first entry and never saw the heavier one.
-    private func matchingSets(exerciseID: UUID, in workout: WorkoutModel) -> [SetLogModel]? {
+    func matchingSets(exerciseID: UUID, in workout: WorkoutModel) -> [SetLogModel]? {
         let matches = (workout.exercises ?? [])
             .filter { $0.exercise?.id == exerciseID }
             .sorted { $0.order < $1.order }

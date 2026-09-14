@@ -66,6 +66,8 @@ public struct LogSetSpec: Hashable, Codable, Sendable {
         /// Weighted bodyweight, e.g. "with ten kilos".
         public var addedKg: Double?
         public var isBodyweight: Bool
+        /// Cardio: canonical metres ("five k", "3 miles").
+        public var distanceMeters: Double?
 
         public init(
             reps: Int? = nil,
@@ -73,7 +75,8 @@ public struct LogSetSpec: Hashable, Codable, Sendable {
             durationSeconds: Int? = nil,
             assistanceKg: Double? = nil,
             addedKg: Double? = nil,
-            isBodyweight: Bool = false
+            isBodyweight: Bool = false,
+            distanceMeters: Double? = nil
         ) {
             self.reps = reps
             self.weightKg = weightKg
@@ -81,6 +84,7 @@ public struct LogSetSpec: Hashable, Codable, Sendable {
             self.assistanceKg = assistanceKg
             self.addedKg = addedKg
             self.isBodyweight = isBodyweight
+            self.distanceMeters = distanceMeters
         }
     }
 
@@ -245,6 +249,8 @@ public struct ParseContext: Sendable {
     /// How an exercise is tracked — drives which fields a bare utterance fills.
     public enum LoggingStyle: Sendable {
         case weightReps, bodyweightReps, timedHold, assisted
+        /// Time and distance, no load: a bare utterance fills `durationSeconds`/`distanceMeters`.
+        case cardio
     }
 
     public struct CompletedSetRef: Sendable {

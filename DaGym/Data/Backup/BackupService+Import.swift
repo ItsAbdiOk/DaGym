@@ -205,7 +205,8 @@ extension BackupService {
             context.insert(PlannedSetModel(
                 order: set.order, kind: set.kind, targetReps: set.targetReps,
                 targetRepsHigh: set.targetRepsHigh, targetWeightKg: set.targetWeightKg,
-                targetRPE: set.targetRPE, targetSeconds: set.targetSeconds, routineExercise: model
+                targetRPE: set.targetRPE, targetSeconds: set.targetSeconds,
+                targetDistanceMeters: set.targetDistanceMeters, routineExercise: model
             ))
         }
         return model
@@ -266,9 +267,9 @@ extension BackupService {
             context.insert(SetLogModel(
                 id: set.id, order: set.order, kind: set.kind, weightKg: set.weightKg, reps: set.reps,
                 durationSeconds: set.durationSeconds, distanceMeters: set.distanceMeters,
-                assistanceKg: set.assistanceKg, rpe: set.rpe, isCompleted: set.isCompleted,
-                completedAt: set.completedAt, prescriptionReason: set.prescriptionReason,
-                workoutExercise: model
+                inclinePercent: set.inclinePercent, assistanceKg: set.assistanceKg, rpe: set.rpe,
+                isCompleted: set.isCompleted, completedAt: set.completedAt,
+                prescriptionReason: set.prescriptionReason, workoutExercise: model
             ))
         }
         return model

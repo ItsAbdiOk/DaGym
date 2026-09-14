@@ -48,7 +48,8 @@ extension WorkoutStore {
             kind: kind, value: model.value, weightKg: model.weightKg, reps: model.reps, date: model.date
         )
         return PersonalRecordLine(
-            kindLabel: Self.kindLabel(kind), line: PersonalRecords.formatLine(record, unit: unit),
+            kindLabel: Self.kindLabel(kind),
+            line: PersonalRecords.formatLine(record, unit: unit, distanceUnit: preferredDistanceUnit),
             date: model.date
         )
     }
@@ -61,6 +62,8 @@ extension WorkoutStore {
         case .volume: "Volume"
         case .longestHold: "Longest hold"
         case .leastAssistance: "Least assistance"
+        case .longestDistance: "Longest distance"
+        case .fastestPace: "Fastest pace"
         }
     }
 }
@@ -193,7 +196,8 @@ extension WorkoutStore {
                 kind: setEntry.kind, weightKg: Self.loadedWeightKg(setEntry, style: style),
                 reps: setEntry.reps, durationSeconds: setEntry.durationSeconds,
                 assistanceKg: Self.assistanceKg(setEntry, style: style),
-                bodyweightKg: bodyweightKg, date: date
+                bodyweightKg: bodyweightKg, date: date,
+                distanceMeters: style == .cardio ? setEntry.distanceMeters : nil
             )
         }
     }

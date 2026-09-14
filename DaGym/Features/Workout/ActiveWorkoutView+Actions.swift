@@ -199,7 +199,10 @@ extension ActiveWorkoutView {
             Button("Remove exercise", role: .destructive) { removeExercise(id: id) }
             Button("Add set") { addSet(exerciseID: id, kind: .working) }
             Button("Add warm-up set") { addSet(exerciseID: id, kind: .warmup) }
-            Button("Generate warm-ups") { generateWarmups(exerciseID: id) }
+            // A run has no load to ramp up to.
+            if !entry.isCardio {
+                Button("Generate warm-ups") { generateWarmups(exerciseID: id) }
+            }
             if index > 0 {
                 Button("Superset with previous") { pairSuperset(entryID: id, with: .previous) }
             }
@@ -282,8 +285,63 @@ extension ActiveWorkoutView {
                     last: previousReps.map(String.init), unit: nil,
                     onDone: { store.sync(session: session) }
                 )
+            case .minutes, .distance, .incline:
+                cardioKeypad(field: field, ei: ei, si: si)
             }
         }
+    }
+
+    /// Cardio fields type in the display unit (minutes, km/mi, %) and land on the row as
+    /// seconds / metres / percent. The "last" line is the target the row was pre-filled with.
+    private func cardioKeypad(field: ActiveSheet.KeypadField, ei: Int, si: Int) -> some View {
+        let set = session.exercises[ei].sets[si]
+        let distanceUnit = preferences.distanceUnit
+        let spec: CardioKeypadSpec = switch field {
+        case .minutes:
+            CardioKeypadSpec(
+                title: "Time", label: "MIN", step: 1, last: set.targetSeconds.map(CardioPace.clock)
+            )
+        case .distance:
+            CardioKeypadSpec(
+                title: "Distance", label: distanceUnit.symbol.uppercased(), step: 0.25,
+                last: set.targetDistanceMeters.map { distanceUnit.format(meters: $0) }
+            )
+        case .incline, .weight, .reps:
+            CardioKeypadSpec(title: "Incline", label: "%", step: 0.5, last: nil)
+        }
+        return WeightKeypadSheet(
+            title: spec.title, value: cardioBinding(field: field, ei: ei, si: si), step: spec.step, bar: nil,
+            last: spec.last, unit: nil, plainLabel: spec.label, onDone: { store.sync(session: session) }
+        )
+    }
+
+    /// How the keypad is labelled and stepped for one cardio field.
+    private struct CardioKeypadSpec {
+        var title: String
+        var label: String
+        var step: Double
+        var last: String?
+    }
+
+    private func cardioBinding(field: ActiveSheet.KeypadField, ei: Int, si: Int) -> Binding<Double> {
+        let unit = preferences.distanceUnit
+        return Binding(
+            get: {
+                let set = session.exercises[ei].sets[si]
+                switch field {
+                case .minutes: return Double(set.cardioSeconds ?? 0) / 60
+                case .distance: return unit.display(meters: set.cardioMeters ?? 0)
+                case .incline, .weight, .reps: return set.inclinePercent ?? 0
+                }
+            },
+            set: { value in
+                switch field {
+                case .minutes: session.exercises[ei].sets[si].durationSeconds = Int((value * 60).rounded())
+                case .distance: session.exercises[ei].sets[si].distanceMeters = unit.toMeters(value)
+                case .incline, .weight, .reps: session.exercises[ei].sets[si].inclinePercent = value
+                }
+            }
+        )
     }
 
     private func weightBinding(ei: Int, si: Int) -> Binding<Double> {

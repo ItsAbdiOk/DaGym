@@ -58,6 +58,8 @@ public struct BackupPreferences: Codable, Sendable {
     public var weighInBeforeWorkout: Bool?
     public var voiceSpeakBackOnHeadphones: Bool?
     public var voiceAutoLogEnabled: Bool?
+    /// `DistanceUnit` raw value ("km"/"mi").
+    public var distanceUnit: String?
 
     public init(
         weightUnit: String = "kg", effortScale: String = "rpe", defaultRestSeconds: Int = 150,

@@ -37,6 +37,8 @@ public struct PerformedSet: Hashable, Sendable {
     public var date: Date
     /// Rated effort, when the lifter logged one — lets balance views single out hard sets.
     public var rpe: Double?
+    /// Canonical metres covered by a cardio set; nil for everything else.
+    public var distanceMeters: Double?
 
     public init(
         kind: SetKind,
@@ -46,7 +48,8 @@ public struct PerformedSet: Hashable, Sendable {
         assistanceKg: Double? = nil,
         bodyweightKg: Double? = nil,
         date: Date,
-        rpe: Double? = nil
+        rpe: Double? = nil,
+        distanceMeters: Double? = nil
     ) {
         self.kind = kind
         self.weightKg = weightKg
@@ -56,6 +59,7 @@ public struct PerformedSet: Hashable, Sendable {
         self.bodyweightKg = bodyweightKg
         self.date = date
         self.rpe = rpe
+        self.distanceMeters = distanceMeters
     }
 
     /// A "hard" set for the balance map: rated at RIR ≤ `TrainingConstants.hardSetMaxRIR`, or
@@ -87,9 +91,15 @@ public struct PerformedSet: Hashable, Sendable {
     }
 }
 
-/// The kind of personal record a set can earn.
+/// The kind of personal record a set can earn. Stored by raw value (`PersonalRecordModel.kind`),
+/// so cases are only ever appended: `longestDistance` and `fastestPace` are the cardio pair.
 public enum PRKind: String, CaseIterable, Codable, Sendable {
     case e1rm, maxWeight, maxRepsAtWeight, volume, longestHold, leastAssistance
+    /// Furthest a cardio set has gone, in metres.
+    case longestDistance
+    /// Quickest seconds-per-km over a set of at least `PersonalRecords.paceMinimumDistanceMeters`,
+    /// so a 200 m sprint can't hold the "fastest pace" over a 10 km run.
+    case fastestPace
 }
 
 /// A single earned personal record.
@@ -149,20 +159,30 @@ public enum PersonalRecords {
             .volume, sets: sets, date: workoutDate, existing: existing, minValue: 0
         ) { $0.weightKg * Double($0.reps) }
         // A row ticked without the timer ever running is a 0-second hold, not a "Hold 0:00" PR.
+        // A cardio set's time is a run, not a hold — it competes for `fastestPace` instead.
         records += bestSimple(
             .longestHold, sets: sets, date: workoutDate, existing: existing, minValue: 0
         ) {
-            $0.durationSeconds.map(Double.init)
+            $0.distanceMeters == nil ? $0.durationSeconds.map(Double.init) : nil
         }
         records += leastAssistanceRecord(sets: sets, date: workoutDate, existing: existing)
         records += maxRepsAtWeightRecords(sets: sets, date: workoutDate, existing: existing)
+        records += bestSimple(
+            .longestDistance, sets: sets, date: workoutDate, existing: existing, minValue: 0
+        ) { $0.distanceMeters }
+        records += fastestPaceRecord(sets: sets, date: workoutDate, existing: existing)
         return records
     }
+
+    /// A pace only counts over at least this far: 1 km.
+    public static let paceMinimumDistanceMeters = 1000.0
 
     /// Human-readable line for a record, as shown on the PR banner and history. `unit` controls
     /// how the weight numbers are formatted; defaults to kg for callers that haven't gone
     /// through unit-aware display yet.
-    public static func formatLine(_ pr: PersonalRecord, unit: WeightUnit = .kg) -> String {
+    public static func formatLine(
+        _ pr: PersonalRecord, unit: WeightUnit = .kg, distanceUnit: DistanceUnit = .km
+    ) -> String {
         switch pr.kind {
         case .e1rm:
             return "\(unit.format(kg: pr.weightKg)) × \(pr.reps) (e1RM \(unit.format(kg: pr.value)))"
@@ -179,6 +199,14 @@ public enum PersonalRecords {
             return "Hold \(clock(Int(pr.value)))"
         case .leastAssistance:
             return "Assistance down to \(unit.format(kg: pr.value)) \(unit.symbol)"
+        case .longestDistance:
+            return "Longest \(distanceUnit.formatWithSymbol(meters: pr.value))"
+        case .fastestPace:
+            // `value` is seconds per km; re-expressed per the display unit.
+            let perUnit = pr.value * distanceUnit.meters / 1000
+            let floor = distanceUnit.formatWithSymbol(meters: paceMinimumDistanceMeters, decimals: 1)
+            let pace = CardioPace.clock(Int(perUnit.rounded()))
+            return "Fastest \(pace) /\(distanceUnit.symbol) over \(floor)+"
         }
     }
 
@@ -207,6 +235,32 @@ public enum PersonalRecords {
         return [
             PersonalRecord(
                 kind: kind, value: best.value, weightKg: weightKg(best.set), reps: best.set.reps, date: date
+            )
+        ]
+    }
+
+    /// Fastest pace is better: fewer seconds per km, over a set that went at least
+    /// `paceMinimumDistanceMeters`. Both a distance and a time are needed for a pace at all.
+    private static func fastestPaceRecord(
+        sets: [PerformedSet], date: Date, existing: [PersonalRecord]
+    ) -> [PersonalRecord] {
+        let paced = sets.compactMap { set -> (set: PerformedSet, value: Double)? in
+            guard let distance = set.distanceMeters, distance >= paceMinimumDistanceMeters,
+                  let seconds = set.durationSeconds,
+                  let pace = CardioPace.secondsPerUnit(
+                    distanceMeters: distance, durationSeconds: seconds, unit: .km
+                  ) else { return nil }
+            return (set, pace)
+        }
+        guard let best = paced.min(by: { $0.value < $1.value }) else { return [] }
+        if let currentBest = existing.first(where: { $0.kind == .fastestPace })?.value,
+           best.value >= currentBest {
+            return []
+        }
+        return [
+            PersonalRecord(
+                kind: .fastestPace, value: best.value, weightKg: best.set.weightKg,
+                reps: best.set.reps, date: date
             )
         ]
     }

@@ -62,8 +62,8 @@ extension VoiceLogController {
     /// what was heard — "try saying it differently" would be nonsense copy here.
     static func mapEdited(_ error: ValidationError) -> VoiceLogError {
         switch error {
-        case .repsOutOfBounds, .weightOutOfBounds, .durationOutOfBounds, .setsCountOutOfBounds,
-             .implausibleWeight, .trackingStyleMismatch:
+        case .repsOutOfBounds, .weightOutOfBounds, .durationOutOfBounds, .distanceOutOfBounds,
+             .setsCountOutOfBounds, .implausibleWeight, .trackingStyleMismatch:
             return .valueOutOfRange
         default:
             return .didNotUnderstand

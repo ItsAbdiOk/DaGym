@@ -194,7 +194,8 @@ extension WorkoutStore {
                 kind: setLog.setKind, weightKg: style == .assisted ? 0 : setLog.weightKg,
                 reps: setLog.reps, durationSeconds: setLog.durationSeconds,
                 assistanceKg: Self.assistanceKg(setLog, style: style),
-                bodyweightKg: bodyweightKg, date: sessionDate, rpe: setLog.rpe
+                bodyweightKg: bodyweightKg, date: sessionDate, rpe: setLog.rpe,
+                distanceMeters: style == .cardio ? setLog.distanceMeters : nil
             )
         }
     }

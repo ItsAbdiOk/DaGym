@@ -3,6 +3,8 @@ import Foundation
 /// A unit a bare number can be tagged with.
 public enum UnitKind: String, Equatable, Sendable {
     case kg, lb, plates, seconds, minutes
+    /// Cardio distance: "five k", "3 miles".
+    case km, miles
 }
 
 /// Normalises raw speech/typed text into the word array every pattern reads.
@@ -104,6 +106,8 @@ public enum Tokenizer {
         case "plate", "plates": return .plates
         case "second", "seconds", "secs", "sec": return .seconds
         case "minute", "minutes", "min", "mins": return .minutes
+        case "k", "km", "kms", "kilometer", "kilometers", "kilometre", "kilometres": return .km
+        case "mi", "mile", "miles": return .miles
         default: return nil
         }
     }

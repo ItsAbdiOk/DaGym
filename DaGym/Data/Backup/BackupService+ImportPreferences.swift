@@ -85,5 +85,8 @@ extension BackupService {
             preferences.voiceSpeakBackOnHeadphones = value
         }
         if let value = backup.voiceAutoLogEnabled { preferences.voiceAutoLogEnabled = value }
+        if let unit = backup.distanceUnit.flatMap(DistanceUnit.init(rawValue:)) {
+            preferences.distanceUnit = unit
+        }
     }
 }

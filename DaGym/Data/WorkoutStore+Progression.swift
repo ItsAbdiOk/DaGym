@@ -103,7 +103,9 @@ extension WorkoutStore {
         routine: RoutineModel, routineExercise: RoutineExerciseModel, exerciseInfo: ExerciseInfo,
         plannedSets: [PlannedSetModel], facts: SessionFacts? = nil
     ) -> Prescribed? {
-        guard !routineExercise.excludeFromProgression, let exerciseID = routineExercise.exercise?.id,
+        // A run has no load to progress: `WorkoutStore+Cardio` pre-fills it from last session.
+        guard !routineExercise.excludeFromProgression, exerciseInfo.loggingStyle != .cardio,
+              let exerciseID = routineExercise.exercise?.id,
               let rule = effectiveRule(routine: routine, routineExercise: routineExercise) else {
             return nil
         }

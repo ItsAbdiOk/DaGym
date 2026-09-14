@@ -14,6 +14,12 @@ final class Preferences {
     var weightUnit: WeightUnit {
         didSet { defaults.set(weightUnit.rawValue, forKey: Key.weightUnit) }
     }
+    /// The unit cardio distances are shown in; storage stays metres. Decided once, on first
+    /// read, from the weight unit (lb lifters get miles) and written straight back so a later
+    /// change of weight unit never silently flips it — Settings › Units changes it explicitly.
+    var distanceUnit: DistanceUnit {
+        didSet { defaults.set(distanceUnit.rawValue, forKey: Key.distanceUnit) }
+    }
     var effortScale: Effort.Scale {
         didSet { defaults.set(effortScale.rawValue, forKey: Key.effortScale) }
     }
@@ -274,7 +280,15 @@ final class Preferences {
         sampleDataMode = Self.boolValue(suite, Key.sampleDataMode, default: false)
         voiceSpeakBackOnHeadphones = Self.boolValue(suite, Key.voiceSpeakBackOnHeadphones, default: true)
         voiceAutoLogEnabled = Self.boolValue(suite, Key.voiceAutoLogEnabled, default: false)
-        weightUnit = WeightUnit(rawValue: suite.string(forKey: Key.weightUnit) ?? "") ?? .kg
+        let unit = WeightUnit(rawValue: suite.string(forKey: Key.weightUnit) ?? "") ?? .kg
+        weightUnit = unit
+        if let stored = DistanceUnit(rawValue: suite.string(forKey: Key.distanceUnit) ?? "") {
+            distanceUnit = stored
+        } else {
+            let derived = DistanceUnit.matching(unit)
+            distanceUnit = derived
+            suite.set(derived.rawValue, forKey: Key.distanceUnit)
+        }
         effortScale = Effort.Scale(rawValue: suite.string(forKey: Key.effortScale) ?? "") ?? .rpe
         defaultRestSeconds = Self.intValue(suite, Key.defaultRestSeconds, default: 150)
         weeklyGoal = Self.intValue(suite, Key.weeklyGoal, default: 4)
@@ -321,6 +335,11 @@ final class Preferences {
 
     /// A canonical kg value, formatted and rounded for the user's unit.
     func formatWeight(kg: Double) -> String { weightUnit.format(kg: kg) }
+
+    /// A canonical metres value in the user's distance unit, with its symbol: "5.00 km".
+    func formatDistance(meters: Double, decimals: Int = 2) -> String {
+        distanceUnit.formatWithSymbol(meters: meters, decimals: decimals)
+    }
 
     var unitSymbol: String { weightUnit.symbol }
 

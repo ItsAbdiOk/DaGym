@@ -68,7 +68,7 @@ struct BackupCoverageTests {
     private func plannedSet() -> BackupPlannedSet {
         BackupPlannedSet(
             order: 1, kind: "working", targetReps: 5, targetRepsHigh: 8, targetWeightKg: 100,
-            targetRPE: 8, targetSeconds: 45
+            targetRPE: 8, targetSeconds: 45, targetDistanceMeters: 5000
         )
     }
 
@@ -93,7 +93,7 @@ struct BackupCoverageTests {
         BackupSetLog(
             id: UUID(), order: 1, kind: "working", weightKg: 100, reps: 5, durationSeconds: 45,
             distanceMeters: 400, assistanceKg: 10, rpe: 8, isCompleted: true, completedAt: Self.date,
-            prescriptionReason: "linear +2.5 kg"
+            prescriptionReason: "linear +2.5 kg", inclinePercent: 2.5
         )
     }
 
@@ -202,6 +202,7 @@ struct BackupCoverageTests {
         value.weighInBeforeWorkout = true
         value.voiceSpeakBackOnHeadphones = false
         value.voiceAutoLogEnabled = true
+        value.distanceUnit = "mi"
         return value
     }
 

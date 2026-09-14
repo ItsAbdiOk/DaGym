@@ -127,7 +127,8 @@ extension BackupService {
         BackupPlannedSet(
             order: model.order, kind: model.kind, targetReps: model.targetReps,
             targetRepsHigh: model.targetRepsHigh, targetWeightKg: model.targetWeightKg,
-            targetRPE: model.targetRPE, targetSeconds: model.targetSeconds
+            targetRPE: model.targetRPE, targetSeconds: model.targetSeconds,
+            targetDistanceMeters: model.targetDistanceMeters
         )
     }
 
@@ -178,7 +179,7 @@ extension BackupService {
             reps: model.reps, durationSeconds: model.durationSeconds,
             distanceMeters: model.distanceMeters, assistanceKg: model.assistanceKg, rpe: model.rpe,
             isCompleted: model.isCompleted, completedAt: model.completedAt,
-            prescriptionReason: model.prescriptionReason
+            prescriptionReason: model.prescriptionReason, inclinePercent: model.inclinePercent
         )
     }
 

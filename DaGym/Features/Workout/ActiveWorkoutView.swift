@@ -211,9 +211,9 @@ struct ActiveWorkoutView: View {
     @ViewBuilder
     private func exerciseCard(at index: Int) -> some View {
         let entry = session.exercises[index]
-        if entry.isTimed, let hold = session.timedHold, hold.exerciseID == entry.id {
+        if entry.isTimed || entry.isCardio, let hold = session.timedHold, hold.exerciseID == entry.id {
             TimedHoldCard(
-                exerciseName: entry.exercise.name, hold: hold,
+                exerciseName: entry.exercise.name, hold: hold, isCardio: entry.isCardio,
                 onPauseResume: { session.pauseResumeTimedHold() }, onStop: stopTimedHold
             )
         } else {
@@ -229,6 +229,9 @@ struct ActiveWorkoutView: View {
                 onToggleDone: { set in toggleDone(exerciseID: entry.id, set: set) },
                 onMore: { menuExerciseID = entry.id },
                 onStartTimed: { setID in startTimedHold(exerciseID: entry.id, setID: setID) },
+                onTapCardioField: { setID, field in
+                    activeSheet = .keypad(exerciseID: entry.id, setID: setID, field: field)
+                },
                 onNote: { activeSheet = .notes(exerciseID: entry.id) },
                 onDeleteSet: { setID in deleteSet(exerciseID: entry.id, setID: setID) },
                 onChangeSetKind: { setID, kind in

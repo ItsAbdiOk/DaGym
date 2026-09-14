@@ -13,6 +13,8 @@ final class SetLogModel {
     var reps: Int = 0
     var durationSeconds: Int?
     var distanceMeters: Double?
+    /// Treadmill/stair incline for a cardio set, in percent. Optional (lightweight migration).
+    var inclinePercent: Double?
     var assistanceKg: Double?
     var rpe: Double?
     var isCompleted: Bool = false
@@ -25,8 +27,8 @@ final class SetLogModel {
     init(
         id: UUID = UUID(), order: Int = 0, kind: String = "working", weightKg: Double = 0,
         reps: Int = 0, durationSeconds: Int? = nil, distanceMeters: Double? = nil,
-        assistanceKg: Double? = nil, rpe: Double? = nil, isCompleted: Bool = false,
-        completedAt: Date? = nil, prescriptionReason: String = "",
+        inclinePercent: Double? = nil, assistanceKg: Double? = nil, rpe: Double? = nil,
+        isCompleted: Bool = false, completedAt: Date? = nil, prescriptionReason: String = "",
         workoutExercise: WorkoutExerciseModel? = nil
     ) {
         self.id = id
@@ -36,6 +38,7 @@ final class SetLogModel {
         self.reps = reps
         self.durationSeconds = durationSeconds
         self.distanceMeters = distanceMeters
+        self.inclinePercent = inclinePercent
         self.assistanceKg = assistanceKg
         self.rpe = rpe
         self.isCompleted = isCompleted

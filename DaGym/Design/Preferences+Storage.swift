@@ -6,6 +6,7 @@ import Foundation
 extension Preferences {
     enum Key {
         static let weightUnit = "weightUnit"
+        static let distanceUnit = "distanceUnit"
         static let effortScale = "effortScale"
         static let defaultRestSeconds = "defaultRestSeconds"
         static let weeklyGoal = "weeklyGoal"

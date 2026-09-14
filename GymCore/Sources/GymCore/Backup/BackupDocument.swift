@@ -130,10 +130,13 @@ public struct BackupPlannedSet: Codable, Sendable {
     public var targetWeightKg: Double?
     public var targetRPE: Double?
     public var targetSeconds: Int?
+    /// Cardio target, canonical metres. Absent in files written before it existed.
+    public var targetDistanceMeters: Double?
 
     public init(
         order: Int, kind: String, targetReps: Int? = nil, targetRepsHigh: Int? = nil,
-        targetWeightKg: Double? = nil, targetRPE: Double? = nil, targetSeconds: Int? = nil
+        targetWeightKg: Double? = nil, targetRPE: Double? = nil, targetSeconds: Int? = nil,
+        targetDistanceMeters: Double? = nil
     ) {
         self.order = order
         self.kind = kind
@@ -142,6 +145,7 @@ public struct BackupPlannedSet: Codable, Sendable {
         self.targetWeightKg = targetWeightKg
         self.targetRPE = targetRPE
         self.targetSeconds = targetSeconds
+        self.targetDistanceMeters = targetDistanceMeters
     }
 }
 
@@ -251,12 +255,14 @@ public struct BackupSetLog: Codable, Sendable, Identifiable {
     public var isCompleted: Bool
     public var completedAt: Date?
     public var prescriptionReason: String
+    /// Treadmill/stair incline for a cardio set. Absent in files written before it existed.
+    public var inclinePercent: Double?
 
     public init(
         id: UUID, order: Int, kind: String, weightKg: Double = 0, reps: Int = 0,
         durationSeconds: Int? = nil, distanceMeters: Double? = nil, assistanceKg: Double? = nil,
         rpe: Double? = nil, isCompleted: Bool = false, completedAt: Date? = nil,
-        prescriptionReason: String = ""
+        prescriptionReason: String = "", inclinePercent: Double? = nil
     ) {
         self.id = id
         self.order = order
@@ -270,6 +276,7 @@ public struct BackupSetLog: Codable, Sendable, Identifiable {
         self.isCompleted = isCompleted
         self.completedAt = completedAt
         self.prescriptionReason = prescriptionReason
+        self.inclinePercent = inclinePercent
     }
 }
 

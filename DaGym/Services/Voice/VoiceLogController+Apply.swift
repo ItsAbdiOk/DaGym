@@ -44,6 +44,9 @@ extension VoiceLogController {
             if let duration = values.durationSeconds {
                 session.exercises[entryIndex].sets[setIndex].durationSeconds = duration
             }
+            if let meters = values.distanceMeters {
+                session.exercises[entryIndex].sets[setIndex].distanceMeters = meters
+            }
             if let assistance = values.assistanceKg {
                 session.exercises[entryIndex].sets[setIndex].assistanceKg = assistance
             }
@@ -58,9 +61,7 @@ extension VoiceLogController {
                 )
             )
             lastSummary = Self.summary(
-                exerciseName: session.exercises[entryIndex].exercise.name,
-                weightKg: session.exercises[entryIndex].sets[setIndex].weightKg,
-                reps: session.exercises[entryIndex].sets[setIndex].reps, unit: target.unit
+                entry: session.exercises[entryIndex], setIndex: setIndex, target: target
             )
         }
 
@@ -69,6 +70,22 @@ extension VoiceLogController {
             Self.undo(snapshots, session: session)
             store?.sync(session: session)
         }))
+    }
+
+    /// The confirmation line for the set just written: distance and time for a run, load × reps
+    /// for anything else.
+    private static func summary(
+        entry: WorkoutExerciseEntry, setIndex: Int, target: VoiceLogWriteTarget
+    ) -> String {
+        let set = entry.sets[setIndex]
+        if entry.isCardio {
+            return cardioSummary(
+                exerciseName: entry.exercise.name, set: set, unit: target.store.preferredDistanceUnit
+            )
+        }
+        return summary(
+            exerciseName: entry.exercise.name, weightKg: set.weightKg, reps: set.reps, unit: target.unit
+        )
     }
 
     /// "Done"/"next": completes the on-deck set as prefilled, no field overrides.

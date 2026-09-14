@@ -199,6 +199,10 @@ extension WorkoutStore {
         let count = setCount ?? previousWorkingSetCount(
             exerciseID: exercise.id, finishedWorkouts: finished
         ) ?? 3
+        if exercise.loggingStyle == .cardio {
+            let entry = cardioAddedEntry(for: exercise, setCount: setCount, facts: facts)
+            return withHistoryStrip(entry, facts: facts)
+        }
         let planned = Array(repeating: workingSet, count: max(1, count))
         let sets = autoFilledSets(
             exerciseID: exercise.id, planned: planned, incrementKg: exercise.incrementKg,
@@ -261,6 +265,11 @@ extension WorkoutStore {
         guard let exerciseModel = routineExercise.exercise else { return nil }
         let info = exerciseInfo(for: exerciseModel, facts: facts)
         let plannedSets = (routineExercise.plannedSets ?? []).sorted { $0.order < $1.order }
+        if info.loggingStyle == .cardio {
+            return cardioEntry(
+                info: info, plannedSets: plannedSets, routineExercise: routineExercise, facts: facts
+            )
+        }
         if facts.weekKind == .deload, !routineExercise.excludeFromProgression {
             return deloadEntry(
                 info: info, plannedSets: plannedSets, routineExercise: routineExercise, facts: facts

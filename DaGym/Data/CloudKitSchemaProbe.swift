@@ -46,7 +46,7 @@ enum CloudKitSchemaProbe {
         context.insert(routineExercise)
         context.insert(PlannedSetModel(
             targetReps: 5, targetRepsHigh: 8, targetWeightKg: 60, targetRPE: 8, targetSeconds: 30,
-            routineExercise: routineExercise
+            targetDistanceMeters: 5000, routineExercise: routineExercise
         ))
 
         let workout = WorkoutModel(
@@ -59,8 +59,8 @@ enum CloudKitSchemaProbe {
         )
         context.insert(workoutExercise)
         context.insert(SetLogModel(
-            durationSeconds: 30, distanceMeters: 100, assistanceKg: 10, rpe: 8, completedAt: now,
-            prescriptionReason: marker, workoutExercise: workoutExercise
+            durationSeconds: 30, distanceMeters: 100, inclinePercent: 2.5, assistanceKg: 10, rpe: 8,
+            completedAt: now, prescriptionReason: marker, workoutExercise: workoutExercise
         ))
 
         context.insert(BodyMeasurementModel(bodyweightKg: 80, source: marker))

@@ -1,3 +1,4 @@
+import GymCore
 import SwiftUI
 
 /// Drag-to-reorder list of the draft's exercises. A superset is one row and moves as a unit,
@@ -105,5 +106,63 @@ struct AddExerciseButton: View {
             }
         }
         .buttonStyle(.dgCard)
+    }
+}
+
+/// One planned cardio set: a kind tag, a target time stepper (minutes) and a target distance
+/// stepper in the lifter's unit. No reps, no weight — a run's plan is how far and how long.
+struct BuilderCardioSetRow: View {
+    @Binding var set: PlannedSetDraft
+
+    @Environment(Preferences.self) private var preferences
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DGSpace.s2) {
+            HStack(spacing: DGSpace.s3) {
+                kindMenu
+                Stepper(value: minutesBinding, in: 0...300, step: 1) {
+                    Text(timeLabel).font(DGFont.body).foregroundStyle(DGColor.ink1)
+                }
+            }
+            Stepper(value: distanceBinding, in: 0...200, step: 0.25) {
+                Text(distanceLabel).font(DGFont.body).foregroundStyle(DGColor.ink1)
+            }
+            .accessibilityLabel("Target distance")
+        }
+    }
+
+    private var kindMenu: some View {
+        Menu {
+            ForEach(SetKind.allCases, id: \.self) { kind in
+                Button(kind.displayName) { set.kind = kind }
+            }
+        } label: {
+            DGTag(text: set.kind.displayName, tint: DGColor.ink2, wash: set.kind.color.opacity(0.22))
+        }
+    }
+
+    private var timeLabel: String {
+        guard let seconds = set.targetSeconds, seconds > 0 else { return "No time target" }
+        return "\(CardioPace.clock(seconds)) target"
+    }
+
+    private var distanceLabel: String {
+        guard let meters = set.targetDistanceMeters, meters > 0 else { return "No distance target" }
+        return "\(preferences.formatDistance(meters: meters)) target"
+    }
+
+    private var minutesBinding: Binding<Int> {
+        Binding(
+            get: { (set.targetSeconds ?? 0) / 60 },
+            set: { set.targetSeconds = $0 > 0 ? $0 * 60 : nil }
+        )
+    }
+
+    /// Steps in the display unit; storage stays metres.
+    private var distanceBinding: Binding<Double> {
+        Binding(
+            get: { preferences.distanceUnit.display(meters: set.targetDistanceMeters ?? 0) },
+            set: { set.targetDistanceMeters = $0 > 0 ? preferences.distanceUnit.toMeters($0) : nil }
+        )
     }
 }

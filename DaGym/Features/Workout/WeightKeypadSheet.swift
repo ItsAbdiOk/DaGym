@@ -36,6 +36,8 @@ struct WeightKeypadSheet: View {
     /// The display unit for a weight field, or `nil` for a plain-number field (reps).
     var unit: WeightUnit?
     var purpose: Purpose = .logSet
+    /// The unit line for a plain-number field: "REPS" by default, "MIN"/"KM"/"%" for cardio.
+    var plainLabel = "REPS"
     var onDone: () -> Void
 
     @State private var buffer = ""
@@ -135,7 +137,7 @@ struct WeightKeypadSheet: View {
     /// The current value formatted in the display unit (kg/lb for weight, plain for reps).
     private var displayValue: String { buffer.isEmpty ? formattedCurrent : buffer }
 
-    private var unitLabel: String { unit?.symbol.uppercased() ?? "REPS" }
+    private var unitLabel: String { unit?.symbol.uppercased() ?? plainLabel }
 
     private var formattedCurrent: String {
         guard let unit else { return WorkoutSession.format(value) }

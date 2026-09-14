@@ -10,10 +10,13 @@ struct PlannedSetDraft {
     var targetWeightKg: Double?
     var targetRPE: Double?
     var targetSeconds: Int?
+    /// Cardio: canonical metres.
+    var targetDistanceMeters: Double?
 
     init(
         kind: SetKind = .working, targetReps: Int? = nil, targetRepsHigh: Int? = nil,
-        targetWeightKg: Double? = nil, targetRPE: Double? = nil, targetSeconds: Int? = nil
+        targetWeightKg: Double? = nil, targetRPE: Double? = nil, targetSeconds: Int? = nil,
+        targetDistanceMeters: Double? = nil
     ) {
         self.kind = kind
         self.targetReps = targetReps
@@ -21,6 +24,18 @@ struct PlannedSetDraft {
         self.targetWeightKg = targetWeightKg
         self.targetRPE = targetRPE
         self.targetSeconds = targetSeconds
+        self.targetDistanceMeters = targetDistanceMeters
+    }
+
+    /// The blank row the builder starts an exercise with: reps for a lift, a target time and
+    /// distance for a run — a cardio slot with "8 reps" on it was the wrong question.
+    static func initial(for style: ExerciseInfo.LoggingStyle) -> PlannedSetDraft {
+        switch style {
+        case .cardio: PlannedSetDraft(kind: .working, targetSeconds: 20 * 60)
+        case .timedHold: PlannedSetDraft(kind: .working, targetSeconds: 30)
+        case .weightReps, .bodyweightReps, .assisted, .weightedBodyweight:
+            PlannedSetDraft(kind: .working, targetReps: 8)
+        }
     }
 }
 
@@ -182,7 +197,7 @@ extension WorkoutStore {
         PlannedSetDraft(
             kind: model.setKind, targetReps: model.targetReps, targetRepsHigh: model.targetRepsHigh,
             targetWeightKg: model.targetWeightKg, targetRPE: model.targetRPE,
-            targetSeconds: model.targetSeconds
+            targetSeconds: model.targetSeconds, targetDistanceMeters: model.targetDistanceMeters
         )
     }
 
@@ -271,7 +286,7 @@ extension WorkoutStore {
                 order: setIndex, kind: setDraft.kind.rawValue, targetReps: setDraft.targetReps,
                 targetRepsHigh: setDraft.targetRepsHigh, targetWeightKg: setDraft.targetWeightKg,
                 targetRPE: setDraft.targetRPE, targetSeconds: setDraft.targetSeconds,
-                routineExercise: routineExercise
+                targetDistanceMeters: setDraft.targetDistanceMeters, routineExercise: routineExercise
             )
             context.insert(plannedSet)
             return plannedSet

@@ -81,10 +81,13 @@ public struct PlanSet: Codable, Sendable {
     public var targetWeightKg: Double?
     public var targetRPE: Double?
     public var targetSeconds: Int?
+    /// Cardio target, canonical metres. Absent in files written before it existed.
+    public var targetDistanceMeters: Double?
 
     public init(
         order: Int, kind: String, targetReps: Int? = nil, targetRepsHigh: Int? = nil,
-        targetWeightKg: Double? = nil, targetRPE: Double? = nil, targetSeconds: Int? = nil
+        targetWeightKg: Double? = nil, targetRPE: Double? = nil, targetSeconds: Int? = nil,
+        targetDistanceMeters: Double? = nil
     ) {
         self.order = order
         self.kind = kind
@@ -93,6 +96,7 @@ public struct PlanSet: Codable, Sendable {
         self.targetWeightKg = targetWeightKg
         self.targetRPE = targetRPE
         self.targetSeconds = targetSeconds
+        self.targetDistanceMeters = targetDistanceMeters
     }
 }
 

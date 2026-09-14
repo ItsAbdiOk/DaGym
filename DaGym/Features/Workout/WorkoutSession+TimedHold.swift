@@ -70,6 +70,7 @@ extension WorkoutSession {
               let si = exercises[ei].sets.firstIndex(where: { $0.id == setID }) else { return }
         exercises[ei].sets[si].durationSeconds = durationSeconds
         exercises[ei].sets[si].isDone = true
+        if exercises[ei].isCardio { exercises[ei].sets[si].adoptCardioTargets() }
         Haptics.setDone()
         startRest(seconds: restSeconds(after: ei, set: si), after: ei, set: si)
     }

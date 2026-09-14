@@ -25,7 +25,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: DGSpace.s6) {
                     header
-                    unitsCard
+                    UnitsSettingsSection()
                     EffortSettingsSection()
                     restTimerCard
                     trainingCard
@@ -60,20 +60,6 @@ struct SettingsView: View {
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             DGIconButton(symbol: "xmark", accessibilityLabel: "Close") { dismiss() }
-        }
-    }
-
-    private var unitsCard: some View {
-        SettingsSection(title: "Units") {
-            SettingsRow(label: "Weight unit") {
-                Picker("Weight unit", selection: binding(\.weightUnit)) {
-                    Text("KG").tag(WeightUnit.kg)
-                    Text("LB").tag(WeightUnit.lb)
-                }
-                .pickerStyle(.segmented)
-                .tint(DGColor.coral)
-                .frame(width: 120)
-            }
         }
     }
 

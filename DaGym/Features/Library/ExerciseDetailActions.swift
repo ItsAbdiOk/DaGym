@@ -126,7 +126,7 @@ struct AddToRoutineSheet: View {
 
     private var newRoutineRow: some View {
         Button {
-            let sets = (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 8) }
+            let sets = (0..<3).map { _ in PlannedSetDraft.initial(for: exercise.loggingStyle) }
             let draft = RoutineExerciseDraft(exerciseID: exercise.id, sets: sets)
             let created = store.saveRoutine(id: nil, name: "\(exercise.name) Day", exercises: [draft])
             finish(routineID: created.id)

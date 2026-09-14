@@ -148,12 +148,18 @@ struct SetEntry: Identifiable, Hashable {
     /// `.assisted` exercises: assistance dialed in on the machine/band, in kg (synced onto
     /// `SetLogModel.assistanceKg`).
     var assistanceKg: Double?
+    /// Cardio: metres covered, the target the plan/previous session set, and the treadmill or
+    /// stair incline. Same split as `durationSeconds`/`targetSeconds` — see `SetEntry+Cardio`.
+    var distanceMeters: Double?
+    var targetDistanceMeters: Double?
+    var inclinePercent: Double?
 
     init(
         id: UUID = UUID(), kind: SetKind = .working, weightKg: Double, reps: Int,
         effort: Effort? = nil, isDone: Bool = false, previousWeightKg: Double? = nil,
         previousReps: Int? = nil, durationSeconds: Int? = nil, targetSeconds: Int? = nil,
-        prescriptionReason: String = "", assistanceKg: Double? = nil
+        prescriptionReason: String = "", assistanceKg: Double? = nil, distanceMeters: Double? = nil,
+        targetDistanceMeters: Double? = nil, inclinePercent: Double? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -167,6 +173,9 @@ struct SetEntry: Identifiable, Hashable {
         self.targetSeconds = targetSeconds
         self.prescriptionReason = prescriptionReason
         self.assistanceKg = assistanceKg
+        self.distanceMeters = distanceMeters
+        self.targetDistanceMeters = targetDistanceMeters
+        self.inclinePercent = inclinePercent
     }
 
     /// Converted for the shared `GymCore` stats helpers. `date` isn't tracked
@@ -181,7 +190,8 @@ struct SetEntry: Identifiable, Hashable {
         GymCore.PerformedSet(
             kind: kind, weightKg: WorkoutStore.loadedWeightKg(self, style: style), reps: reps,
             durationSeconds: durationSeconds,
-            assistanceKg: WorkoutStore.assistanceKg(self, style: style), date: Date()
+            assistanceKg: WorkoutStore.assistanceKg(self, style: style), date: Date(),
+            distanceMeters: style == .cardio ? distanceMeters : nil
         )
     }
 }
@@ -238,6 +248,7 @@ struct WorkoutExerciseEntry: Identifiable, Hashable {
     var doneCount: Int { sets.filter(\.isDone).count }
     var isComplete: Bool { !sets.isEmpty && doneCount == sets.count }
     var isTimed: Bool { exercise.loggingStyle == .timedHold }
+    var isCardio: Bool { exercise.loggingStyle == .cardio }
 }
 
 struct RoutineInfo: Identifiable, Hashable {
@@ -422,6 +433,7 @@ struct DeletedWorkout: Sendable {
         var reps: Int
         var durationSeconds: Int?
         var distanceMeters: Double?
+        var inclinePercent: Double?
         var assistanceKg: Double?
         var rpe: Double?
         var isCompleted: Bool
@@ -473,7 +485,8 @@ struct DeletedWorkout: Sendable {
                     SetLog(
                         id: set.id, order: set.order, kind: set.kind, weightKg: set.weightKg,
                         reps: set.reps, durationSeconds: set.durationSeconds,
-                        distanceMeters: set.distanceMeters, assistanceKg: set.assistanceKg, rpe: set.rpe,
+                        distanceMeters: set.distanceMeters, inclinePercent: set.inclinePercent,
+                        assistanceKg: set.assistanceKg, rpe: set.rpe,
                         isCompleted: set.isCompleted, completedAt: set.completedAt,
                         prescriptionReason: set.prescriptionReason
                     )

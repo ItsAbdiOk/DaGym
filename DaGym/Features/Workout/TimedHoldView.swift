@@ -7,12 +7,15 @@ import SwiftUI
 struct TimedHoldCard: View {
     var exerciseName: String
     var hold: WorkoutSession.TimedHoldState
+    /// A cardio set counts up the same way; only the label changes.
+    var isCardio = false
     var onPauseResume: () -> Void
     var onStop: () -> Void
 
     var body: some View {
         VStack(spacing: DGSpace.s4) {
-            Text("Timed hold · live work timer").dgLabel(DGColor.success)
+            Text(isCardio ? "Cardio · live work timer" : "Timed hold · live work timer")
+                .dgLabel(DGColor.success)
             ring
             controls
         }

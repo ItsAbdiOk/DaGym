@@ -107,7 +107,7 @@ extension PlanSet {
     /// Applies every per-set clamp: an unrecognised `kind` becomes "working"; non-positive rep
     /// targets are dropped and a crossed rep range is swapped back into order; a negative or
     /// non-finite target weight is dropped; `targetRPE` clamps to 1...10; a non-positive
-    /// `targetSeconds` is dropped.
+    /// `targetSeconds` or `targetDistanceMeters` is dropped.
     func sanitised() -> PlanSet {
         var result = self
         if SetKind(rawValue: result.kind) == nil {
@@ -127,6 +127,9 @@ extension PlanSet {
         }
         if let seconds = result.targetSeconds, seconds <= 0 {
             result.targetSeconds = nil
+        }
+        if let meters = result.targetDistanceMeters, meters <= 0 || !meters.isFinite {
+            result.targetDistanceMeters = nil
         }
         return result
     }

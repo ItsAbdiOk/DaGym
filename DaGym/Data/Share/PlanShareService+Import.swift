@@ -183,7 +183,8 @@ extension PlanShareService {
             context.insert(PlannedSetModel(
                 order: set.order, kind: set.kind, targetReps: set.targetReps,
                 targetRepsHigh: set.targetRepsHigh, targetWeightKg: set.targetWeightKg,
-                targetRPE: set.targetRPE, targetSeconds: set.targetSeconds, routineExercise: model
+                targetRPE: set.targetRPE, targetSeconds: set.targetSeconds,
+                targetDistanceMeters: set.targetDistanceMeters, routineExercise: model
             ))
         }
         return model

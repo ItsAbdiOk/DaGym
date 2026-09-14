@@ -54,7 +54,11 @@ extension SetEntry {
             effort: model.rpe.map { Effort(rpe: $0) }, isDone: model.isCompleted,
             durationSeconds: model.isCompleted ? model.durationSeconds : nil,
             targetSeconds: model.isCompleted ? nil : model.durationSeconds,
-            prescriptionReason: model.prescriptionReason, assistanceKg: model.assistanceKg
+            prescriptionReason: model.prescriptionReason, assistanceKg: model.assistanceKg,
+            // `distanceMeters` has the same two meanings as `durationSeconds` — covered, or asked for.
+            distanceMeters: model.isCompleted ? model.distanceMeters : nil,
+            targetDistanceMeters: model.isCompleted ? nil : model.distanceMeters,
+            inclinePercent: model.inclinePercent
         )
     }
 }
@@ -71,6 +75,8 @@ extension SetLogModel {
         // asked for (until then). `SetEntry.init(model:)` reads it back the same way. Without
         // persisting the target here, resuming a timed hold lost the number the timer counts to.
         durationSeconds = entry.durationSeconds ?? (entry.isDone ? nil : entry.targetSeconds)
+        distanceMeters = entry.distanceMeters ?? (entry.isDone ? nil : entry.targetDistanceMeters)
+        inclinePercent = entry.inclinePercent
         rpe = entry.effort?.rpe
         isCompleted = entry.isDone
         assistanceKg = entry.assistanceKg
@@ -400,7 +406,7 @@ extension WorkoutStore {
             .filter { $0.isCompleted && $0.setKind.countsTowardProgression }.count
     }
 
-    private func previousLoggedExercise(
+    func previousLoggedExercise(
         exerciseID: UUID, finishedWorkouts: [WorkoutModel]? = nil
     ) -> (exercise: WorkoutExerciseModel, workout: WorkoutModel)? {
         for workout in finishedWorkouts ?? finishedWorkoutModelsNewestFirst() {
