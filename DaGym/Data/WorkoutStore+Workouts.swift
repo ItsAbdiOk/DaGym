@@ -23,8 +23,25 @@ extension WorkoutStore {
             exercises: entries
         )
         session.workoutID = model.id
+        if let routine { session.routineGlyphs[routine.id] = Self.routineGlyph(routine) }
         session.fillPlaceholderWarmups()
         return session
+    }
+
+    /// `RoutineGlyphInfo` for one routine — shared by `startWorkout`, `appendRoutine`,
+    /// `resumeSession(for:)` and `workoutDetail(id:)`.
+    static func routineGlyph(_ routine: RoutineModel) -> RoutineGlyphInfo {
+        RoutineGlyphInfo(name: routine.name, symbolName: routine.symbolName, tint: routine.tint)
+    }
+
+    /// Looks up every distinct `WorkoutExerciseEntry.routineID` among `entries`, falling back to
+    /// `.deletedRoutine` for one whose routine no longer exists.
+    func routineGlyphs(for entries: [WorkoutExerciseEntry]) -> [UUID: RoutineGlyphInfo] {
+        var result: [UUID: RoutineGlyphInfo] = [:]
+        for routineID in Set(entries.compactMap(\.routineID)) {
+            result[routineID] = fetchRoutineModel(id: routineID).map(Self.routineGlyph) ?? .deletedRoutine
+        }
+        return result
     }
 
     /// Appends a routine's exercises to a running session, built the same way `startWorkout`
@@ -35,6 +52,7 @@ extension WorkoutStore {
     func appendRoutine(id: UUID, to session: WorkoutSession) {
         guard let routine = fetchRoutineModel(id: id) else { return }
         session.exercises.append(contentsOf: buildEntries(from: routine))
+        session.routineGlyphs[routine.id] = Self.routineGlyph(routine)
         session.fillPlaceholderWarmups()
         let title = Self.combinedTitle(session.title, adding: routine.name)
         session.title = title
@@ -162,7 +180,11 @@ extension WorkoutStore {
             buildEntry(
                 routine: routine, routineExercise: routineExercise, weekKind: weekKind,
                 finishedWorkouts: finishedWorkouts
-            ).map { withHistoryStrip($0, finishedWorkouts: finishedWorkouts) }
+            ).map { entry -> WorkoutExerciseEntry in
+                var entry = withHistoryStrip(entry, finishedWorkouts: finishedWorkouts)
+                entry.routineID = routine.id
+                return entry
+            }
         }
     }
 
@@ -427,7 +449,8 @@ extension WorkoutStore {
         let excluded = workout.routineID.flatMap(fetchRoutineModel)?.exercises?
             .contains { $0.exercise?.id == entry.exercise.id && $0.excludeFromProgression } ?? false
         let model = WorkoutExerciseModel(
-            id: entry.id, excludedFromProgression: excluded, exercise: exerciseModel, workout: workout
+            id: entry.id, excludedFromProgression: excluded, routineID: entry.routineID,
+            exercise: exerciseModel, workout: workout
         )
         context.insert(model)
         workout.exercises = (workout.exercises ?? []) + [model]

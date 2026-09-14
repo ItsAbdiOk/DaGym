@@ -2,6 +2,43 @@ import GymCore
 import SwiftData
 import SwiftUI
 
+extension WorkoutDetail {
+    /// One run of consecutive exercises from the same routine, in `exercises`' original order.
+    struct ExerciseGroup: Identifiable {
+        var id: UUID
+        var routineID: UUID?
+        var glyph: RoutineGlyphInfo?
+        var exercises: [WorkoutExerciseEntry]
+    }
+
+    /// `exercises` split into runs by `WorkoutExerciseEntry.routineID`, each carrying that
+    /// routine's glyph. A workout built from one routine (or none — freestyle) always collapses
+    /// to a single ungrouped run with no glyph, so it renders exactly as before multi-routine
+    /// sessions existed — no empty header for the common case. Only a workout that actually
+    /// combined more than one routine (`WorkoutStore.appendRoutine`) gets headers.
+    var exerciseGroups: [ExerciseGroup] {
+        let distinctRoutineIDs = Set(exercises.compactMap(\.routineID))
+        guard distinctRoutineIDs.count > 1 else {
+            return [ExerciseGroup(id: id, routineID: nil, glyph: nil, exercises: exercises)]
+        }
+        var groups: [ExerciseGroup] = []
+        for entry in exercises {
+            if let last = groups.last, last.routineID == entry.routineID {
+                groups[groups.count - 1].exercises.append(entry)
+            } else {
+                let glyph = entry.routineID.map { routineGlyphs[$0] ?? .deletedRoutine }
+                groups.append(
+                    ExerciseGroup(
+                        id: entry.routineID ?? entry.id, routineID: entry.routineID, glyph: glyph,
+                        exercises: [entry]
+                    )
+                )
+            }
+        }
+        return groups
+    }
+}
+
 /// Read-only detail for one finished workout: title, time range, stats and
 /// a card per exercise with its logged sets.
 struct WorkoutDetailView: View {
@@ -21,7 +58,12 @@ struct WorkoutDetailView: View {
                         topRow
                         titleBlock(detail)
                         statRow(detail)
-                        ForEach(detail.exercises) { entry in ExerciseEntryCard(entry: entry) }
+                        ForEach(detail.exerciseGroups) { group in
+                            if let glyph = group.glyph {
+                                groupHeader(glyph)
+                            }
+                            ForEach(group.exercises) { entry in ExerciseEntryCard(entry: entry) }
+                        }
                         if !detail.notes.isEmpty { notesCard(detail) }
                     }
                     .padding(.horizontal, DGSpace.s4)
@@ -72,6 +114,16 @@ struct WorkoutDetailView: View {
             StatTile(value: preferences.formatWeight(kg: detail.volumeKg), label: "Volume").dgCard(radius: 14)
             StatTile(value: "\(detail.setsDone)", label: "Sets").dgCard(radius: 14)
             StatTile(value: "\(detail.prCount)", label: "PRs", tint: DGColor.prGoldText).dgCard(radius: 14)
+        }
+    }
+
+    private func groupHeader(_ glyph: RoutineGlyphInfo) -> some View {
+        HStack(spacing: DGSpace.s2) {
+            RoutineGlyph(symbolName: glyph.symbolName, tint: glyph.tint, size: 28)
+            Text(glyph.name)
+                .font(DGFont.title3)
+                .textCase(.uppercase)
+                .foregroundStyle(DGColor.ink2)
         }
     }
 

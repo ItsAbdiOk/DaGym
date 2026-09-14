@@ -75,6 +75,33 @@ struct SeedDedupeTests {
         #expect(pushA.exercises?.first?.exercise?.seedID == "Barbell_Bench_Press_-_Medium_Grip")
     }
 
+    /// `ExerciseNoteModel.exerciseID` is a bare id, not a SwiftData relationship (CloudKit-legal,
+    /// like the PR cache) — so it isn't covered by SwiftData deleting `duplicate`'s relationships
+    /// and needs its own re-point in `ExerciseSeeder.fold`. Before that fix, a note left on
+    /// whichever copy lost the fold vanished the moment the loser was deleted.
+    @Test("a note on a folded exercise's losing copy survives, re-pointed at the survivor")
+    func foldedExerciseRepointsNotes() throws {
+        let (store, context) = try seededStore()
+        let bench = try #require(
+            store.exercises().first { $0.seedID == "Barbell_Bench_Press_-_Medium_Grip" }
+        )
+        let duplicate = ExerciseModel(
+            seedID: bench.seedID, name: bench.name, primaryMuscles: bench.primary.map(\.rawValue),
+            equipment: bench.equipment, loggingStyle: bench.loggingStyle.rawKey,
+            createdAt: Date().addingTimeInterval(60)
+        )
+        context.insert(duplicate)
+        let note = ExerciseNoteModel(exerciseID: duplicate.id, text: "Elbows tucked", scope: "always")
+        context.insert(note)
+        try context.save()
+
+        let folded = store.dedupeSeededRows()
+        #expect(folded > 0)
+        #expect(store.fetchExerciseModel(id: duplicate.id) == nil)
+        #expect(note.exerciseID == bench.id)
+        #expect(store.exerciseNotes(exerciseID: bench.id).contains { $0.text == "Elbows tucked" })
+    }
+
     @Test("dedupe with nothing to fold is a no-op")
     func dedupeIsNoOpWhenClean() throws {
         let (store, context) = try seededStore()

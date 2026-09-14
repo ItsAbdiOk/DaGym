@@ -68,7 +68,8 @@ enum ExerciseSeeder {
 
     /// Folds rows that share a `seedID` (two devices each seeded before the other's rows synced)
     /// into one survivor — the oldest, by `id` on a tie so every device picks the same one — and
-    /// re-points routine slots, workout entries and PR rows at it. Returns the number removed.
+    /// re-points routine slots, workout entries, exercise notes and PR rows at it. Returns the
+    /// number removed.
     @discardableResult
     static func dedupe(in context: ModelContext) -> Int {
         let models = (try? context.fetch(FetchDescriptor<ExerciseModel>())) ?? []
@@ -106,6 +107,14 @@ enum ExerciseSeeder {
             FetchDescriptor<PersonalRecordModel>(predicate: #Predicate { $0.exerciseID == duplicateID })
         )) ?? []
         for record in records { record.exerciseID = survivor.id }
+        // `ExerciseNoteModel` holds `exerciseID` as a bare id, not a SwiftData relationship (see
+        // its doc comment), so it isn't covered by cascading through `duplicate`'s relationships
+        // above — without this, a "next time"/"always" note on the losing copy would silently
+        // stop resolving the moment `duplicate` is deleted below.
+        let notes = (try? context.fetch(
+            FetchDescriptor<ExerciseNoteModel>(predicate: #Predicate { $0.exerciseID == duplicateID })
+        )) ?? []
+        for note in notes { note.exerciseID = survivor.id }
         survivor.isFavorite = survivor.isFavorite || duplicate.isFavorite
         if survivor.notes.isEmpty { survivor.notes = duplicate.notes }
         context.delete(duplicate)

@@ -25,7 +25,12 @@ private struct TodayWorkoutWidgetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             label
-            routineName
+            HStack(spacing: 8) {
+                if let symbolName = snapshot.routineSymbolName {
+                    RoutineWidgetGlyph(symbolName: symbolName, tint: snapshot.routineTint, size: 26)
+                }
+                routineName
+            }
             Spacer(minLength: 0)
             HStack(alignment: .lastTextBaseline, spacing: 4) {
                 Text("\(snapshot.exerciseCount)")

@@ -68,7 +68,7 @@ extension WorkoutExerciseEntry {
         self.init(
             id: model.id, exercise: exercise, sets: sets, supersetGroup: model.supersetGroup,
             note: model.note.isEmpty ? nil : model.note, wasSubstitution: model.wasSubstitution,
-            wasPlannedDeload: model.wasPlannedDeload
+            wasPlannedDeload: model.wasPlannedDeload, routineID: model.routineID
         )
     }
 }

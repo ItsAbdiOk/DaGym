@@ -1,8 +1,9 @@
 import SwiftUI
 import WidgetKit
 
-/// Dynamic Island presentations for the rest timer: compact leading = coral dot, compact trailing
-/// = countdown; minimal = ring only; expanded = ring + countdown + next-set label + buttons.
+/// Dynamic Island presentations for the rest timer: compact leading = routine glyph, compact
+/// trailing = countdown; minimal = ring only; expanded = ring + countdown + next-set label +
+/// buttons.
 enum RestDynamicIsland {
     static func expandedLeading(_ state: RestActivityAttributes.ContentState) -> some View {
         RestRing(state: state).frame(width: 34, height: 34)
@@ -24,8 +25,8 @@ enum RestDynamicIsland {
         }
     }
 
-    static func compactLeading() -> some View {
-        Circle().fill(WidgetPalette.coral).frame(width: 10, height: 10)
+    static func compactLeading(_ attributes: RestActivityAttributes) -> some View {
+        RoutineWidgetGlyph(symbolName: attributes.routineSymbolName, tint: attributes.routineTint, size: 20)
     }
 
     static func compactTrailing(_ state: RestActivityAttributes.ContentState) -> some View {

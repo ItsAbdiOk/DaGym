@@ -32,7 +32,9 @@ struct RestLockScreenView: View {
     private var header: some View {
         HStack {
             HStack(spacing: 6) {
-                RoundedRectangle(cornerRadius: 3).fill(WidgetPalette.coral).frame(width: 10, height: 10)
+                RoutineWidgetGlyph(
+                    symbolName: attributes.routineSymbolName, tint: attributes.routineTint, size: 16
+                )
                 Text("DAGYM · REST")
                     .font(.caption2.weight(.bold))
                     .tracking(1.2)

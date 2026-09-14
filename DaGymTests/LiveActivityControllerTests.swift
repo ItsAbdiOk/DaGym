@@ -13,6 +13,7 @@ private final class FakeActivityBackend: RestActivityBackend {
     private(set) var hasActivity = false
     private(set) var staleCleanups = 0
     private(set) var started: [RestActivityAttributes.ContentState] = []
+    private(set) var startedAttributes: [RestActivityAttributes] = []
     private(set) var updated: [RestActivityAttributes.ContentState] = []
     private(set) var ended: [RestActivityDismissal] = []
 
@@ -27,6 +28,7 @@ private final class FakeActivityBackend: RestActivityBackend {
     func start(attributes: RestActivityAttributes, state: RestActivityAttributes.ContentState) {
         hasActivity = true
         started.append(state)
+        startedAttributes.append(attributes)
     }
 
     func update(state: RestActivityAttributes.ContentState) {
@@ -174,6 +176,35 @@ struct LiveActivityControllerTests {
         let expected = "\(WeightUnit.lb.format(kg: 80)) lb × 8"
         #expect(harness.backend.started.first?.nextSetLabel == expected)
         #expect(harness.center.addedRequests.first?.content.body == "Next: \(expected)")
+        harness.controller.endNow()
+    }
+
+    @Test("a rest activity starts with the on-deck exercise's own routine glyph")
+    func startsWithRoutineGlyph() async {
+        let harness = Harness()
+        let routineID = UUID()
+        harness.session.exercises[0].routineID = routineID
+        harness.session.routineGlyphs[routineID] = RoutineGlyphInfo(
+            name: "Push A", symbolName: "bolt", tint: "violet"
+        )
+
+        harness.session.startRest(seconds: 90, after: 0, set: 0)
+        await harness.awaitScheduling()
+
+        #expect(harness.backend.startedAttributes.first?.routineSymbolName == "bolt")
+        #expect(harness.backend.startedAttributes.first?.routineTint == "violet")
+        harness.controller.endNow()
+    }
+
+    @Test("a freestyle rest activity falls back to the default dumbbell/coral glyph")
+    func fallsBackToDefaultGlyphWithNoRoutine() async {
+        let harness = Harness()
+
+        harness.session.startRest(seconds: 90, after: 0, set: 0)
+        await harness.awaitScheduling()
+
+        #expect(harness.backend.startedAttributes.first?.routineSymbolName == "dumbbell")
+        #expect(harness.backend.startedAttributes.first?.routineTint == "coral")
         harness.controller.endNow()
     }
 

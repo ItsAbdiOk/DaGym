@@ -152,6 +152,7 @@ extension WorkoutStore {
         // re-querying the whole finished-workout list.
         let finishedWorkouts = finishedWorkoutModelsNewestFirst()
         session.exercises = session.exercises.map { withHistoryStrip($0, finishedWorkouts: finishedWorkouts) }
+        session.routineGlyphs = routineGlyphs(for: session.exercises)
         return session
     }
 
@@ -202,7 +203,7 @@ extension WorkoutStore {
                 id: exercise.id, order: exercise.order, supersetGroup: exercise.supersetGroup,
                 note: exercise.note, wasSubstitution: exercise.wasSubstitution,
                 wasPlannedDeload: exercise.wasPlannedDeload,
-                excludedFromProgression: exercise.excludedFromProgression,
+                excludedFromProgression: exercise.excludedFromProgression, routineID: exercise.routineID,
                 exercise: exercise.exerciseID.flatMap(fetchExerciseModel), workout: workout
             )
             context.insert(exerciseModel)
@@ -244,7 +245,7 @@ extension WorkoutStore {
         return WorkoutDetail(
             id: model.id, title: model.title, startedAt: model.startedAt, endedAt: model.endedAt,
             exercises: entries, notes: model.notes, isBackfilled: model.isBackfilled,
-            prCount: prCount(for: model.id)
+            prCount: prCount(for: model.id), routineGlyphs: routineGlyphs(for: entries)
         )
     }
 
@@ -402,6 +403,7 @@ struct DeletedWorkout: Sendable {
         var wasSubstitution: Bool
         var wasPlannedDeload: Bool
         var excludedFromProgression: Bool
+        var routineID: UUID?
         var exerciseID: UUID?
         var sets: [SetLog]
     }
@@ -452,6 +454,7 @@ struct DeletedWorkout: Sendable {
                 note: exercise.note, wasSubstitution: exercise.wasSubstitution,
                 wasPlannedDeload: exercise.wasPlannedDeload,
                 excludedFromProgression: exercise.excludedFromProgression,
+                routineID: exercise.routineID,
                 exerciseID: exercise.exercise?.id,
                 sets: (exercise.sets ?? []).sorted { $0.order < $1.order }.map { set in
                     SetLog(

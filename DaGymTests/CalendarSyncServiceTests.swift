@@ -109,7 +109,9 @@ struct CalendarSyncServiceTests {
 
         // The notes and deep-link URL `RootView.handleOpenURL` relies on to start the right
         // routine from a calendar tap — dropped by a fake that only kept title/start/end.
-        let mondayKey = DateKey.string(for: Self.monday(), calendar: Self.calendar())
+        let mondayKey = CalendarSyncService.eventKey(
+            date: Self.monday(), routineID: pushA.id, calendar: Self.calendar()
+        )
         let pushAEventID = try #require(eventIDs[mondayKey])
         let pushAEvent = try #require(fake.events[pushAEventID])
         #expect(pushAEvent.notes == "Bench Press\nOverhead Press")
@@ -145,7 +147,13 @@ struct CalendarSyncServiceTests {
         schedule.days[.monday] = pushA.id
 
         let first = try await service.sync(request(schedule: schedule, routines: [pushA]))
-        let originalEventID = try #require(first[DateKey.string(for: monday, calendar: Self.calendar())])
+        let mondayKey = CalendarSyncService.eventKey(
+            date: monday, routineID: pushA.id, calendar: Self.calendar()
+        )
+        let thursdayKey = CalendarSyncService.eventKey(
+            date: thursday, routineID: pushA.id, calendar: Self.calendar()
+        )
+        let originalEventID = try #require(first[mondayKey])
 
         schedule.moved(date: monday, to: nil, calendar: Self.calendar())
         schedule.moved(date: thursday, to: pushA.id, calendar: Self.calendar())
@@ -155,8 +163,8 @@ struct CalendarSyncServiceTests {
         )
 
         #expect(fake.deletedIDs == [originalEventID])
-        #expect(second[DateKey.string(for: thursday, calendar: Self.calendar())] != nil)
-        #expect(second[DateKey.string(for: monday, calendar: Self.calendar())] == nil)
+        #expect(second[thursdayKey] != nil)
+        #expect(second[mondayKey] == nil)
     }
 
     @Test("clearing a scheduled day deletes its event")
@@ -177,5 +185,59 @@ struct CalendarSyncServiceTests {
         #expect(second.isEmpty)
         #expect(fake.events.isEmpty)
         #expect(fake.deletedIDs.count == 1)
+    }
+
+    @Test("a day with two routines produces two events, and re-syncing is idempotent")
+    func multiRoutineDayCreatesOneEventPerRoutine() async throws {
+        let fake = FakeEventStore()
+        let service = CalendarSyncService(eventStore: fake)
+        let pushA = routine(name: "Push A")
+        let arms = routine(name: "Arms")
+        var schedule = WeeklySchedule()
+        schedule.addRoutine(pushA.id, to: .monday)
+        schedule.addRoutine(arms.id, to: .monday)
+
+        let first = try await service.sync(request(schedule: schedule, routines: [pushA, arms]))
+        #expect(first.count == 2)
+        #expect(fake.events.count == 2)
+        #expect(Set(fake.events.values.map(\.title)) == ["DaGym · Push A", "DaGym · Arms"])
+
+        // Re-syncing the same schedule must not create or delete anything.
+        let second = try await service.sync(
+            request(schedule: schedule, routines: [pushA, arms], existingEventIDs: first)
+        )
+        #expect(second == first)
+        #expect(fake.events.count == 2)
+        #expect(fake.deletedIDs.isEmpty)
+    }
+
+    @Test("removing one routine from a multi-routine day deletes exactly its event")
+    func removingOneRoutineFromMultiRoutineDayDeletesOnlyItsEvent() async throws {
+        let fake = FakeEventStore()
+        let service = CalendarSyncService(eventStore: fake)
+        let pushA = routine(name: "Push A")
+        let arms = routine(name: "Arms")
+        var schedule = WeeklySchedule()
+        schedule.addRoutine(pushA.id, to: .monday)
+        schedule.addRoutine(arms.id, to: .monday)
+
+        let first = try await service.sync(request(schedule: schedule, routines: [pushA, arms]))
+        let pushAKey = CalendarSyncService.eventKey(
+            date: Self.monday(), routineID: pushA.id, calendar: Self.calendar()
+        )
+        let armsKey = CalendarSyncService.eventKey(
+            date: Self.monday(), routineID: arms.id, calendar: Self.calendar()
+        )
+        let armsEventID = try #require(first[armsKey])
+
+        schedule.removeRoutine(arms.id, from: .monday)
+        let second = try await service.sync(
+            request(schedule: schedule, routines: [pushA, arms], existingEventIDs: first)
+        )
+
+        #expect(fake.deletedIDs == [armsEventID])
+        #expect(second[pushAKey] != nil)
+        #expect(second[armsKey] == nil)
+        #expect(fake.events.count == 1)
     }
 }

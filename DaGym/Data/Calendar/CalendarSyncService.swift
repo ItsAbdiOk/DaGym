@@ -98,11 +98,19 @@ struct ScheduleSyncRequest {
     var calendar: Calendar = .current
 }
 
-/// Mirrors a `WeeklySchedule` onto a dedicated "DaGym" calendar: one event
-/// per planned session, keyed by calendar day so re-syncing is idempotent
-/// and moving or clearing a day updates or removes just that event.
+/// Mirrors a `WeeklySchedule` onto a dedicated "DaGym" calendar: one event per planned
+/// routine, keyed by calendar day + routine id so re-syncing is idempotent and moving,
+/// clearing, or removing one routine from a multi-routine day updates or removes just its
+/// event, leaving the day's other routines' events untouched.
 struct CalendarSyncService: Sendable {
     static let calendarName = "DaGym"
+
+    /// The `existingEventIDs` key for one routine planned on one day. Composite (rather than
+    /// just the day) so a day with several routines gets one event each instead of one merged
+    /// event, and so removing a single routine from that day only ever deletes its own key.
+    static func eventKey(date: Date, routineID: UUID, calendar: Calendar) -> String {
+        "\(DateKey.string(for: date, calendar: calendar))#\(routineID.uuidString)"
+    }
 
     var eventStore: EventStoring
 
@@ -123,7 +131,7 @@ struct CalendarSyncService: Sendable {
         var updatedEventIDs: [String: String] = [:]
         for (date, routineID) in planned {
             guard let routine = routinesByID[routineID] else { continue }
-            let key = DateKey.string(for: date, calendar: request.calendar)
+            let key = Self.eventKey(date: date, routineID: routineID, calendar: request.calendar)
             let draft = eventDraft(for: routine, on: date, request: request)
             let eventID = try eventStore.upsertEvent(
                 id: request.existingEventIDs[key], draft: draft, calendarID: calendarID

@@ -19,6 +19,10 @@ final class WorkoutSession {
     var workoutID: UUID?
     /// Free-text note for the whole session, persisted to `WorkoutModel.notes`.
     var notes: String = ""
+    /// Glyph for every routine feeding this session (`WorkoutExerciseEntry.routineID`), set by
+    /// `WorkoutStore` alongside `exercises` when the session is built. Used to show the on-deck
+    /// exercise's own routine glyph on the rest-timer Live Activity.
+    var routineGlyphs: [UUID: RoutineGlyphInfo] = [:]
 
     /// Wall clock every timer derives from, so a test can jump time and the app survives being
     /// suspended: rest and hold state store dates, never accumulated ticks.
@@ -53,6 +57,7 @@ final class WorkoutSession {
     private var restExerciseName = ""
     private var restSetNumber = 0
     private var restSetCount = 0
+    private var restRoutineGlyph: RoutineGlyphInfo?
     /// Every set completed at least once this session, so un-ticking a row to fix its reps and
     /// re-ticking it doesn't restart a rest that's still running.
     private var everCompletedSetIDs: Set<UUID> = []
@@ -159,6 +164,7 @@ final class WorkoutSession {
         restExerciseName = ex.exercise.name
         restSetNumber = setIndex + 1
         restSetCount = ex.sets.count
+        restRoutineGlyph = ex.routineID.flatMap { routineGlyphs[$0] }
         onRestStateChange?(restState(isEnded: seconds == 0, isSkipped: seconds == 0))
     }
 
@@ -191,7 +197,9 @@ final class WorkoutSession {
             remaining: restRemaining, total: restTotal,
             endDate: restEndDate ?? now(), workoutTitle: title, exerciseName: restExerciseName,
             setNumber: restSetNumber, setCount: restSetCount, nextWeightKg: restNextWeightKg,
-            nextReps: restNextReps, fallbackNextLabel: restNextLabel, isEnded: isEnded, isSkipped: isSkipped
+            nextReps: restNextReps, fallbackNextLabel: restNextLabel, isEnded: isEnded, isSkipped: isSkipped,
+            routineSymbolName: restRoutineGlyph?.symbolName ?? "dumbbell",
+            routineTint: restRoutineGlyph?.tint ?? "coral"
         )
     }
 

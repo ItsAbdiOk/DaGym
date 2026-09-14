@@ -17,6 +17,13 @@ final class WorkoutExerciseModel {
     /// rehab or accessory session that never becomes a progression baseline or ghost, even
     /// if the routine flag is edited later.
     var excludedFromProgression: Bool = false
+    /// The routine this exercise was built from, stamped once when the row is first persisted
+    /// (`WorkoutStore.sync(session:)`, mirroring `excludedFromProgression`) — a later edit to
+    /// the routine, or the routine being deleted, leaves this workout's history as it was
+    /// logged. Nil for a freestyle exercise or one with no routine slot. Lets a session built
+    /// from more than one routine (`WorkoutStore.appendRoutine`) group its exercises in
+    /// `WorkoutDetailView` and show the right routine's glyph on the rest-timer Live Activity.
+    var routineID: UUID?
 
     @Relationship(inverse: \ExerciseModel.workoutExercises)
     var exercise: ExerciseModel?
@@ -28,7 +35,7 @@ final class WorkoutExerciseModel {
     init(
         id: UUID = UUID(), order: Int = 0, supersetGroup: Int? = nil, note: String = "",
         wasSubstitution: Bool = false, wasPlannedDeload: Bool = false,
-        excludedFromProgression: Bool = false,
+        excludedFromProgression: Bool = false, routineID: UUID? = nil,
         exercise: ExerciseModel? = nil, workout: WorkoutModel? = nil
     ) {
         self.id = id
@@ -38,6 +45,7 @@ final class WorkoutExerciseModel {
         self.wasSubstitution = wasSubstitution
         self.wasPlannedDeload = wasPlannedDeload
         self.excludedFromProgression = excludedFromProgression
+        self.routineID = routineID
         self.exercise = exercise
         self.workout = workout
     }

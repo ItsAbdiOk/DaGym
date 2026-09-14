@@ -169,12 +169,19 @@ struct WorkoutExerciseEntry: Identifiable, Hashable {
     /// True when this exercise was prescribed as part of a program's planned deload week
     /// (plan.md §6.5) — excluded as the baseline future progression builds from.
     var wasPlannedDeload = false
+    /// The routine this exercise was built from, stamped once when the entry is created
+    /// (`WorkoutStore.buildEntries(from:)`) and persisted on `WorkoutExerciseModel.routineID`.
+    /// Nil for a freestyle exercise or one added mid-workout with no routine slot. Multiple
+    /// routines can feed one session (`WorkoutStore.appendRoutine`); this is what lets
+    /// `WorkoutDetailView` group a "Push A + Arms" workout by the routine each exercise came
+    /// from, and the Live Activity show the on-deck exercise's own routine glyph.
+    var routineID: UUID?
 
     init(
         id: UUID = UUID(), exercise: ExerciseInfo, sets: [SetEntry], supersetGroup: Int? = nil,
         note: String? = nil, whyTitle: String? = nil, whyBody: String? = nil,
         whyKind: PrescriptionReason.Kind? = nil, lastSessions: [String] = [], sparkline: [Double] = [],
-        wasSubstitution: Bool = false, wasPlannedDeload: Bool = false
+        wasSubstitution: Bool = false, wasPlannedDeload: Bool = false, routineID: UUID? = nil
     ) {
         self.id = id
         self.exercise = exercise
@@ -188,6 +195,7 @@ struct WorkoutExerciseEntry: Identifiable, Hashable {
         self.sparkline = sparkline
         self.wasSubstitution = wasSubstitution
         self.wasPlannedDeload = wasPlannedDeload
+        self.routineID = routineID
     }
 
     var doneCount: Int { sets.filter(\.isDone).count }
@@ -280,11 +288,15 @@ struct WorkoutDetail: Identifiable {
     var notes: String
     var isBackfilled: Bool
     var prCount: Int
+    /// Glyph + name for every distinct `WorkoutExerciseEntry.routineID` this workout's exercises
+    /// carry, for `WorkoutDetailView`'s group headers. Empty for a single-routine or freestyle
+    /// workout — see `WorkoutDetail.exerciseGroups`.
+    var routineGlyphs: [UUID: RoutineGlyphInfo]
 
     init(
         id: UUID = UUID(), title: String, startedAt: Date, endedAt: Date? = nil,
         exercises: [WorkoutExerciseEntry] = [], notes: String = "", isBackfilled: Bool = false,
-        prCount: Int = 0
+        prCount: Int = 0, routineGlyphs: [UUID: RoutineGlyphInfo] = [:]
     ) {
         self.id = id
         self.title = title
@@ -294,6 +306,7 @@ struct WorkoutDetail: Identifiable {
         self.notes = notes
         self.isBackfilled = isBackfilled
         self.prCount = prCount
+        self.routineGlyphs = routineGlyphs
     }
 
     var durationMinutes: Int {

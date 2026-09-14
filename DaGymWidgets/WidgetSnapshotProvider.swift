@@ -31,6 +31,7 @@ struct WidgetSnapshotProvider: TimelineProvider {
 
     private static let placeholderSnapshot = WidgetSnapshot(
         routineName: "Push Day A", exerciseCount: 5, streakWeeks: 3,
-        trainedDays: [true, true, false, true, true, false, false], updatedAt: .now
+        trainedDays: [true, true, false, true, true, false, false], updatedAt: .now,
+        routineSymbolName: "dumbbell", routineTint: "coral"
     )
 }

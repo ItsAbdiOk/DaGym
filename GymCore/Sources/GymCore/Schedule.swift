@@ -185,16 +185,15 @@ public struct WeeklySchedule: Codable, Hashable, Sendable {
     }
 
     /// Every planned session from `startDate` for `days` calendar days
-    /// (inclusive of `startDate`), in date order. Rest days are omitted.
-    /// Feeds calendar sync, which upserts one event per entry keyed by the
-    /// day's first routine.
+    /// (inclusive of `startDate`), in date order. Rest days are omitted. A day with more than
+    /// one routine planned produces one entry per routine, in that day's merge order — calendar
+    /// sync upserts one event per entry, so a "Push A + Arms" day gets two events, not one.
     public func plannedSessions(
         from startDate: Date, days: Int, calendar: Calendar = .current
     ) -> [(date: Date, routineID: UUID)] {
-        (0..<max(0, days)).compactMap { offset -> (date: Date, routineID: UUID)? in
-            guard let date = calendar.date(byAdding: .day, value: offset, to: startDate) else { return nil }
-            guard let routineID = routineID(on: date, calendar: calendar) else { return nil }
-            return (date, routineID)
+        (0..<max(0, days)).flatMap { offset -> [(date: Date, routineID: UUID)] in
+            guard let date = calendar.date(byAdding: .day, value: offset, to: startDate) else { return [] }
+            return routineIDs(on: date, calendar: calendar).map { (date, $0) }
         }
     }
 

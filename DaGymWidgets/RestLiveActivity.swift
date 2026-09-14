@@ -23,7 +23,7 @@ struct RestLiveActivity: Widget {
                     RestDynamicIsland.expandedBottom(context.state)
                 }
             } compactLeading: {
-                RestDynamicIsland.compactLeading()
+                RestDynamicIsland.compactLeading(context.attributes)
             } compactTrailing: {
                 RestDynamicIsland.compactTrailing(context.state)
             } minimal: {

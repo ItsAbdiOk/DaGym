@@ -18,6 +18,9 @@ struct RestState {
     var fallbackNextLabel: String
     var isEnded: Bool
     var isSkipped: Bool
+    /// The on-deck exercise's routine glyph — see `RestActivityAttributes.routineSymbolName`.
+    var routineSymbolName: String = "dumbbell"
+    var routineTint: String = "coral"
 
     /// "82.5 kg × 8" / "180 lb × 8" when the next step is a plain weight × reps set, else the
     /// session's own fallback text ("Next Bench Press" / "Last set done").
@@ -140,7 +143,8 @@ final class RestActivityController {
             backend.update(state: content)
         } else {
             let attributes = RestActivityAttributes(
-                workoutTitle: state.workoutTitle, exerciseName: state.exerciseName
+                workoutTitle: state.workoutTitle, exerciseName: state.exerciseName,
+                routineSymbolName: state.routineSymbolName, routineTint: state.routineTint
             )
             backend.start(attributes: attributes, state: content)
         }

@@ -103,6 +103,22 @@ struct ScheduleTests {
         #expect(sessions.map(\.routineID) == [pushA, pullB])
     }
 
+    @Test("a day with more than one routine contributes one planned session per routine")
+    func plannedSessionsExpandMultiRoutineDays() {
+        let calendar = Self.makeCalendar(mondayFirst: true)
+        let pushA = UUID()
+        let arms = UUID()
+        let monday = Self.referenceMonday()
+        var schedule = WeeklySchedule()
+        schedule.addRoutine(pushA, to: .monday)
+        schedule.addRoutine(arms, to: .monday)
+
+        let sessions = schedule.plannedSessions(from: monday, days: 1, calendar: calendar)
+        #expect(sessions.count == 2)
+        #expect(sessions.map(\.routineID) == [pushA, arms])
+        #expect(sessions.allSatisfy { calendar.isDate($0.date, inSameDayAs: monday) })
+    }
+
     @Test("DateKey round trips through Calendar components")
     func dateKeyRoundTrip() {
         let calendar = Self.makeCalendar(mondayFirst: true)

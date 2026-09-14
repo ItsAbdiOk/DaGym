@@ -51,7 +51,7 @@ struct WidgetSnapshotWriter {
         return WidgetSnapshot(
             routineName: routine?.name, exerciseCount: routine?.exercises.count ?? 0,
             streakWeeks: streak.current, trainedDays: trainedDays(dates: dates, calendar: calendar, now: now),
-            updatedAt: now
+            updatedAt: now, routineSymbolName: routine?.symbolName, routineTint: routine?.tint
         )
     }
 
@@ -69,5 +69,6 @@ extension WidgetSnapshot {
     func sameContent(as other: WidgetSnapshot) -> Bool {
         routineName == other.routineName && exerciseCount == other.exerciseCount
             && streakWeeks == other.streakWeeks && trainedDays == other.trainedDays
+            && routineSymbolName == other.routineSymbolName && routineTint == other.routineTint
     }
 }

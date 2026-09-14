@@ -11,6 +11,11 @@ struct WidgetSnapshot: Codable, Equatable {
     /// The last 7 calendar days, oldest first. `true` means a workout was finished that day.
     var trainedDays: [Bool]
     var updatedAt: Date
+    /// Today's routine's glyph (SF Symbol name + `RoutineTint` raw value — see `RoutineGlyph` in
+    /// the app target, which this widget can't import). Optional so a snapshot written by an
+    /// older app build still decodes here, and nil on a rest day (no `routineName` either).
+    var routineSymbolName: String?
+    var routineTint: String?
 
     static let empty = WidgetSnapshot(
         routineName: nil, exerciseCount: 0, streakWeeks: 0,

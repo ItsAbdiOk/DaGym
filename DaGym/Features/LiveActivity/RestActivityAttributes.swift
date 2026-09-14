@@ -21,4 +21,11 @@ struct RestActivityAttributes: ActivityAttributes {
 
     var workoutTitle: String
     var exerciseName: String
+    /// The on-deck exercise's routine glyph (SF Symbol name + `RoutineTint` raw value) as of
+    /// when this rest activity started. Attributes are fixed for the life of an Activity — a
+    /// later rest in a session built from more than one routine (`WorkoutStore.appendRoutine`)
+    /// keeps showing the glyph the activity started with rather than switching mid-workout.
+    /// "dumbbell"/"coral" for a freestyle session with no routine.
+    var routineSymbolName: String
+    var routineTint: String
 }
