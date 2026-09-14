@@ -15,11 +15,12 @@ extension WorkoutStore {
         guard let workoutID = session.workoutID, let workout = fetchWorkoutModel(id: workoutID) else {
             return WorkoutSummary(durationSeconds: 0, volumeKg: 0, setsDone: 0, prs: [], musclesHit: [:])
         }
-        // A live session is finished exactly once: a second call (double-tap, re-entrant sheet)
-        // would otherwise re-run progression with this session now inside its own baseline and
-        // burn a second stall. Backfills carry their end date from `startBackfill`, so they are
-        // recognised by `isBackfilled` rather than by a nil `endedAt`.
-        if workout.endedAt != nil, !workout.isBackfilled {
+        // A session is finished exactly once: a second call (double-tap, re-entrant sheet) would
+        // otherwise re-run progression with this session now inside its own baseline and burn a
+        // second stall. A backfill used to be exempt from this guard, because `startBackfill`
+        // stamped its `endedAt` up front and there was no other way to tell it from a finished
+        // one; it no longer does, so `endedAt` alone is the answer for every session.
+        if workout.endedAt != nil {
             return summary(for: workout, session: session, prs: [], achievements: [])
         }
         // Computed with this session still excluded from `exerciseHistory` (its own `endedAt`
@@ -30,10 +31,15 @@ extension WorkoutStore {
         persistProgression(session: session)
         pruneUnfinishedRows(of: workout)
         let now = Date()
-        // A backfilled workout keeps the `date + duration` end it was started with; only a live
-        // session ends now.
-        let endedAt = workout.isBackfilled ? (workout.endedAt ?? now) : now
+        let endedAt = Self.endDate(for: workout, session: session, now: now)
         workout.endedAt = endedAt
+        // The sets were stamped before the workout had an end; re-clamp them into the window it
+        // has now, so `completedAt` always lands inside `[startedAt, endedAt]` (which is what
+        // recovery decays from).
+        for setModel in (workout.exercises ?? []).flatMap({ $0.sets ?? [] }) {
+            guard let completedAt = setModel.completedAt else { continue }
+            setModel.completedAt = Self.completionDate(completedAt, in: workout)
+        }
         let prs = evaluatePRs(session: session, workout: workout, unit: unit)
         let earnedAchievements = evaluateMilestones(
             for: workout, weeklyGoal: weeklyGoal, calendar: calendar, unit: unit
@@ -52,16 +58,30 @@ extension WorkoutStore {
     /// History only ever holds what was actually done: an unticked planned row, and an exercise
     /// left with no rows, are dropped here — in `finish`, not `sync`, so an in-progress session
     /// keeps its planned rows for resume. The `WorkoutModel` itself stays even when it empties.
+    ///
+    /// A pruned exercise's *note* survives onto the workout's own notes. "Skipped, left shoulder
+    /// pinching" is exactly the note worth keeping, and it was thrown away with the row.
     private func pruneUnfinishedRows(of workout: WorkoutModel) {
         for exerciseModel in workout.exercises ?? [] {
             for setModel in (exerciseModel.sets ?? []).filter({ !$0.isCompleted }) {
                 context.delete(setModel)
             }
-            exerciseModel.sets = (exerciseModel.sets ?? []).filter(\.isCompleted)
         }
-        let emptied = (workout.exercises ?? []).filter { ($0.sets ?? []).isEmpty }
+        let emptied = (workout.exercises ?? []).filter { ($0.sets ?? []).allSatisfy { !$0.isCompleted } }
+        let rescued = emptied.compactMap { exerciseModel -> String? in
+            let note = exerciseModel.note.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !note.isEmpty else { return nil }
+            let name = exerciseModel.exercise?.name ?? "Exercise"
+            return "Skipped \(name): \(note)"
+        }
+        if !rescued.isEmpty {
+            workout.notes = ([workout.notes] + rescued)
+                .filter { !$0.isEmpty }
+                .joined(separator: "\n")
+        }
+        // Deleted through the context alone: re-assigning the parent's array while SwiftData is
+        // mid-way through updating that same relationship traps.
         emptied.forEach(context.delete)
-        workout.exercises = (workout.exercises ?? []).filter { !($0.sets ?? []).isEmpty }
     }
 
     private func summary(
@@ -131,28 +151,54 @@ extension WorkoutStore {
         return fetch(descriptor)
     }
 
-    /// Deletes every unfinished workout started before `date` (and, by cascade, its sets).
-    /// Returns how many were removed.
+    /// Clears out unfinished workouts started before `date`, **without ever destroying logged
+    /// work**. Returns how many were dealt with.
+    ///
+    /// This runs at launch, before the user is asked anything. It used to delete outright, so a
+    /// Friday session with 14 sets in it was silently gone by Sunday — no prompt, no undo — and
+    /// on a CloudKit-mirrored store it could delete a workout another device was still logging.
+    /// A workout with completed sets is now auto-finished instead, at its own last logged set
+    /// (see `endDate(for:session:now:)`), which is what the lifter would have got had they
+    /// remembered to tap Finish. Only a genuinely empty shell is deleted.
     @discardableResult
     func purgeUnfinished(olderThan date: Date) -> Int {
         let stale = unfinishedWorkouts().filter { $0.startedAt < date }
         guard !stale.isEmpty else { return 0 }
-        stale.forEach(context.delete)
+        for workout in stale {
+            let hasLoggedWork = (workout.exercises ?? [])
+                .flatMap { $0.sets ?? [] }
+                .contains(where: \.isCompleted)
+            if hasLoggedWork, let session = resumeSession(for: workout.id) {
+                _ = finish(session: session)
+            } else {
+                context.delete(workout)
+            }
+        }
         save()
         return stale.count
     }
 
-    /// Re-opens an unfinished workout as a live `WorkoutSession` (its sets, done flags, notes and
-    /// per-exercise history strip restored) so `ActiveWorkoutView` can carry on where it stopped.
-    /// Nil once the workout has been finished or deleted.
+    /// Re-opens an unfinished workout as a live `WorkoutSession` so `ActiveWorkoutView` can carry
+    /// on where it stopped. Nil once the workout has been finished or deleted.
+    ///
+    /// Everything the session carries that `sync` does not persist is rebuilt here, because a
+    /// resumed workout is meant to be indistinguishable from the one that was interrupted: the
+    /// history strip and sparkline, the per-set ghost of the previous session (`withGhosts`), and
+    /// the "already logged once" set of ids that stops a re-tick restarting rest
+    /// (`markLoggedSetsAsSeen`). The "why" headline comes back from the per-set
+    /// `prescriptionReason` the store *does* persist (see `WorkoutExerciseEntry.init(model:)`),
+    /// and a timed hold's target from its uncompleted row's duration.
     func resumeSession(for workoutID: UUID) -> WorkoutSession? {
         guard let model = fetchWorkoutModel(id: workoutID), model.endedAt == nil else { return nil }
         // Fetched once and shared: every exercise's `exerciseInfo` stats and history strip would
         // otherwise re-query the finished-workout list, the PR cache and its own `ExerciseModel`.
         let facts = makeSessionFacts(routineID: model.routineID)
         let session = WorkoutSession(model: model, exerciseInfo: { self.exerciseInfo(for: $0, facts: facts) })
-        session.exercises = session.exercises.map { withHistoryStrip($0, facts: facts) }
+        session.exercises = session.exercises.map {
+            withGhosts(withHistoryStrip($0, facts: facts), facts: facts)
+        }
         session.routineGlyphs = routineGlyphs(for: session.exercises)
+        session.markLoggedSetsAsSeen()
         return session
     }
 
@@ -185,16 +231,94 @@ extension WorkoutStore {
             // Health store and leaves a tombstone behind so it is never re-imported.
             return deleteImportedHealthWorkout(id: id).map(DeletedWorkout.init(imported:))
         }
-        let snapshot = DeletedWorkout(model: model)
+        var snapshot = DeletedWorkout(model: model)
         let wasFinished = model.endedAt != nil
+        // Captured before the delete: the routine slots whose engine memory this workout fed,
+        // and the milestone tiers it earned.
+        let slots = Self.progressionSlots(of: model)
+        snapshot.achievements = achievementModels(forWorkoutID: id).map(DeletedWorkout.Achievement.init)
         // A workout DaGym wrote to Apple Health should not outlive itself there.
         if let healthKitID = model.healthKitID {
             onWorkoutDeletedFromHealth?(healthKitID)
         }
+        // A mistyped session that earned a badge left it earned for ever — and `earnedTiers`
+        // then blocked the lifter from earning that same tier legitimately later.
+        achievementModels(forWorkoutID: id).forEach(context.delete)
         context.delete(model)
         save()
-        if wasFinished { rebuildPersonalRecords() }
+        if wasFinished {
+            rebuildPersonalRecords()
+            replayProgression(slots: slots)
+            save()
+        }
         return snapshot
+    }
+
+    /// The `(routine, exercise)` pairs a workout's rows were logged under — the routine slots
+    /// whose `stallJSON`/`trainingMaxKg` this workout's judgement was folded into.
+    private static func progressionSlots(of workout: WorkoutModel) -> [ProgressionSlot] {
+        (workout.exercises ?? []).compactMap { exerciseModel in
+            guard !exerciseModel.excludedFromProgression,
+                  let routineID = exerciseModel.routineID ?? workout.routineID,
+                  let exerciseID = exerciseModel.exercise?.id else { return nil }
+            return ProgressionSlot(routineID: routineID, exerciseID: exerciseID)
+        }
+    }
+
+    /// Re-derives each slot's engine memory from the history that is actually there now.
+    ///
+    /// Deleting a workout reverted its PRs but not its stall state, so a session deleted because
+    /// it was mistyped left `consecutiveMisses` elevated and the *next* session could be deloaded
+    /// on evidence the lifter had removed. The state is a fold over history, so the only honest
+    /// way back is to fold it again: replay the judgement `finish` makes, session by session,
+    /// over what remains. `restoreWorkout` runs the same replay, which is what makes undo exact.
+    ///
+    /// The training max and its cycle marker are carried over rather than replayed — the lifter
+    /// set the TM, and the engine only bumps it once per cycle, so re-deriving it would either
+    /// lose it or bump it twice.
+    private func replayProgression(slots: [ProgressionSlot]) {
+        let all = finishedWorkoutModelsNewestFirst()
+        for slot in Set(slots) {
+            guard let routine = fetchRoutineModel(id: slot.routineID),
+                  let routineExercise = (routine.exercises ?? [])
+                      .first(where: { $0.exercise?.id == slot.exerciseID }),
+                  let exerciseModel = routineExercise.exercise,
+                  let plannedSets = routineExercise.plannedSets else { continue }
+            var facts = makeSessionFacts(routineID: routine.id)
+            let info = exerciseInfo(for: exerciseModel, facts: facts)
+            let judged = all.indices.filter { Self.isJudged(all[$0], exerciseID: slot.exerciseID) }
+            var state = StallState(trainingMaxCycle: routineExercise.stallStateValue.trainingMaxCycle)
+            // Oldest first, and only as far back as the engine's own history window reaches.
+            for index in judged.prefix(Self.progressionReplayLimit).reversed() {
+                routineExercise.stallStateValue = state
+                // Exactly what `finish` sees: this session is still *outside* its own baseline.
+                facts.finishedWorkouts = Array(all.dropFirst(index + 1))
+                guard let result = computeProgression(
+                    routine: routine, routineExercise: routineExercise, exerciseInfo: info,
+                    plannedSets: plannedSets, facts: facts
+                ) else { break }
+                state = result.stall
+            }
+            routineExercise.stallStateValue = state
+        }
+    }
+
+    /// Whether this workout's row for `exerciseID` is one the engine would ever judge — the same
+    /// test `exerciseHistory` and `persistProgression` apply.
+    private static func isJudged(_ workout: WorkoutModel, exerciseID: UUID) -> Bool {
+        guard let match = (workout.exercises ?? []).first(where: { $0.exercise?.id == exerciseID })
+        else { return false }
+        return !match.excludedFromProgression && !match.wasPlannedDeload
+            && (match.sets ?? []).contains(where: \.isCompleted)
+    }
+
+    /// Matches `exerciseHistory`'s own `limit`: further back than this the engine cannot see, so
+    /// replaying further cannot change the answer.
+    private static let progressionReplayLimit = 6
+
+    private func achievementModels(forWorkoutID id: UUID) -> [AchievementModel] {
+        let predicate = #Predicate<AchievementModel> { $0.workoutID == id }
+        return fetch(FetchDescriptor(predicate: predicate))
     }
 
     /// Puts a deleted workout back exactly as it was (same ids, sets and flags) and rebuilds
@@ -239,8 +363,20 @@ extension WorkoutStore {
                 context.insert(setModel)
             }
         }
+        for achievement in snapshot.achievements {
+            context.insert(AchievementModel(
+                id: achievement.id, milestoneID: achievement.milestoneID, tier: achievement.tier,
+                earnedAt: achievement.earnedAt, workoutID: snapshot.id
+            ))
+        }
         save()
-        if snapshot.endedAt != nil { rebuildPersonalRecords() }
+        if snapshot.endedAt != nil {
+            rebuildPersonalRecords()
+            // The delete replayed this workout out of the engine's memory; put it back the same
+            // way, so undo restores the stall state as exactly as it restores the sets.
+            replayProgression(slots: Self.progressionSlots(of: workout))
+            save()
+        }
         // Re-write it to Apple Health if it had been written before (and the toggle is still on):
         // the delete above removed our own `HKWorkout`, so undo has to put that back too.
         if snapshot.healthKitID != nil, snapshot.endedAt != nil {
@@ -363,39 +499,6 @@ extension WorkoutStore {
 
     // MARK: - Helpers
 
-    private func recoveryEvents(in workout: WorkoutModel) -> [StimulusEvent] {
-        (workout.exercises ?? []).flatMap { exerciseModel -> [StimulusEvent] in
-            guard let exercise = exerciseModel.exercise else { return [] }
-            let fallbackDate = workout.startedAt
-            return (exerciseModel.sets ?? [])
-                .filter { $0.isCompleted && $0.setKind.countsTowardStats }
-                .flatMap { stimulusEvents(for: $0, exercise: exercise, fallbackDate: fallbackDate) }
-        }
-    }
-
-    private func stimulusEvents(
-        for setLog: SetLogModel, exercise: ExerciseModel, fallbackDate: Date
-    ) -> [StimulusEvent] {
-        let date = setLog.completedAt ?? fallbackDate
-        let effort = Self.effortFactor(rpe: setLog.rpe)
-        let primary = exercise.primary.map { muscle in
-            StimulusEvent(muscle: muscle, share: 1.0, effort: effort, date: date)
-        }
-        let secondary = exercise.secondary.map { muscle in
-            StimulusEvent(muscle: muscle, share: 0.5, effort: effort, date: date)
-        }
-        return primary + secondary
-    }
-
-    /// RIR 0 → 1.0, RIR ≥ 4 → 0.5 (linear in between), unknown RPE → 0.75 (§7 of the plan).
-    private static func effortFactor(rpe: Double?) -> Double {
-        guard let rpe else { return 0.75 }
-        let rir = Effort(rpe: rpe).rir
-        guard rir > 0 else { return 1.0 }
-        guard rir < 4 else { return 0.5 }
-        return 1.0 - Double(rir) * 0.125
-    }
-
     private func workoutVolume(_ workout: WorkoutModel) -> Double {
         (workout.exercises ?? []).flatMap { $0.sets ?? [] }
             .filter { $0.isCompleted && $0.setKind.countsTowardStats }
@@ -431,88 +534,5 @@ extension WorkoutStore {
 
     private func matchingExercise(exerciseID: UUID, in workout: WorkoutModel) -> WorkoutExerciseModel? {
         (workout.exercises ?? []).first { $0.exercise?.id == exerciseID }
-    }
-}
-
-/// A value copy of a deleted workout's whole graph, enough to re-insert it unchanged.
-/// Handed back by `WorkoutStore.deleteWorkout(id:)` so an undo toast can call
-/// `restoreWorkout(_:)`; nothing is kept in the store, so it's CloudKit-neutral.
-struct DeletedWorkout: Sendable {
-    struct Exercise: Sendable {
-        var id: UUID
-        var order: Int
-        var supersetGroup: Int?
-        var note: String
-        var wasSubstitution: Bool
-        var wasPlannedDeload: Bool
-        var excludedFromProgression: Bool
-        var routineID: UUID?
-        var exerciseID: UUID?
-        var sets: [SetLog]
-    }
-
-    struct SetLog: Sendable {
-        var id: UUID
-        var order: Int
-        var kind: String
-        var weightKg: Double
-        var reps: Int
-        var durationSeconds: Int?
-        var distanceMeters: Double?
-        var assistanceKg: Double?
-        var rpe: Double?
-        var isCompleted: Bool
-        var completedAt: Date?
-        var prescriptionReason: String
-    }
-
-    var id: UUID
-    var title: String
-    var startedAt: Date
-    var endedAt: Date?
-    var notes: String
-    var isBackfilled: Bool
-    var routineID: UUID?
-    var routineName: String
-    var bodyweightKg: Double?
-    var sourceDevice: String
-    var healthKitID: String?
-    var exercises: [Exercise]
-    /// Set only when the deleted row was an Apple Health import (which lives in the local Health
-    /// store, not the main one) — `restoreWorkout(_:)` routes on it.
-    var importedHealthWorkout: ImportedHealthWorkoutSnapshot?
-
-    init(model: WorkoutModel) {
-        importedHealthWorkout = nil
-        id = model.id
-        title = model.title
-        startedAt = model.startedAt
-        endedAt = model.endedAt
-        notes = model.notes
-        isBackfilled = model.isBackfilled
-        routineID = model.routineID
-        routineName = model.routineName
-        bodyweightKg = model.bodyweightKg
-        sourceDevice = model.sourceDevice
-        healthKitID = model.healthKitID
-        exercises = (model.exercises ?? []).sorted { $0.order < $1.order }.map { exercise in
-            Exercise(
-                id: exercise.id, order: exercise.order, supersetGroup: exercise.supersetGroup,
-                note: exercise.note, wasSubstitution: exercise.wasSubstitution,
-                wasPlannedDeload: exercise.wasPlannedDeload,
-                excludedFromProgression: exercise.excludedFromProgression,
-                routineID: exercise.routineID,
-                exerciseID: exercise.exercise?.id,
-                sets: (exercise.sets ?? []).sorted { $0.order < $1.order }.map { set in
-                    SetLog(
-                        id: set.id, order: set.order, kind: set.kind, weightKg: set.weightKg,
-                        reps: set.reps, durationSeconds: set.durationSeconds,
-                        distanceMeters: set.distanceMeters, assistanceKg: set.assistanceKg, rpe: set.rpe,
-                        isCompleted: set.isCompleted, completedAt: set.completedAt,
-                        prescriptionReason: set.prescriptionReason
-                    )
-                }
-            )
-        }
     }
 }

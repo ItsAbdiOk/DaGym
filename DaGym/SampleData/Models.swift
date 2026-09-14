@@ -356,3 +356,109 @@ struct PersonalRecordInfo: Identifiable, Hashable {
 
 // `WorkoutSession` (the in-progress session state driving Active Workout) lives in
 // `WorkoutSession.swift`, split out to keep this file under the line-count cap.
+
+/// One routine slot the progression engine keeps memory for.
+struct ProgressionSlot: Hashable, Sendable {
+    var routineID: UUID
+    var exerciseID: UUID
+}
+
+/// A value copy of a deleted workout's whole graph, enough to re-insert it unchanged.
+/// Handed back by `WorkoutStore.deleteWorkout(id:)` so an undo toast can call
+/// `restoreWorkout(_:)`; nothing is kept in the store, so it's CloudKit-neutral.
+struct DeletedWorkout: Sendable {
+    struct Exercise: Sendable {
+        var id: UUID
+        var order: Int
+        var supersetGroup: Int?
+        var note: String
+        var wasSubstitution: Bool
+        var wasPlannedDeload: Bool
+        var excludedFromProgression: Bool
+        var routineID: UUID?
+        var exerciseID: UUID?
+        var sets: [SetLog]
+    }
+
+    struct Achievement: Sendable {
+        var id: UUID
+        var milestoneID: String
+        var tier: String
+        var earnedAt: Date
+
+        init(model: AchievementModel) {
+            id = model.id
+            milestoneID = model.milestoneID
+            tier = model.tier
+            earnedAt = model.earnedAt
+        }
+    }
+
+    struct SetLog: Sendable {
+        var id: UUID
+        var order: Int
+        var kind: String
+        var weightKg: Double
+        var reps: Int
+        var durationSeconds: Int?
+        var distanceMeters: Double?
+        var assistanceKg: Double?
+        var rpe: Double?
+        var isCompleted: Bool
+        var completedAt: Date?
+        var prescriptionReason: String
+    }
+
+    var id: UUID
+    var title: String
+    var startedAt: Date
+    var endedAt: Date?
+    var notes: String
+    var isBackfilled: Bool
+    var routineID: UUID?
+    var routineName: String
+    var bodyweightKg: Double?
+    var sourceDevice: String
+    var healthKitID: String?
+    var exercises: [Exercise]
+    /// The milestone tiers this workout earned, deleted along with it so a badge from a mistyped
+    /// session doesn't outlive the session — and put back by `restoreWorkout(_:)`.
+    var achievements: [Achievement] = []
+    /// Set only when the deleted row was an Apple Health import (which lives in the local Health
+    /// store, not the main one) — `restoreWorkout(_:)` routes on it.
+    var importedHealthWorkout: ImportedHealthWorkoutSnapshot?
+
+    init(model: WorkoutModel) {
+        importedHealthWorkout = nil
+        id = model.id
+        title = model.title
+        startedAt = model.startedAt
+        endedAt = model.endedAt
+        notes = model.notes
+        isBackfilled = model.isBackfilled
+        routineID = model.routineID
+        routineName = model.routineName
+        bodyweightKg = model.bodyweightKg
+        sourceDevice = model.sourceDevice
+        healthKitID = model.healthKitID
+        exercises = (model.exercises ?? []).sorted { $0.order < $1.order }.map { exercise in
+            Exercise(
+                id: exercise.id, order: exercise.order, supersetGroup: exercise.supersetGroup,
+                note: exercise.note, wasSubstitution: exercise.wasSubstitution,
+                wasPlannedDeload: exercise.wasPlannedDeload,
+                excludedFromProgression: exercise.excludedFromProgression,
+                routineID: exercise.routineID,
+                exerciseID: exercise.exercise?.id,
+                sets: (exercise.sets ?? []).sorted { $0.order < $1.order }.map { set in
+                    SetLog(
+                        id: set.id, order: set.order, kind: set.kind, weightKg: set.weightKg,
+                        reps: set.reps, durationSeconds: set.durationSeconds,
+                        distanceMeters: set.distanceMeters, assistanceKg: set.assistanceKg, rpe: set.rpe,
+                        isCompleted: set.isCompleted, completedAt: set.completedAt,
+                        prescriptionReason: set.prescriptionReason
+                    )
+                }
+            )
+        }
+    }
+}

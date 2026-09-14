@@ -40,9 +40,31 @@ extension WorkoutSession {
         guard hasUndoneSets, defaultRestSeconds > 0 else { return 0 }
         if exercises[exerciseIndex].sets[setIndex].kind == .restPause { return restPauseSeconds }
         let members = supersetMembers(containing: exerciseIndex)
-        guard members.count > 1 else { return rest(of: exerciseIndex) }
-        if roundPartner(members: members, round: setIndex, excluding: exerciseIndex) != nil { return 0 }
+        guard members.count > 1, let round = round(of: exerciseIndex, set: setIndex) else {
+            // A singleton, or a warm-up: nobody is waiting on it, so it takes its own rest.
+            return rest(of: exerciseIndex)
+        }
+        if roundPartner(members: members, round: round, excluding: exerciseIndex) != nil { return 0 }
         return members.map { rest(of: $0) }.max() ?? 0
+    }
+
+    /// The indices of an exercise's working (non-warm-up) sets, in order.
+    func workingSetIndices(of exerciseIndex: Int) -> [Int] {
+        exercises[exerciseIndex].sets.indices.filter {
+            exercises[exerciseIndex].sets[$0].kind.countsTowardStats
+        }
+    }
+
+    /// Which superset *round* a set belongs to — its position among the exercise's working sets
+    /// — or nil for a warm-up, which is no round at all.
+    ///
+    /// Rounds used to be the raw set index, which only lines up when both sides of the superset
+    /// happen to have the same warm-ups: with two warm-ups on the bench and none on the row, the
+    /// bench's first working set (index 2) was paired against the row's *third* working set, so
+    /// the rest timer waited on a partner who had already finished — and a lifter ramping up on
+    /// one side got no rest between the other side's working sets.
+    func round(of exerciseIndex: Int, set setIndex: Int) -> Int? {
+        workingSetIndices(of: exerciseIndex).firstIndex(of: setIndex)
     }
 
     /// One exercise's rest, falling back to `defaultRestSeconds` when it carries none.
@@ -55,19 +77,23 @@ extension WorkoutSession {
         groupedIndices.first { $0.contains(exerciseIndex) } ?? [exerciseIndex]
     }
 
-    /// Another group member with an undone set in this round — the ones after `exerciseIndex`
-    /// first, so the label follows the group's order.
+    /// Another group member with an undone working set in this round — the ones after
+    /// `exerciseIndex` first, so the label follows the group's order.
     func roundPartner(members: [Int], round: Int, excluding exerciseIndex: Int) -> Int? {
         let others = members.filter { $0 > exerciseIndex } + members.filter { $0 < exerciseIndex }
         return others.first { index in
-            let sets = exercises[index].sets
-            return sets.indices.contains(round) && !sets[round].isDone
+            let working = workingSetIndices(of: index)
+            guard working.indices.contains(round) else { return false }
+            return !exercises[index].sets[working[round]].isDone
         }
     }
 
+    /// The first group member's set for `round`, for the "Next 82.5 × 8" hint.
     func nextRoundSet(members: [Int], round: Int) -> SetEntry? {
-        for index in members where exercises[index].sets.indices.contains(round) {
-            return exercises[index].sets[round]
+        for index in members {
+            let working = workingSetIndices(of: index)
+            guard working.indices.contains(round) else { continue }
+            return exercises[index].sets[working[round]]
         }
         return nil
     }
@@ -106,8 +132,11 @@ extension WorkoutSession {
     }
 
     /// Re-numbers groups so every group is one consecutive run of at least two exercises —
-    /// the shape `groupedIndices` and the reorder sheet assume.
-    private func normalizeSupersets() {
+    /// the shape `groupedIndices` and the reorder sheet assume. Also called after an exercise is
+    /// removed (or an undo puts one back): deleting one half of a pair used to leave the survivor
+    /// carrying a `supersetGroup` nobody else shared, which persisted as a one-member superset
+    /// and made the rest timer wait on a partner that no longer existed.
+    func normalizeSupersets() {
         var seen: Set<Int> = []
         for chunk in groupedIndices {
             guard let first = chunk.first, let group = exercises[first].supersetGroup else { continue }

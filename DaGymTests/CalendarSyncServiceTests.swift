@@ -5,7 +5,7 @@ import Testing
 @testable import DaGym
 
 /// One recorded event, keyed by id in `FakeEventStore.events`.
-private struct StoredEvent {
+struct StoredEvent {
     var title: String
     var start: Date
     var end: Date
@@ -14,27 +14,38 @@ private struct StoredEvent {
 }
 
 /// Records every call so tests can assert on it without touching EventKit.
-private final class FakeEventStore: EventStoring, @unchecked Sendable {
-    var accessGranted = true
+///
+/// Crucially this now **models what EventKit actually does under each access level**. The old
+/// fake found events by identifier and listed calendars unconditionally, whatever access had
+/// been granted — which is exactly why the suite could not see that the service was asking for
+/// write-only access while depending on reads.
+final class FakeEventStore: EventStoring, @unchecked Sendable {
+    var access: CalendarAccess = .full
+    var createCalendarError: Error?
     private var storedCalendars: [CalendarInfo] = []
     private(set) var events: [String: StoredEvent] = [:]
     private(set) var deletedIDs: [String] = []
     private(set) var createCalendarCount = 0
     private var nextEventNumber = 0
 
-    func requestWriteOnlyAccess() async throws -> Bool { accessGranted }
+    func requestAccess() async throws -> CalendarAccess { access }
 
-    func calendars() -> [CalendarInfo] { storedCalendars }
+    /// `EKEventStore.calendars(for:)` comes back empty under write-only access.
+    func calendars() -> [CalendarInfo] { access == .full ? storedCalendars : [] }
 
     func createCalendar(named name: String) throws -> String {
+        if let createCalendarError { throw createCalendarError }
         createCalendarCount += 1
         let calendar = CalendarInfo(id: "cal-\(createCalendarCount)", title: name)
         storedCalendars.append(calendar)
         return calendar.id
     }
 
+    /// Under write-only access `event(withIdentifier:)` returns nil, so an "update" silently
+    /// becomes a brand-new event.
     func upsertEvent(id: String?, draft: EventDraft, calendarID: String) throws -> String {
-        let eventID = id ?? {
+        let existing = access == .full ? id : nil
+        let eventID = existing ?? {
             nextEventNumber += 1
             return "event-\(nextEventNumber)"
         }()
@@ -44,33 +55,66 @@ private final class FakeEventStore: EventStoring, @unchecked Sendable {
         return eventID
     }
 
+    /// …and a delete is a no-op, because the event can't be looked up.
     func deleteEvent(id: String) throws {
+        guard access == .full else { return }
         deletedIDs.append(id)
         events.removeValue(forKey: id)
     }
 
-    func fetchEvents(inCalendar calendarID: String, from: Date, to: Date) throws -> [String] {
-        Array(events.keys)
+    func fetchEvents(inCalendar calendarID: String, from: Date, to: Date) throws -> [FetchedEvent] {
+        guard access == .full else { return [] }
+        return events
+            .filter { $0.value.start >= from && $0.value.start < to }
+            .map { FetchedEvent(id: $0.key, url: $0.value.url) }
+    }
+
+    /// Plants an event nothing is tracking — what a second device's sync leaves behind when
+    /// CloudKit hasn't merged the two `ScheduleModel` rows yet.
+    @discardableResult
+    func plantOrphan(start: Date, routineID: UUID) -> String {
+        nextEventNumber += 1
+        let id = "orphan-\(nextEventNumber)"
+        events[id] = StoredEvent(
+            title: "DaGym · Ghost", start: start, end: start, notes: "",
+            url: URL(string: "dagym://start?routine=\(routineID.uuidString)")
+        )
+        return id
+    }
+
+    /// An event the lifter put in the DaGym calendar themselves — no `dagym://` URL.
+    @discardableResult
+    func plantUserEvent(start: Date) -> String {
+        nextEventNumber += 1
+        let id = "user-\(nextEventNumber)"
+        events[id] = StoredEvent(title: "Physio", start: start, end: start, notes: "", url: nil)
+        return id
     }
 }
 
 @Suite("Calendar sync")
 struct CalendarSyncServiceTests {
-    private static func calendar() -> Calendar {
+    private static func calendar(
+        timeZone: String = "UTC", firstWeekday: Int = 2
+    ) -> Calendar {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
-        calendar.firstWeekday = 2
+        calendar.timeZone = TimeZone(identifier: timeZone) ?? .current
+        calendar.firstWeekday = firstWeekday
         return calendar
     }
 
-    /// Monday 2026-01-05.
-    private static func monday() -> Date {
+    private static func date(
+        _ year: Int, _ month: Int, _ day: Int, calendar: Calendar = calendar()
+    ) -> Date {
         var components = DateComponents()
-        components.year = 2026
-        components.month = 1
-        components.day = 5
-        return calendar().date(from: components) ?? Date()
+        components.year = year
+        components.month = month
+        components.day = day
+        return calendar.date(from: components) ?? Date()
     }
+
+    /// Monday 2026-01-05.
+    private static func monday() -> Date { date(2026, 1, 5) }
 
     private func routine(name: String, exerciseNames: [String] = []) -> RoutineInfo {
         let exercises = exerciseNames.map { exerciseName in
@@ -83,13 +127,17 @@ struct CalendarSyncServiceTests {
     }
 
     private func request(
-        schedule: WeeklySchedule, routines: [RoutineInfo], existingEventIDs: [String: String] = [:]
+        schedule: WeeklySchedule, routines: [RoutineInfo], existingEventIDs: [String: String] = [:],
+        startDate: Date = CalendarSyncServiceTests.monday(), days: Int = 7,
+        calendar: Calendar = CalendarSyncServiceTests.calendar()
     ) -> ScheduleSyncRequest {
         ScheduleSyncRequest(
-            schedule: schedule, routines: routines, startDate: Self.monday(), days: 7, defaultStartHour: 18,
-            existingEventIDs: existingEventIDs, calendar: Self.calendar()
+            schedule: schedule, routines: routines, startDate: startDate, days: days,
+            defaultStartHour: 18, existingEventIDs: existingEventIDs, calendar: calendar
         )
     }
+
+    // MARK: - Baseline behaviour
 
     @Test("first sync creates one event per planned session, with its notes and deep link")
     func firstSyncCreatesEvents() async throws {
@@ -239,5 +287,60 @@ struct CalendarSyncServiceTests {
         #expect(second[pushAKey] != nil)
         #expect(second[armsKey] == nil)
         #expect(fake.events.count == 1)
+    }
+
+    // MARK: - Access levels
+
+    @Test("denied access throws instead of quietly reporting success")
+    func deniedAccessThrows() async throws {
+        let fake = FakeEventStore()
+        fake.access = .denied
+        let service = CalendarSyncService(eventStore: fake)
+        let pushA = routine(name: "Push A")
+        var schedule = WeeklySchedule()
+        schedule.days[.monday] = pushA.id
+
+        await #expect(throws: CalendarSyncError.accessDenied) {
+            try await service.sync(request(schedule: schedule, routines: [pushA]))
+        }
+        #expect(fake.events.isEmpty)
+        #expect(fake.createCalendarCount == 0)
+    }
+
+    /// The defect this whole fake was rebuilt for. Under "Add Events Only" EventKit can't look
+    /// an event up by identifier, so a second sync would create a *second* copy of every
+    /// session and delete nothing — and `calendars(for:)` being empty meant a fresh "DaGym"
+    /// calendar on every sync too. The service now refuses rather than doing that.
+    @Test("write-only access is refused, not silently duplicated")
+    func writeOnlyAccessIsRefused() async throws {
+        let fake = FakeEventStore()
+        fake.access = .writeOnly
+        let service = CalendarSyncService(eventStore: fake)
+        let pushA = routine(name: "Push A")
+        var schedule = WeeklySchedule()
+        schedule.days[.monday] = pushA.id
+        schedule.days[.wednesday] = pushA.id
+        schedule.days[.friday] = pushA.id
+
+        await #expect(throws: CalendarSyncError.writeOnlyAccess) {
+            try await service.sync(request(schedule: schedule, routines: [pushA]))
+        }
+        #expect(fake.events.isEmpty)
+        #expect(fake.createCalendarCount == 0)
+    }
+
+    @Test("a calendar source that refuses new calendars surfaces its error")
+    func createCalendarErrorPropagates() async throws {
+        struct Refused: Error {}
+        let fake = FakeEventStore()
+        fake.createCalendarError = Refused()
+        let service = CalendarSyncService(eventStore: fake)
+        let pushA = routine(name: "Push A")
+        var schedule = WeeklySchedule()
+        schedule.days[.monday] = pushA.id
+
+        await #expect(throws: Refused.self) {
+            try await service.sync(request(schedule: schedule, routines: [pushA]))
+        }
     }
 }

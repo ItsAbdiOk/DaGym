@@ -84,12 +84,19 @@ extension WorkoutStore {
         return session
     }
 
+    /// Starts a session logged after the fact ("Log a Past Workout"). The planned end
+    /// (`date + durationMinutes`) rides on the *session*, not on the `WorkoutModel`: a workout
+    /// with `endedAt` already set is a finished workout everywhere in this app, so stamping it
+    /// at the start made a backfill that was never finished a permanent phantom in history — it
+    /// counted in lifetime stats, streaks and the widget, it was inside its own progression
+    /// baseline while it was still being logged, and it slipped through `finish`'s
+    /// double-finish guard. `finish` stamps `endedAt` from `session.backfillEndedAt`, like
+    /// every other session.
     func startBackfill(date: Date, durationMinutes: Int, routineID: UUID?) -> WorkoutSession {
         let routine = routineID.flatMap(fetchRoutineModel)
         let entries = buildEntries(from: routine)
-        let endedAt = date.addingTimeInterval(TimeInterval(durationMinutes * 60))
         let model = WorkoutModel(
-            title: routine?.name ?? "Backfilled workout", startedAt: date, endedAt: endedAt,
+            title: routine?.name ?? "Backfilled workout", startedAt: date,
             isBackfilled: true, routineID: routine?.id, routineName: routine?.name ?? ""
         )
         context.insert(model)
@@ -99,6 +106,7 @@ extension WorkoutStore {
             isBackfilled: true
         )
         session.workoutID = model.id
+        session.backfillEndedAt = date.addingTimeInterval(TimeInterval(durationMinutes * 60))
         return session
     }
 
@@ -116,13 +124,31 @@ extension WorkoutStore {
         // cannot differ between them. Nothing is fetched when no new rows are needed — the
         // common case, since `sync` runs after every set edit.
         let newEntries = session.exercises.filter { existing[$0.id] == nil }
-        let libraryModels = fetchExerciseModels(ids: Set(newEntries.map(\.exercise.id)))
+        // Rows whose entry now points at a *different* library exercise than the persisted row
+        // does — an in-place swap (`replaceInPlace`) keeps the entry id and changes only
+        // `entry.exercise`, so the id lookup above still finds the old row. Without re-pointing
+        // it, every set logged after the swap was credited to the exercise that was swapped
+        // *out*: history detail, the sparkline, the progression baseline and
+        // `rebuildPersonalRecords` all read the model, not the session.
+        let swapped = session.exercises.filter { entry in
+            guard let model = existing[entry.id] else { return false }
+            return model.exercise?.id != entry.exercise.id
+        }
+        let libraryModels = fetchExerciseModels(
+            ids: Set((newEntries + swapped).map(\.exercise.id))
+        )
         let sourceRoutine = newEntries.isEmpty ? nil : workout.routineID.flatMap(fetchRoutineModel)
         for (index, entry) in session.exercises.enumerated() {
             let exerciseModel = existing[entry.id] ?? makeWorkoutExercise(
                 entry: entry, workout: workout, exercise: libraryModels[entry.exercise.id],
                 sourceRoutine: sourceRoutine
             )
+            // A missing library row (a deleted exercise) leaves the row pointing where it did:
+            // losing the old exercise is worse than the stale one.
+            if exerciseModel.exercise?.id != entry.exercise.id,
+               let replacement = libraryModels[entry.exercise.id] {
+                exerciseModel.exercise = replacement
+            }
             exerciseModel.order = index
             exerciseModel.supersetGroup = entry.supersetGroup
             exerciseModel.note = entry.note ?? ""
@@ -372,7 +398,10 @@ extension WorkoutStore {
             kind: kind, weightKg: numbers.weightKg, reps: numbers.reps,
             previousWeightKg: ghost.previous != nil ? ghost.weightKg : nil,
             previousReps: ghost.previous != nil ? ghost.reps : nil,
-            durationSeconds: numbers.durationSeconds ?? targetSeconds,
+            // A hold that hasn't happened yet is a *target*, not a duration held — the same
+            // split `autoFilledSets` already makes. Filling `durationSeconds` showed a fresh
+            // 45-second plank as 45 seconds already held.
+            targetSeconds: numbers.durationSeconds ?? targetSeconds,
             prescriptionReason: reason, assistanceKg: rx?.assistanceKg
         )
     }
@@ -387,11 +416,26 @@ extension WorkoutStore {
         let baseline = exerciseHistory(exerciseID: info.id, finishedWorkouts: facts.finishedWorkouts)
             .first { !$0.wasPlannedDeload }?.workingSets.first?.weightKg
         let baselineWeight = baseline ?? plannedSets.first?.targetWeightKg ?? 0
-        let plan = DeloadDetector.deloadPlan(sets: max(plannedSets.count, 1), load: baselineWeight)
-        let loadKg = loadGrid(for: info, equipment: facts.equipment).nearestBelow(plan.loadKg)
-        let template = plannedSets.first
-        let sets = (0..<min(plan.sets, max(plannedSets.count, 1))).map { index -> SetEntry in
-            let spec = index < plannedSets.count ? plannedSets[index] : template
+        // Sized from the *working* sets. Passing the raw planned count let the warm-ups eat the
+        // deload: a routine with 2 warm-ups and 1 working set asked for `deloadPlan(sets: 3)`,
+        // which is 2 — and those two, taken by position, were the two warm-ups. A deload week
+        // prescribed zero working sets at 90 %.
+        let workingSets = plannedSets.filter { $0.setKind.countsTowardStats }
+        let plan = DeloadDetector.deloadPlan(sets: max(workingSets.count, 1), load: baselineWeight)
+        // An assisted exercise logs the *assistance* dialled in, not the load lifted, so less of
+        // it is harder work. Scaling it by the deload fraction handed the lifter a harder set in
+        // a deload week; easing off means dialling assistance up by the same fraction instead.
+        let fraction = TrainingConstants.deloadLoadFraction
+        let loadKg: Double
+        if info.loggingStyle == .assisted {
+            // `.assisted` rounds on a `.free` grid (see `loadGrid`), so there is nothing to snap to.
+            loadKg = fraction > 0 ? baselineWeight / fraction : baselineWeight
+        } else {
+            loadKg = loadGrid(for: info, equipment: facts.equipment).nearestBelow(plan.loadKg)
+        }
+        let template = workingSets.first
+        let sets = (0..<min(plan.sets, max(workingSets.count, 1))).map { index -> SetEntry in
+            let spec = index < workingSets.count ? workingSets[index] : template
             return SetEntry(
                 kind: spec?.setKind ?? .working, weightKg: loadKg, reps: spec?.targetReps ?? 5,
                 durationSeconds: spec?.targetSeconds, prescriptionReason: "Planned deload"
@@ -456,50 +500,6 @@ extension WorkoutStore {
         }
     }
 
-    /// The most recent finished workout's logged, *completed* sets for this exercise (A6: an
-    /// uncompleted "0 × 0" row is not a previous), in position order, plus that session's date
-    /// for `AutoFill`'s "is the plan newer than this?" check. A session with nothing completed,
-    /// a planned deload, or one logged under an excluded routine slot is skipped — the next
-    /// older one is the previous.
-    private func previousSets(
-        exerciseID: UUID, finishedWorkouts: [WorkoutModel]? = nil
-    ) -> (sets: [PreviousSet], date: Date?) {
-        guard let previous = previousLoggedExercise(
-            exerciseID: exerciseID, finishedWorkouts: finishedWorkouts
-        ) else { return ([], nil) }
-        let sets = (previous.exercise.sets ?? []).filter(\.isCompleted).sorted { $0.order < $1.order }
-        return (
-            sets.map { setModel in
-                PreviousSet(
-                    kind: setModel.setKind, weightKg: setModel.weightKg, reps: setModel.reps,
-                    durationSeconds: setModel.durationSeconds
-                )
-            },
-            previous.workout.startedAt
-        )
-    }
-
-    /// Completed working-set count from the previous counting session (see `previousSets`);
-    /// nil when the exercise was never logged.
-    private func previousWorkingSetCount(exerciseID: UUID, finishedWorkouts: [WorkoutModel]?) -> Int? {
-        let previous = previousLoggedExercise(exerciseID: exerciseID, finishedWorkouts: finishedWorkouts)
-        guard let previous else { return nil }
-        return (previous.exercise.sets ?? []).filter { $0.isCompleted && $0.setKind.countsTowardStats }.count
-    }
-
-    private func previousLoggedExercise(
-        exerciseID: UUID, finishedWorkouts: [WorkoutModel]? = nil
-    ) -> (exercise: WorkoutExerciseModel, workout: WorkoutModel)? {
-        for workout in finishedWorkouts ?? finishedWorkoutModelsNewestFirst() {
-            let candidates = (workout.exercises ?? []).filter {
-                $0.exercise?.id == exerciseID && !$0.wasPlannedDeload && !$0.excludedFromProgression
-                    && ($0.sets ?? []).contains(where: \.isCompleted)
-            }
-            if let match = candidates.min(by: { $0.order < $1.order }) { return (match, workout) }
-        }
-        return nil
-    }
-
     // MARK: - Syncing
 
     /// Stamps `excludedFromProgression` from the routine slot the workout was started from, once,
@@ -516,17 +516,22 @@ extension WorkoutStore {
             exercise: exercise, workout: workout
         )
         context.insert(model)
-        workout.exercises = (workout.exercises ?? []) + [model]
+        // Linked through the `workout:` inverse alone — assigning the parent's array at the same
+        // time makes SwiftData rebuild a relationship it is already mid-way through updating,
+        // which traps (the same trap `restoreWorkout` was rewritten to avoid).
         return model
     }
 
     private func syncSets(entry: WorkoutExerciseEntry, into exerciseModel: WorkoutExerciseModel) {
         var existing = Dictionary(uniqueKeysWithValues: (exerciseModel.sets ?? []).map { ($0.id, $0) })
         var kept = Set<UUID>()
+        let workout = exerciseModel.workout
         for (index, setEntry) in entry.sets.enumerated() {
             let setModel = existing[setEntry.id] ?? makeSetLog(id: setEntry.id, into: exerciseModel)
             setModel.apply(setEntry, order: index)
-            setModel.completedAt = setEntry.isDone ? (setModel.completedAt ?? Date()) : nil
+            setModel.completedAt = setEntry.isDone
+                ? Self.completionDate(setModel.completedAt ?? Date(), in: workout)
+                : nil
             kept.insert(setEntry.id)
             existing[setEntry.id] = setModel
         }
@@ -538,7 +543,7 @@ extension WorkoutStore {
     private func makeSetLog(id: UUID, into exerciseModel: WorkoutExerciseModel) -> SetLogModel {
         let model = SetLogModel(id: id, workoutExercise: exerciseModel)
         context.insert(model)
-        exerciseModel.sets = (exerciseModel.sets ?? []) + [model]
+        // Linked through the `workoutExercise:` inverse alone — see `makeWorkoutExercise`.
         return model
     }
 }

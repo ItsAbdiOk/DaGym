@@ -162,8 +162,10 @@ struct AppRootContainer: View {
         // A second iCloud device imports the first one's seeded rows after launch; fold those
         // as they land. Kept in `phase` so the observer lives as long as the store does.
         let deduper = store.startRemoteChangeDedupe()
-        // Half-finished workouts older than a day are abandoned, not resumable; `RootView`
-        // offers to resume anything newer.
+        // Workouts left open for more than a day are cleared out before `RootView` offers to
+        // resume anything newer. Nothing logged is destroyed: one with completed sets in it is
+        // auto-finished at its own last set, and only an empty shell is deleted — see
+        // `purgeUnfinished(olderThan:)`.
         store.purgeUnfinished(olderThan: Date().addingTimeInterval(-24 * 60 * 60))
         let healthSync = HealthSyncService(workoutStore: store, preferences: preferences)
         let healthInsights = HealthInsightsService(workoutStore: store, preferences: preferences)

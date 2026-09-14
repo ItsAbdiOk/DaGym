@@ -133,3 +133,163 @@ struct TrainingCalendarTests {
         func removePendingNotificationRequests(withIdentifiers identifiers: [String]) {}
     }
 }
+
+/// Calendar-sync behaviour at the awkward edges of the calendar: month and year boundaries, a
+/// Sunday-first week, a timezone well away from UTC, and a DST changeover. The rest of the sync
+/// suite pins everything to one Monday in UTC, where none of these can go wrong.
+@Suite("Calendar sync boundaries")
+struct CalendarSyncBoundaryTests {
+    private static func calendar(timeZone: String = "UTC", firstWeekday: Int = 2) -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: timeZone) ?? .current
+        calendar.firstWeekday = firstWeekday
+        return calendar
+    }
+
+    private static func date(
+        _ year: Int, _ month: Int, _ day: Int, calendar: Calendar = calendar()
+    ) -> Date {
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        return calendar.date(from: components) ?? Date()
+    }
+
+    private func routine(name: String) -> RoutineInfo {
+        RoutineInfo(
+            name: name, exercises: [], setCount: 0, estimatedMinutes: 50, progressionRule: "linear",
+            progressionDetail: ""
+        )
+    }
+
+    private func request(
+        schedule: WeeklySchedule, routines: [RoutineInfo], startDate: Date, days: Int = 7,
+        calendar: Calendar = CalendarSyncBoundaryTests.calendar()
+    ) -> ScheduleSyncRequest {
+        ScheduleSyncRequest(
+            schedule: schedule, routines: routines, startDate: startDate, days: days,
+            defaultStartHour: 18, existingEventIDs: [:], calendar: calendar
+        )
+    }
+
+    @Test("a window spanning a month boundary plans every day on both sides")
+    func monthBoundary() async throws {
+        let fake = FakeEventStore()
+        let service = CalendarSyncService(eventStore: fake)
+        let pushA = routine(name: "Push A")
+        var schedule = WeeklySchedule()
+        for weekday in Weekday.allCases { schedule.setRoutines([pushA.id], on: weekday) }
+        let calendar = Self.calendar()
+        let lateJanuary = Self.date(2026, 1, 29)
+
+        let result = try await service.sync(request(
+            schedule: schedule, routines: [pushA], startDate: lateJanuary, days: 5
+        ))
+
+        #expect(result.count == 5)
+        let februaryFirst = CalendarSyncService.eventKey(
+            date: Self.date(2026, 2, 1), routineID: pushA.id, calendar: calendar
+        )
+        #expect(result[februaryFirst] != nil)
+        #expect(result.keys.contains { $0.hasPrefix("2026-02-02") })
+    }
+
+    @Test("a window spanning a year boundary plans every day on both sides")
+    func yearBoundary() async throws {
+        let fake = FakeEventStore()
+        let service = CalendarSyncService(eventStore: fake)
+        let pushA = routine(name: "Push A")
+        var schedule = WeeklySchedule()
+        for weekday in Weekday.allCases { schedule.setRoutines([pushA.id], on: weekday) }
+
+        let result = try await service.sync(request(
+            schedule: schedule, routines: [pushA], startDate: Self.date(2025, 12, 30), days: 4
+        ))
+
+        #expect(result.count == 4)
+        #expect(result.keys.contains { $0.hasPrefix("2025-12-31") })
+        #expect(result.keys.contains { $0.hasPrefix("2026-01-01") })
+    }
+
+    /// The sync is day-based, so a Sunday-first calendar must produce exactly the same events —
+    /// what changes is only which weekday the lifter *sees* first in the schedule list.
+    @Test("a Sunday-first calendar plans the same weekdays as a Monday-first one")
+    func sundayFirstWeek() async throws {
+        let pushA = routine(name: "Push A")
+        var schedule = WeeklySchedule()
+        schedule.days[.sunday] = pushA.id
+        schedule.days[.wednesday] = pushA.id
+
+        var results: [Set<String>] = []
+        for firstWeekday in [1, 2] {
+            let fake = FakeEventStore()
+            let service = CalendarSyncService(eventStore: fake)
+            let calendar = Self.calendar(firstWeekday: firstWeekday)
+            let result = try await service.sync(request(
+                schedule: schedule, routines: [pushA],
+                startDate: Self.date(2026, 1, 5, calendar: calendar), calendar: calendar
+            ))
+            results.append(Set(result.keys))
+        }
+        #expect(results[0] == results[1])
+        #expect(results[0].count == 2)
+        #expect(results[0].contains { $0.hasPrefix("2026-01-07") }, "Wednesday")
+        #expect(results[0].contains { $0.hasPrefix("2026-01-11") }, "Sunday")
+    }
+
+    /// In `Europe/London`, 2026-03-29 is the spring-forward day: 01:00 jumps to 02:00, so that
+    /// calendar day is 23 hours long. Day-keyed planning must not skip or double it, and an
+    /// 18:00 session must still start at 18:00 local time.
+    @Test("a DST changeover doesn't skip, duplicate or shift a day")
+    func dstChangeover() async throws {
+        let fake = FakeEventStore()
+        let service = CalendarSyncService(eventStore: fake)
+        let calendar = Self.calendar(timeZone: "Europe/London")
+        let pushA = routine(name: "Push A")
+        var schedule = WeeklySchedule()
+        for weekday in Weekday.allCases { schedule.setRoutines([pushA.id], on: weekday) }
+
+        let result = try await service.sync(request(
+            schedule: schedule, routines: [pushA],
+            startDate: Self.date(2026, 3, 27, calendar: calendar), days: 4, calendar: calendar
+        ))
+
+        #expect(result.count == 4)
+        for day in 27...30 {
+            #expect(
+                result.keys.contains { $0.hasPrefix(String(format: "2026-03-%02d", day)) },
+                "2026-03-\(day) must be planned exactly once"
+            )
+        }
+        let springForward = CalendarSyncService.eventKey(
+            date: Self.date(2026, 3, 29, calendar: calendar), routineID: pushA.id, calendar: calendar
+        )
+        let eventID = try #require(result[springForward])
+        let event = try #require(fake.events[eventID])
+        #expect(calendar.component(.hour, from: event.start) == 18)
+    }
+
+    /// Same wall-clock plan, a timezone well west of UTC: the event still lands at 18:00 local,
+    /// and the day keys still line up with the lifter's own calendar days.
+    @Test("a non-UTC timezone keys days and start times by local time")
+    func nonUTCTimezone() async throws {
+        let fake = FakeEventStore()
+        let service = CalendarSyncService(eventStore: fake)
+        let calendar = Self.calendar(timeZone: "America/Los_Angeles")
+        let pushA = routine(name: "Push A")
+        var schedule = WeeklySchedule()
+        schedule.days[.monday] = pushA.id
+        let monday = Self.date(2026, 1, 5, calendar: calendar)
+
+        let result = try await service.sync(request(
+            schedule: schedule, routines: [pushA], startDate: monday, calendar: calendar
+        ))
+
+        let key = CalendarSyncService.eventKey(date: monday, routineID: pushA.id, calendar: calendar)
+        let eventID = try #require(result[key])
+        let event = try #require(fake.events[eventID])
+        #expect(calendar.component(.hour, from: event.start) == 18)
+        #expect(calendar.component(.day, from: event.start) == 5)
+    }
+}

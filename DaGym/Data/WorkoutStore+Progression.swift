@@ -150,8 +150,12 @@ extension WorkoutStore {
               let startedAt = program.startedAt, program.weeks > 0 else {
             return nil
         }
-        let days = Calendar.current.dateComponents([.day], from: startedAt, to: Date()).day ?? 0
-        return (max(0, days / 7) / program.weeks) + 1
+        // Whole calendar weeks, and nil once the program has run its repetitions out — see
+        // `GymCore.ProgramCycle`. The old `days / 7` climbed forever, so the training-max rule
+        // kept bumping every `weeks` weeks for as long as the program stayed active.
+        return ProgramCycle.position(
+            startedAt: startedAt, now: Date(), weeks: program.weeks, calendar: .current
+        )?.cycle
     }
 
     /// 2.5 kg for an upper-body lift, 5 kg for a lower-body one (A3) — matches the seeded
@@ -201,6 +205,19 @@ extension WorkoutStore {
                 factsByRoutine[routineID] = facts
             }
             persistProgression(entry: entry, routine: routine, facts: facts)
+            // `RoutineModel.updatedAt` is what `RoutineSeeder`'s CloudKit fold picks a survivor
+            // by. Committing a judgement without touching it left the device that had actually
+            // been *training* looking older than one where the routine had merely been renamed,
+            // and the fold discarded weeks of stall state and training maxes in favour of the
+            // rename.
+            //
+            // Stamped with the session's own start, not `Date()`, and never moved backwards.
+            // `updatedAt` has a second job — `AutoFill` and `planOverridesPrescription` ask "is
+            // the plan newer than the session the numbers came from?" — and "now" is always
+            // newer than the session finishing right now, so a plain bump would have made the
+            // plan outrank the engine after every single workout, taking the previous-session
+            // ghost off every row with it. The session's own date ties, and a tie is not newer.
+            routine.updatedAt = max(routine.updatedAt, workout.startedAt)
         }
     }
 

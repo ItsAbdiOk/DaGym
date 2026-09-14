@@ -56,6 +56,11 @@ struct RootView: View {
         ) { prompt in
             Button("Resume \(prompt.title)") { resumeUnfinished(prompt) }
             Button("Discard", role: .destructive) { discardUnfinished(prompt) }
+            // Tapping outside the dialog already dismisses it, and there was no way back to the
+            // workout afterwards — it simply sat there until the launch purge ate it. Saying
+            // "Not now" out loud is the honest version of that, and the workout now survives:
+            // `purgeUnfinished` never deletes one with sets in it, so it is offered again.
+            Button("Not now", role: .cancel) { resumePrompt = nil }
         } message: { prompt in
             Text(prompt.detail)
         }
@@ -104,6 +109,12 @@ struct RootView: View {
     private func refresh() {
         refreshRoutine()
         WidgetSnapshotWriter.refresh(store: store, preferences: preferences)
+        // The calendar sync writes a rolling 14-day window, and used to run only from the
+        // Schedule and Settings screens — so a lifter who set their plan and never went back
+        // had their calendar simply stop 14 days later. Running it here means launch, every
+        // foreground and midnight all push the window forward, and a routine renamed or
+        // deleted elsewhere has its events corrected on the next foreground.
+        CalendarSyncCoordinator.syncInBackground(store: store, preferences: preferences)
         runPendingIntents()
     }
 

@@ -128,9 +128,22 @@ extension WorkoutStore {
         return routineInfo(copy)
     }
 
+    /// Deletes a routine **and every plan that still points at it** — the weekday schedule,
+    /// any date overrides, and every program's `routineIDs`.
+    ///
+    /// Without this the id survived the routine: the schedule showed a blank planned day,
+    /// `nextSession` returned nothing for it, a program cycled onto a day with no routine, and
+    /// the routine's calendar events sat in the "DaGym" calendar with nothing left to remove
+    /// them. Dropping the schedule ids is also what lets the next calendar sync collect those
+    /// events: they become in-window days with nothing planned, which is exactly the case
+    /// `CalendarSyncService` deletes.
     func deleteRoutine(id: UUID) {
         guard let model = fetchRoutineModel(id: id) else { return }
         context.delete(model)
+        removeRoutineFromSchedule(id: id)
+        for program in fetch(FetchDescriptor<ProgramModel>()) where program.routineIDs.contains(id) {
+            program.routineIDs = program.routineIDs.filter { $0 != id }
+        }
         save()
         WidgetSnapshotWriter.refresh(store: self)
     }

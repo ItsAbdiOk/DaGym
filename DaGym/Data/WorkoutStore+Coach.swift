@@ -39,6 +39,11 @@ extension WorkoutStore {
         return CoachInput(
             schedule: schedule(),
             workoutDates: workoutDates(),
+            // Adherence is scored against *logged* sessions only — an imported Apple Health run
+            // broke the rest day (so it belongs in `workoutDates`, which feeds `Streaks`) but it
+            // is not one of the planned gym sessions the schedule asked for.
+            loggedWorkoutDates: finishedWorkouts.map(\.startedAt),
+            scheduleUpdatedAt: scheduleUpdatedAt(),
             recentSessions: recentSessions(from: recentWorkouts),
             muscleSetsInWindow: bodySeries(
                 weeks: 1, calendar: calendar,

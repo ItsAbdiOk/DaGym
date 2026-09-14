@@ -70,9 +70,14 @@ extension ActiveWorkoutView {
     func removeExercise(id: UUID) {
         guard let index = session.exercises.firstIndex(where: { $0.id == id }) else { return }
         let removed = session.exercises.remove(at: index)
+        // Removing one half of a superset used to leave the survivor carrying the pair's group
+        // id, so it stayed a "superset" of one: the rest timer kept waiting on a partner that no
+        // longer existed and never started.
+        session.normalizeSupersets()
         store.sync(session: session)
         undoAction = UndoAction(message: "Removed \(removed.exercise.name)") {
             session.exercises.insert(removed, at: min(index, session.exercises.count))
+            session.normalizeSupersets()
             store.sync(session: session)
         }
     }

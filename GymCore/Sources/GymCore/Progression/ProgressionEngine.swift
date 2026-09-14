@@ -253,8 +253,14 @@ struct RuleContext {
     }
 
     /// "+5 lb" — the jump that actually happened, not the rule's nominal increment.
+    ///
+    /// At the top of the plate rack (or the last dumbbell on the rack) the grid has nothing
+    /// above the current load, so `increased` hands back the weight it was given and the jump
+    /// is zero. "+0 kg" read as a raise that wasn't; say what actually happens instead.
     func increaseTitle(from oldKg: Double, to newKg: Double) -> String {
-        "+\(formatted(kg: newKg - oldKg))"
+        let delta = newKg - oldKg
+        guard delta > 0.001 else { return "Repeat \(formatted(kg: newKg))" }
+        return "+\(formatted(kg: delta))"
     }
 
     /// A "from your plan"/"first time" prescription for when there is no baseline to build from.

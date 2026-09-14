@@ -154,3 +154,71 @@ struct WorkoutSessionWarmupTests {
         }
     }
 }
+
+/// Superset rounds, set counting and group hygiene — the session-level half of the
+/// "life of a workout" review.
+@MainActor
+@Suite("WorkoutSession supersets and set counting")
+struct WorkoutSessionSupersetFixTests {
+    /// `warmups` warm-ups then `working` working sets, for one exercise.
+    private func entry(_ name: String, warmups: Int, working: Int, restSeconds: Int) -> WorkoutExerciseEntry {
+        let exercise = ExerciseInfo(
+            name: name, primary: [.chest], equipment: "Barbell", restSeconds: restSeconds
+        )
+        // Built one at a time: `Array(repeating:)` would hand every row the same id.
+        let sets = (0..<warmups).map { _ in SetEntry(kind: .warmup, weightKg: 40, reps: 5) }
+            + (0..<working).map { _ in SetEntry(kind: .working, weightKg: 80, reps: 8) }
+        return WorkoutExerciseEntry(exercise: exercise, sets: sets, supersetGroup: 1)
+    }
+
+    private func session(_ entries: [WorkoutExerciseEntry]) -> WorkoutSession {
+        WorkoutSession(title: "Push", subtitle: "", startedAt: Date(), exercises: entries)
+    }
+
+    @Test("a superset round is counted in working sets, so a warm-up never waits on a partner")
+    func roundsIgnoreWarmups() {
+        // Bench ramps up with two warm-ups; the row has none.
+        let workout = session([
+            entry("Bench", warmups: 2, working: 3, restSeconds: 120),
+            entry("Row", warmups: 0, working: 3, restSeconds: 90)
+        ])
+
+        // Bench's warm-up is nobody's business: it takes bench's own rest, not zero.
+        #expect(workout.restSeconds(after: 0, set: 0) == 120)
+        // Bench's first *working* set (row index 2) is round 0 — the row still owes round 0,
+        // so there is no rest yet.
+        #expect(workout.round(of: 0, set: 2) == 0)
+        #expect(workout.restSeconds(after: 0, set: 2) == 0)
+        // Once the row's round 0 is done, the group rests on its longest rest.
+        workout.exercises[1].sets[0].isDone = true
+        #expect(workout.restSeconds(after: 0, set: 2) == 120)
+    }
+
+    @Test("removing a superset partner leaves the survivor ungrouped")
+    func removingPartnerDissolvesTheGroup() {
+        let workout = session([
+            entry("Bench", warmups: 0, working: 3, restSeconds: 120),
+            entry("Row", warmups: 0, working: 3, restSeconds: 90)
+        ])
+        #expect(workout.exercises.allSatisfy { $0.supersetGroup != nil })
+
+        workout.exercises.remove(at: 1)
+        workout.normalizeSupersets()
+
+        #expect(workout.exercises[0].supersetGroup == nil)
+        // …and the survivor rests on its own timer rather than waiting for a partner.
+        #expect(workout.restSeconds(after: 0, set: 0) == 120)
+    }
+
+    @Test("the header's set count is working sets, the same count the summary shows")
+    func setCountsExcludeWarmups() {
+        let workout = session([entry("Bench", warmups: 2, working: 3, restSeconds: 120)])
+        workout.exercises[0].sets[0].isDone = true // a warm-up
+        workout.exercises[0].sets[2].isDone = true // a working set
+
+        #expect(workout.setsTotal == 3)
+        #expect(workout.setsDone == 1)
+        // `musclesHit` is weighted by the same sets volume is.
+        #expect(workout.musclesHit[.chest] == 1)
+    }
+}

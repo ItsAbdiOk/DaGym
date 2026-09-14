@@ -15,6 +15,12 @@ final class WorkoutSession {
     var effortScale: Effort.Scale = .rpe
     /// True for a session logged after the fact via "Log a Past Workout".
     var isBackfilled: Bool
+    /// The end a backfill was started with (`date + duration`), carried here rather than on the
+    /// `WorkoutModel` — a model with `endedAt` set is a *finished* workout everywhere else, so
+    /// stamping it at the start made an abandoned backfill a phantom in history. `finish` reads
+    /// it. Nil for a live session, and nil for a backfill re-opened after a crash (whose sets
+    /// all sit at the session's own date, so it ends there).
+    var backfillEndedAt: Date?
     /// The `WorkoutModel` this session is backed by, once persisted.
     var workoutID: UUID?
     /// Free-text note for the whole session, persisted to `WorkoutModel.notes`.
@@ -116,8 +122,16 @@ final class WorkoutSession {
         GymCore.SessionStats.volumeKg(exercises.flatMap(\.sets).filter(\.isDone).map(\.performed))
     }
 
-    var setsDone: Int { exercises.reduce(0) { $0 + $1.doneCount } }
-    var setsTotal: Int { exercises.reduce(0) { $0 + $1.sets.count } }
+    /// Working sets only — the same definition the summary card, the History row, the weekly
+    /// recap and the Health write use. The header used to count warm-ups here and nowhere else,
+    /// so a session read "8 / 12 sets" on screen and "6 sets" on the summary a tap later.
+    var setsDone: Int {
+        exercises.flatMap(\.sets).filter { $0.isDone && $0.kind.countsTowardStats }.count
+    }
+
+    var setsTotal: Int {
+        exercises.flatMap(\.sets).filter { $0.kind.countsTowardStats }.count
+    }
     var prCount: Int { prBanner == nil ? 0 : 1 }
 
     /// Elapsed seconds since the session started, as of `date`.
@@ -128,10 +142,15 @@ final class WorkoutSession {
     /// Index of the first exercise with an incomplete set.
     var onDeckIndex: Int? { exercises.firstIndex { !$0.isComplete } }
 
-    /// Muscles hit so far, weighted by completed sets.
+    /// Muscles hit so far, weighted by completed *working* sets — the same sets `volumeKg` and
+    /// the summary's set count are built from. Weighting by every completed row let a
+    /// warm-up-heavy lift outweigh one with no warm-ups at identical working volume.
     var musclesHit: [Muscle: Double] {
-        let entries = exercises.map {
-            (primary: $0.exercise.primary, secondary: $0.exercise.secondary, completedCount: $0.doneCount)
+        let entries = exercises.map { entry in
+            (
+                primary: entry.exercise.primary, secondary: entry.exercise.secondary,
+                completedCount: entry.sets.filter { $0.isDone && $0.kind.countsTowardStats }.count
+            )
         }
         return GymCore.SessionStats.musclesHit(sets: entries)
     }
@@ -145,6 +164,13 @@ final class WorkoutSession {
         if isRecheck, isResting { return }
         Haptics.setDone()
         startRest(seconds: restSeconds(after: ei, set: si), after: ei, set: si)
+    }
+
+    /// Marks every already-logged set as "completed at least once", for a session re-opened from
+    /// the store. Without it a resumed workout treated a row the lifter had ticked days ago as
+    /// brand new: un-ticking it to fix the reps and re-ticking started a full rest timer.
+    func markLoggedSetsAsSeen() {
+        everCompletedSetIDs = Set(exercises.flatMap(\.sets).filter(\.isDone).map(\.id))
     }
 
     func uncompleteSet(exerciseID: UUID, setID: UUID) {
@@ -165,11 +191,16 @@ final class WorkoutSession {
         restNextReps = nil
         restNextLabel = ""
         let members = supersetMembers(containing: exerciseIndex)
+        // Rounds count working sets, not rows: a warm-up belongs to no round (see
+        // `WorkoutSession+Supersets.round(of:set:)`), so what follows it is simply this
+        // exercise's own next row.
+        let round = round(of: exerciseIndex, set: setIndex)
         if !hasUndoneSets {
             restNextLabel = "Last set done"
-        } else if let partner = roundPartner(members: members, round: setIndex, excluding: exerciseIndex) {
+        } else if let round,
+                  let partner = roundPartner(members: members, round: round, excluding: exerciseIndex) {
             restNextLabel = "Next \(exercises[partner].exercise.name)"
-        } else if let next = nextRoundSet(members: members, round: setIndex + 1) {
+        } else if let next = nextStep(after: exerciseIndex, set: setIndex, members: members, round: round) {
             restNextWeightKg = next.weightKg
             restNextReps = next.reps
         } else if let last = members.last, last + 1 < exercises.count {
@@ -182,6 +213,17 @@ final class WorkoutSession {
         restSetCount = ex.sets.count
         restRoutineGlyph = ex.routineID.flatMap { routineGlyphs[$0] }
         onRestStateChange?(restState(isEnded: seconds == 0, isSkipped: seconds == 0))
+    }
+
+    /// What comes after this set within the exercise or its superset group: the next round's
+    /// first set, or — after a warm-up, which is in no round — this exercise's own next row.
+    private func nextStep(after exerciseIndex: Int, set setIndex: Int, members: [Int], round: Int?)
+        -> SetEntry? {
+        guard let round else {
+            let sets = exercises[exerciseIndex].sets
+            return sets.indices.contains(setIndex + 1) ? sets[setIndex + 1] : nil
+        }
+        return nextRoundSet(members: members, round: round + 1)
     }
 
     /// Refreshes `restRemaining` from the wall clock. Safe to call as often as you like — it only

@@ -141,6 +141,17 @@ public struct CoachInput: Sendable {
     // Adherence
     public var schedule: WeeklySchedule
     public var workoutDates: [Date]
+    /// The dates of sessions **logged in DaGym**, for the adherence rule only — Apple Health
+    /// imports are deliberately excluded. A Health-imported run broke the rest day (so it
+    /// belongs in `workoutDates`, which feeds `Streaks`), but it is not one of the planned gym
+    /// sessions the lifter's schedule asked for, and counting it made a week of running read as
+    /// perfect adherence to a lifting plan. Defaults to `workoutDates` when not supplied.
+    public var loggedWorkoutDates: [Date]
+    /// When `schedule` was last edited, if known. Weeks that began before this are not scored:
+    /// the schedule holds only the *current* plan, so grading a week from a month ago against a
+    /// plan written yesterday rewrote the lifter's own history every time they changed their
+    /// mind about which days they train.
+    public var scheduleUpdatedAt: Date?
 
     // Session drift
     public var recentSessions: [CoachSessionSummary]
@@ -181,6 +192,8 @@ public struct CoachInput: Sendable {
     public init(
         schedule: WeeklySchedule = WeeklySchedule(),
         workoutDates: [Date] = [],
+        loggedWorkoutDates: [Date]? = nil,
+        scheduleUpdatedAt: Date? = nil,
         recentSessions: [CoachSessionSummary] = [],
         muscleSetsInWindow: [Muscle: Double] = [:],
         // Empty, not `Muscle.allCases`: an app layer that hasn't computed a coverage window yet
@@ -198,6 +211,8 @@ public struct CoachInput: Sendable {
     ) {
         self.schedule = schedule
         self.workoutDates = workoutDates
+        self.loggedWorkoutDates = loggedWorkoutDates ?? workoutDates
+        self.scheduleUpdatedAt = scheduleUpdatedAt
         self.recentSessions = recentSessions
         self.muscleSetsInWindow = muscleSetsInWindow
         self.trackedMuscles = trackedMuscles

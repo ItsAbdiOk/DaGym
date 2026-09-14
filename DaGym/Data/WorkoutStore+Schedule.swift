@@ -60,9 +60,42 @@ extension WorkoutStore {
     func nextSession(
         calendar: Calendar = .current, now: Date = Date()
     ) -> (date: Date, routine: RoutineInfo)? {
-        guard let next = schedule().nextSession(after: now, calendar: calendar) else { return nil }
-        guard let routine = routines().first(where: { $0.id == next.routineID }) else { return nil }
+        // Days whose routines no longer exist are skipped rather than ending the search: the
+        // old version took the planned day's *first* routine id and gave up when it had been
+        // deleted, so one stale id blanked Home's "Next:" card entirely instead of showing the
+        // session after it.
+        let byID = Dictionary(routines().map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        guard let next = schedule().nextSession(
+            after: now, calendar: calendar, where: { byID[$0] != nil }
+        ), let routine = byID[next.routineID] else { return nil }
         return (next.date, routine)
+    }
+
+    /// When the schedule row was last written, for `CoachInput.scheduleUpdatedAt` — the coach's
+    /// adherence rule refuses to grade weeks that began before the current plan existed.
+    func scheduleUpdatedAt() -> Date? {
+        fetchScheduleModel()?.updatedAt
+    }
+
+    /// Drops `routineID` from every weekday and every date override, returning whether anything
+    /// changed. Called when a routine is deleted: leaving the id behind left the schedule
+    /// pointing at a routine that no longer exists, which showed as a blank planned day and
+    /// (via `nextSession`) a blank "Next:" card.
+    @discardableResult
+    func removeRoutineFromSchedule(id routineID: UUID) -> Bool {
+        var current = schedule()
+        var changed = false
+        for (weekday, list) in current.dayRoutines where list.contains(routineID) {
+            current.setRoutines(list.filter { $0 != routineID }, on: weekday)
+            changed = true
+        }
+        for (key, list) in current.dateOverrides where list.contains(routineID) {
+            current.dateOverrides[key] = list.filter { $0 != routineID }
+            changed = true
+        }
+        guard changed else { return false }
+        saveSchedule(current)
+        return true
     }
 
     /// Event identifiers written by the last calendar sync, keyed by

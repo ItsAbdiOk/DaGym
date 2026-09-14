@@ -184,11 +184,25 @@ public struct WeeklySchedule: Codable, Hashable, Sendable {
     public func nextSession(
         after date: Date, calendar: Calendar = .current, limit: Int = 14
     ) -> (date: Date, routineID: UUID)? {
+        nextSession(after: date, calendar: calendar, limit: limit) { _ in true }
+    }
+
+    /// The next planned session strictly after `date` whose routine `isAvailable` accepts.
+    ///
+    /// A day whose routines have all been deleted is skipped like a rest day rather than
+    /// ending the search: the caller only knows which routines still exist, and taking the
+    /// day's *first* id unconditionally meant one deleted routine blanked Home's "Next:" card
+    /// until the lifter noticed and edited their schedule. A day whose first routine is gone
+    /// but whose second still exists reports the second.
+    public func nextSession(
+        after date: Date, calendar: Calendar = .current, limit: Int = 14,
+        where isAvailable: (UUID) -> Bool
+    ) -> (date: Date, routineID: UUID)? {
         var cursor = date
         for _ in 0..<limit {
             guard let candidate = calendar.date(byAdding: .day, value: 1, to: cursor) else { return nil }
             cursor = candidate
-            if let routineID = routineID(on: candidate, calendar: calendar) {
+            if let routineID = routineIDs(on: candidate, calendar: calendar).first(where: isAvailable) {
                 return (candidate, routineID)
             }
         }

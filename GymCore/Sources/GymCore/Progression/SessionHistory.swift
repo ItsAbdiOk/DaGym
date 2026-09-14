@@ -42,9 +42,15 @@ public struct ExerciseHistoryEntry: Hashable, Sendable {
         self.wasPlannedDeload = wasPlannedDeload
     }
 
-    /// The working sets that count toward progression (warm-ups never do).
+    /// The sets the engine may judge — `SetKind.countsTowardProgression`, i.e. straight working
+    /// sets and AMRAPs, in logged order.
+    ///
+    /// Warm-ups were always excluded; drop sets, failure sets and rest-pause continuations are
+    /// too, because every rule pairs these against the plan *by position*. A drop set inserted
+    /// under set 1 shifted every later set up a slot, so the plan's 3×8 at 80 was judged against
+    /// 80×8, 64×6, 80×8 — a miss on a session that hit everything asked for.
     public var workingSets: [HistorySet] {
-        sets.filter { $0.kind.countsTowardStats }
+        sets.filter { $0.kind.countsTowardProgression }
     }
 }
 

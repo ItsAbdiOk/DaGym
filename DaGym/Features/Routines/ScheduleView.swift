@@ -16,8 +16,7 @@ struct ScheduleView: View {
     @State private var routines: [RoutineInfo] = []
     @State private var schedule = WeeklySchedule()
     @State private var moveRequest: MoveRequest?
-    @State private var syncTask: Task<Void, Never>?
-    @State private var eventStore: EventStoring = EventKitStore()
+    @State private var syncProblem: String?
 
     var body: some View {
         ZStack {
@@ -89,14 +88,20 @@ struct ScheduleView: View {
         }
     }
 
+    /// Says what actually happened. It used to claim "Synced to your \"DaGym\" calendar."
+    /// whenever the toggle was on — including when calendar access had been denied and every
+    /// sync was failing silently behind a `try?`.
     private var footnote: some View {
-        Text(
-            preferences.calendarSyncEnabled
-                ? "Synced to your \"DaGym\" calendar."
-                : "Turn on calendar sync in Settings → Calendar to keep these sessions on your calendar."
-        )
-        .font(DGFont.footnote)
-        .foregroundStyle(DGColor.ink4)
+        Text(footnoteText)
+            .font(DGFont.footnote)
+            .foregroundStyle(syncProblem == nil ? DGColor.ink4 : DGColor.danger)
+    }
+
+    private var footnoteText: String {
+        if let syncProblem { return syncProblem }
+        return preferences.calendarSyncEnabled
+            ? "Synced to your \"DaGym\" calendar."
+            : "Turn on calendar sync in Settings → Calendar to keep these sessions on your calendar."
     }
 
     private var orderedWeekdays: [Weekday] { Weekday.ordered(mondayFirst: preferences.weekStartsMonday) }
@@ -150,22 +155,17 @@ struct ScheduleView: View {
         // Workout-day reminders are dated, so a schedule edit invalidates every pending one.
         // Without this they only caught up on the next launch.
         TrainingNotificationScheduler().rescheduleAll(store: store, preferences: preferences)
-        guard preferences.calendarSyncEnabled else { return }
-        let snapshot = schedule
-        let currentRoutines = routines
-        let hour = preferences.scheduledStartHour
-        // Two quick edits must not sync concurrently: the second would read the same
-        // `existingEventIDs` as the first and create duplicate events. Chain on the last task.
-        let previous = syncTask
-        syncTask = Task {
-            await previous?.value
-            let service = CalendarSyncService(eventStore: eventStore)
-            let request = ScheduleSyncRequest(
-                schedule: snapshot, routines: currentRoutines, startDate: Date(), defaultStartHour: hour,
-                existingEventIDs: store.scheduleEventIDs()
-            )
-            guard let updated = try? await service.sync(request) else { return }
-            store.saveScheduleEventIDs(updated)
+        syncCalendar()
+    }
+
+    /// `CalendarSyncCoordinator` owns the serialising chain (a settings toggle and a schedule
+    /// edit could otherwise sync concurrently over the same event ids) and reports refusals
+    /// instead of swallowing them.
+    private func syncCalendar() {
+        guard !LaunchFlags.isTesting else { return }
+        Task {
+            let outcome = await CalendarSyncCoordinator.sync(store: store, preferences: preferences)
+            syncProblem = outcome.problemMessage
         }
     }
 }

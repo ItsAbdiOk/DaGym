@@ -73,4 +73,104 @@ struct DeloadWeekTests {
         #expect(active.name == "Deload Week")
         #expect(active.isActive)
     }
+
+    private static func calendar() -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+        calendar.firstWeekday = 2
+        return calendar
+    }
+
+    private static func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        return calendar().date(from: components) ?? Date()
+    }
+
+    /// The defect, in the reviewer's own numbers: a 4-week PPL started Monday 7 Sep with a
+    /// deload planned on the 21st used to resume on the 28th at **week 4** — which is the
+    /// block's own deload — so the lifter got two deload weeks back to back and never trained
+    /// week 3 at all. The interrupted program's `startedAt` now moves forward by however many
+    /// weeks the deload consumed, so it comes back where it left off.
+    @Test("resuming after a deload doesn't skip the interrupted week or stack two deloads")
+    func resumeShiftsTheInterruptedProgramForward() throws {
+        let store = try makeStore()
+        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        let original = try #require(store.createProgram(from: .pushPullLegs))
+        let routineID = try #require(original.routineIDs.first)
+        let calendar = Self.calendar()
+        let programModel = try #require(fetchProgram(store, id: original.id))
+        programModel.startedAt = Self.date(2026, 9, 7) // Monday, week 1
+        programModel.isActive = true
+        store.save()
+
+        // Week 3 of the block: plan a deload.
+        store.planDeloadWeek()
+        let deloadID = try #require(store.activeProgramModel()?.id)
+        let deload = try #require(fetchProgram(store, id: deloadID))
+        deload.startedAt = Self.date(2026, 9, 21)
+        store.save()
+
+        // Monday the 28th: the deload week is over.
+        let resumeDay = Self.date(2026, 9, 28)
+        let resumed = try #require(store.activeProgramModel(now: resumeDay, calendar: calendar))
+        #expect(resumed.id == original.id)
+        #expect(
+            store.currentWeek(for: resumed, now: resumeDay, calendar: calendar) == 3,
+            "it resumes at the week the deload interrupted, not at the block's own deload"
+        )
+        #expect(store.currentWeekKind(
+            forRoutineID: routineID, activeProgram: resumed, now: resumeDay, calendar: calendar
+        ) == .normal)
+    }
+
+    /// Tapping "Plan a deload week" twice used to drop the saved previous-program id (it was
+    /// read back as the deload program's own id and cleared), so the real program stayed
+    /// deactivated forever — and each tap left another "Deload Week" row in the programs list.
+    @Test("a second deload tap still resumes the real program, and leaves no extra rows")
+    func doubleDeloadTap() throws {
+        let store = try makeStore()
+        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        let original = try #require(store.createProgram(from: .pushPullLegs))
+        store.startProgram(id: original.id, now: Self.date(2026, 9, 7))
+        let calendar = Self.calendar()
+
+        store.planDeloadWeek()
+        store.planDeloadWeek()
+
+        let active = try #require(store.activeProgramModel())
+        active.startedAt = Self.date(2026, 9, 21)
+        store.save()
+
+        let resumeDay = Self.date(2026, 9, 28)
+        let resumed = try #require(store.activeProgramModel(now: resumeDay, calendar: calendar))
+        #expect(resumed.id == original.id, "the real program must still come back")
+
+        let deloadRows = store.programs().filter { $0.name == "Deload Week" }
+        #expect(deloadRows.count == 1, "the abandoned shim from the first tap is cleaned up")
+    }
+
+    /// The previous-program pointer used to live in `UserDefaults.standard`, so a second device
+    /// — which shares the SwiftData store through CloudKit but not the defaults — never resumed
+    /// anything. It is derived from the programs themselves now.
+    @Test("resuming works with no UserDefaults pointer at all")
+    func resumesWithoutUserDefaults() throws {
+        let store = try makeStore()
+        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        let original = try #require(store.createProgram(from: .pushPullLegs))
+        store.startProgram(id: original.id, now: Self.date(2026, 9, 7))
+        store.planDeloadWeek()
+        let active = try #require(store.activeProgramModel())
+        active.startedAt = Self.date(2026, 9, 21)
+        store.save()
+        // What the other device sees: the store, but none of this device's defaults.
+        UserDefaults.standard.removeObject(forKey: WorkoutStore.deloadPreviousProgramIDKey)
+
+        let resumed = try #require(
+            store.activeProgramModel(now: Self.date(2026, 9, 28), calendar: Self.calendar())
+        )
+        #expect(resumed.id == original.id)
+    }
 }

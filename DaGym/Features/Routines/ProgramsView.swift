@@ -8,6 +8,7 @@ struct ProgramsView: View {
     var onDone: () -> Void
 
     @Environment(WorkoutStore.self) private var store
+    @Environment(Preferences.self) private var preferences
     @State private var programs: [ProgramInfo] = []
     @State private var showingNew = false
 
@@ -72,7 +73,9 @@ struct ProgramsView: View {
         }
     }
 
-    private func refresh() { programs = store.programs() }
+    /// `preferences.trainingCalendar` carries `weekStartsMonday`, so the week a program says
+    /// you're in is the same week the Progress tab and the widget draw.
+    private func refresh() { programs = store.programs(calendar: preferences.trainingCalendar) }
 
     private func create(_ kind: StarterProgramKind) {
         store.createProgram(from: kind)
@@ -112,21 +115,47 @@ private struct ProgramCard: View {
                 Spacer()
                 if program.isActive { Text("Active").dgLabel(DGColor.coralText) }
             }
+            Text(statusLine)
+                .font(DGFont.subhead)
+                .foregroundStyle(DGColor.ink3)
             weekStrip
             actions
         }
         .dgCard()
     }
 
+    /// Which week the lifter is actually in — the one thing a multi-week program is for, and
+    /// the one thing this card never showed.
+    private var statusLine: String {
+        guard let week = program.currentWeek else {
+            if program.isFinished { return "Finished · \(program.weeks)-week block" }
+            return program.startedAt == nil ? "Not started · \(program.weeks) weeks" : "Not running"
+        }
+        let kind = program.currentWeekKind.map { " · \($0.displayName)" } ?? ""
+        let cycle = (program.currentCycle ?? 1) > 1 ? " · round \(program.currentCycle ?? 1)" : ""
+        return "Week \(week) of \(program.weeks)\(kind)\(cycle)"
+    }
+
     private var weekStrip: some View {
         HStack(spacing: DGSpace.s2) {
             ForEach(program.programWeeks) { week in
                 VStack(spacing: 2) {
-                    Text("W\(week.index)").font(DGFont.caption).foregroundStyle(DGColor.ink3)
-                    Circle().fill(color(week.kind)).frame(width: 10, height: 10)
+                    Text("W\(week.index)")
+                        .font(DGFont.caption)
+                        .foregroundStyle(week.index == program.currentWeek ? DGColor.ink1 : DGColor.ink3)
+                    Circle()
+                        .fill(color(week.kind))
+                        .frame(width: 10, height: 10)
+                        .overlay(
+                            Circle()
+                                .stroke(DGColor.ink1, lineWidth: week.index == program.currentWeek ? 2 : 0)
+                                .padding(-3)
+                        )
                 }
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(statusLine)
     }
 
     private func color(_ kind: ProgramWeekKind) -> Color {
@@ -160,6 +189,7 @@ private struct ProgramCard: View {
     if let container = try? ModelContainer.dagym(inMemory: true) {
         ProgramsView(onDone: {})
             .environment(WorkoutStore(context: container.mainContext))
+            .environment(Preferences())
     } else {
         Text("Preview unavailable")
     }

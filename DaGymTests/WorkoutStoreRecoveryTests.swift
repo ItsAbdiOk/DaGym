@@ -45,7 +45,7 @@ struct WorkoutStoreRecoveryTests {
         #expect(dates.first == finished.startedAt)
     }
 
-    @Test("recoveryEvents emits primary (share 1) and secondary (share 0.5) events, warm-ups excluded")
+    @Test("recoveryEvents emits primary and secondary events by StimulusAttribution, warm-ups excluded")
     func recoveryEventsSharesAndWarmups() throws {
         let store = try makeStore()
         let exercise = store.createCustomExercise(
@@ -68,7 +68,9 @@ struct WorkoutStoreRecoveryTests {
         let chestEvent = events.first { $0.muscle == .chest }
         let tricepsEvent = events.first { $0.muscle == .triceps }
         #expect(chestEvent?.share == 1.0)
-        #expect(tricepsEvent?.share == 0.5)
+        // `Recovery.secondaryShare` (0.45), not a second, hard-coded opinion of what half means —
+        // the same weight the body map and the volume charts give a secondary mover.
+        #expect(tricepsEvent?.share == Recovery.secondaryShare)
     }
 
     @Test("recoveryEvents excludes workouts started before the cutoff")

@@ -97,9 +97,11 @@ targets:
         NSSpeechRecognitionUsageDescription: >-
           DaGym uses on-device speech recognition to turn what you say into a logged set. Nothing
           is sent to a server.
-        # Calendar sync (plan.md §6.8): write-only access is enough — DaGym only creates,
-        # updates and deletes events in its own "DaGym" calendar, never reads the user's other
-        # events.
+        # Calendar sync (plan.md §6.8): DaGym only ever touches its own "DaGym" calendar, but it
+        # needs *full* access to do so. The sync is an upsert — it has to look its own events up
+        # by identifier to move, retitle or remove them when the plan changes. Under write-only
+        # access `event(withIdentifier:)` returns nil and `calendars(for:)` is empty, so every
+        # edit created duplicates and no delete ever landed. See `EventStoring`.
         CFBundleURLTypes:
           - CFBundleURLName: dev.abdirahmanmohamed.dagym
             CFBundleURLSchemes: [dagym]
@@ -117,9 +119,10 @@ targets:
             LSItemContentTypes: [dev.abdirahmanmohamed.dagym.plan]
             CFBundleTypeRole: Editor
             LSHandlerRank: Owner
-        NSCalendarsWriteOnlyAccessUsageDescription: >-
-          DaGym adds your scheduled workouts to a "DaGym" calendar so they show up alongside
-          the rest of your day.
+        NSCalendarsFullAccessUsageDescription: >-
+          DaGym keeps your scheduled workouts in a "DaGym" calendar of its own, so they show up
+          alongside the rest of your day. It needs full access to update and remove the sessions
+          it created when you change your plan; it never reads your other calendars.
         # Progress photos (plan.md §6.4): in-app capture with a ghost overlay of the previous
         # shot, or picking an existing photo. Photos stay in a local-only store by default (see
         # `Preferences.syncPhotos`, `ModelContainer.dagym`) and can be gated behind Face ID.

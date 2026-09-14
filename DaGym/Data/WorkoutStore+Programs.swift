@@ -19,6 +19,28 @@ struct ProgramInfo: Identifiable, Hashable {
     var isActive: Bool
     var routineIDs: [UUID]
     var programWeeks: [ProgramWeekInfo]
+    /// 1-based week within the block, and 1-based repetition of the block — nil for a program
+    /// that hasn't started or has run its `ProgramCycle.maxCycles` repetitions. `ProgramsView`
+    /// shows these; without them the lifter had no way to see which week they were in, which is
+    /// the one thing a multi-week program is for.
+    var currentWeek: Int?
+    var currentCycle: Int?
+    var isFinished = false
+
+    /// The kind of week the program is in right now, for the week strip's highlight.
+    var currentWeekKind: ProgramWeekKind? {
+        guard let currentWeek else { return nil }
+        return ProgramInfo.week(at: currentWeek, in: programWeeks)?.kind
+    }
+
+    /// `programWeeks` may not have exactly `weeks` entries (a `.gymplan` import can define
+    /// fewer), so an index that has no exact match wraps into whatever weeks the program does
+    /// define rather than reporting "no week kind at all".
+    static func week(at index: Int, in weeks: [ProgramWeekInfo]) -> ProgramWeekInfo? {
+        guard !weeks.isEmpty else { return nil }
+        if let exact = weeks.first(where: { $0.index == index }) { return exact }
+        return weeks[(max(1, index) - 1) % weeks.count]
+    }
 }
 
 /// Starter program templates built from the seeded routines (`RoutineSeeder`'s starters —
@@ -56,10 +78,10 @@ enum StarterPrograms {
 }
 
 extension WorkoutStore {
-    func programs() -> [ProgramInfo] {
+    func programs(now: Date = Date(), calendar: Calendar = .current) -> [ProgramInfo] {
+        pruneAbandonedDeloadPrograms()
         let descriptor = FetchDescriptor<ProgramModel>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
-        let models = fetch(descriptor)
-        return models.map(programInfo)
+        return fetch(descriptor).map { programInfo($0, now: now, calendar: calendar) }
     }
 
     /// Builds `kind`'s program from its seeded routines. Nil — and nothing inserted — when any
@@ -83,11 +105,11 @@ extension WorkoutStore {
 
     /// Starts a program, deactivating every other one — only one can be active at a time.
     @discardableResult
-    func startProgram(id: UUID) -> ProgramInfo? {
+    func startProgram(id: UUID, now: Date = Date()) -> ProgramInfo? {
         guard let model = fetchProgramModel(id: id) else { return nil }
         for other in fetch(FetchDescriptor<ProgramModel>()) { other.isActive = false }
         model.isActive = true
-        model.startedAt = Date()
+        model.startedAt = now
         model.completedAt = nil
         save()
         return programInfo(model)
@@ -106,12 +128,19 @@ extension WorkoutStore {
         save()
     }
 
-    /// 1-based week index in the program's cycle from `startedAt`, wrapping every `weeks` weeks;
-    /// 1 for a program that hasn't started.
-    func currentWeek(for program: ProgramModel) -> Int {
+    /// 1-based week index in the program's cycle, counted in **whole calendar weeks** from the
+    /// week `startedAt` falls in (see `GymCore.ProgramCycle`); 1 for a program that hasn't
+    /// started, and held at the last week once the program has run its repetitions out.
+    ///
+    /// `now`/`calendar` are parameters rather than `Date()`/`Calendar.current` reached for
+    /// inside: none of this was testable before, and the week boundary moved with the clock and
+    /// the timezone instead of sitting on the lifter's own week start.
+    func currentWeek(for program: ProgramModel, now: Date = Date(), calendar: Calendar = .current) -> Int {
         guard let startedAt = program.startedAt, program.weeks > 0 else { return 1 }
-        let days = Calendar.current.dateComponents([.day], from: startedAt, to: Date()).day ?? 0
-        return (max(0, days / 7) % program.weeks) + 1
+        let position = ProgramCycle.position(
+            startedAt: startedAt, now: now, weeks: program.weeks, calendar: calendar
+        )
+        return position?.week ?? program.weeks
     }
 
     /// The active program's current week index for `routineID`, or nil when no active program
@@ -130,40 +159,109 @@ extension WorkoutStore {
     /// holds. `startWorkout` and friends fetch the active program once for the whole session and
     /// call these, rather than paying `activeProgramModel()`'s two queries per exercise for an
     /// answer that cannot differ between them.
-    func weekInCycle(forRoutineID routineID: UUID, activeProgram: ProgramModel?) -> Int? {
-        guard let program = activeProgram, program.routineIDs.contains(routineID) else { return nil }
-        return currentWeek(for: program)
+    func weekInCycle(
+        forRoutineID routineID: UUID, activeProgram: ProgramModel?, now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Int? {
+        guard let program = activeProgram, program.routineIDs.contains(routineID),
+              let startedAt = program.startedAt else { return nil }
+        return ProgramCycle.position(
+            startedAt: startedAt, now: now, weeks: program.weeks, calendar: calendar
+        )?.week
     }
 
-    func currentWeekKind(forRoutineID routineID: UUID, activeProgram: ProgramModel?) -> ProgramWeekKind? {
-        guard let program = activeProgram, program.routineIDs.contains(routineID) else { return nil }
-        let week = currentWeek(for: program)
-        return (program.programWeeks ?? []).first { $0.index == week }?.weekKind
+    /// The week kind for `routineID` right now.
+    ///
+    /// Wraps into whatever weeks the program actually defines when `programWeeks.count` doesn't
+    /// match `weeks` — a `.gymplan` import can produce that, and the old exact-index lookup
+    /// then returned nil, silently dropping every planned deload the plan described.
+    func currentWeekKind(
+        forRoutineID routineID: UUID, activeProgram: ProgramModel?, now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> ProgramWeekKind? {
+        guard let program = activeProgram,
+              let week = weekInCycle(
+                  forRoutineID: routineID, activeProgram: program, now: now, calendar: calendar
+              ) else { return nil }
+        let weeks = (program.programWeeks ?? []).sorted { $0.index < $1.index }
+        guard !weeks.isEmpty else { return nil }
+        if let exact = weeks.first(where: { $0.index == week }) { return exact.weekKind }
+        return weeks[(max(1, week) - 1) % weeks.count].weekKind
     }
 
-    func activeProgramModel() -> ProgramModel? {
-        resumeProgramIfDeloadExpired()
+    func activeProgramModel(now: Date = Date(), calendar: Calendar = .current) -> ProgramModel? {
+        resumeProgramIfDeloadExpired(now: now, calendar: calendar)
         let descriptor = FetchDescriptor<ProgramModel>(predicate: #Predicate { $0.isActive })
-        return fetchFirst(descriptor)
+        guard let active = fetchFirst(descriptor) else { return nil }
+        guard let startedAt = active.startedAt,
+              ProgramCycle.isFinished(
+                  startedAt: startedAt, now: now, weeks: active.weeks, calendar: calendar
+              ) else { return active }
+        // A program that has repeated its own block `ProgramCycle.maxCycles` times is over.
+        // Left running, its week index wrapped forever and its cycle index climbed without
+        // bound, so the training-max rule kept bumping every `weeks` weeks indefinitely.
+        active.isActive = false
+        active.completedAt = active.completedAt ?? now
+        save()
+        return nil
     }
 
     /// A planned deload week (`planDeloadWeek()`) is a 2-week program — week 1 deload, week 2
     /// normal — so that a lifter who never reopens the app isn't stuck on deload load forever.
-    /// Once its own week index moves past week 1, this deactivates it and reactivates whichever
-    /// program was active before it (persisted by `planDeloadWeek()`), so progression on the
-    /// user's real program resumes without them having to do anything.
-    private func resumeProgramIfDeloadExpired() {
+    /// Once a whole calendar week has passed since it started, this deactivates it and hands
+    /// control back to the program it interrupted (see `interruptedProgram()`), shifted forward
+    /// by the weeks the deload consumed, so progression resumes exactly where it left off.
+    private func resumeProgramIfDeloadExpired(now: Date, calendar: Calendar) {
         let descriptor = FetchDescriptor<ProgramModel>(predicate: #Predicate { $0.isActive })
-        guard let active = fetchFirst(descriptor),
-              active.name == WorkoutStore.deloadProgramName, currentWeek(for: active) > 1 else { return }
+        guard let active = fetchFirst(descriptor), active.name == WorkoutStore.deloadProgramName,
+              let deloadStart = active.startedAt else { return }
+        let elapsed = ProgramCycle.weeksElapsed(from: deloadStart, to: now, calendar: calendar)
+        guard elapsed >= 1 else { return }
         active.isActive = false
-        active.completedAt = Date()
-        let defaults = UserDefaults.standard
-        if let idString = defaults.string(forKey: WorkoutStore.deloadPreviousProgramIDKey),
-           let id = UUID(uuidString: idString), let resumed = fetchProgramModel(id: id) {
+        active.completedAt = now
+        if let resumed = interruptedProgram() {
             resumed.isActive = true
+            // The deload ate `elapsed` calendar weeks of the interrupted program's own cycle.
+            // Without this shift a 4-week block interrupted in week 3 came back in week 4 —
+            // which is that block's *own* deload — so the lifter got two deload weeks back to
+            // back and never trained week 3 at all.
+            resumed.startedAt = (resumed.startedAt).map {
+                ProgramCycle.shifted($0, byWeeks: elapsed, notPast: now, calendar: calendar)
+            }
+            resumed.completedAt = nil
         }
-        defaults.removeObject(forKey: WorkoutStore.deloadPreviousProgramIDKey)
+        pruneAbandonedDeloadPrograms()
+        save()
+    }
+
+    /// The real program a planned deload interrupted: the most recently started program that
+    /// isn't a deload shim and hasn't been completed.
+    ///
+    /// Derived rather than remembered. The pointer used to live in `UserDefaults.standard`,
+    /// which meant a second device never resumed anything, and tapping "Plan a deload week"
+    /// while a deload was already running overwrote it with nothing — so the original program
+    /// stayed deactivated forever.
+    private func interruptedProgram() -> ProgramModel? {
+        fetch(FetchDescriptor<ProgramModel>())
+            .filter { $0.name != WorkoutStore.deloadProgramName && $0.completedAt == nil }
+            .compactMap { model in model.startedAt.map { (model, $0) } }
+            .max { $0.1 < $1.1 }?.0
+    }
+
+    /// Deletes deload shims that were superseded before they ever expired — what a second tap
+    /// on "Plan a deload week" leaves behind. An expired one (`completedAt` set) is kept, since
+    /// it is the record of a deload the lifter actually took.
+    ///
+    /// Called from `programs()` (the only screen that shows the clutter) and from the resume
+    /// path — deliberately *not* from `activeProgramModel()`, which is on `startWorkout`'s hot
+    /// path and is held to a fixed query count by `WorkoutStoreStartPerformanceTests`.
+    private func pruneAbandonedDeloadPrograms() {
+        let name = WorkoutStore.deloadProgramName
+        let abandoned = fetch(FetchDescriptor<ProgramModel>()).filter {
+            $0.name == name && !$0.isActive && $0.completedAt == nil
+        }
+        guard !abandoned.isEmpty else { return }
+        for model in abandoned { context.delete(model) }
         save()
     }
 
@@ -173,14 +271,23 @@ extension WorkoutStore {
         return fetchFirst(descriptor)
     }
 
-    private func programInfo(_ model: ProgramModel) -> ProgramInfo {
+    private func programInfo(
+        _ model: ProgramModel, now: Date = Date(), calendar: Calendar = .current
+    ) -> ProgramInfo {
         let weeks = (model.programWeeks ?? []).sorted { $0.index < $1.index }.map {
             ProgramWeekInfo(id: $0.id, index: $0.index, kind: $0.weekKind)
         }
+        let position = model.startedAt.flatMap {
+            ProgramCycle.position(startedAt: $0, now: now, weeks: model.weeks, calendar: calendar)
+        }
+        let finished = model.startedAt.map {
+            ProgramCycle.isFinished(startedAt: $0, now: now, weeks: model.weeks, calendar: calendar)
+        } ?? false
         return ProgramInfo(
             id: model.id, name: model.name, weeks: model.weeks, startedAt: model.startedAt,
             completedAt: model.completedAt, isActive: model.isActive, routineIDs: model.routineIDs,
-            programWeeks: weeks
+            programWeeks: weeks, currentWeek: position?.week, currentCycle: position?.cycle,
+            isFinished: finished
         )
     }
 }

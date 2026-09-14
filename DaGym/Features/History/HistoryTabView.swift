@@ -116,6 +116,10 @@ struct HistoryTabView: View {
         WidgetSnapshotWriter.refresh(store: store, preferences: preferences)
         // Same reason as `ScheduleView.persist`: the moved day's reminder has to move with it.
         TrainingNotificationScheduler().rescheduleAll(store: store, preferences: preferences)
+        // …and so does its calendar event. Moving a session from here saved the schedule but
+        // never synced, so the "DaGym" calendar kept showing the session on the old day until
+        // something else happened to trigger a sync.
+        CalendarSyncCoordinator.syncInBackground(store: store, preferences: preferences)
         refresh()
     }
 

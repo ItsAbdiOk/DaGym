@@ -11,11 +11,19 @@ extension CoachRules {
         let starts = completeWeekStarts(before: now, count: lookback, calendar: calendar)
         guard starts.count == lookback else { return [] }
 
+        // Only weeks the *current* schedule actually describes are scored — see
+        // `CoachInput.scheduleUpdatedAt`. A week that began before the lifter last edited their
+        // plan was lived under a different plan, and grading it against today's one silently
+        // rewrote their adherence history every time they moved a training day.
+        guard starts.allSatisfy({ describesWeek(start: $0, updatedAt: input.scheduleUpdatedAt) }) else {
+            return []
+        }
+        let trained = Set(input.loggedWorkoutDates.map { calendar.startOfDay(for: $0) })
         let rates = starts.compactMap { start -> Double? in
-            let planned = plannedDays(weekStart: start, schedule: input.schedule, calendar: calendar)
-            guard planned > 0 else { return nil }
-            let actual = actualDays(weekStart: start, dates: input.workoutDates, calendar: calendar)
-            return Double(actual) / Double(planned)
+            let days = plannedAndKept(weekStart: start, schedule: input.schedule, trained: trained,
+                                      calendar: calendar)
+            guard days.planned > 0 else { return nil }
+            return Double(days.kept) / Double(days.planned)
         }
         guard rates.count == lookback else { return [] }
 
@@ -29,7 +37,7 @@ extension CoachRules {
 
         let action = mostMissedWeekday(
             weekStarts: Array(starts.prefix(half)), schedule: input.schedule,
-            dates: input.workoutDates, calendar: calendar
+            trained: trained, calendar: calendar
         ).map(CoachSuggestedAction.addSession) ?? .none
 
         let evidence: [CoachEvidenceItem] = [
@@ -60,25 +68,40 @@ extension CoachRules {
         return starts
     }
 
-    private static func plannedDays(weekStart: Date, schedule: WeeklySchedule, calendar: Calendar) -> Int {
-        (0..<7).reduce(0) { total, offset in
-            guard let day = calendar.date(byAdding: .day, value: offset, to: weekStart) else { return total }
-            return total + (schedule.routineIDs(on: day, calendar: calendar).isEmpty ? 0 : 1)
-        }
+    /// Whether the current schedule can fairly be said to describe the week starting at
+    /// `start`: either we don't know when it was last edited, or it was already in force when
+    /// that week began.
+    private static func describesWeek(start: Date, updatedAt: Date?) -> Bool {
+        guard let updatedAt else { return true }
+        return updatedAt <= start
     }
 
-    private static func actualDays(weekStart: Date, dates: [Date], calendar: Calendar) -> Int {
-        guard let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) else { return 0 }
-        let days = Set(dates.filter { $0 >= weekStart && $0 < weekEnd }.map { calendar.startOfDay(for: $0) })
-        return days.count
+    /// The week's planned training days, and how many of those *same* days were actually
+    /// trained.
+    ///
+    /// The old version compared "days planned" with "days trained anywhere in the week", so
+    /// three unplanned drop-ins against three planned days read as 100% adherence while every
+    /// planned session was missed, and five trained days against three planned gave a
+    /// completion "rate" of 1.67 — which then poisoned the recent-vs-prior average the rule
+    /// compares. Scoring the intersection keeps every rate inside 0…1 and makes it mean what
+    /// the card says it means: the share of *planned* sessions kept.
+    private static func plannedAndKept(
+        weekStart: Date, schedule: WeeklySchedule, trained: Set<Date>, calendar: Calendar
+    ) -> (planned: Int, kept: Int) {
+        (0..<7).reduce(into: (planned: 0, kept: 0)) { total, offset in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: weekStart),
+                  !schedule.routineIDs(on: day, calendar: calendar).isEmpty else { return }
+            total.planned += 1
+            if trained.contains(calendar.startOfDay(for: day)) { total.kept += 1 }
+        }
     }
 
     /// The planned weekday with the most misses across `weekStarts` — the natural "add a session
     /// here" suggestion for the adherence card.
     private static func mostMissedWeekday(
-        weekStarts: [Date], schedule: WeeklySchedule, dates: [Date], calendar: Calendar
+        weekStarts: [Date], schedule: WeeklySchedule, trained: Set<Date>, calendar: Calendar
     ) -> Weekday? {
-        let workoutDays = Set(dates.map { calendar.startOfDay(for: $0) })
+        let workoutDays = trained
         var misses: [Weekday: Int] = [:]
         for start in weekStarts {
             for offset in 0..<7 {
