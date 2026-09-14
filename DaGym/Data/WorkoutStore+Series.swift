@@ -133,10 +133,17 @@ extension WorkoutStore {
         let models = finishedWorkoutsOldestFirst()
         return models.compactMap { workout -> ExerciseSession? in
             if let since, workout.startedAt < since { return nil }
-            guard let match = (workout.exercises ?? []).first(where: { $0.exercise?.id == exerciseID }) else {
-                return nil
+            // *Every* row for this exercise, not `.first`. Benching 80 × 8 early in a session and
+            // again at 100 × 3 later is one exercise logged twice, and taking the first entry
+            // meant the chart never showed the 100 × 3 the PR banner had just congratulated.
+            let matches = (workout.exercises ?? [])
+                .filter { $0.exercise?.id == exerciseID }
+                .sorted { $0.order < $1.order }
+            guard !matches.isEmpty else { return nil }
+            let style = matches.first?.exercise?.style ?? .weightReps
+            let sets = matches.flatMap {
+                performedSets(from: $0.sets, sessionDate: workout.startedAt, style: style)
             }
-            let sets = performedSets(from: match.sets, sessionDate: workout.startedAt)
             guard !sets.isEmpty else { return nil }
             return ExerciseSession(date: workout.startedAt, sets: sets)
         }
@@ -161,7 +168,9 @@ extension WorkoutStore {
         let duration = workout.endedAt.map { max(0, Int($0.timeIntervalSince(workout.startedAt))) } ?? 0
         let entries = (workout.exercises ?? []).compactMap { exerciseModel -> BodyWorkout.MuscleEntry? in
             guard let exercise = exerciseModel.exercise else { return nil }
-            let sets = performedSets(from: exerciseModel.sets, sessionDate: workout.startedAt)
+            let sets = performedSets(
+                from: exerciseModel.sets, sessionDate: workout.startedAt, style: exercise.style
+            )
             guard !sets.isEmpty else { return nil }
             return BodyWorkout.MuscleEntry(
                 primary: exercise.primary, secondary: exercise.secondary, sets: sets
@@ -170,13 +179,34 @@ extension WorkoutStore {
         return BodyWorkout(date: workout.startedAt, durationSeconds: duration, entries: entries)
     }
 
-    private func performedSets(from setLogs: [SetLogModel]?, sessionDate: Date) -> [PerformedSet] {
-        (setLogs ?? []).filter(\.isCompleted).map { setLog in
+    /// Logged rows as `PerformedSet`s, under the same weight conventions the PR cache uses —
+    /// see `WorkoutStore.loadedWeightKg(_:style:)`. Charts read assistance and bodyweight now
+    /// too: without them, a +20 kg pull-up plotted an e1RM point of 23 while the exercise card
+    /// quoted 117 for the very same set, and an assisted lift's top-set line *fell* as the
+    /// lifter needed less help.
+    private func performedSets(
+        from setLogs: [SetLogModel]?, sessionDate: Date, style: ExerciseInfo.LoggingStyle
+    ) -> [PerformedSet] {
+        let bodyweightKg = Self.needsBodyweight(style)
+            ? latestBodyMeasurement(asOf: sessionDate)?.bodyweightKg : nil
+        return (setLogs ?? []).filter(\.isCompleted).map { setLog in
             PerformedSet(
-                kind: setLog.setKind, weightKg: setLog.weightKg, reps: setLog.reps,
-                durationSeconds: setLog.durationSeconds, date: sessionDate, rpe: setLog.rpe
+                kind: setLog.setKind, weightKg: style == .assisted ? 0 : setLog.weightKg,
+                reps: setLog.reps, durationSeconds: setLog.durationSeconds,
+                assistanceKg: Self.assistanceKg(setLog, style: style),
+                bodyweightKg: bodyweightKg, date: sessionDate, rpe: setLog.rpe
             )
         }
+    }
+
+    /// Assistance for a persisted row, resolved the same way `WorkoutStore.assistanceKg(_:style:)`
+    /// resolves a live one: the logged weight when there is one, the prescribed assistance
+    /// otherwise.
+    private static func assistanceKg(
+        _ setLog: SetLogModel, style: ExerciseInfo.LoggingStyle
+    ) -> Double? {
+        guard style == .assisted else { return nil }
+        return setLog.weightKg > 0 ? setLog.weightKg : (setLog.assistanceKg ?? 0)
     }
 
     private func weekStats(workouts: [BodyWorkout], weekStart: Date, calendar: Calendar) -> WeekStats {

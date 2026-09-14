@@ -21,12 +21,19 @@ public struct ExerciseSession: Sendable {
 /// point per session that has eligible data. Pure over `[ExerciseSession]` — no I/O, no dates
 /// beyond what's passed in.
 public enum ExerciseSeries {
-    /// Best estimated one-rep max per session (`OneRepMax`, sets 1…12 reps, non-warm-up).
-    /// Sessions with no eligible set are omitted rather than charted as zero.
+    /// Best estimated one-rep max per session (`OneRepMax.estimate`, sets 1…12 reps,
+    /// non-warm-up). Sessions with no eligible set are omitted rather than charted as zero.
+    ///
+    /// Estimated from `PerformedSet.effectiveWeightKg`, the same load the PR cache uses — this
+    /// used to read the raw `weightKg`, so a +20 kg pull-up charted a point of 23 while the
+    /// exercise card quoted 117 from the PR cache for the very same set, and the coach's e1RM
+    /// downtrend rule watched the 23-series.
     public static func e1rm(sessions: [ExerciseSession]) -> [(date: Date, value: Double)] {
         sessions.compactMap { session in
             let best = session.countingSets
-                .compactMap { OneRepMax.estimate(weight: $0.weightKg, reps: $0.reps) }
+                .compactMap { set in
+                    set.effectiveWeightKg.flatMap { OneRepMax.estimate(weight: $0, reps: set.reps) }
+                }
                 .max()
             return best.map { (date: session.date, value: $0) }
         }

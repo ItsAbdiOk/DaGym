@@ -127,7 +127,12 @@ extension ProgressionEngine {
     /// Judges a session against its planned sets: a partial session (fewer sets
     /// than planned) is a miss, and a plan with no rep targets can't be judged.
     static func setsHitTarget(workingSets: [HistorySet], planned: [PlannedSetSpec]) -> TargetCheck {
-        let workingPlanned = planned.filter { $0.kind.countsTowardStats }
+        // Filtered by `countsTowardProgression`, exactly as the logged side already is
+        // (`SessionHistory.workingSets`). Filtering the plan by `countsTowardStats` instead kept
+        // a *planned* drop set in the list, so the two sides were different lengths and `zip`
+        // paired every row after it against the wrong spec — the same mis-pairing that was
+        // fixed on the logged side, still live on the planned one.
+        let workingPlanned = planned.filter { $0.kind.countsTowardProgression }
         guard !workingPlanned.isEmpty, workingPlanned.contains(where: { $0.targetReps != nil }) else {
             return .noTargets
         }

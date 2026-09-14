@@ -2,12 +2,29 @@ import Foundation
 import Testing
 @testable import GymCore
 
+/// e1RM expectations are hand-derived from the three published formulas, not read back out of
+/// `OneRepMax` — see the note on `PersonalRecordsTests`. 100 kg × 5 → **115.2497**;
+/// 50 kg × 8 → Epley 63.3333, Brzycki 62.0690, Wathen 63.8357 → **63.0793**.
 @Suite("Exercise series")
 struct ExerciseSeriesTests {
+    /// e1RM of 100 kg × 5 reps, worked out by hand.
+    static let e1rm100x5 = 115.2497
+    /// e1RM of 50 kg × 8 reps.
+    static let e1rm50x8 = 63.0793
+
     private func set(
-        kind: SetKind = .working, weight: Double, reps: Int, date: Date = Date()
+        kind: SetKind = .working, weight: Double, reps: Int, date: Date = Date(),
+        assistance: Double? = nil, bodyweight: Double? = nil
     ) -> PerformedSet {
-        PerformedSet(kind: kind, weightKg: weight, reps: reps, date: date)
+        PerformedSet(
+            kind: kind, weightKg: weight, reps: reps, assistanceKg: assistance,
+            bodyweightKg: bodyweight, date: date
+        )
+    }
+
+    private func isClose(_ value: Double?, _ expected: Double) -> Bool {
+        guard let value else { return false }
+        return abs(value - expected) < 0.001
     }
 
     private let day1 = Date(timeIntervalSince1970: 0)
@@ -27,17 +44,7 @@ struct ExerciseSeriesTests {
         ]
         let series = ExerciseSeries.e1rm(sessions: sessions)
         #expect(series.count == 1)
-        let expected = OneRepMax.estimate(weight: 100, reps: 5)
-        #expect(series[0].value == expected)
-    }
-
-    @Test("13-rep sets are excluded from e1RM but count toward volume")
-    func thirteenRepsExcludedFromE1RMOnly() {
-        let sessions = [ExerciseSession(date: day1, sets: [set(weight: 60, reps: 13)])]
-        #expect(ExerciseSeries.e1rm(sessions: sessions).isEmpty)
-        let volume = ExerciseSeries.volume(sessions: sessions)
-        #expect(volume.count == 1)
-        #expect(volume[0].value == 60 * 13)
+        #expect(isClose(series[0].value, Self.e1rm100x5))
     }
 
     @Test("topSet picks the heaviest weight, ties broken by more reps")

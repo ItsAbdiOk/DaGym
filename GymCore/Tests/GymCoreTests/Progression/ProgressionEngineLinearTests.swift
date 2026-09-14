@@ -39,6 +39,59 @@ struct ProgressionEngineLinearTests {
         #expect(result.stall.lastWeightKg == 82.5)
     }
 
+    @Test("a planned drop set is excluded from the plan, so the logged sets still pair correctly")
+    func plannedDropSetDoesNotMisPairTheRows() {
+        // A routine whose plan is 2×8 with a drop set written between them. The logged side
+        // already drops the drop (`SetKind.countsTowardProgression`), so the lifter's two 8-rep
+        // working sets arrive as two rows; filtering the *plan* by `countsTowardStats` left three
+        // specs, `workingSets.count < workingPlanned.count` failed the length guard, and a
+        // session that hit everything asked for was read as a miss.
+        let plan = [
+            PlannedSetSpec(kind: .working, targetReps: 8),
+            PlannedSetSpec(kind: .drop, targetReps: 12),
+            PlannedSetSpec(kind: .working, targetReps: 8)
+        ]
+        let logged = [
+            ExerciseHistoryEntry(
+                date: .now,
+                sets: [
+                    HistorySet(kind: .working, weightKg: 80, reps: 8),
+                    HistorySet(kind: .drop, weightKg: 64, reps: 12),
+                    HistorySet(kind: .working, weightKg: 80, reps: 8)
+                ]
+            )
+        ]
+        let result = ProgressionEngine.prescribe(
+            rule: .linear(incrementKg: 2.5), planned: plan, history: logged, stall: StallState()
+        )
+        #expect(result.reason.kind == .increase)
+        #expect(result.stall.consecutiveMisses == 0)
+    }
+
+    @Test("a planned drop set can't hide a genuine miss on the working sets")
+    func plannedDropSetStillDetectsAMiss() {
+        let plan = [
+            PlannedSetSpec(kind: .working, targetReps: 8),
+            PlannedSetSpec(kind: .drop, targetReps: 12),
+            PlannedSetSpec(kind: .working, targetReps: 8)
+        ]
+        let logged = [
+            ExerciseHistoryEntry(
+                date: .now,
+                sets: [
+                    HistorySet(kind: .working, weightKg: 80, reps: 8),
+                    HistorySet(kind: .drop, weightKg: 64, reps: 12),
+                    HistorySet(kind: .working, weightKg: 80, reps: 5)
+                ]
+            )
+        ]
+        let result = ProgressionEngine.prescribe(
+            rule: .linear(incrementKg: 2.5), planned: plan, history: logged, stall: StallState()
+        )
+        #expect(result.reason.kind == .repeat)
+        #expect(result.stall.consecutiveMisses == 1)
+    }
+
     @Test("missing the rep target repeats the weight and starts a miss streak")
     func missPath() {
         let result = ProgressionEngine.prescribe(

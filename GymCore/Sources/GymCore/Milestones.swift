@@ -155,20 +155,29 @@ public enum Milestones {
         )
     }
 
-    /// Newly earned tiers only — at most one `Achievement` per definition, the highest tier
-    /// crossed since `earned`. A milestone already at its highest already-earned tier, or whose
-    /// metric can't be evaluated (e.g. a strength ratio with no bodyweight on file), is skipped.
+    /// Newly earned tiers — **every** tier crossed since `earned`, bronze first, not just the
+    /// highest. A milestone already at its highest already-earned tier, or whose metric can't be
+    /// evaluated (e.g. a strength ratio with no bodyweight on file), contributes nothing.
+    ///
+    /// Returning only the top tier meant a lifter who imported 200 workouts, or who logged their
+    /// first squat at 2× bodyweight, was handed Gold and never owned Bronze or Silver at all —
+    /// the milestones list showed a gap where the tiers they had plainly earned should be.
     public static func evaluate(
         state: MilestoneState, earned: [(id: String, tier: Tier)], unit: WeightUnit = .kg
     ) -> [Achievement] {
         let earnedTiers = Dictionary(earned.map { ($0.id, $0.tier) }, uniquingKeysWith: { max($0, $1) })
-        return definitions.compactMap { definition -> Achievement? in
-            guard let achieved = highestAchievedTier(definition, state: state) else { return nil }
-            if let previous = earnedTiers[definition.id], achieved <= previous { return nil }
-            return Achievement(
-                id: definition.id, tier: achieved, title: definition.title,
-                line: line(for: definition, tier: achieved, state: state, unit: unit)
-            )
+        return definitions.flatMap { definition -> [Achievement] in
+            guard let achieved = highestAchievedTier(definition, state: state) else { return [] }
+            let previous = earnedTiers[definition.id]
+            return Tier.allCases
+                .filter { tier in tier <= achieved && definition.threshold(for: tier) != nil }
+                .filter { tier in previous.map { tier > $0 } ?? true }
+                .map { tier in
+                    Achievement(
+                        id: definition.id, tier: tier, title: definition.title,
+                        line: line(for: definition, tier: tier, state: state, unit: unit)
+                    )
+                }
         }
     }
 

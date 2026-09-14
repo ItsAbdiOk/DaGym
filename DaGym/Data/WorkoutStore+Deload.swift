@@ -60,13 +60,13 @@ extension WorkoutStore {
     /// week and, once it does, `activeProgramModel()` hands control back to whichever program was
     /// active before — see `resumeProgramIfDeloadExpired()`.
     func planDeloadWeek() {
-        let previous = activeProgramModel()
+        // Called for its side effects, not its result: it retires an already-expired deload shim
+        // (stamping `completedAt`, so `pruneAbandonedDeloadPrograms` keeps it as the record of a
+        // deload actually taken) and hands control back to the programme it interrupted before
+        // this new shim deactivates everything. Which programme that was is *derived* by
+        // `interruptedProgram()` — the old `UserDefaults` pointer never reached a second device.
+        _ = activeProgramModel()
         for other in fetch(FetchDescriptor<ProgramModel>()) { other.isActive = false }
-        if let previous, previous.name != Self.deloadProgramName {
-            UserDefaults.standard.set(previous.id.uuidString, forKey: Self.deloadPreviousProgramIDKey)
-        } else {
-            UserDefaults.standard.removeObject(forKey: Self.deloadPreviousProgramIDKey)
-        }
         let model = ProgramModel(name: Self.deloadProgramName, weeks: 2, startedAt: Date(), isActive: true)
         model.routineIDs = routines().map(\.id)
         context.insert(model)
@@ -82,7 +82,6 @@ extension WorkoutStore {
 
     /// Shared with `WorkoutStore+Programs.swift`'s `resumeProgramIfDeloadExpired()`.
     static let deloadProgramName = "Deload Week"
-    static let deloadPreviousProgramIDKey = "deloadPreviousProgramID"
 
     /// Consecutive recent weeks (working back from this week, or from the last complete one when
     /// this week hasn't met the goal yet) that met `weeklyGoal` with no

@@ -28,13 +28,19 @@ public enum Streaks {
         return (current, longest, thisWeekCount)
     }
 
+    /// Training **days** per week, not workouts: a week's count is how many distinct calendar
+    /// days carried a session. Two sessions on one Saturday used to count as two toward a goal
+    /// of "4 a week", so a lifter who trained twice on two days could hit a four-session goal
+    /// having trained on two — and the streak, the weekly goal ring and the consistency
+    /// milestone all agreed on the wrong number. `WorkoutStore.consistentWeekCount` counts the
+    /// same way.
     private static func countsPerWeek(_ dates: [Date], calendar: Calendar) -> [Date: Int] {
-        var counts: [Date: Int] = [:]
+        var daysPerWeek: [Date: Set<Date>] = [:]
         for date in dates {
             guard let start = calendar.dateInterval(of: .weekOfYear, for: date)?.start else { continue }
-            counts[start, default: 0] += 1
+            daysPerWeek[start, default: []].insert(calendar.startOfDay(for: date))
         }
-        return counts
+        return daysPerWeek.mapValues(\.count)
     }
 
     private static func longestRun(of weeks: Set<Date>, calendar: Calendar) -> Int {
@@ -56,16 +62,26 @@ public enum Streaks {
 
     /// Walks backward from `nowWeekStart` (or, if this week hasn't counted yet, from the
     /// previous week) while each week still counts.
+    ///
+    /// Weeks are matched with the same tolerant `.weekOfYear` comparison `longestRun` uses, not
+    /// by exact `Date` equality. The counting weeks are bucketed by whatever instant
+    /// `dateInterval` returned when the workouts were read; stepping back a week from *now* in a
+    /// zone whose clocks shift at midnight (Lord Howe, and every zone on a DST boundary that
+    /// falls on the first day of the week) lands an hour off that instant, `Set.contains` missed,
+    /// and the current streak read 0 while the longest still read 12.
     private static func currentRun(of weeks: Set<Date>, nowWeekStart: Date, calendar: Calendar) -> Int {
+        func counts(_ week: Date) -> Bool {
+            weeks.contains { calendar.isDate($0, equalTo: week, toGranularity: .weekOfYear) }
+        }
         var cursor = nowWeekStart
-        if !weeks.contains(cursor) {
+        if !counts(cursor) {
             guard let previousWeek = calendar.date(byAdding: .weekOfYear, value: -1, to: cursor) else {
                 return 0
             }
             cursor = previousWeek
         }
         var run = 0
-        while weeks.contains(cursor) {
+        while counts(cursor) {
             run += 1
             guard let previousWeek = calendar.date(byAdding: .weekOfYear, value: -1, to: cursor) else {
                 break

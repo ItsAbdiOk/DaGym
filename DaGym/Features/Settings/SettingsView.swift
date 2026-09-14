@@ -10,8 +10,9 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showingAcknowledgements = false
     @State private var showingPrivacyPolicy = false
-    @State private var eventStore: EventStoring = EventKitStore()
-    @State private var syncTask: Task<Void, Never>?
+    /// What the last calendar sync refused to do, shown under the Calendar card — the same
+    /// message `ScheduleView` shows. Nil when the last sync was fine (or never ran).
+    @State private var syncProblem: String?
     /// The weekly-goal stepper needs its own reschedule (S14/F14): `RemindersSettingsSection`'s
     /// three bindings reschedule on change, but the notification body embeds
     /// `weeklyGoal - thisWeekCount` at schedule time, so a goal edit here must reschedule too or
@@ -154,6 +155,15 @@ struct SettingsView: View {
     }
 
     private var calendarCard: some View {
+        VStack(alignment: .leading, spacing: DGSpace.s3) {
+            calendarRows
+            if let syncProblem {
+                Text(syncProblem).font(DGFont.footnote).foregroundStyle(DGColor.danger)
+            }
+        }
+    }
+
+    private var calendarRows: some View {
         SettingsSection(title: "Calendar") {
             SettingsRow(label: "Add my schedule to Calendar") {
                 Toggle("", isOn: calendarSyncBinding).tint(DGColor.coral).labelsHidden()
@@ -174,26 +184,21 @@ struct SettingsView: View {
             get: { preferences.calendarSyncEnabled },
             set: { enabled in
                 preferences.calendarSyncEnabled = enabled
+                syncProblem = nil
                 if enabled { syncCalendarNow() }
             }
         )
     }
 
+    /// `CalendarSyncCoordinator` owns the serialising chain (this toggle and a schedule edit
+    /// could otherwise sync concurrently over the same event ids) and reports a refusal instead
+    /// of swallowing it behind a `try?` — which used to leave the toggle switched on while every
+    /// sync silently failed. A refusal also turns `calendarSyncEnabled` back off.
     private func syncCalendarNow() {
-        let schedule = store.schedule()
-        let routines = store.routines()
-        let hour = preferences.scheduledStartHour
-        // Serialised so a toggle flicked twice can't run two syncs over the same event IDs.
-        let previous = syncTask
-        syncTask = Task {
-            await previous?.value
-            let service = CalendarSyncService(eventStore: eventStore)
-            let request = ScheduleSyncRequest(
-                schedule: schedule, routines: routines, startDate: Date(), defaultStartHour: hour,
-                existingEventIDs: store.scheduleEventIDs()
-            )
-            guard let updated = try? await service.sync(request) else { return }
-            store.saveScheduleEventIDs(updated)
+        guard !LaunchFlags.isTesting else { return }
+        Task {
+            let outcome = await CalendarSyncCoordinator.sync(store: store, preferences: preferences)
+            syncProblem = outcome.problemMessage
         }
     }
 

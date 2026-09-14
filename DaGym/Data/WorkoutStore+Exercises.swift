@@ -15,9 +15,16 @@ struct CustomExerciseFields {
 extension WorkoutStore {
     /// Every library exercise except the tombstones a seed fold left behind
     /// (`ExerciseSeeder.dedupe`) — the base of every "browse the library" read.
+    /// NOTE: the tombstone filter is applied in memory by `isLive`, never in the `#Predicate`.
+    /// SwiftData does not translate an optional UUID compared against nil — the fetch comes back
+    /// empty, which silently emptied the whole library.
     static func liveExercises() -> FetchDescriptor<ExerciseModel> {
-        FetchDescriptor<ExerciseModel>(predicate: #Predicate { $0.mergedIntoID == nil })
+        FetchDescriptor<ExerciseModel>()
     }
+
+    /// A row that survived its seed fold, rather than a tombstone kept alive for late CloudKit
+    /// children (`ExerciseSeeder.dedupe`).
+    static func isLive(_ model: ExerciseModel) -> Bool { model.mergedIntoID == nil }
 
     /// Filtered, sorted (favorites first, then name) exercise list for the library screen. Best
     /// e1RM comes from one fetch of the PR cache shared by every row; `sessions` is left at 0 —
@@ -26,7 +33,7 @@ extension WorkoutStore {
         matching query: String = "", muscle: Muscle? = nil, equipment: String? = nil,
         favoritesOnly: Bool = false, customOnly: Bool = false
     ) -> [ExerciseInfo] {
-        let all = fetch(Self.liveExercises())
+        let all = fetch(Self.liveExercises()).filter(Self.isLive)
         let tokens = Self.searchTokens(query)
         let bestByExercise = bestE1RMRecordsByExercise()
         return all
@@ -225,10 +232,7 @@ extension WorkoutStore {
     /// The library exercise carrying this seed id, for the import alias table. Nil when the row
     /// was deleted or the id isn't in this seed version.
     func exerciseID(seedID: String) -> UUID? {
-        var descriptor = FetchDescriptor<ExerciseModel>(
-            predicate: #Predicate { $0.seedID == seedID && $0.mergedIntoID == nil }
-        )
-        descriptor.fetchLimit = 1
-        return fetchFirst(descriptor)?.id
+        let descriptor = FetchDescriptor<ExerciseModel>(predicate: #Predicate { $0.seedID == seedID })
+        return fetch(descriptor).first { $0.mergedIntoID == nil }?.id
     }
 }

@@ -45,11 +45,11 @@ extension WorkoutStore {
 
     /// Starts a session from an ordered list of routines: the first one the usual way, the rest
     /// appended via `appendRoutine(id:to:)`. An empty list starts a freestyle session.
-    func startWorkout(routineIDs: [UUID]) -> WorkoutSession {
+    func startWorkout(routineIDs: [UUID], calendar: Calendar = .current) -> WorkoutSession {
         guard let first = routineIDs.first else { return startFreestyle() }
-        let session = startWorkout(routineID: first)
+        let session = startWorkout(routineID: first, calendar: calendar)
         for id in routineIDs.dropFirst() {
-            appendRoutine(id: id, to: session)
+            appendRoutine(id: id, to: session, calendar: calendar)
         }
         return session
     }

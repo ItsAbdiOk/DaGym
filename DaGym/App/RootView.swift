@@ -168,7 +168,9 @@ struct RootView: View {
 
     private func startWorkout(_ routine: RoutineInfo) {
         beginWorkout {
-            session = store.startWorkout(routineID: routine.id)
+            session = store.startWorkout(
+                routineID: routine.id, calendar: preferences.trainingCalendar
+            )
             seedEffortScale()
         }
     }
@@ -199,13 +201,19 @@ struct RootView: View {
 
     private func startBackfillFreestyle(date: Date, durationMinutes: Int) {
         showingBackfill = false
-        session = store.startBackfill(date: date, durationMinutes: durationMinutes, routineID: nil)
+        session = store.startBackfill(
+            date: date, durationMinutes: durationMinutes, routineID: nil,
+            calendar: preferences.trainingCalendar
+        )
         seedEffortScale()
     }
 
     private func startBackfillRoutine(date: Date, durationMinutes: Int, routineID: UUID) {
         showingBackfill = false
-        session = store.startBackfill(date: date, durationMinutes: durationMinutes, routineID: routineID)
+        session = store.startBackfill(
+            date: date, durationMinutes: durationMinutes, routineID: routineID,
+            calendar: preferences.trainingCalendar
+        )
         seedEffortScale()
     }
 

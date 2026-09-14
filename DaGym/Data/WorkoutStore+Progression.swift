@@ -50,7 +50,13 @@ extension WorkoutStore {
     /// of how many exercises the routine has. `routineID` is nil for a build with no routine
     /// behind it (a freshly added exercise), where the program lookups have no answer anyway
     /// and so aren't paid for.
-    func makeSessionFacts(routineID: UUID?) -> SessionFacts {
+    ///
+    /// `calendar` decides which calendar the program's weeks are measured in — the lifter's own
+    /// `Preferences.trainingCalendar`, passed down from the call site the way `unit:` is, because
+    /// the store never reads `Preferences` itself. Left at `.current` it fell back to the device
+    /// locale's week start, so a Sunday-start lifter could be handed a planned deload on a
+    /// different day from the one the Programmes screen showed them.
+    func makeSessionFacts(routineID: UUID?, calendar: Calendar = .current) -> SessionFacts {
         let finished = finishedWorkoutModelsNewestFirst()
         var facts = SessionFacts(
             finishedWorkouts: finished,
@@ -60,10 +66,17 @@ extension WorkoutStore {
             sessionCounts: Self.sessionCounts(in: finished)
         )
         guard let routineID else { return facts }
-        let program = activeProgramModel()
-        facts.weekInCycle = weekInCycle(forRoutineID: routineID, activeProgram: program)
-        facts.cycleIndex = cycleIndex(forRoutineID: routineID, activeProgram: program)
-        facts.weekKind = currentWeekKind(forRoutineID: routineID, activeProgram: program)
+        let now = Date()
+        let program = activeProgramModel(now: now, calendar: calendar)
+        facts.weekInCycle = weekInCycle(
+            forRoutineID: routineID, activeProgram: program, now: now, calendar: calendar
+        )
+        facts.cycleIndex = cycleIndex(
+            forRoutineID: routineID, activeProgram: program, now: now, calendar: calendar
+        )
+        facts.weekKind = currentWeekKind(
+            forRoutineID: routineID, activeProgram: program, now: now, calendar: calendar
+        )
         return facts
     }
 
@@ -145,7 +158,10 @@ extension WorkoutStore {
 
     /// `cycleIndex(forRoutineID:)` against an already-fetched active program — see
     /// `weekInCycle(forRoutineID:activeProgram:)`.
-    func cycleIndex(forRoutineID routineID: UUID, activeProgram: ProgramModel?) -> Int? {
+    func cycleIndex(
+        forRoutineID routineID: UUID, activeProgram: ProgramModel?, now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Int? {
         guard let program = activeProgram, program.routineIDs.contains(routineID),
               let startedAt = program.startedAt, program.weeks > 0 else {
             return nil
@@ -154,7 +170,7 @@ extension WorkoutStore {
         // `GymCore.ProgramCycle`. The old `days / 7` climbed forever, so the training-max rule
         // kept bumping every `weeks` weeks for as long as the program stayed active.
         return ProgramCycle.position(
-            startedAt: startedAt, now: Date(), weeks: program.weeks, calendar: .current
+            startedAt: startedAt, now: now, weeks: program.weeks, calendar: calendar
         )?.cycle
     }
 

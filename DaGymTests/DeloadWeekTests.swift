@@ -152,6 +152,57 @@ struct DeloadWeekTests {
         #expect(deloadRows.count == 1, "the abandoned shim from the first tap is cleaned up")
     }
 
+    /// `planDeloadWeek()` used to write the interrupted programme's id to
+    /// `UserDefaults.standard`. That key is gone: it never reached a second device (which shares
+    /// the SwiftData store through CloudKit but not the defaults), so resume silently did
+    /// nothing there. Leaving a stale value from an older build behind must change nothing.
+    @Test("a stale UserDefaults pointer from an older build has no effect on resuming")
+    func staleDefaultsPointerIsIgnored() throws {
+        let key = "deloadPreviousProgramID"
+        let stale = UUID().uuidString
+        UserDefaults.standard.set(stale, forKey: key)
+        defer { UserDefaults.standard.removeObject(forKey: key) }
+
+        let store = try makeStore()
+        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        let original = try #require(store.createProgram(from: .pushPullLegs))
+        store.startProgram(id: original.id)
+
+        store.planDeloadWeek()
+        // Neither written nor cleared any more — nothing in this path reads or writes defaults.
+        #expect(UserDefaults.standard.string(forKey: key) == stale)
+
+        let deload = try #require(store.activeProgramModel())
+        deload.startedAt = Calendar.current.date(byAdding: .day, value: -8, to: Date())
+        store.save()
+
+        let resumed = try #require(store.activeProgramModel())
+        #expect(resumed.id == original.id, "the pointer is derived from the programmes themselves")
+    }
+
+    /// `programs()` (the Programmes screen) and `activeProgramModel()` (what `startWorkout`
+    /// builds a session from) have to agree on which programme is active. `programs()` never ran
+    /// the deload-expiry check, so an expired shim was still listed as the active programme — in
+    /// its week 2 — while `startWorkout` had already handed control back to the interrupted one.
+    @Test("Programmes shows the resumed programme as active once the deload week has expired")
+    func programsAgreesWithTheSessionPathAboutTheActiveProgramme() throws {
+        let store = try makeStore()
+        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        let original = try #require(store.createProgram(from: .pushPullLegs))
+        store.startProgram(id: original.id)
+        store.planDeloadWeek()
+        let deload = try #require(store.activeProgramModel())
+        deload.startedAt = Calendar.current.date(byAdding: .day, value: -8, to: Date())
+        store.save()
+
+        // Read the Programmes screen *first*, with nothing else having touched the store.
+        let listed = store.programs()
+        #expect(listed.first { $0.isActive }?.id == original.id)
+        #expect(listed.first { $0.name == "Deload Week" }?.isActive == false)
+        // And the deload it actually took is kept, not pruned as an abandoned shim.
+        #expect(listed.contains { $0.name == "Deload Week" && $0.completedAt != nil })
+    }
+
     /// The previous-program pointer used to live in `UserDefaults.standard`, so a second device
     /// — which shares the SwiftData store through CloudKit but not the defaults — never resumed
     /// anything. It is derived from the programs themselves now.
@@ -165,9 +216,7 @@ struct DeloadWeekTests {
         let active = try #require(store.activeProgramModel())
         active.startedAt = Self.date(2026, 9, 21)
         store.save()
-        // What the other device sees: the store, but none of this device's defaults.
-        UserDefaults.standard.removeObject(forKey: WorkoutStore.deloadPreviousProgramIDKey)
-
+        // What the other device sees: the store, and nothing else.
         let resumed = try #require(
             store.activeProgramModel(now: Self.date(2026, 9, 28), calendar: Self.calendar())
         )

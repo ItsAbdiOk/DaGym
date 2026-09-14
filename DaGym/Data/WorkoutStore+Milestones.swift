@@ -42,10 +42,14 @@ extension WorkoutStore {
         let newlyEarned = Milestones.evaluate(
             state: state, earned: earned.map { (id: $0.key, tier: $0.value) }, unit: unit
         )
+        // Stamped with the session that earned it, not with "now". A lifter backfilling six
+        // months of training had every badge dated today, so the milestones list read as though
+        // they had earned a Gold streak on the afternoon they typed it in.
+        let earnedAt = min(workout.startedAt, Date())
         for achievement in newlyEarned {
             let model = AchievementModel(
-                milestoneID: achievement.id, tier: Self.tierString(achievement.tier), earnedAt: Date(),
-                workoutID: workout.id
+                milestoneID: achievement.id, tier: Self.tierString(achievement.tier),
+                earnedAt: earnedAt, workoutID: workout.id
             )
             context.insert(model)
         }
@@ -91,18 +95,21 @@ extension WorkoutStore {
     }
 
     /// Weeks (anywhere in history, not necessarily consecutive) that met `weeklyGoal`.
+    ///
+    /// Counts distinct training **days** per week, matching `Streaks.weekly`: two sessions on one
+    /// Saturday are one day toward "4 a week", not two.
     private func consistentWeekCount(dates: [Date], weeklyGoal: Int, calendar: Calendar) -> Int {
         guard weeklyGoal > 0 else { return 0 }
-        var counts: [Date: Int] = [:]
+        var daysPerWeek: [Date: Set<Date>] = [:]
         for date in dates {
             guard let start = calendar.dateInterval(of: .weekOfYear, for: date)?.start else { continue }
-            counts[start, default: 0] += 1
+            daysPerWeek[start, default: []].insert(calendar.startOfDay(for: date))
         }
-        return counts.values.filter { $0 >= weeklyGoal }.count
+        return daysPerWeek.values.filter { $0.count >= weeklyGoal }.count
     }
 
     /// Best cached e1RM per `strengthRatio` exercise key ("bench"/"squat"/"deadlift"/"ohp"),
-    /// matched by a small substring map over the exercise name.
+    /// matched on the exercise's **identity**.
     private func bestE1RMByExerciseKey() -> [String: Double] {
         let kind = PRKind.e1rm.rawValue
         let predicate = #Predicate<PersonalRecordModel> { $0.kind == kind }
@@ -110,19 +117,56 @@ extension WorkoutStore {
         var result: [String: Double] = [:]
         for model in models {
             guard let exerciseID = model.exerciseID, let exercise = fetchExerciseModel(id: exerciseID),
-                  let key = Self.exerciseKey(name: exercise.name) else { continue }
+                  let key = Self.exerciseKey(
+                      seedID: exercise.seedID, name: exercise.name, equipment: exercise.equipment
+                  ) else { continue }
             result[key] = max(result[key] ?? 0, model.value)
         }
         return result
     }
 
-    private static func exerciseKey(name: String) -> String? {
-        let lower = name.lowercased()
-        if lower.contains("bench press") { return "bench" }
-        if lower.contains("squat") { return "squat" }
-        if lower.contains("deadlift") { return "deadlift" }
-        if lower.contains("overhead press") || lower.contains("shoulder press") { return "ohp" }
-        return nil
+    /// The seeded exercises that *are* the four tracked barbell lifts. A "Bodyweight Squat"
+    /// milestone has to mean the barbell squat and nothing else.
+    ///
+    /// Matching on `name.contains("squat")` meant a hack squat at 180 × 5 earned **Gold**
+    /// "Bodyweight Squat", a Romanian deadlift (a hip hinge done at a fraction of a pull) earned
+    /// Silver deadlift, and a dumbbell shoulder press counted as the barbell press at half the
+    /// load — because a dumbbell's `weightKg` is one bell.
+    private static let strengthSeedIDs: [String: String] = [
+        // bench
+        "Barbell_Bench_Press_-_Medium_Grip": "bench",
+        "Bench_Press_-_Powerlifting": "bench",
+        "Pause_Bench": "bench",
+        // squat
+        "Barbell_Squat": "squat",
+        "Barbell_Full_Squat": "squat",
+        // deadlift
+        "Barbell_Deadlift": "deadlift",
+        "Deadlifts": "deadlift",
+        "Sumo_Deadlift": "deadlift",
+        // overhead press
+        "Barbell_Shoulder_Press": "ohp",
+        "Standing_Military_Press": "ohp",
+        "Overhead_Barbell_Press": "ohp"
+    ]
+
+    /// Exact names, for a custom or imported exercise with no `seedID`. Paired with an equipment
+    /// check so a "Squat" logged as a bodyweight move can never qualify.
+    private static let strengthNames: [String: String] = [
+        "bench press": "bench", "barbell bench press": "bench", "flat bench press": "bench",
+        "squat": "squat", "back squat": "squat", "barbell squat": "squat", "high bar squat": "squat",
+        "low bar squat": "squat",
+        "deadlift": "deadlift", "barbell deadlift": "deadlift", "conventional deadlift": "deadlift",
+        "sumo deadlift": "deadlift",
+        "overhead press": "ohp", "barbell overhead press": "ohp", "military press": "ohp",
+        "strict press": "ohp"
+    ]
+
+    private static func exerciseKey(seedID: String?, name: String, equipment: String) -> String? {
+        if let seedID, let key = strengthSeedIDs[seedID] { return key }
+        guard seedID == nil, equipment.lowercased() == "barbell" else { return nil }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return strengthNames[trimmed]
     }
 
     private static func achievementInfo(_ achievement: Achievement) -> AchievementInfo {

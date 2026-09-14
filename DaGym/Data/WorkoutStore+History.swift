@@ -124,18 +124,32 @@ extension WorkoutStore {
         )
     }
 
+    /// One row per exercise, merging every entry for it in the session.
+    ///
+    /// The same exercise can legitimately appear twice in one workout — bench 80 × 8 early, bench
+    /// again at 100 × 3 at the end. A `seen` guard emitted the first entry and dropped the second
+    /// entry's sets entirely, so the summary reported the 80 × 8 as the session's best while the
+    /// PR banner right above it celebrated the 100 × 3.
     private func e1rmChanges(session: WorkoutSession, previous: WorkoutModel?) -> [ExerciseE1RMChange] {
-        var seen = Set<UUID>()
-        return session.exercises.compactMap { entry in
-            guard seen.insert(entry.exercise.id).inserted else { return nil }
-            let current = entry.sets
+        var order: [UUID] = []
+        var setsByExercise: [UUID: [SetEntry]] = [:]
+        var names: [UUID: String] = [:]
+        for entry in session.exercises {
+            if setsByExercise[entry.exercise.id] == nil {
+                order.append(entry.exercise.id)
+                names[entry.exercise.id] = entry.exercise.name
+            }
+            setsByExercise[entry.exercise.id, default: []] += entry.sets
+        }
+        return order.compactMap { exerciseID in
+            let current = (setsByExercise[exerciseID] ?? [])
                 .filter { $0.isDone && $0.kind.countsTowardStats }
                 .compactMap { OneRepMax.estimate(weight: $0.weightKg, reps: $0.reps) }
                 .max()
-            let before = previous.flatMap { bestE1RM(exerciseID: entry.exercise.id, in: $0) }
+            let before = previous.flatMap { bestE1RM(exerciseID: exerciseID, in: $0) }
             guard current != nil || before != nil else { return nil }
             return ExerciseE1RMChange(
-                exerciseID: entry.exercise.id, name: entry.exercise.name, previous: before, current: current
+                exerciseID: exerciseID, name: names[exerciseID] ?? "", previous: before, current: current
             )
         }
     }
@@ -472,8 +486,8 @@ extension WorkoutStore {
         exerciseID: UUID, finishedWorkouts: [WorkoutModel]? = nil, value: (SetLogModel) -> Double
     ) -> [(Date, Double)] {
         (finishedWorkouts ?? finishedWorkoutModelsNewestFirst()).reversed().compactMap { workout in
-            guard let match = matchingExercise(exerciseID: exerciseID, in: workout) else { return nil }
-            let best = (match.sets ?? [])
+            guard let match = matchingSets(exerciseID: exerciseID, in: workout) else { return nil }
+            let best = match
                 .filter { $0.isCompleted && $0.setKind.countsTowardStats }
                 .map(value).max()
             return best.map { (workout.startedAt, $0) }
@@ -508,10 +522,8 @@ extension WorkoutStore {
     private func sessionLine(
         exerciseID: UUID, style: ExerciseInfo.LoggingStyle, in workout: WorkoutModel
     ) -> String? {
-        guard let match = matchingExercise(exerciseID: exerciseID, in: workout) else { return nil }
-        let sets = (match.sets ?? [])
-            .filter { $0.isCompleted && $0.setKind.countsTowardStats }
-            .sorted { $0.order < $1.order }
+        guard let match = matchingSets(exerciseID: exerciseID, in: workout) else { return nil }
+        let sets = match.filter { $0.isCompleted && $0.setKind.countsTowardStats }
         guard let first = sets.first else { return nil }
         switch style {
         case .timedHold, .cardio:
@@ -525,14 +537,24 @@ extension WorkoutStore {
     }
 
     private func bestE1RM(exerciseID: UUID, in workout: WorkoutModel) -> Double? {
-        guard let match = matchingExercise(exerciseID: exerciseID, in: workout) else { return nil }
-        return (match.sets ?? [])
+        guard let match = matchingSets(exerciseID: exerciseID, in: workout) else { return nil }
+        return match
             .filter { $0.isCompleted && $0.setKind.countsTowardStats }
             .compactMap { OneRepMax.estimate(weight: $0.weightKg, reps: $0.reps) }
             .max()
     }
 
-    private func matchingExercise(exerciseID: UUID, in workout: WorkoutModel) -> WorkoutExerciseModel? {
-        (workout.exercises ?? []).first { $0.exercise?.id == exerciseID }
+    /// Every logged row for `exerciseID` in this workout, in logged order — nil when the workout
+    /// doesn't contain the exercise at all.
+    ///
+    /// It used to take `.first`, so an exercise logged twice in one session (bench 80 × 8 early,
+    /// bench 100 × 3 at the end) was half-invisible: the history line, the card sparkline and
+    /// the exercise's best-e1RM all read the first entry and never saw the heavier one.
+    private func matchingSets(exerciseID: UUID, in workout: WorkoutModel) -> [SetLogModel]? {
+        let matches = (workout.exercises ?? [])
+            .filter { $0.exercise?.id == exerciseID }
+            .sorted { $0.order < $1.order }
+        guard !matches.isEmpty else { return nil }
+        return matches.flatMap { ($0.sets ?? []).sorted { $0.order < $1.order } }
     }
 }

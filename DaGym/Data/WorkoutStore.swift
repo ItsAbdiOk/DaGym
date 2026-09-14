@@ -158,11 +158,9 @@ final class WorkoutStore {
     /// so late-arriving CloudKit children still resolve (`ExerciseSeeder.dedupe`), and must
     /// never be handed to a caller as if it were a real library exercise.
     func fetchExerciseModel(id: UUID) -> ExerciseModel? {
-        var descriptor = FetchDescriptor<ExerciseModel>(
-            predicate: #Predicate { $0.id == id && $0.mergedIntoID == nil }
-        )
+        var descriptor = FetchDescriptor<ExerciseModel>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
-        return fetchFirst(descriptor)
+        return fetchFirst(descriptor).flatMap { $0.mergedIntoID == nil ? $0 : nil }
     }
 
     /// Every library exercise in `ids`, keyed by id, in one query — the batched form of
@@ -171,10 +169,9 @@ final class WorkoutStore {
     func fetchExerciseModels(ids: Set<UUID>) -> [UUID: ExerciseModel] {
         guard !ids.isEmpty else { return [:] }
         let wanted = Array(ids)
-        let descriptor = FetchDescriptor<ExerciseModel>(
-            predicate: #Predicate { wanted.contains($0.id) && $0.mergedIntoID == nil }
-        )
-        return Dictionary(fetch(descriptor).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let descriptor = FetchDescriptor<ExerciseModel>(predicate: #Predicate { wanted.contains($0.id) })
+        let live = fetch(descriptor).filter { $0.mergedIntoID == nil }
+        return Dictionary(live.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     func fetchWorkoutModel(id: UUID) -> WorkoutModel? {
@@ -184,10 +181,8 @@ final class WorkoutStore {
     }
 
     func fetchRoutineModel(id: UUID) -> RoutineModel? {
-        var descriptor = FetchDescriptor<RoutineModel>(
-            predicate: #Predicate { $0.id == id && $0.mergedIntoID == nil }
-        )
+        var descriptor = FetchDescriptor<RoutineModel>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
-        return fetchFirst(descriptor)
+        return fetchFirst(descriptor).flatMap { $0.mergedIntoID == nil ? $0 : nil }
     }
 }

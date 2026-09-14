@@ -25,21 +25,22 @@ extension WorkoutImportService {
         environment.store.context.insert(workout)
 
         var touchedExerciseIDs: [UUID] = []
-        var exerciseModels: [WorkoutExerciseModel] = []
         for (order, exercise) in imported.exercises.enumerated() {
             let exerciseID = resolveExercise(
                 exercise, store: environment.store, context: environment.context,
                 exerciseCache: &exerciseCache, report: &report
             )
             guard let exerciseModel = environment.store.fetchExerciseModel(id: exerciseID) else { continue }
-            let entryModel = addExerciseEntry(
+            addExerciseEntry(
                 exercise, order: order, model: exerciseModel, workout: workout, store: environment.store
             )
             report.setsImported += exercise.sets.count
             touchedExerciseIDs.append(exerciseID)
-            exerciseModels.append(entryModel)
         }
-        workout.exercises = exerciseModels
+        // The rows are linked through `WorkoutExerciseModel.workout` alone. Assigning
+        // `workout.exercises` as well makes SwiftData rebuild a relationship it is already
+        // mid-way through updating, which traps — the trap `restoreWorkout` was rewritten to
+        // avoid.
         return touchedExerciseIDs
     }
 
@@ -57,7 +58,7 @@ extension WorkoutImportService {
     private static func addExerciseEntry(
         _ exercise: ImportedExercise, order: Int, model exerciseModel: ExerciseModel,
         workout: WorkoutModel, store: WorkoutStore
-    ) -> WorkoutExerciseModel {
+    ) {
         // `supersetGroup` carries the source's own grouping (Hevy's `superset_id`) through, so a
         // superset imports as a superset instead of two unrelated blocks.
         let entryModel = WorkoutExerciseModel(
@@ -65,10 +66,10 @@ extension WorkoutImportService {
             exercise: exerciseModel, workout: workout
         )
         store.context.insert(entryModel)
-        let sets = makeSetModels(exercise.sets, workoutExercise: entryModel, at: workout.startedAt)
-        entryModel.sets = sets
-        for set in sets { store.context.insert(set) }
-        return entryModel
+        // `workoutExercise:` is the whole link; `entryModel.sets` must not also be assigned.
+        for set in makeSetModels(exercise.sets, workoutExercise: entryModel, at: workout.startedAt) {
+            store.context.insert(set)
+        }
     }
 
     private static func makeSetModels(

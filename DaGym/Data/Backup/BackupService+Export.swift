@@ -57,8 +57,30 @@ extension BackupService {
 
     // MARK: - Exercises, routines
 
+    /// Exercises that are still real rows. A row that lost a seed fold is a **tombstone**
+    /// (`ExerciseModel.mergedIntoID`), kept alive only so CloudKit can still deliver children to
+    /// it — every read path hides it. Exporting one wrote the duplicate into the file, and the
+    /// importer has no idea it was a tombstone, so it arrived on the other device as a second
+    /// real "Bench Press" sitting in the library next to the first.
+    nonisolated static func liveExercises(context: ModelContext) -> [ExerciseModel] {
+        // Filtered in memory, not in the #Predicate: SwiftData does not translate an optional
+        // UUID compared against nil, and the fetch comes back empty — which silently made every
+        // exercise lookup in import and plan sharing fail to match anything.
+        let all = (try? context.fetch(FetchDescriptor<ExerciseModel>())) ?? []
+        return all.filter { $0.mergedIntoID == nil }
+    }
+
+    /// The same, for routines (`RoutineModel.mergedIntoID`, stamped by `dedupeRoutines()`). A
+    /// routine tombstone still *owns its slots*, so exporting one shipped a complete duplicate
+    /// routine, not just an empty shell. Archived routines are deliberately still exported — a
+    /// backup carries them, a tombstone is not the user's data.
+    nonisolated static func liveRoutines(context: ModelContext) -> [RoutineModel] {
+        let all = (try? context.fetch(FetchDescriptor<RoutineModel>())) ?? []
+        return all.filter { $0.mergedIntoID == nil }
+    }
+
     static func exportExercises(context: ModelContext, baseline: SeedBaseline) -> [BackupExercise] {
-        let models = (try? context.fetch(FetchDescriptor<ExerciseModel>())) ?? []
+        let models = liveExercises(context: context)
         return models.compactMap { model -> BackupExercise? in
             guard model.isCustom || baseline.isOverridden(model) else { return nil }
             return BackupExercise(
@@ -74,7 +96,7 @@ extension BackupService {
     }
 
     static func exportRoutines(context: ModelContext) -> [BackupRoutine] {
-        let models = (try? context.fetch(FetchDescriptor<RoutineModel>())) ?? []
+        let models = liveRoutines(context: context)
         return models.map { model in
             let routineExercises = (model.exercises ?? []).sorted { $0.order < $1.order }
             return BackupRoutine(
@@ -219,7 +241,7 @@ extension BackupService {
     /// re-points the note at whatever local row those resolve to.
     static func exportExerciseNotes(context: ModelContext) -> [BackupExerciseNote] {
         let notes = (try? context.fetch(FetchDescriptor<ExerciseNoteModel>())) ?? []
-        let exercises = (try? context.fetch(FetchDescriptor<ExerciseModel>())) ?? []
+        let exercises = liveExercises(context: context)
         let byID = Dictionary(exercises.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         return notes.map { note in
             let exercise = note.exerciseID.flatMap { byID[$0] }

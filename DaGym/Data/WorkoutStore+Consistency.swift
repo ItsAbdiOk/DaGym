@@ -64,8 +64,16 @@ extension WorkoutStore {
             .filter { $0.isCompleted && $0.setKind.countsTowardStats }
     }
 
+    /// Weight × reps over counting sets, reading each row's **lifted** load: an assisted row
+    /// stores the assistance dialled in as its weight, and counting that as volume put 30 kg of
+    /// help × 8 reps into the week's total. See `WorkoutStore.loadedWeightKg(_:style:)`.
     private func volume(of workout: WorkoutModel) -> Double {
-        countedSets(in: workout).reduce(0.0) { $0 + $1.weightKg * Double($1.reps) }
+        (workout.exercises ?? []).reduce(0.0) { total, exerciseModel in
+            let isAssisted = exerciseModel.exercise?.style == .assisted
+            return total + (exerciseModel.sets ?? [])
+                .filter { $0.isCompleted && $0.setKind.countsTowardStats }
+                .reduce(0.0) { $0 + (isAssisted ? 0 : $1.weightKg) * Double($1.reps) }
+        }
     }
 
     private func minutes(of workout: WorkoutModel) -> Int {

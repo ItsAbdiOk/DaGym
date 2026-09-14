@@ -1,5 +1,6 @@
 import Foundation
 import GymCore
+import SwiftData
 import Testing
 
 @testable import DaGym
@@ -327,6 +328,55 @@ struct CalendarSyncServiceTests {
         }
         #expect(fake.events.isEmpty)
         #expect(fake.createCalendarCount == 0)
+    }
+
+    // MARK: - The coordinator both screens now go through
+
+    /// The Settings toggle used to run its own `try? await service.sync(request)` chain, so
+    /// denying calendar access left the switch on and the schedule footnote still claiming
+    /// "Synced to your \"DaGym\" calendar." Both screens go through `CalendarSyncCoordinator`
+    /// now: a refusal comes back as an `Outcome`, turns `calendarSyncEnabled` back off, and
+    /// carries the message the UI shows.
+    @Test("a refused sync turns the preference back off and says why")
+    @MainActor
+    func refusedSyncDisablesThePreferenceAndExplains() async throws {
+        let container = try ModelContainer.dagym(inMemory: true)
+        let store = WorkoutStore(context: ModelContext(container))
+        let defaults = UserDefaults(suiteName: "calendar-sync-coordinator") ?? .standard
+        defaults.removePersistentDomain(forName: "calendar-sync-coordinator")
+        let preferences = Preferences(suite: defaults)
+        preferences.calendarSyncEnabled = true
+
+        let fake = FakeEventStore()
+        fake.access = .denied
+        let outcome = await CalendarSyncCoordinator.sync(
+            store: store, preferences: preferences, eventStore: fake
+        )
+
+        #expect(outcome == CalendarSyncCoordinator.Outcome.denied(.accessDenied))
+        #expect(preferences.calendarSyncEnabled == false)
+        #expect(outcome.problemMessage?.isEmpty == false)
+        #expect(fake.events.isEmpty)
+        #expect(store.scheduleEventIDs().isEmpty)
+    }
+
+    /// And the ordinary case stays quiet: nothing for either screen to report.
+    @Test("a successful sync reports no problem for the UI to show")
+    @MainActor
+    func successfulSyncHasNoProblemMessage() async throws {
+        let container = try ModelContainer.dagym(inMemory: true)
+        let store = WorkoutStore(context: ModelContext(container))
+        let defaults = UserDefaults(suiteName: "calendar-sync-coordinator-ok") ?? .standard
+        defaults.removePersistentDomain(forName: "calendar-sync-coordinator-ok")
+        let preferences = Preferences(suite: defaults)
+        preferences.calendarSyncEnabled = true
+
+        let outcome = await CalendarSyncCoordinator.sync(
+            store: store, preferences: preferences, eventStore: FakeEventStore()
+        )
+
+        #expect(outcome.problemMessage == nil)
+        #expect(preferences.calendarSyncEnabled)
     }
 
     @Test("a calendar source that refuses new calendars surfaces its error")

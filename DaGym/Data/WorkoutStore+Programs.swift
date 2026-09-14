@@ -79,6 +79,12 @@ enum StarterPrograms {
 
 extension WorkoutStore {
     func programs(now: Date = Date(), calendar: Calendar = .current) -> [ProgramInfo] {
+        // Same expiry check `activeProgramModel()` runs, so the Programmes screen and the session
+        // that `startWorkout` builds agree on which programme is active. Without it an expired
+        // deload shim was still listed as the active programme (in its week 2) right up until
+        // some *other* screen happened to call `activeProgramModel()` — while `startWorkout` had
+        // already handed control back to the programme the deload interrupted.
+        resumeProgramIfDeloadExpired(now: now, calendar: calendar)
         pruneAbandonedDeloadPrograms()
         let descriptor = FetchDescriptor<ProgramModel>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
         return fetch(descriptor).map { programInfo($0, now: now, calendar: calendar) }

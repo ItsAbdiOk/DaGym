@@ -42,4 +42,21 @@ struct OneRepMaxTests {
         #expect(easy > hard)
         #expect(easy == sameAsEight)
     }
+
+    @Test("an RIR-extended rep count is clamped, never dropped off the eligible range")
+    func repsInReserveClamps() throws {
+        // 100 × 8 at RPE 5 is RIR 5 → 13 reps, which used to return nil: rating a set deleted
+        // its e1RM from the progression rule while the same set left unrated still produced one.
+        let rated = try #require(OneRepMax.estimate(weight: 100, reps: 8, repsInReserve: 5))
+        let twelve = try #require(OneRepMax.estimate(weight: 100, reps: 12))
+        let unrated = try #require(OneRepMax.estimate(weight: 100, reps: 8))
+        #expect(rated == twelve)
+        #expect(rated > unrated)
+    }
+
+    @Test("an RIR adjustment can't rescue a set that was ineligible on its own reps")
+    func repsInReserveDoesNotRescueIneligibleSets() {
+        #expect(OneRepMax.estimate(weight: 100, reps: 13, repsInReserve: 0) == nil)
+        #expect(OneRepMax.estimate(weight: 0, reps: 5, repsInReserve: 2) == nil)
+    }
 }

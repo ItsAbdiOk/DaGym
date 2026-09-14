@@ -69,9 +69,10 @@ extension PlanShareService {
         private var bySeedID: [String: ExerciseModel] = [:]
         private var byName: [String: ExerciseModel] = [:]
 
+        /// Live rows only, for the reason `BackupService.ExerciseIndex` gives: a seed tombstone
+        /// carries its survivor's `seedID`, and resolving a slot onto one hides it from the app.
         init(context: ModelContext) {
-            let models = (try? context.fetch(FetchDescriptor<ExerciseModel>())) ?? []
-            for model in models { register(model) }
+            for model in BackupService.liveExercises(context: context) { register(model) }
         }
 
         func register(_ model: ExerciseModel) {
@@ -113,7 +114,12 @@ extension PlanShareService {
         _ items: [PlanRoutine], index: ExerciseIndex, context: ModelContext, preview: Bool,
         report: inout PlanImportReport
     ) -> [UUID: UUID] {
-        let existing = (try? context.fetch(FetchDescriptor<RoutineModel>())) ?? []
+        // Tombstones are matched too — one still stands for a plan the user already imported, so
+        // skipping on it avoids re-creating the duplicate its survivor absorbed — but they are
+        // indexed *first*, so wherever a tombstone and its survivor share an `importedFromID` the
+        // live survivor wins the key and `importProgram` maps the day cycle onto a visible routine.
+        let all = (try? context.fetch(FetchDescriptor<RoutineModel>())) ?? []
+        let existing = all.filter(\.isMergedAway) + all.filter { !$0.isMergedAway }
         var existingByImportID: [UUID: RoutineModel] = [:]
         for model in existing {
             existingByImportID[model.id] = model
@@ -146,8 +152,13 @@ extension PlanShareService {
             )
             context.insert(routine)
             idMap[item.id] = routine.id
-            routine.exercises = item.exercises.compactMap { draft in
-                makeRoutineExercise(draft, index: index, routine: routine, context: context, report: &report)
+            // Linked through `RoutineExerciseModel.routine` only — assigning `routine.exercises`
+            // as well makes SwiftData rebuild a relationship it is already mid-way through
+            // updating, the trap `restoreWorkout` was rewritten to avoid.
+            for draft in item.exercises {
+                _ = makeRoutineExercise(
+                    draft, index: index, routine: routine, context: context, report: &report
+                )
             }
         }
         return idMap
@@ -167,14 +178,13 @@ extension PlanShareService {
             progressionRuleJSON: draft.ruleJSON, exercise: exercise, routine: routine
         )
         context.insert(model)
-        model.plannedSets = draft.sets.map { set in
-            let plannedSet = PlannedSetModel(
+        // `routineExercise:` is the whole link; `model.plannedSets` must not also be assigned.
+        for set in draft.sets {
+            context.insert(PlannedSetModel(
                 order: set.order, kind: set.kind, targetReps: set.targetReps,
                 targetRepsHigh: set.targetRepsHigh, targetWeightKg: set.targetWeightKg,
                 targetRPE: set.targetRPE, targetSeconds: set.targetSeconds, routineExercise: model
-            )
-            context.insert(plannedSet)
-            return plannedSet
+            ))
         }
         return model
     }
@@ -200,10 +210,9 @@ extension PlanShareService {
         let model = ProgramModel(id: item.id, name: item.name, weeks: item.weeks)
         model.routineIDs = item.routineIDs.compactMap { routineIDMap[$0] }
         context.insert(model)
-        model.programWeeks = item.programWeeks.map { week in
-            let weekModel = ProgramWeekModel(index: week.index, kind: week.kind, program: model)
-            context.insert(weekModel)
-            return weekModel
+        // `program:` is the whole link; `model.programWeeks` must not also be assigned.
+        for week in item.programWeeks {
+            context.insert(ProgramWeekModel(index: week.index, kind: week.kind, program: model))
         }
     }
 }

@@ -9,9 +9,15 @@ extension WorkoutStore {
     /// from progression, falls back to plain auto-fill by set position from the previous
     /// session (plan.md §6.1). Immediately persists a `WorkoutModel` so a crash mid-workout
     /// never loses it.
-    func startWorkout(routineID: UUID?) -> WorkoutSession {
+    ///
+    /// `calendar` is the lifter's `Preferences.trainingCalendar`, handed in by the call site the
+    /// same way `unit:` is (the store never reads `Preferences`). It decides which week of the
+    /// active program today falls in — and so whether this session is a planned deload — so that
+    /// a Sunday-start lifter is not given a deload week on a different day from the one the
+    /// Programmes screen shows.
+    func startWorkout(routineID: UUID?, calendar: Calendar = .current) -> WorkoutSession {
         let routine = routineID.flatMap(fetchRoutineModel)
-        let entries = buildEntries(from: routine)
+        let entries = buildEntries(from: routine, calendar: calendar)
         let model = WorkoutModel(
             title: routine?.name ?? "Freestyle", startedAt: Date(), routineID: routine?.id,
             routineName: routine?.name ?? ""
@@ -47,9 +53,9 @@ extension WorkoutStore {
     /// `WorkoutModel` take a combined title ("Push A + Arms") so history shows every routine
     /// that fed the workout. Used by a multi-routine schedule day and the header's
     /// "Add routine to this session".
-    func appendRoutine(id: UUID, to session: WorkoutSession) {
+    func appendRoutine(id: UUID, to session: WorkoutSession, calendar: Calendar = .current) {
         guard let routine = fetchRoutineModel(id: id) else { return }
-        session.exercises.append(contentsOf: buildEntries(from: routine))
+        session.exercises.append(contentsOf: buildEntries(from: routine, calendar: calendar))
         session.routineGlyphs[routine.id] = Self.routineGlyph(routine)
         session.fillPlaceholderWarmups()
         let title = Self.combinedTitle(session.title, adding: routine.name)
@@ -92,9 +98,11 @@ extension WorkoutStore {
     /// baseline while it was still being logged, and it slipped through `finish`'s
     /// double-finish guard. `finish` stamps `endedAt` from `session.backfillEndedAt`, like
     /// every other session.
-    func startBackfill(date: Date, durationMinutes: Int, routineID: UUID?) -> WorkoutSession {
+    func startBackfill(
+        date: Date, durationMinutes: Int, routineID: UUID?, calendar: Calendar = .current
+    ) -> WorkoutSession {
         let routine = routineID.flatMap(fetchRoutineModel)
-        let entries = buildEntries(from: routine)
+        let entries = buildEntries(from: routine, calendar: calendar)
         let model = WorkoutModel(
             title: routine?.name ?? "Backfilled workout", startedAt: date,
             isBackfilled: true, routineID: routine?.id, routineName: routine?.name ?? ""
@@ -209,7 +217,9 @@ extension WorkoutStore {
         kind: SetKind, targetReps: Int?, targetWeightKg: Double?, targetSeconds: Int?
     )
 
-    private func buildEntries(from routine: RoutineModel?) -> [WorkoutExerciseEntry] {
+    private func buildEntries(
+        from routine: RoutineModel?, calendar: Calendar = .current
+    ) -> [WorkoutExerciseEntry] {
         guard let routine else { return [] }
         let routineExercises = (routine.exercises ?? []).sorted { $0.order < $1.order }
         // Fetched once for the whole routine: the finished-workout list (progression baseline,
@@ -217,7 +227,7 @@ extension WorkoutStore {
         // the active program's week/cycle and the PR cache. None of them can differ between the
         // exercises of one session, and re-deriving each per exercise was the N+1 that made
         // `startWorkout` visibly stall on an 8+ exercise routine.
-        let facts = makeSessionFacts(routineID: routine.id)
+        let facts = makeSessionFacts(routineID: routine.id, calendar: calendar)
         return routineExercises.compactMap { routineExercise in
             buildEntry(routine: routine, routineExercise: routineExercise, facts: facts)
                 .map { entry -> WorkoutExerciseEntry in

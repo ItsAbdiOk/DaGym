@@ -125,13 +125,19 @@ struct HistoryTabView: View {
 
     private func startFreestyleBackfill(date: Date, minutes: Int) {
         showingBackfill = false
-        backfillSession = store.startBackfill(date: date, durationMinutes: minutes, routineID: nil)
+        backfillSession = store.startBackfill(
+            date: date, durationMinutes: minutes, routineID: nil,
+            calendar: preferences.trainingCalendar
+        )
         backfillSession?.effortScale = preferences.effortScale
     }
 
     private func startRoutineBackfill(date: Date, minutes: Int, routineID: UUID) {
         showingBackfill = false
-        backfillSession = store.startBackfill(date: date, durationMinutes: minutes, routineID: routineID)
+        backfillSession = store.startBackfill(
+            date: date, durationMinutes: minutes, routineID: routineID,
+            calendar: preferences.trainingCalendar
+        )
         backfillSession?.effortScale = preferences.effortScale
     }
 }

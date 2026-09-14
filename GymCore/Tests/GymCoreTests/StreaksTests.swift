@@ -83,6 +83,58 @@ struct StreaksTests {
         #expect(result.longest == 1)
     }
 
+    @Test("two sessions on one day are one day toward the weekly goal, not two")
+    func twoSessionsInOneDayCountOnce() {
+        let now = Date()
+        let start = mondayStart(weeksAgo: 0, from: now)
+        // Four sessions, but only two calendar days: morning and evening on Monday and Tuesday.
+        let hoursFromWeekStart = [8, 19, 32, 43]
+        let workouts = hoursFromWeekStart.compactMap {
+            calendar.date(byAdding: .hour, value: $0, to: start)
+        }
+        let result = Streaks.weekly(workoutDates: workouts, weeklyGoal: 4, calendar: calendar, now: now)
+        #expect(result.thisWeekCount == 2)
+        #expect(result.current == 0)
+    }
+
+    @Test("a week with four sessions across four days still counts")
+    func fourDistinctDaysCount() {
+        let now = Date()
+        let workouts = dates(weeksAgo: 0, count: 4, now: now)
+        let result = Streaks.weekly(workoutDates: workouts, weeklyGoal: 4, calendar: calendar, now: now)
+        #expect(result.thisWeekCount == 4)
+        #expect(result.current == 1)
+    }
+
+    @Test("current and longest agree across a week boundary in a zone that shifts at midnight")
+    func currentAndLongestAgreeAcrossMidnightShiftingZone() {
+        // Lord Howe Island's clocks move at 02:00 on the first Sunday of April, and its week (with
+        // firstWeekday = 1) starts on that same Sunday — so `dateInterval` and "step back one
+        // week from now" land on different instants. `currentRun` compared them exactly and read
+        // 0 while `longestRun`, which compares tolerantly, read the full streak.
+        var lordHowe = Calendar(identifier: .gregorian)
+        lordHowe.firstWeekday = 1 // Sunday
+        lordHowe.timeZone = TimeZone(identifier: "Australia/Lord_Howe") ?? .current
+
+        var components = DateComponents(year: 2026, month: 4, day: 8, hour: 12) // Wed after the shift
+        components.timeZone = lordHowe.timeZone
+        let now = lordHowe.date(from: components) ?? Date()
+
+        func weekDates(weeksAgo: Int, count: Int) -> [Date] {
+            let thisWeekStart = lordHowe.dateInterval(of: .weekOfYear, for: now)?.start ?? now
+            let start = lordHowe.date(byAdding: .weekOfYear, value: -weeksAgo, to: thisWeekStart) ?? now
+            return (0..<count).compactMap {
+                lordHowe.date(byAdding: .hour, value: $0 * 24 + 12, to: start)
+            }
+        }
+
+        var workouts: [Date] = []
+        for weeksAgo in 0..<3 { workouts += weekDates(weeksAgo: weeksAgo, count: 4) }
+        let result = Streaks.weekly(workoutDates: workouts, weeklyGoal: 4, calendar: lordHowe, now: now)
+        #expect(result.longest == 3)
+        #expect(result.current == result.longest)
+    }
+
     @Test("a streak spanning the Europe/London spring-forward DST boundary stays intact")
     func streakAcrossDSTBoundary() {
         var london = Calendar(identifier: .gregorian)

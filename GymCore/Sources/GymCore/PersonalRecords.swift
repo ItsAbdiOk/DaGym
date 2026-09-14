@@ -1,12 +1,38 @@
 import Foundation
 
 /// One completed set as logged by the user, ready to be checked against PRs.
+///
+/// ## What the weight fields mean
+///
+/// - `weightKg` is **external load actually lifted**, and nothing else. A bodyweight-only set
+///   and an assisted set both carry 0: assistance is help, not load, so it belongs in
+///   `assistanceKg`. Anything that totals "weight moved" (volume, tonnage, the top-set chart,
+///   the `maxWeight`/`volume` records) reads this field and is therefore always honest.
+///   Callers building a `PerformedSet` from an assisted row — where the UI stores the
+///   assistance dialled in as the row's weight — must move it across.
+/// - `assistanceKg` is the assistance for an assisted lift, and its presence is what *makes*
+///   the set assisted. Less is better (`PRKind.leastAssistance`).
+/// - `bodyweightKg` is the lifter's bodyweight as of the session, supplied only for the styles
+///   where it is part of the load: assisted and weighted-bodyweight. A bodyweight-only set must
+///   leave it nil — otherwise the lifter's own mass turns air squats into a 113 kg e1RM.
+///
+/// ## Per-side loads
+///
+/// `weightKg` is one implement's weight for a unilateral ("per side") exercise — the number the
+/// lifter typed, the number the plate calculator builds and the number the progression engine
+/// increments. It is deliberately **not** doubled here or anywhere else: a 30 kg dumbbell press
+/// reads "Best set 30 × 10 (300 kg)", not 600. One convention, applied everywhere, beats a
+/// truer number applied in some places and not others; `ExerciseInfo.isPerSide` is the flag a
+/// future display layer would use if the app ever chooses to render a bilateral total.
 public struct PerformedSet: Hashable, Sendable {
     public var kind: SetKind
+    /// External load lifted — see the type's note. 0 for bodyweight-only and assisted sets.
     public var weightKg: Double
     public var reps: Int
     public var durationSeconds: Int?
+    /// Assistance dialled in; its presence marks the set as an assisted lift.
     public var assistanceKg: Double?
+    /// Bodyweight as of the session — only for assisted and weighted-bodyweight styles.
     public var bodyweightKg: Double?
     public var date: Date
     /// Rated effort, when the lifter logged one — lets balance views single out hard sets.
@@ -39,6 +65,26 @@ public struct PerformedSet: Hashable, Sendable {
         guard let rpe else { return false }
         return Effort(rpe: rpe).rir <= TrainingConstants.hardSetMaxRIR
     }
+
+    /// The load an e1RM should be estimated from — **the** definition, used by the PR cache and
+    /// by `ExerciseSeries.e1rm` alike so the card and the chart never disagree.
+    ///
+    /// - assisted: bodyweight minus assistance. Nil without a bodyweight on file, because there
+    ///   is no honest answer: reading the raw `weightKg` would estimate a 1RM from the *help*.
+    ///   Nil (rather than 0) also when the assistance meets or exceeds bodyweight — nothing was
+    ///   lifted yet.
+    /// - weighted bodyweight: bodyweight plus the added load.
+    /// - everything else: the load itself, which is 0 (and so ineligible) for a bodyweight-only
+    ///   set. Air squats do not have a one-rep max.
+    public var effectiveWeightKg: Double? {
+        if let assistanceKg {
+            guard let bodyweightKg else { return nil }
+            let net = bodyweightKg - assistanceKg
+            return net > 0 ? net : nil
+        }
+        if let bodyweightKg { return bodyweightKg + weightKg }
+        return weightKg
+    }
 }
 
 /// The kind of personal record a set can earn.
@@ -65,24 +111,35 @@ public struct PersonalRecord: Hashable, Sendable {
 
 /// Evaluates completed sets against a lifter's existing records to find new PRs.
 public enum PersonalRecords {
-    /// Returns the new records earned by `newSets`, empty when none were beaten.
-    /// Warm-ups never count. A backfilled workout dated before `latestWorkoutDate`
-    /// earns nothing, since it cannot claim a PR against a later session.
+    /// Returns the new records earned by `newSets`, empty when none were beaten. Warm-ups never
+    /// count.
+    ///
+    /// This is a pure "do these sets beat these bests" comparison and knows nothing about where
+    /// the workout sits in history. Whether a past-dated session may be judged incrementally at
+    /// all is the caller's decision, because only the caller can see the rest of the history —
+    /// see `WorkoutStore.evaluatePRs`, which replays everything rather than comparing when a
+    /// workout is dated before one already logged.
     public static func evaluate(
         newSets: [PerformedSet],
         existing: [PersonalRecord],
-        workoutDate: Date,
-        isBackfilled: Bool,
-        latestWorkoutDate: Date?
+        workoutDate: Date
     ) -> [PersonalRecord] {
-        if isBackfilled, let latest = latestWorkoutDate, workoutDate < latest {
-            return []
-        }
         let sets = newSets.filter { $0.kind.countsTowardStats }
         guard !sets.isEmpty else { return [] }
 
         var records: [PersonalRecord] = []
-        records += bestSimple(.e1rm, sets: sets, date: workoutDate, existing: existing, value: e1rmValue)
+        // A bodyweight-only set has no e1RM at all: `effectiveWeightKg` is its (zero) external
+        // load, which `OneRepMax` rejects. Before that, any lifter with a weigh-in on file had
+        // their own mass folded in, banked a ~113 kg e1RM for 12 air squats, and
+        // `bestE1RMByExerciseKey` handed them a strength milestone for it — while a lifter who
+        // had never weighed in saw nothing. `minValue` keeps a degenerate zero out of the cache
+        // the same way maxWeight and volume do. The record's own `weightKg` is the *effective*
+        // load, so an assisted or weighted-bodyweight line reads "100 × 5 (e1RM 117)" rather
+        // than quoting the 20 kg belt or the 0 kg an assisted row carries.
+        records += bestSimple(
+            .e1rm, sets: sets, date: workoutDate, existing: existing, minValue: 0,
+            weightKg: { $0.effectiveWeightKg ?? $0.weightKg }, value: e1rmValue
+        )
         // A 0 kg set (bodyweight push-ups, planks) shouldn't bank a "Heaviest 0 kg" or
         // "Best set … (0 kg)" record — those are only meaningful once real load is involved.
         records += bestSimple(
@@ -91,7 +148,10 @@ public enum PersonalRecords {
         records += bestSimple(
             .volume, sets: sets, date: workoutDate, existing: existing, minValue: 0
         ) { $0.weightKg * Double($0.reps) }
-        records += bestSimple(.longestHold, sets: sets, date: workoutDate, existing: existing) {
+        // A row ticked without the timer ever running is a 0-second hold, not a "Hold 0:00" PR.
+        records += bestSimple(
+            .longestHold, sets: sets, date: workoutDate, existing: existing, minValue: 0
+        ) {
             $0.durationSeconds.map(Double.init)
         }
         records += leastAssistanceRecord(sets: sets, date: workoutDate, existing: existing)
@@ -122,20 +182,10 @@ public enum PersonalRecords {
         }
     }
 
-    /// The e1RM value for a set, using the effective weight for assisted and
-    /// weighted-bodyweight styles when a bodyweight is supplied.
+    /// The e1RM value for a set: the canonical formula over `PerformedSet.effectiveWeightKg`.
     private static func e1rmValue(_ set: PerformedSet) -> Double? {
-        let effectiveWeight: Double
-        if let bodyweight = set.bodyweightKg {
-            if let assistance = set.assistanceKg {
-                effectiveWeight = bodyweight - assistance
-            } else {
-                effectiveWeight = bodyweight + set.weightKg
-            }
-        } else {
-            effectiveWeight = set.weightKg
-        }
-        return OneRepMax.estimate(weight: effectiveWeight, reps: set.reps)
+        guard let weight = set.effectiveWeightKg else { return nil }
+        return OneRepMax.estimate(weight: weight, reps: set.reps)
     }
 
     /// Finds the best set for a kind where "bigger value wins", returning at
@@ -146,6 +196,7 @@ public enum PersonalRecords {
         date: Date,
         existing: [PersonalRecord],
         minValue: Double = -.infinity,
+        weightKg: (PerformedSet) -> Double = { $0.weightKg },
         value: (PerformedSet) -> Double?
     ) -> [PersonalRecord] {
         let best = sets.compactMap { set in value(set).map { (set: set, value: $0) } }
@@ -155,7 +206,7 @@ public enum PersonalRecords {
         guard best.value > currentBest else { return [] }
         return [
             PersonalRecord(
-                kind: kind, value: best.value, weightKg: best.set.weightKg, reps: best.set.reps, date: date
+                kind: kind, value: best.value, weightKg: weightKg(best.set), reps: best.set.reps, date: date
             )
         ]
     }

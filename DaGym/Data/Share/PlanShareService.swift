@@ -119,10 +119,13 @@ enum PlanShareService {
 
     // MARK: - Fetch helpers
 
+    /// `mergedIntoID == nil`: a routine that lost a seed fold is a tombstone that still owns its
+    /// slots, so sharing one would send the recipient a complete duplicate of a routine they are
+    /// about to receive anyway (see `BackupService.liveRoutines`).
     private static func fetchRoutine(id: UUID, context: ModelContext) -> RoutineModel? {
         var descriptor = FetchDescriptor<RoutineModel>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
-        return (try? context.fetch(descriptor))?.first
+        return (try? context.fetch(descriptor))?.first.flatMap { $0.mergedIntoID == nil ? $0 : nil }
     }
 
     private static func fetchProgram(id: UUID, context: ModelContext) -> ProgramModel? {

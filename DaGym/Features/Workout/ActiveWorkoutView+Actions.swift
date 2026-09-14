@@ -95,7 +95,7 @@ extension ActiveWorkoutView {
 
     /// Appends a saved routine's exercises to the session (header menu → "Add routine…").
     func appendRoutine(id: UUID) {
-        store.appendRoutine(id: id, to: session)
+        store.appendRoutine(id: id, to: session, calendar: preferences.trainingCalendar)
         store.sync(session: session)
     }
 

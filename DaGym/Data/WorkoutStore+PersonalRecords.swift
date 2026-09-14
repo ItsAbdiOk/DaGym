@@ -98,14 +98,28 @@ extension WorkoutStore {
     func evaluatePRs(
         session: WorkoutSession, workout: WorkoutModel, unit: WeightUnit = .kg
     ) -> [PersonalRecordInfo] {
-        let latestDate = latestFinishedWorkoutDate(excluding: workout.id)
+        // A workout dated before one that is already logged cannot be judged incrementally: the
+        // cache it would be compared against holds records set *after* it. That used to mean a
+        // backfill earned nothing and the cache never learned of it either — so a Friday
+        // backfill of Tuesday's 140 × 5 left the cache on Thursday's 148, and the following
+        // week's 135 × 5 was crowned "PR! e1RM 153" with a bigger lift sitting in the history
+        // and plotted on the very same chart. Worse, `rebuildPersonalRecords` replays in date
+        // order and would have awarded the 140 and refused the 135, so deleting an unrelated
+        // workout silently changed who held the records.
+        //
+        // There is only one honest answer for a past-dated session and it is the replay, which
+        // is exactly what deleting a workout already does. No banner: a session logged for last
+        // Tuesday is not a PR moment today, and the records list shows what it earned.
+        if let latest = latestFinishedWorkoutDate(excluding: workout.id), workout.startedAt < latest {
+            rebuildPersonalRecords()
+            return []
+        }
         return session.exercises.compactMap { entry -> PersonalRecordInfo? in
             let performed = performedSets(in: entry, date: workout.startedAt)
             guard !performed.isEmpty else { return nil }
             let records = PersonalRecords.evaluate(
                 newSets: performed, existing: existingRecords(exerciseID: entry.exercise.id),
-                workoutDate: workout.startedAt, isBackfilled: workout.isBackfilled,
-                latestWorkoutDate: latestDate
+                workoutDate: workout.startedAt
             )
             for record in records {
                 cacheRecord(record, exerciseID: entry.exercise.id, workoutID: workout.id)
@@ -141,7 +155,7 @@ extension WorkoutStore {
             // later one is: a backfill can never claim a record against a session after it.
             let records = PersonalRecords.evaluate(
                 newSets: performed, existing: existingRecords(exerciseID: exercise.id),
-                workoutDate: workout.startedAt, isBackfilled: false, latestWorkoutDate: nil
+                workoutDate: workout.startedAt
             )
             for record in records {
                 cacheRecord(record, exerciseID: exercise.id, workoutID: workout.id)
@@ -171,16 +185,56 @@ extension WorkoutStore {
     }
 
     private func performedSets(in entry: WorkoutExerciseEntry, date: Date) -> [PerformedSet] {
-        let isBodyweightStyle = entry.exercise.loggingStyle == .bodyweightReps
-            || entry.exercise.loggingStyle == .assisted || entry.exercise.loggingStyle == .weightedBodyweight
-        let bodyweightKg = isBodyweightStyle ? latestBodyMeasurement(asOf: date)?.bodyweightKg : nil
+        let style = entry.exercise.loggingStyle
+        let bodyweightKg = Self.needsBodyweight(style)
+            ? latestBodyMeasurement(asOf: date)?.bodyweightKg : nil
         return entry.sets.filter { $0.isDone && $0.kind.countsTowardStats }.map { setEntry in
             PerformedSet(
-                kind: setEntry.kind, weightKg: setEntry.weightKg, reps: setEntry.reps,
-                durationSeconds: setEntry.durationSeconds, assistanceKg: setEntry.assistanceKg,
+                kind: setEntry.kind, weightKg: Self.loadedWeightKg(setEntry, style: style),
+                reps: setEntry.reps, durationSeconds: setEntry.durationSeconds,
+                assistanceKg: Self.assistanceKg(setEntry, style: style),
                 bodyweightKg: bodyweightKg, date: date
             )
         }
+    }
+
+    /// Bodyweight is part of the load for exactly two styles. A bodyweight-only exercise must
+    /// **not** carry one: folding the lifter's mass in gave 12 air squats an e1RM of ~113 kg and
+    /// a Bronze "Bodyweight Squat" badge, and only for lifters who had logged a weigh-in — two
+    /// identical lifters saw different PR lists.
+    static func needsBodyweight(_ style: ExerciseInfo.LoggingStyle) -> Bool {
+        style == .assisted || style == .weightedBodyweight
+    }
+
+    /// External load actually lifted (`PerformedSet.weightKg`). **The** conversion from a logged
+    /// row to the number every total may use — `WorkoutStore+Series` and `+Consistency` read it
+    /// too.
+    ///
+    /// An assisted row stores the assistance dialled in as its `weightKg` (that is what the set
+    /// row edits, and what `ProgressionEngine+AssistedTimed` reads back). Taken literally it
+    /// made 30 kg of help into 30 kg lifted: "Heaviest 30 kg", "Best set 30 × 8 (240 kg)",
+    /// 240 kg of lifetime tonnage, and a top-set chart that *fell* as the lifter got stronger.
+    /// Assistance is not load, so it is 0 here and travels in `assistanceKg` instead.
+    static func loadedWeightKg(_ setEntry: SetEntry, style: ExerciseInfo.LoggingStyle) -> Double {
+        style == .assisted ? 0 : setEntry.weightKg
+    }
+
+    /// The assistance for an assisted row: what was **logged**, not what was prescribed.
+    ///
+    /// The set row for an assisted lift edits `weightKg`, so that is the number the lifter
+    /// actually dialled in; `assistanceKg` only carries what the prescription (or a voice log)
+    /// put there, and is never updated afterwards. Reading the prescription first meant a lifter
+    /// who went from 30 kg of help down to 20 had their e1RM computed off the stale 30 and
+    /// missed the PR — and an assisted exercise added mid-workout had no prescription at all, so
+    /// `assistanceKg` was nil, the set read as weighted-bodyweight, and bodyweight + 20 gave a
+    /// ~117 kg e1RM to someone who cannot do one unassisted pull-up.
+    ///
+    /// Resolution order matches `ProgressionEngine+AssistedTimed`, the other reader of these
+    /// rows: the logged weight when there is one, the prescribed assistance otherwise. Never
+    /// nil for an assisted set — its absence is what makes a set *not* assisted.
+    static func assistanceKg(_ setEntry: SetEntry, style: ExerciseInfo.LoggingStyle) -> Double? {
+        guard style == .assisted else { return nil }
+        return setEntry.weightKg > 0 ? setEntry.weightKg : (setEntry.assistanceKg ?? 0)
     }
 
     /// Every cached record for this exercise, across all kinds — the `existing` bests that

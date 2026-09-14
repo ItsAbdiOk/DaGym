@@ -86,9 +86,12 @@ extension BackupService {
         private var byID: [UUID: ExerciseModel] = [:]
         private var byName: [String: ExerciseModel] = [:]
 
+        /// Built from **live** rows only. A seed tombstone shares its survivor's `seedID`, so
+        /// indexing one could shadow the survivor and re-point every imported routine slot and
+        /// logged set at a row the whole app hides — the import would "succeed" and the
+        /// exercise would simply not be there.
         init(context: ModelContext) {
-            let models = (try? context.fetch(FetchDescriptor<ExerciseModel>())) ?? []
-            for model in models { register(model) }
+            for model in BackupService.liveExercises(context: context) { register(model) }
         }
 
         func register(_ model: ExerciseModel) {
@@ -148,6 +151,9 @@ extension BackupService {
     private static func importRoutines(
         _ items: [BackupRoutine], index: ExerciseIndex, context: ModelContext, report: inout ImportReport
     ) {
+        // Tombstones included on purpose: an older file can carry both halves of a fold, and a
+        // routine whose local row is a tombstone is already represented by its survivor. Matching
+        // it keeps the id unique and lets `dedupeRoutines()` converge the rest.
         let existingByID = Dictionary(
             uniqueKeysWithValues: ((try? context.fetch(FetchDescriptor<RoutineModel>())) ?? [])
                 .map { ($0.id, $0) }
@@ -163,8 +169,13 @@ extension BackupService {
                 symbolName: item.symbolName ?? "dumbbell", tint: item.tint ?? "coral"
             )
             context.insert(routine)
-            routine.exercises = item.exercises.compactMap { draft in
-                makeRoutineExercise(draft, index: index, routine: routine, context: context, report: &report)
+            // Linked through `RoutineExerciseModel.routine` only — assigning `routine.exercises`
+            // as well makes SwiftData rebuild a relationship it is already mid-way through
+            // updating, the trap `restoreWorkout` was rewritten to avoid.
+            for draft in item.exercises {
+                _ = makeRoutineExercise(
+                    draft, index: index, routine: routine, context: context, report: &report
+                )
             }
             report.routinesImported += 1
         }
@@ -189,14 +200,13 @@ extension BackupService {
             exercise: exercise, routine: routine
         )
         context.insert(model)
-        model.plannedSets = draft.plannedSets.map { set in
-            let plannedSet = PlannedSetModel(
+        // `routineExercise:` is the whole link; `model.plannedSets` must not also be assigned.
+        for set in draft.plannedSets {
+            context.insert(PlannedSetModel(
                 order: set.order, kind: set.kind, targetReps: set.targetReps,
                 targetRepsHigh: set.targetRepsHigh, targetWeightKg: set.targetWeightKg,
                 targetRPE: set.targetRPE, targetSeconds: set.targetSeconds, routineExercise: model
-            )
-            context.insert(plannedSet)
-            return plannedSet
+            ))
         }
         return model
     }
@@ -221,8 +231,11 @@ extension BackupService {
                 sourceDevice: item.sourceDevice, healthKitID: item.healthKitID
             )
             context.insert(workout)
-            workout.exercises = item.exercises.compactMap { draft in
-                makeWorkoutExercise(draft, index: index, workout: workout, context: context, report: &report)
+            // Linked through `WorkoutExerciseModel.workout` only — see `importRoutines`.
+            for draft in item.exercises {
+                _ = makeWorkoutExercise(
+                    draft, index: index, workout: workout, context: context, report: &report
+                )
             }
             report.workoutsImported += 1
             inserted += 1
@@ -248,16 +261,15 @@ extension BackupService {
             routineID: draft.routineID, exercise: exercise, workout: workout
         )
         context.insert(model)
-        model.sets = draft.sets.map { set in
-            let setModel = SetLogModel(
+        // `workoutExercise:` is the whole link; `model.sets` must not also be assigned.
+        for set in draft.sets {
+            context.insert(SetLogModel(
                 id: set.id, order: set.order, kind: set.kind, weightKg: set.weightKg, reps: set.reps,
                 durationSeconds: set.durationSeconds, distanceMeters: set.distanceMeters,
                 assistanceKg: set.assistanceKg, rpe: set.rpe, isCompleted: set.isCompleted,
                 completedAt: set.completedAt, prescriptionReason: set.prescriptionReason,
                 workoutExercise: model
-            )
-            context.insert(setModel)
-            return setModel
+            ))
         }
         return model
     }
@@ -336,12 +348,11 @@ extension BackupService {
             )
             model.routineIDs = item.routineIDs
             context.insert(model)
-            model.programWeeks = item.programWeeks.map { week in
-                let weekModel = ProgramWeekModel(
-                    id: week.id, index: week.index, kind: week.kind, program: model
+            // `program:` is the whole link; `model.programWeeks` must not also be assigned.
+            for week in item.programWeeks {
+                context.insert(
+                    ProgramWeekModel(id: week.id, index: week.index, kind: week.kind, program: model)
                 )
-                context.insert(weekModel)
-                return weekModel
             }
         }
     }

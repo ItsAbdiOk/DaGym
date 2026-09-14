@@ -35,11 +35,21 @@ struct MilestonesTests {
         #expect(!result.contains { $0.id == "workoutCount" })
     }
 
-    @Test("crossing straight to a higher tier reports only that tier")
+    @Test("crossing straight to gold also awards the bronze and silver tiers it passed")
     func higherTierUpgrade() {
+        // Importing 200 workouts at once used to list Gold and leave Bronze and Silver
+        // permanently unowned — a gap in the milestones list for tiers plainly earned.
         let result = Milestones.evaluate(state: state(workoutCount: 200), earned: [])
-        let match = result.first { $0.id == "workoutCount" }
-        #expect(match?.tier == .gold)
+        let tiers = result.filter { $0.id == "workoutCount" }.map(\.tier)
+        #expect(tiers == [.bronze, .silver, .gold])
+    }
+
+    @Test("crossing two tiers at once awards both, and never one already earned")
+    func twoTiersAtOnceFromBronze() {
+        let result = Milestones.evaluate(
+            state: state(workoutCount: 200), earned: [(id: "workoutCount", tier: .bronze)]
+        )
+        #expect(result.filter { $0.id == "workoutCount" }.map(\.tier) == [.silver, .gold])
     }
 
     @Test("upgrading from bronze to silver reports silver only")
@@ -81,9 +91,9 @@ struct MilestonesTests {
         let result = Milestones.evaluate(
             state: state(streakWeeks: 12, lifetimeTonnageKg: 500_000, consistentWeeks: 26), earned: []
         )
-        #expect(result.first { $0.id == "streakWeeks" }?.tier == .silver)
-        #expect(result.first { $0.id == "lifetimeTonnage" }?.tier == .silver)
-        #expect(result.first { $0.id == "consistencyWeeks" }?.tier == .silver)
+        #expect(result.filter { $0.id == "streakWeeks" }.map(\.tier) == [.bronze, .silver])
+        #expect(result.filter { $0.id == "lifetimeTonnage" }.map(\.tier) == [.bronze, .silver])
+        #expect(result.filter { $0.id == "consistencyWeeks" }.map(\.tier) == [.bronze, .silver])
     }
 
     @Test("celebration worthy for a workout finished moments ago")

@@ -61,17 +61,17 @@ enum SampleDataSeeder {
         )
         store.context.insert(workout)
 
-        var entries: [WorkoutExerciseModel] = []
+        // Children are linked through the `workout:`/`workoutExercise:` inverses only. Assigning
+        // the parent's array as well makes SwiftData rebuild a relationship it is already mid-way
+        // through updating, which traps (the trap `restoreWorkout` was rewritten to avoid).
         for (order, exercise) in routine.exercises.enumerated() {
             guard let exerciseModel = store.fetchExerciseModel(id: exercise.id) else { continue }
             let entry = WorkoutExerciseModel(order: order, exercise: exerciseModel, workout: workout)
             store.context.insert(entry)
-            let sets = plausibleSets(for: exercise, sessionIndex: sessionIndex, at: date, entry: entry)
-            entry.sets = sets
-            for set in sets { store.context.insert(set) }
-            entries.append(entry)
+            for set in plausibleSets(for: exercise, sessionIndex: sessionIndex, at: date, entry: entry) {
+                store.context.insert(set)
+            }
         }
-        workout.exercises = entries
     }
 
     /// A gentle, plausible progression: three working sets, reps stepping down across the set

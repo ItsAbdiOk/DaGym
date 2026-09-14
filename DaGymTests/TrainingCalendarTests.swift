@@ -67,6 +67,58 @@ struct TrainingCalendarTests {
         _ = store.finish(session: session)
     }
 
+    /// `startWorkout` is the last preference-dependent path that still measured a programme's
+    /// weeks in `Calendar.current`. The store deliberately never reads `Preferences`, so the
+    /// lifter's calendar has to arrive as a parameter the way `unit:` does — otherwise a
+    /// Sunday-start lifter could be handed a planned deload on a different day from the one the
+    /// Programmes screen (which does pass `preferences.trainingCalendar`) shows them.
+    @Test("startWorkout's programme week follows the week-start preference it is given")
+    func startWorkoutHonoursTheTrainingCalendar() throws {
+        let store = try makeStore()
+        let exercise = store.createCustomExercise(
+            name: "Bench Press", primary: [.chest], equipment: "Barbell", style: .weightReps
+        )
+        let draft = RoutineExerciseDraft(
+            exerciseID: exercise.id,
+            sets: [PlannedSetDraft(kind: .working, targetReps: 8, targetWeightKg: 60)]
+        )
+        let routine = store.saveRoutine(id: nil, name: "Push A", exercises: [draft])
+
+        // Which of the two calendars lands on the deload week depends on today's weekday, so
+        // the start date is chosen for *disagreement* rather than hard-coded to one side.
+        let now = Date()
+        var disagreeingStart: Date?
+        for offset in 0...13 {
+            guard let candidate = Calendar.current.date(byAdding: .day, value: -offset, to: now)
+            else { continue }
+            let mondayWeek = ProgramCycle.position(
+                startedAt: candidate, now: now, weeks: 2, calendar: mondayFirstCalendar
+            )?.week
+            let sundayWeek = ProgramCycle.position(
+                startedAt: candidate, now: now, weeks: 2, calendar: sundayFirstCalendar
+            )?.week
+            if mondayWeek != sundayWeek {
+                disagreeingStart = candidate
+                break
+            }
+        }
+        let startedAt = try #require(disagreeingStart)
+
+        let program = ProgramModel(name: "Block", weeks: 2, startedAt: startedAt, isActive: true)
+        program.routineIDs = [routine.id]
+        store.context.insert(program)
+        store.context.insert(ProgramWeekModel(index: 1, kind: "normal", program: program))
+        store.context.insert(ProgramWeekModel(index: 2, kind: "deload", program: program))
+        store.save()
+
+        let mondayFirst = store.startWorkout(routineID: routine.id, calendar: mondayFirstCalendar)
+        let sundayFirst = store.startWorkout(routineID: routine.id, calendar: sundayFirstCalendar)
+        #expect(
+            mondayFirst.exercises[0].wasPlannedDeload != sundayFirst.exercises[0].wasPlannedDeload,
+            "the week-start preference has to decide which programme week today is"
+        )
+    }
+
     @Test("trainingCalendar's firstWeekday follows the preference, not the device locale")
     func trainingCalendarFollowsPreference() {
         let preferences = Preferences(suite: makeSuite(#function))

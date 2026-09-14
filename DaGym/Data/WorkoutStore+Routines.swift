@@ -69,10 +69,10 @@ struct RoutineExerciseDraft {
 extension WorkoutStore {
     func routines() -> [RoutineInfo] {
         let descriptor = FetchDescriptor<RoutineModel>(
-            predicate: #Predicate { !$0.isArchived && $0.mergedIntoID == nil },
+            predicate: #Predicate { !$0.isArchived },
             sortBy: [SortDescriptor(\.sortOrder)]
         )
-        let models = fetch(descriptor)
+        let models = fetch(descriptor).filter { $0.mergedIntoID == nil }
         return models.map(routineInfo)
     }
 
