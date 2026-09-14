@@ -40,7 +40,10 @@ ok "lint clean"
 # until a reviewer diffs the repo).
 command -v xcodegen >/dev/null 2>&1 || fail "xcodegen is not installed. Run: brew install xcodegen"
 xcodegen generate --quiet 2>/dev/null || xcodegen generate >/dev/null 2>&1
-GENERATED_PATHS="DaGym.xcodeproj DaGym/Info.plist DaGym/DaGym.entitlements \
+# project.pbxproj, not the whole .xcodeproj: Xcode rewrites shared schemes in its own format
+# (attribute order, version 1.7) every time it opens the project, so a scheme diff while Xcode
+# is running is noise, and schemes are not something App Review or Xcode Cloud reads.
+GENERATED_PATHS="DaGym.xcodeproj/project.pbxproj DaGym/Info.plist DaGym/DaGym.entitlements \
     DaGymWidgets/Info.plist DaGymWidgets/DaGymWidgets.entitlements DaGymWatch/Info.plist"
 if ! git diff --quiet -- $GENERATED_PATHS; then
     fail "a file xcodegen generates from project.yml is out of sync. Commit the regenerated files."
