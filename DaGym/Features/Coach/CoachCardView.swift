@@ -27,14 +27,30 @@ struct CoachCardView: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: DGSpace.s2) {
-            Circle()
-                .fill(severityColor)
-                .frame(width: 8, height: 8)
+            // Severity is the dot's colour *and* its shape: a triangle for a warning, a filled
+            // circle for a notice, a ring for information — so it survives colour-blindness.
+            severityGlyph
                 .padding(.top, 6)
             Text(card.title)
                 .font(DGFont.title3)
                 .foregroundStyle(DGColor.ink1)
             Spacer(minLength: DGSpace.s2)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(Self.severityWord(card.severity)): \(card.title)")
+    }
+
+    @ViewBuilder
+    private var severityGlyph: some View {
+        switch card.severity {
+        case .warning:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(severityColor)
+        case .notice:
+            Circle().fill(severityColor).frame(width: 8, height: 8)
+        case .info:
+            Circle().strokeBorder(severityColor, lineWidth: 2).frame(width: 8, height: 8)
         }
     }
 
@@ -43,6 +59,14 @@ struct CoachCardView: View {
         case .warning: DGColor.danger
         case .notice: DGColor.warning
         case .info: DGColor.info
+        }
+    }
+
+    static func severityWord(_ severity: CoachSeverity) -> String {
+        switch severity {
+        case .warning: "Warning"
+        case .notice: "Notice"
+        case .info: "Information"
         }
     }
 
@@ -77,13 +101,16 @@ struct CoachCardView: View {
                                 .font(DGFont.footnote)
                                 .foregroundStyle(DGColor.ink1)
                         }
+                        // One element per row, so the list reads "Volume: 120" then "Sets: 5"
+                        // rather than one run-on sentence.
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("\(item.label): \(format(item.value))")
                     }
                 }
                 .padding(DGSpace.s3)
                 .background(
                     DGColor.surface2, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
                 )
-                .accessibilityElement(children: .combine)
             }
         }
     }
@@ -116,7 +143,7 @@ struct CoachCardView: View {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink2)
                 .padding(.horizontal, DGSpace.s3)
-                .frame(height: 36)
+                .frame(minHeight: 36)
                 .background(DGColor.surface3, in: Capsule())
                 .accessibilityLabel("Dismiss, \(card.title)")
             if hasApprovableAction {
@@ -126,7 +153,7 @@ struct CoachCardView: View {
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.inkOnCoral)
                     .padding(.horizontal, DGSpace.s3)
-                    .frame(height: 36)
+                    .frame(minHeight: 36)
                     .background(DGColor.coral, in: Capsule())
                     .accessibilityLabel("Approve, \(card.title)")
             }

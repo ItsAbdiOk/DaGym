@@ -230,7 +230,8 @@ private struct HealthToggleRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: DGSpace.s3)
-            Toggle("", isOn: $isOn).tint(DGColor.coral).labelsHidden()
+            Toggle(title, isOn: $isOn).tint(DGColor.coral).labelsHidden()
+                .accessibilityHint(detail)
         }
         .padding(.horizontal, DGSpace.s5)
         .padding(.vertical, DGSpace.s4)
@@ -260,7 +261,7 @@ private struct HealthPermissionRow: View {
             Text(row.kind == .read ? "READ" : "WRITE")
                 .font(DGFont.condensedLabel(11))
                 .foregroundStyle(row.kind == .read ? DGColor.ink3 : DGColor.coral)
-                .frame(width: 44, alignment: .leading)
+                .frame(minWidth: 44, alignment: .leading)
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.title).font(DGFont.body).foregroundStyle(DGColor.ink1)
@@ -271,6 +272,8 @@ private struct HealthPermissionRow: View {
         }
         .padding(.horizontal, DGSpace.s5)
         .padding(.vertical, DGSpace.s4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(row.kind == .read ? "Reads" : "Writes") \(row.title). \(row.reason)")
     }
 }
 

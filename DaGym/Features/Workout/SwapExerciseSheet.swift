@@ -162,6 +162,7 @@ private struct CandidateRow: View {
             )
                 .padding(6)
                 .frame(width: 40, height: 40)
+                .accessibilityHidden(true)
                 .background(
                     DGColor.surface2, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
                 )
@@ -180,7 +181,7 @@ private struct CandidateRow: View {
                 .textCase(.uppercase)
                 .foregroundStyle(isPrimary ? .white : DGColor.ink2)
                 .padding(.horizontal, DGSpace.s3)
-                .frame(height: 36)
+                .frame(minHeight: 36)
                 .background(isPrimary ? DGColor.aiViolet : DGColor.surface3, in: Capsule())
         }
         .dgCard(padding: DGSpace.s3)

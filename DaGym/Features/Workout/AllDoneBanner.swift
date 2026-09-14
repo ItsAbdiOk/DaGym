@@ -17,7 +17,8 @@ struct AllDoneBanner: View {
                     .foregroundStyle(DGColor.ink2)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            HStack(spacing: DGSpace.s3) {
+            .accessibilityElement(children: .combine)
+            DGAdaptiveStack(spacing: DGSpace.s3) {
                 DGPrimaryButton(
                     title: "Finish", symbol: "checkmark", fill: DGColor.success, height: 44, action: onFinish
                 )
@@ -28,7 +29,7 @@ struct AllDoneBanner: View {
                         .textCase(.uppercase)
                         .foregroundStyle(DGColor.ink1)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 44)
+                        .frame(minHeight: 44)
                         .dgGlass(.regular, in: Capsule())
                 }
                 .buttonStyle(.dgControl)

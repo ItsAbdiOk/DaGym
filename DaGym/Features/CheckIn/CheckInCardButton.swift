@@ -34,7 +34,7 @@ struct CheckInCardButton: View {
                         .foregroundStyle(DGColor.ink3)
                 }
                 Spacer()
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.right").accessibilityHidden(true)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(DGColor.ink4)
             }

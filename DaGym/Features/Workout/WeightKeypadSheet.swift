@@ -243,7 +243,7 @@ private struct KeypadKey: View {
                 .font(DGFont.condensedLabel(20))
                 .foregroundStyle(isAccent ? DGColor.coralText : DGColor.ink1)
                 .frame(maxWidth: .infinity)
-                .frame(height: 52)
+                .frame(minHeight: 52)
                 .dgGlass(.regular, radius: DGRadius.sm)
         }
         .buttonStyle(.dgControl)
@@ -278,7 +278,7 @@ private struct PlateLine: View {
             .foregroundStyle(isInvalid ? DGColor.danger : DGColor.ink2)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, DGSpace.s3)
-            .frame(height: 40)
+            .frame(minHeight: 40)
             .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous))
             .onChange(of: isInvalid) { _, invalid in
                 if invalid { Haptics.invalid() }

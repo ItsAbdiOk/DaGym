@@ -66,6 +66,7 @@ struct CardioSetRow: View {
                 Text(paceLine)
                     .font(DGFont.footnote)
                     .foregroundStyle(DGColor.ink3)
+                    .accessibilityLabel("Pace and speed, \(paceLine)")
                     .padding(.leading, 28 + DGSpace.s3)
                     .padding(.bottom, DGSpace.s1)
             }
@@ -77,6 +78,7 @@ struct CardioSetRow: View {
             RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
                 .strokeBorder(DGColor.coral, lineWidth: isCurrent ? 1 : 0)
         }
+        .dgDenseType()
     }
 
     private func metric(
@@ -120,11 +122,15 @@ struct CardioSetRow: View {
         .accessibilityIdentifier(A11yID.setRowDone(rowIndex))
         .accessibilityLabel(doneButtonLabel)
         .accessibilityAddTraits(setEntry.isDone ? .isSelected : [])
+        .accessibilityAction(named: "Delete set", onDelete)
+        .accessibilityAction(named: "Change set type") { showKindPicker = true }
     }
 
     private var doneButtonLabel: String {
-        let state = setEntry.isDone ? "done" : "not done"
-        return "\(setEntry.kind.displayName) set, \(setEntry.cardioSummary(unit: unit)), \(state)"
+        SetRowAccessibility.cardioLabel(
+            kind: setEntry.kind, summary: setEntry.cardioSummary(unit: unit),
+            done: setEntry.isDone, isCurrent: isCurrent
+        )
     }
 
     private var swipeActions: some View {

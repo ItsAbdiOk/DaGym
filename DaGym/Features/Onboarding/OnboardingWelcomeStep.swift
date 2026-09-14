@@ -24,6 +24,7 @@ struct OnboardingWelcomeStep: View {
                 .background(
                     DGColor.coral, in: RoundedRectangle(cornerRadius: DGRadius.xl, style: .continuous)
                 )
+                .accessibilityHidden(true)
             VStack(spacing: DGSpace.s3) {
                 Text("DaGym")
                     .font(DGFont.title1)
@@ -39,6 +40,7 @@ struct OnboardingWelcomeStep: View {
                     HStack(spacing: DGSpace.s3) {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(DGColor.success)
+                            .accessibilityHidden(true)
                         Text(line)
                             .font(DGFont.subhead)
                             .foregroundStyle(DGColor.ink2)

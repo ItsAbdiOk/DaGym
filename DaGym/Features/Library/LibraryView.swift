@@ -164,7 +164,7 @@ struct EquipmentFilterBanner: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, DGSpace.s3)
-        .frame(height: 36)
+        .frame(minHeight: 36)
         .dgGlass(.thin, radius: 12)
     }
 }

@@ -53,3 +53,40 @@ enum DGMotion {
         reduceMotion ? .linear(duration: 0.001) : token
     }
 }
+
+/// `.animation(token, value:)` that reads Reduce Motion itself, so a call site needs neither
+/// the environment nor `DGMotion.aware` — every moving or scaling animation in the app goes
+/// through this (or `DGMotion.aware` where a `withAnimation` block needs the token directly).
+private struct DGAwareAnimation<Value: Equatable>: ViewModifier {
+    let token: Animation
+    let value: Value
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.animation(DGMotion.aware(token, reduceMotion: reduceMotion), value: value)
+    }
+}
+
+/// `.transition(moving)` that falls back to a plain cross-fade under Reduce Motion, so a toast
+/// or overlay still appears and disappears without sliding.
+private struct DGAwareTransition: ViewModifier {
+    let moving: AnyTransition
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.transition(reduceMotion ? .opacity : moving)
+    }
+}
+
+extension View {
+    /// Reduce Motion-aware `.animation(_:value:)`. Cross-fades stay; moves and scales collapse
+    /// to an instant change when the system setting is on.
+    func dgAnimation<Value: Equatable>(_ token: Animation, value: Value) -> some View {
+        modifier(DGAwareAnimation(token: token, value: value))
+    }
+
+    /// Reduce Motion-aware `.transition(_:)`: `moving` normally, `.opacity` when the setting is on.
+    func dgTransition(_ moving: AnyTransition) -> some View {
+        modifier(DGAwareTransition(moving: moving))
+    }
+}

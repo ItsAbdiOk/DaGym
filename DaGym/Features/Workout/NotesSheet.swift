@@ -35,6 +35,7 @@ struct NotesSheet: View {
                 .fill(DGColor.ink4)
                 .frame(width: 36, height: 5)
                 .padding(.top, DGSpace.s2)
+                .accessibilityHidden(true)
             Text(title)
                 .font(DGFont.title2)
                 .textCase(.uppercase)
@@ -42,6 +43,7 @@ struct NotesSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             if exerciseID != nil { scopeRow }
             TextEditor(text: $text)
+                .accessibilityLabel("\(title) note")
                 .scrollContentBackground(.hidden)
                 .font(DGFont.body)
                 .foregroundStyle(DGColor.ink1)

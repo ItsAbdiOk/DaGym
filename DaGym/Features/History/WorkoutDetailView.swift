@@ -81,7 +81,7 @@ struct WorkoutDetailView: View {
             dismiss()
         } label: {
             HStack(spacing: DGSpace.s1) {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.left").accessibilityHidden(true)
                     .font(.system(size: 13, weight: .semibold))
                 Text("History").dgLabel()
             }
@@ -108,7 +108,7 @@ struct WorkoutDetailView: View {
     }
 
     private func statRow(_ detail: WorkoutDetail) -> some View {
-        HStack(spacing: DGSpace.s3) {
+        DGAdaptiveStack(spacing: DGSpace.s3, threshold: .accessibility3) {
             StatTile(value: "\(detail.durationMinutes)", label: "Minutes").dgCard(radius: 14)
             StatTile(value: volumeText(detail), label: "Volume").dgCard(radius: 14)
             StatTile(value: "\(detail.setsDone)", label: "Sets").dgCard(radius: 14)
@@ -208,11 +208,13 @@ private struct ReadOnlySetRow: View {
                     .font(DGFont.footnote)
                     .foregroundStyle(effort.color)
                     .padding(.horizontal, DGSpace.s2)
-                    .frame(height: 24)
+                    .frame(minHeight: 24)
                     .background(effort.color.opacity(0.16), in: Capsule())
+                    .accessibilityLabel("Effort \(effort.displayValue(scale: preferences.effortScale))")
             }
         }
-        .frame(height: 44)
+        .frame(minHeight: 44)
+        .accessibilityElement(children: .combine)
     }
 }
 

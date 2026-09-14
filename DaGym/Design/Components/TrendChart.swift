@@ -21,6 +21,10 @@ struct TrendChartView: View {
     var goal: Double?
     var goalLabel: String?
     var height: CGFloat = 140
+    /// What the line is ("Bodyweight", "Body fat") — the VoiceOver summary leads with it.
+    var title: String = "Trend"
+    /// Renders one value with its unit for the VoiceOver summary ("78.5 kg").
+    var formatValue: (Double) -> String = ChartAccessibility.formatter(unit: "")
 
     var body: some View {
         Chart {
@@ -48,7 +52,16 @@ struct TrendChartView: View {
         .chartYAxis { AxisMarks(position: .leading) }
         .chartYScale(domain: yDomain)
         .frame(height: height)
-        .accessibilityHidden(true) // The stat above the chart already carries the latest value.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    private var accessibilitySummary: String {
+        var summary = ChartAccessibility.trendSummary(
+            title: title, dates: points.map(\.date), values: points.map(\.value), format: formatValue
+        )
+        if let goal { summary += ", goal \(formatValue(goal))" }
+        return summary
     }
 
     /// A few units either side of the readings (and the goal) rather than a 0-based axis, so a

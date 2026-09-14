@@ -22,7 +22,7 @@ extension ExerciseDetailView {
                     .font(DGFont.body)
                     .foregroundStyle(DGColor.ink1)
                 Spacer()
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.right").accessibilityHidden(true)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(DGColor.ink4)
             }
@@ -39,7 +39,7 @@ extension ExerciseDetailView {
                 dismiss()
             } label: {
                 HStack(spacing: DGSpace.s1) {
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "chevron.left").accessibilityHidden(true)
                         .font(.system(size: 13, weight: .semibold))
                     Text("Library").dgLabel()
                 }
@@ -55,6 +55,7 @@ extension ExerciseDetailView {
                     .dgGlass(.regular, in: Circle())
             }
             .buttonStyle(.dgControl)
+            .accessibilityLabel(exercise.isFavorite ? "Remove from favourites" : "Add to favourites")
         }
     }
 
@@ -121,7 +122,7 @@ extension ExerciseDetailView {
     }
 
     var statTiles: some View {
-        HStack(spacing: DGSpace.s3) {
+        DGAdaptiveStack(spacing: DGSpace.s3, threshold: .accessibility3) {
             goldStat
             StatTile(value: exercise.bestSet ?? "—", label: "Best Set")
                 .dgCard(radius: 14, padding: 0)

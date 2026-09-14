@@ -82,6 +82,7 @@ struct BodyView: View {
                                 .foregroundStyle(DGColor.ink1)
                             Text(preferences.unitSymbol).dgLabel()
                         }
+                        .accessibilityElement(children: .combine)
                     } else {
                         Text("—").dgMetric(DGFont.metricL).foregroundStyle(DGColor.ink3)
                     }
@@ -110,7 +111,7 @@ struct BodyView: View {
             Text(goalLabel)
                 .dgLabel(DGColor.infoText)
                 .padding(.horizontal, DGSpace.s3)
-                .frame(height: 28)
+                .frame(minHeight: 28)
                 .dgGlass(.thin, radius: DGRadius.sm)
         }
         .buttonStyle(.dgControl)
@@ -126,7 +127,9 @@ struct BodyView: View {
             points: series.map { TrendChartView.Point(date: $0.date, value: displayWeight($0.kg)) },
             lineColor: DGColor.coral, pointColor: weightPointColor,
             goal: preferences.bodyweightGoalKg.map(displayWeight),
-            goalLabel: preferences.bodyweightGoalKg.map { "Goal \(preferences.formatWeight(kg: $0))" }
+            goalLabel: preferences.bodyweightGoalKg.map { "Goal \(preferences.formatWeight(kg: $0))" },
+            title: "Bodyweight",
+            formatValue: ChartAccessibility.formatter(unit: preferences.weightUnit.symbol)
         )
     }
 
@@ -143,7 +146,7 @@ struct BodyView: View {
                             .textCase(.uppercase)
                     }
                     .foregroundStyle(DGColor.ink1)
-                    .frame(height: 52)
+                    .frame(minHeight: 52)
                     .padding(.horizontal, DGSpace.s4)
                     .dgGlass(.regular, radius: DGRadius.lg)
                 }
@@ -227,13 +230,14 @@ private struct MeasurementRow: View {
             Text(Self.dateLabel(measurement.date))
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
-                .frame(width: 64, alignment: .leading)
+                .frame(minWidth: 64, alignment: .leading)
             Text(preferences.formatWeight(kg: measurement.kg))
                 .font(DGFont.body)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             DGTag(text: measurement.source == "health" ? "Health" : "Manual")
         }
+        .accessibilityElement(children: .combine)
         .padding(.horizontal, DGSpace.s4)
         .frame(minHeight: DGTap.min)
         .background(DGColor.surface1, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))

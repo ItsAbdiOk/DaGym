@@ -128,12 +128,24 @@ private struct PhotoGridCell: View {
                 Text(preferences.formatWeight(kg: kg)).dgLabel()
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Self.accessibilityLabel(photo: photo, preferences: preferences))
+    }
+
+    /// "Progress photo, 12 Sep, 82 kg" — the image itself is a photograph of the lifter, so the
+    /// date and weight are what VoiceOver should read.
+    static func accessibilityLabel(photo: ProgressPhotoInfo, preferences: Preferences) -> String {
+        var parts = ["Progress photo", dateLabel(photo.date)]
+        if let kg = photo.bodyweightKg {
+            parts.append("\(preferences.formatWeight(kg: kg)) \(preferences.unitSymbol)")
+        }
+        return parts.joined(separator: ", ")
     }
 
     private var thumbnail: some View {
         Group {
             if let data = photo.thumbnailData, let image = UIImage(data: data) {
-                Image(uiImage: image).resizable().scaledToFill()
+                Image(uiImage: image).resizable().scaledToFill().accessibilityHidden(true)
             } else {
                 Rectangle().fill(DGColor.surface2)
             }

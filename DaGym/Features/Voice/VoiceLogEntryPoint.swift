@@ -17,6 +17,7 @@ struct VoiceLogEntryPoint: View {
     @State private var controller = VoiceLogController(
         recognizer: OnDeviceSpeechRecognizer(), speaker: VoiceSpeechSynthesizer()
     )
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var reviewCard: VoiceLogController.ReviewCard?
     @State private var activeError: VoiceLogController.VoiceLogError?
 
@@ -40,12 +41,12 @@ struct VoiceLogEntryPoint: View {
         .overlay(alignment: .top) {
             if case .listening(let partial) = controller.state {
                 VoiceListeningOverlay(partialTranscript: partial)
-                    .frame(width: 240)
+                    .frame(width: dynamicTypeSize.isAccessibilitySize ? 340 : 240)
                     .offset(y: 62)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .dgTransition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .animation(DGMotion.standard, value: controller.state)
+        .dgAnimation(DGMotion.standard, value: controller.state)
         .sheet(item: $reviewCard) { card in
             reviewSheet(for: card)
         }

@@ -123,7 +123,7 @@ private struct FormRow<Content: View>: View {
 
     var body: some View {
         HStack {
-            Text(label).dgLabel().frame(width: 90, alignment: .leading)
+            Text(label).dgLabel().frame(minWidth: 90, alignment: .leading)
             content
         }
         .padding(.vertical, DGSpace.s3)
@@ -208,7 +208,7 @@ private struct PerSideRow: View {
 
     var body: some View {
         FormRow(label: "Per Side") {
-            Toggle("", isOn: $isPerSide)
+            Toggle("Per side", isOn: $isPerSide)
                 .labelsHidden()
                 .tint(DGColor.coral)
         }

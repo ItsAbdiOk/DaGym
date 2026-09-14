@@ -71,14 +71,16 @@ extension BodyView {
         if composition.bodyFatHistory.count > 1 {
             TrendChartView(
                 points: composition.bodyFatHistory.map { .init(date: $0.date, value: $0.value) },
-                lineColor: DGColor.infoText, height: 90
+                lineColor: DGColor.infoText, height: 90, title: "Body fat",
+                formatValue: ChartAccessibility.formatter(unit: "percent")
             )
         } else if composition.leanMassHistory.count > 1 {
             TrendChartView(
                 points: composition.leanMassHistory.map {
                     .init(date: $0.date, value: displayWeight($0.value))
                 },
-                lineColor: DGColor.infoText, height: 90
+                lineColor: DGColor.infoText, height: 90, title: "Lean mass",
+                formatValue: ChartAccessibility.formatter(unit: preferences.weightUnit.symbol)
             )
         }
     }
@@ -103,8 +105,9 @@ extension BodyView {
             Text("Turn on in Settings \u{203A} Apple Health")
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink4)
+                .frame(minHeight: DGTap.min)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgControl)
     }
 
     private static func longDateLabel(_ date: Date) -> String {

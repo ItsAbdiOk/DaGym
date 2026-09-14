@@ -146,7 +146,7 @@ struct HistoryView: View {
                     .textCase(.uppercase)
             }
             .foregroundStyle(DGColor.coralText)
-            .frame(height: 52)
+            .frame(minHeight: 52)
             .padding(.horizontal, DGSpace.s5)
             .dgGlass(.regular, radius: DGRadius.lg)
         }
@@ -240,6 +240,7 @@ private struct ProgressTile<Destination: View>: View {
     var symbol: String
     var tint: Color
     @ViewBuilder var destination: () -> Destination
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         NavigationLink {
@@ -254,17 +255,20 @@ private struct ProgressTile<Destination: View>: View {
                         tint.opacity(0.14),
                         in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
                     )
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).dgLabel(tint)
                     Text(subtitle)
                         .font(DGFont.footnote)
                         .foregroundStyle(DGColor.ink3)
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
             }
             .padding(DGSpace.s3)
-            .frame(width: 184, alignment: .leading)
+            // The row scrolls sideways, so a wider tile costs nothing at accessibility sizes.
+            .frame(width: dynamicTypeSize.isAccessibilitySize ? 300 : 184, alignment: .leading)
             .frame(minHeight: DGTap.min)
             .dgGlass(.regular, radius: DGRadius.md)
         }

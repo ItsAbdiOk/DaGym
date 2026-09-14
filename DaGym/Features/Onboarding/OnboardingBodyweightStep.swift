@@ -88,6 +88,7 @@ struct OnboardingBodyweightStep: View {
                 .background(coral ? DGColor.coral : DGColor.surface3, in: Circle())
         }
         .buttonStyle(.dgControl)
+        .accessibilityLabel(symbol == "minus" ? "Decrease weight" : "Increase weight")
     }
 
     private var fineStepKg: Double { preferences.weightUnit.toKg(preferences.weightUnit.displayStep) }

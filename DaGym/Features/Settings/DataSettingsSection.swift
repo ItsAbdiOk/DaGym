@@ -260,9 +260,9 @@ private struct DataRow: View {
             }
             Spacer()
             if isBusy {
-                ProgressView().tint(DGColor.ink3)
+                ProgressView().tint(DGColor.ink3).accessibilityLabel("In progress")
             } else {
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.right").accessibilityHidden(true)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(DGColor.ink4)
             }

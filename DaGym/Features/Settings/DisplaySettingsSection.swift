@@ -27,10 +27,10 @@ struct DisplaySettingsSection: View {
     }
 
     private func row(label: String, isOn: Binding<Bool>) -> some View {
-        HStack {
+        DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
             Text(label).font(DGFont.body).foregroundStyle(DGColor.ink1)
             Spacer()
-            Toggle("", isOn: isOn).tint(DGColor.coral).labelsHidden()
+            Toggle(label, isOn: isOn).tint(DGColor.coral).labelsHidden()
         }
         .padding(.horizontal, DGSpace.s5)
         .frame(minHeight: 52)

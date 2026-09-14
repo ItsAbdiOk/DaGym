@@ -119,7 +119,7 @@ struct PhotoCaptureView: View {
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink2)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 52)
+                    .frame(minHeight: 52)
                     .dgGlass(.regular, radius: DGRadius.lg)
             }
             .buttonStyle(.dgControl)
@@ -160,7 +160,7 @@ private struct LibraryButtonLabel: View {
             .textCase(.uppercase)
             .foregroundStyle(DGColor.ink1)
             .frame(maxWidth: .infinity)
-            .frame(height: 52)
+            .frame(minHeight: 52)
             .dgGlass(.regular, radius: DGRadius.lg)
     }
 }

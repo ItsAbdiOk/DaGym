@@ -109,7 +109,7 @@ struct AddToRoutineSheet: View {
                         .foregroundStyle(DGColor.ink3)
                 }
                 Spacer()
-                Image(systemName: "plus.circle")
+                Image(systemName: "plus.circle").accessibilityHidden(true)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(DGColor.coralText)
             }
@@ -224,7 +224,7 @@ struct EditExerciseSheet: View {
     private var formCard: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Name").dgLabel().frame(width: 90, alignment: .leading)
+                Text("Name").dgLabel().frame(minWidth: 90, alignment: .leading)
                 TextField("Exercise name", text: $name)
                     .font(DGFont.body)
                     .foregroundStyle(DGColor.ink1)
@@ -346,7 +346,7 @@ struct MenuSettingsRow<Items: View>: View {
                 Text(value)
                     .font(DGFont.subhead)
                     .foregroundStyle(DGColor.ink3)
-                Image(systemName: "chevron.up.chevron.down")
+                Image(systemName: "chevron.up.chevron.down").accessibilityHidden(true)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(DGColor.ink4)
             }

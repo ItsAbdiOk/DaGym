@@ -54,6 +54,7 @@ private struct GoalRow: View {
             .dgCard(fill: isSelected ? DGColor.coralWash : DGColor.surface1, padding: DGSpace.s4)
         }
         .buttonStyle(.dgCard)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

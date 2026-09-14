@@ -58,10 +58,11 @@ struct EffortPickerSheet: View {
                         .font(DGFont.condensedLabel(13))
                         .foregroundStyle(on ? DGColor.inkOnCoral : DGColor.ink2)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 40)
+                        .frame(minHeight: 40)
                         .background { if on { Capsule().fill(DGColor.coral) } }
                 }
                 .buttonStyle(.dgControl)
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
         .padding(4)
@@ -81,7 +82,7 @@ private struct EffortRow: View {
                 Text(effort.displayValue(scale: scale))
                     .dgMetric(DGFont.metricM)
                     .foregroundStyle(effort.color)
-                    .frame(width: 28, alignment: .leading)
+                    .frame(minWidth: 28, alignment: .leading)
                 Text(effort.plainLanguage)
                     .font(DGFont.body)
                     .foregroundStyle(DGColor.ink2)
@@ -94,7 +95,7 @@ private struct EffortRow: View {
                 }
             }
             .padding(.horizontal, DGSpace.s4)
-            .frame(height: 52)
+            .frame(minHeight: 52)
             .background(
                 effort.color.opacity(0.14),
                 in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)

@@ -23,7 +23,7 @@ private struct UndoToastModifier: ViewModifier {
                 }
                 .padding(.horizontal, DGSpace.s4)
                 .padding(.bottom, DGSpace.s4)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .dgTransition(.move(edge: .bottom).combined(with: .opacity))
                 .task(id: action.id) {
                     try? await Task.sleep(for: .seconds(seconds))
                     guard !Task.isCancelled, self.action?.id == action.id else { return }
@@ -31,7 +31,7 @@ private struct UndoToastModifier: ViewModifier {
                 }
             }
         }
-        .animation(DGMotion.standard, value: action?.id)
+        .dgAnimation(DGMotion.standard, value: action?.id)
     }
 }
 
@@ -44,23 +44,24 @@ private struct UndoToast: View {
             Text(message)
                 .font(DGFont.subhead)
                 .foregroundStyle(DGColor.ink1)
-                .lineLimit(1)
+                .lineLimit(2)
             Text("·")
                 .font(DGFont.subhead)
                 .foregroundStyle(DGColor.ink4)
+                .accessibilityHidden(true)
             Button(action: onUndo) {
                 Text("Undo")
                     .font(DGFont.condensedLabel(13))
                     .tracking(1.2)
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.coralText)
-                    .frame(minHeight: DGTap.min)
+                    .frame(minWidth: DGTap.min, minHeight: DGTap.min)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.dgControl)
             .accessibilityLabel("Undo, \(message)")
         }
         .padding(.horizontal, DGSpace.s4)
-        .frame(height: 48)
+        .frame(minHeight: 48)
         .dgGlass(.thick, in: Capsule())
         .accessibilityElement(children: .contain)
     }

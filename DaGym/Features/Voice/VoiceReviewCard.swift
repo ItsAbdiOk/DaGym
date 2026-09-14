@@ -41,7 +41,7 @@ struct VoiceReviewCard: View {
                 }
             }
 
-            HStack(spacing: DGSpace.s3) {
+            DGAdaptiveStack(spacing: DGSpace.s3) {
                 field(label: "Weight (\(card.unit.symbol))") {
                     TextField("Weight", value: weightBinding, format: .number)
                 }
@@ -61,7 +61,7 @@ struct VoiceReviewCard: View {
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink2)
                     .padding(.horizontal, DGSpace.s4)
-                    .frame(height: 44)
+                    .frame(minHeight: 44)
                     .background(DGColor.surface3, in: Capsule())
 
                 DGPrimaryButton(title: card.setCount > 1 ? "Log sets" : "Log set", height: 44, action: onLog)
@@ -93,11 +93,12 @@ struct VoiceReviewCard: View {
         VStack(alignment: .leading, spacing: DGSpace.s1) {
             Text(label).dgLabel()
             content()
+                .accessibilityLabel(label)
                 .keyboardType(.decimalPad)
                 .font(DGFont.metricM)
                 .foregroundStyle(DGColor.ink1)
                 .padding(.horizontal, DGSpace.s3)
-                .frame(height: 44)
+                .frame(minHeight: 44)
                 .background(
                     DGColor.surface2, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
                 )

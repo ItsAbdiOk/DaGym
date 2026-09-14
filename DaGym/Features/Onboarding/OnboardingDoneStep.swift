@@ -12,6 +12,7 @@ struct OnboardingDoneStep: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 48, weight: .bold))
                 .foregroundStyle(DGColor.success)
+                .accessibilityHidden(true)
             VStack(spacing: DGSpace.s3) {
                 Text("You're Set")
                     .font(DGFont.title1)

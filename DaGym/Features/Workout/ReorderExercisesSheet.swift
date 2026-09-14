@@ -41,6 +41,7 @@ struct ReorderExercisesSheet: View {
                     .foregroundStyle(DGColor.ink1)
             }
         }
+        .accessibilityElement(children: .combine)
     }
 }
 

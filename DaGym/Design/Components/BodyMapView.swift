@@ -55,32 +55,67 @@ struct BodyMapView: View {
             let transform = CGAffineTransform(a: scale, b: 0, c: 0, d: scale, tx: offsetX, ty: offsetY)
 
             let regions = BodyMapRegionCache.shared.regions(gender: gender, side: mmSide)
-            ZStack(alignment: .topLeading) {
-                ForEach(Array(regions.enumerated()), id: \.offset) { _, region in
-                    let addressable = region.muscle.map {
-                        BodyMapMuscleMapping.isAddressable($0, on: side)
-                    } ?? false
-                    let transformedPath = region.path.applying(transform)
-                    let tappable = addressable && onTap != nil ? region.muscle : nil
-                    transformedPath
-                        .fill(fillColor(muscle: region.muscle, addressable: addressable))
-                        .contentShape(transformedPath)
-                        .onTapGesture {
-                            if let tappable { onTap?(tappable) }
-                        }
-                        // Only addressable regions take a hit area. An inert one (a knee over
-                        // the quads, the hands over the forearm, or `.adductors` — mapped to a
-                        // back-only muscle — over the front thigh) is drawn *after* the muscle
-                        // it overlaps, so leaving it hit-testable swallows that muscle's taps.
-                        // With no `onTap` at all (thumbnails) nothing takes taps, so a row's
-                        // own tap target keeps working over the whole thumbnail.
-                        .allowsHitTesting(tappable != nil)
-                }
-            }
-            .animation(DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion), value: intensity)
+            figure(regions, transform: transform)
+                .overlay { accessibilityRegions(regions, transform: transform) }
         }
         .aspectRatio(aspectRatio, contentMode: .fit)
-        .accessibilityLabel(accessibilityDescription)
+        .modifier(BodyMapAccessibilityContainer(
+            interactive: onTap != nil, side: side, summary: accessibilityDescription
+        ))
+    }
+
+    private func figure(_ regions: [Region], transform: CGAffineTransform) -> some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(Array(regions.enumerated()), id: \.offset) { _, region in
+                let addressable = region.muscle.map {
+                    BodyMapMuscleMapping.isAddressable($0, on: side)
+                } ?? false
+                let transformedPath = region.path.applying(transform)
+                let tappable = addressable && onTap != nil ? region.muscle : nil
+                transformedPath
+                    .fill(fillColor(muscle: region.muscle, addressable: addressable))
+                    .contentShape(transformedPath)
+                    .onTapGesture {
+                        if let tappable { onTap?(tappable) }
+                    }
+                    // Only addressable regions take a hit area. An inert one (a knee over
+                    // the quads, the hands over the forearm, or `.adductors` — mapped to a
+                    // back-only muscle — over the front thigh) is drawn *after* the muscle
+                    // it overlaps, so leaving it hit-testable swallows that muscle's taps.
+                    // With no `onTap` at all (thumbnails) nothing takes taps, so a row's
+                    // own tap target keeps working over the whole thumbnail.
+                    .allowsHitTesting(tappable != nil)
+            }
+        }
+        .animation(DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion), value: intensity)
+        // The paths are drawing only; VoiceOver reads the overlay elements (interactive) or
+        // the one summary label (thumbnail) instead of a shape per SVG part.
+        .accessibilityHidden(true)
+    }
+
+    /// One VoiceOver element per lit, tappable muscle, sized to that muscle's bounding box, so
+    /// the recovery map reads "Chest, mostly spent" per group — never one element per path,
+    /// and nothing for inert body or muscles with no data. Drawing-only otherwise.
+    @ViewBuilder
+    private func accessibilityRegions(_ regions: [Region], transform: CGAffineTransform) -> some View {
+        if onTap != nil {
+            ForEach(Array(regions.enumerated()), id: \.offset) { _, region in
+                if let muscle = region.muscle, let value = intensity[muscle], value > 0,
+                   BodyMapMuscleMapping.isAddressable(muscle, on: side) {
+                    let rect = region.path.applying(transform).boundingRect
+                    Color.clear
+                        .frame(width: rect.width, height: rect.height)
+                        .position(x: rect.midX, y: rect.midY)
+                        .allowsHitTesting(false)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(
+                            BodyMapAccessibility.regionLabel(muscle: muscle, value: value, mode: mode)
+                        )
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction { onTap?(muscle) }
+                }
+            }
+        }
     }
 
     private var mmSide: BodySide {
@@ -202,12 +237,50 @@ private final class BodyMapRegionCache {
     }
 }
 
+/// A tappable map is a container of per-muscle elements; a thumbnail is one element with the
+/// summary label. Split out so `BodyMapView.body` stays one expression.
+private struct BodyMapAccessibilityContainer: ViewModifier {
+    let interactive: Bool
+    let side: BodyMapView.Side
+    let summary: String
+
+    func body(content: Content) -> some View {
+        if interactive {
+            content
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(side == .front ? "Front body map" : "Back body map")
+        } else {
+            content
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(summary)
+        }
+    }
+}
+
 /// Pure label-building for a body map's `intensity` — shared by the single-side
 /// `BodyMapView` and the two-up `BodyMapPair`, and cheap to unit test.
 enum BodyMapAccessibility {
     static func label(intensity: [Muscle: Double]) -> String {
         let named = intensity.filter { $0.value > 0 }.keys.map(\.displayName).sorted()
         return named.isEmpty ? "Body map, nothing highlighted" : "Body map: " + named.joined(separator: ", ")
+    }
+
+    /// "Chest, worked hard" / "Quads, mostly spent" — the same step the colour shows, in words.
+    static func regionLabel(muscle: Muscle, value: Double, mode: BodyMapView.Mode) -> String {
+        "\(muscle.displayName), \(stepWord(value: value, mode: mode))"
+    }
+
+    /// The word for a colour step: `BodyMapView` rounds `value` onto 4 hit steps or 5 recovery
+    /// stops, and this rounds the same way so the label never disagrees with the tint.
+    static func stepWord(value: Double, mode: BodyMapView.Mode) -> String {
+        switch mode {
+        case .hit:
+            let steps = ["worked lightly", "worked lightly", "worked moderately", "worked hard"]
+            return steps[min(3, max(0, Int((value * 3).rounded())))]
+        case .recovery:
+            let stops = ["fresh", "mostly fresh", "recovering", "mostly spent", "spent"]
+            return stops[min(4, max(0, Int((value * 4).rounded())))]
+        }
     }
 }
 

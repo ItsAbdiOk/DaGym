@@ -79,6 +79,7 @@ struct ExerciseChartView: View {
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
         }
+        .accessibilityElement(children: .combine)
     }
 
     private var displayedPoint: ChartPoint? {
@@ -115,6 +116,24 @@ struct ExerciseChartView: View {
         }
         .frame(height: 160)
         .chartOverlay { proxy in scrubOverlay(proxy: proxy) }
+        // One adjustable element: the summary as its label, the scrubbed session as its value,
+        // and swipe up/down steps through sessions the way a finger drag does.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(chartSummary)
+        .accessibilityValue(displayedPoint.map { "\(headlineValue($0)), \(Self.dateLabel($0.date))" } ?? "")
+        .accessibilityAdjustableAction { direction in
+            let current = scrubbedIndex ?? (points.isEmpty ? 0 : points.count - 1)
+            let next = direction == .increment ? current + 1 : current - 1
+            guard points.indices.contains(next) else { return }
+            scrubbedIndex = next
+        }
+    }
+
+    private var chartSummary: String {
+        ChartAccessibility.trendSummary(
+            title: metric.title, dates: points.map(\.date), values: points.map(\.value),
+            format: { value in headlineValue(ChartPoint(date: .now, value: value)) }
+        )
     }
 
     @ChartContentBuilder
@@ -257,7 +276,7 @@ private struct MetricSegmentToggle: View {
     @Binding var metric: ExerciseChartView.Metric
 
     var body: some View {
-        HStack(spacing: 2) {
+        DGAdaptiveGrid(columns: 4, spacing: 2) {
             ForEach(ExerciseChartView.Metric.allCases) { option in
                 let selected = option == metric
                 Button {
@@ -269,7 +288,7 @@ private struct MetricSegmentToggle: View {
                         .textCase(.uppercase)
                         .foregroundStyle(selected ? DGColor.coralText : DGColor.ink3)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 32)
+                        .frame(minHeight: 32)
                         .background {
                             if selected {
                                 RoundedRectangle(cornerRadius: 10, style: .continuous).fill(DGColor.coralWash)
@@ -277,6 +296,7 @@ private struct MetricSegmentToggle: View {
                         }
                 }
                 .buttonStyle(.dgControl)
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
         .dgGlass(.thin, radius: 12)

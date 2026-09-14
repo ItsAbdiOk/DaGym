@@ -50,7 +50,7 @@ struct WorkoutSummaryView: View {
     }
 
     private var statRow: some View {
-        HStack(spacing: DGSpace.s3) {
+        DGAdaptiveStack(spacing: DGSpace.s3, threshold: .accessibility3) {
             StatTile(value: WorkoutSession.clock(summary.durationSeconds), label: "Time").dgCard(radius: 14)
             StatTile(value: volumeText, label: "Volume").dgCard(radius: 14)
             StatTile(value: "\(summary.setsDone)", label: "Sets").dgCard(radius: 14)
@@ -76,6 +76,7 @@ struct WorkoutSummaryView: View {
                     .dgGlass(.regular, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
             }
             .buttonStyle(.dgControl)
+            .accessibilityLabel("Share workout")
         }
     }
 }
@@ -102,6 +103,7 @@ private struct PRCard: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(DGColor.inkOnCoral)
                 }
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(titleText)
                     .font(DGFont.title3)
@@ -123,6 +125,7 @@ private struct PRCard: View {
             RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
                 .strokeBorder(DGColor.prGold.opacity(0.4), lineWidth: 1)
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -145,6 +148,7 @@ private struct MilestoneUnlockedCard: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(DGColor.inkOnCoral)
                 }
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: DGSpace.s1) {
                 Text(titleText)
                     .font(DGFont.title3)
@@ -169,6 +173,7 @@ private struct MilestoneUnlockedCard: View {
             RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
                 .strokeBorder(DGColor.prGold.opacity(0.4), lineWidth: 1)
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -184,7 +189,7 @@ private struct MusclesHitCard: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: DGSpace.s4) {
+        DGAdaptiveStack(verticalAlignment: .top, spacing: DGSpace.s4) {
             BodyMapPair(intensity: musclesHit, height: 96)
             VStack(alignment: .leading, spacing: DGSpace.s2) {
                 Text("Muscles Hit").dgLabel()
@@ -204,6 +209,7 @@ private struct MusclesHitCard: View {
                                 .font(DGFont.title3)
                                 .foregroundStyle(DGColor.ink2)
                         }
+                        .accessibilityElement(children: .combine)
                     }
                 }
             }

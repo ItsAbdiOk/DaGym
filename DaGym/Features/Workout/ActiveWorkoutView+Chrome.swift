@@ -42,6 +42,76 @@ extension ActiveWorkoutView {
         .accessibilityLabel("Workout options")
     }
 
+    // MARK: Expanded header
+
+    var navHeader: some View {
+        // Title on its own line at accessibility sizes; the controls become a second row.
+        DGAdaptiveStack(verticalAlignment: .top, spacing: DGSpace.s3) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(startedAtLabel).dgLabel()
+                Text(session.title)
+                    .font(DGFont.title1)
+                    .textCase(.uppercase)
+                    .foregroundStyle(DGColor.ink1)
+            }
+            Spacer(minLength: DGSpace.s2)
+            headerControls
+        }
+        .padding(.horizontal, DGSpace.s4)
+        .padding(.top, DGSpace.s2)
+        .padding(.bottom, DGSpace.s3)
+        .dgGlass(.regular, radius: 0)
+    }
+
+    var headerControls: some View {
+        HStack(alignment: .top, spacing: DGSpace.s3) {
+            if !session.isBackfilled {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Elapsed").dgLabel()
+                    TimelineView(.periodic(from: session.startedAt, by: 1)) { context in
+                        Text(WorkoutSession.clock(session.elapsedSeconds(at: context.date)))
+                            .dgMetric(DGFont.metricL)
+                            .foregroundStyle(DGColor.ink1)
+                    }
+                }
+                // The clock never compresses; the title on the other side of the row wraps.
+                .fixedSize()
+            }
+            DGPrimaryButton(title: "Finish", height: 44) { showFinishConfirm = true }
+                .frame(width: 96)
+                .accessibilityIdentifier(A11yID.workoutFinish)
+            // Voice logging entry point (plan: DaGym/Features/Voice). Self-contained — owns its
+            // own controller — so this is the one line the rest of the screen needs.
+            VoiceLogEntryPoint(
+                session: session, store: store, preferences: preferences, undoAction: $undoAction
+            )
+            headerMenu
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .dgDenseType()
+    }
+
+    var statStrip: some View {
+        DGAdaptiveStack(spacing: 0, threshold: .accessibility3) {
+            StatTile(
+                value: preferences.formatWeight(kg: session.volumeKg),
+                label: "\(preferences.unitSymbol) volume"
+            )
+            Divider().overlay(DGColor.hairline)
+            StatTile(value: "\(session.setsDone) / \(session.setsTotal)", label: "sets")
+            Divider().overlay(DGColor.hairline)
+            StatTile(value: "\(session.prCount)", label: "pr", tint: DGColor.prGoldText)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .background(DGColor.surface1, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
+                .strokeBorder(DGColor.hairline, lineWidth: 1)
+        }
+        .padding(.horizontal, DGSpace.s4)
+        .padding(.bottom, DGSpace.s3)
+    }
+
     /// Single 40pt row: title + elapsed on one line, FINISH shrunk to a 36pt pill.
     var condensedNavHeader: some View {
         HStack(spacing: DGSpace.s3) {
@@ -62,13 +132,14 @@ extension ActiveWorkoutView {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.inkOnCoral)
                 .padding(.horizontal, DGSpace.s3)
-                .frame(height: 36)
+                .frame(minHeight: 36)
                 .background(DGColor.coral, in: Capsule())
                 .accessibilityIdentifier(A11yID.workoutFinish)
         }
         .padding(.horizontal, DGSpace.s4)
-        .frame(height: 40)
+        .frame(minHeight: 40)
         .dgGlass(.regular, radius: 0)
+        .dgDenseType()
     }
 
     /// The bottom sticky group, swapped between the full action bar and the condensed

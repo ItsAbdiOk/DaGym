@@ -193,7 +193,7 @@ private struct GymCardFace: View {
                     .font(DGFont.title2)
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
-                    .lineLimit(1)
+                    .lineLimit(2)
                 Spacer()
                 Menu {
                     Button("Rename", systemImage: "pencil") {

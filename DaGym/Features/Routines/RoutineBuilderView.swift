@@ -82,7 +82,8 @@ struct RoutineBuilderView: View {
     private var reorderButton: some View {
         Button { showingReorder = true } label: {
             HStack(spacing: DGSpace.s2) {
-                Image(systemName: "arrow.up.arrow.down").font(.system(size: 13, weight: .semibold))
+                Image(systemName: "arrow.up.arrow.down").accessibilityHidden(true)
+                    .font(.system(size: 13, weight: .semibold))
                 Text("Reorder")
                     .font(DGFont.condensedLabel(14))
                     .tracking(1.2)
@@ -90,7 +91,7 @@ struct RoutineBuilderView: View {
             }
             .foregroundStyle(DGColor.ink2)
             .frame(maxWidth: .infinity)
-            .frame(height: 44)
+            .frame(minHeight: 44)
             .dgGlass(.thin, radius: DGRadius.lg)
         }
         .buttonStyle(.dgCard)
@@ -392,7 +393,7 @@ private struct BuilderSetRow: View {
     @Binding var set: PlannedSetDraft
 
     var body: some View {
-        HStack(spacing: DGSpace.s3) {
+        DGAdaptiveStack(spacing: DGSpace.s3) {
             kindMenu
             Stepper(value: repsBinding, in: 1...30) {
                 Text(repsLabel).font(DGFont.body).foregroundStyle(DGColor.ink1)

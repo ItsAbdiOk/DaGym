@@ -15,6 +15,7 @@ struct DGPrimaryButton: View {
             HStack(spacing: DGSpace.s2) {
                 if let symbol {
                     Image(systemName: symbol).font(.system(size: 15, weight: .bold))
+                        .accessibilityHidden(true)
                 }
                 Text(title)
                     .font(DGFont.condensedLabel(15))
@@ -23,7 +24,7 @@ struct DGPrimaryButton: View {
             }
             .foregroundStyle(ink)
             .frame(maxWidth: .infinity)
-            .frame(height: height)
+            .frame(minHeight: height)
             .background(fill, in: Capsule())
             .shadow(color: fill.opacity(0.35), radius: 12, y: 6)
         }
@@ -69,7 +70,7 @@ struct DGChip: View {
                 .textCase(.uppercase)
                 .foregroundStyle(selected ? selectedInk : DGColor.ink2)
                 .padding(.horizontal, 14)
-                .frame(height: 36)
+                .frame(minHeight: 36)
                 .background {
                     if selected {
                         Capsule().fill(selectedFill)
@@ -80,6 +81,8 @@ struct DGChip: View {
                 }
         }
         .buttonStyle(DGPressStyle())
+        // Selection is otherwise the fill colour alone; VoiceOver hears it as a trait.
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
@@ -96,7 +99,7 @@ struct DGTag: View {
             .textCase(.uppercase)
             .foregroundStyle(tint)
             .padding(.horizontal, 8)
-            .frame(height: 24)
+            .frame(minHeight: 24)
             .background(wash, in: RoundedRectangle(cornerRadius: DGRadius.chip, style: .continuous))
     }
 }
@@ -110,8 +113,18 @@ struct SetKindBadge: View {
         Text(kind == .working ? String(index) : kind.badge)
             .font(DGFont.condensedLabel(12))
             .foregroundStyle(kind == .working ? DGColor.ink1 : DGColor.inkOnCoral.opacity(0.9))
-            .frame(width: 28, height: 28)
+            .frame(minWidth: 28, minHeight: 28)
             .background(kind.color, in: RoundedRectangle(cornerRadius: DGRadius.chip, style: .continuous))
+            .accessibilityLabel(Self.accessibilityLabel(kind: kind, index: index))
+    }
+
+    /// "Set 2" / "Warm-up set" — a bare "2" or "W" says nothing on its own.
+    static func accessibilityLabel(kind: SetKind, index: Int) -> String {
+        switch kind {
+        case .working: "Set \(index)"
+        case .drop: kind.displayName
+        default: "\(kind.displayName) set"
+        }
     }
 }
 
@@ -147,8 +160,12 @@ struct StatTile: View {
                 .foregroundStyle(tint)
             Text(label).dgLabel()
         }
+        .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
         .padding(.vertical, DGSpace.s3)
+        // One element: "4 280, kg volume" rather than a bare number and then a label.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(value), \(label)")
     }
 }
 
@@ -173,14 +190,14 @@ struct WhyCard: View {
                 .foregroundStyle(DGColor.ink2)
                 .fixedSize(horizontal: false, vertical: true)
             if primary != nil || secondary != nil {
-                HStack(spacing: DGSpace.s2) {
+                DGAdaptiveStack(spacing: DGSpace.s2) {
                     if let primary {
                         Button(primary) { onPrimary?() }
                             .buttonStyle(.plain)
                             .font(DGFont.condensedLabel(13))
                             .textCase(.uppercase)
                             .foregroundStyle(DGColor.inkOnCoral)
-                            .padding(.horizontal, 14).frame(height: 34)
+                            .padding(.horizontal, 14).frame(minHeight: 34)
                             .background(DGColor.aiViolet, in: Capsule())
                     }
                     if let secondary {
@@ -189,7 +206,7 @@ struct WhyCard: View {
                             .font(DGFont.condensedLabel(13))
                             .textCase(.uppercase)
                             .foregroundStyle(DGColor.ink2)
-                            .padding(.horizontal, 14).frame(height: 34)
+                            .padding(.horizontal, 14).frame(minHeight: 34)
                             .background(DGColor.surface3, in: Capsule())
                     }
                 }
@@ -224,6 +241,7 @@ struct EmptyState: View {
                     .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(DGColor.ink3)
                     .frame(width: 56, height: 56)
+                    .accessibilityHidden(true)
                     .background(
                         DGColor.surface3,
                         in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
@@ -237,6 +255,8 @@ struct EmptyState: View {
                 .font(DGFont.subhead)
                 .foregroundStyle(DGColor.ink3)
                 .multilineTextAlignment(.center)
+                // Inside a `List` row the message otherwise truncates at accessibility sizes.
+                .fixedSize(horizontal: false, vertical: true)
             if let action {
                 DGPrimaryButton(title: action) { onAction?() }
                     .padding(.top, DGSpace.s2)
@@ -249,8 +269,9 @@ struct EmptyState: View {
 
 extension DGFont {
     /// Condensed bold at an arbitrary size for buttons, chips and badges. Scales with
-    /// Dynamic Type against `.footnote`, the closest built-in style to these sizes.
+    /// Dynamic Type on the chrome curve (`.title3`, about 2.2× at the largest accessibility
+    /// size) — see the note on `DGFont`.
     static func condensedLabel(_ size: CGFloat) -> Font {
-        Font.custom(Family.condensedBold, size: size, relativeTo: .footnote)
+        Font.custom(Family.condensedBold, size: size, relativeTo: .title3)
     }
 }

@@ -58,6 +58,7 @@ struct BodyweightSheet: View {
             Text(preferences.formatWeight(kg: kg))
                 .dgMetric(DGFont.metricXL)
                 .foregroundStyle(DGColor.ink1)
+                .accessibilityLabel("Weight, \(preferences.formatWeight(kg: kg)) \(preferences.unitSymbol)")
             Spacer(minLength: DGSpace.s4)
             circleButton(symbol: "plus", fill: DGColor.coral, ink: DGColor.inkOnCoral) {
                 step(by: fineStepKg)
@@ -83,6 +84,7 @@ struct BodyweightSheet: View {
                 .background(fill, in: Circle())
         }
         .buttonStyle(.dgControl)
+        .accessibilityLabel(symbol == "minus" ? "Decrease weight" : "Increase weight")
     }
 
     private static let quickAmount = 1

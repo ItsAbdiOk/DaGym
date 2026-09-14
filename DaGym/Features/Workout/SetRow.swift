@@ -30,6 +30,7 @@ struct SetRow: View {
     @State private var isSwipeOpen = false
     @State private var showKindPicker = false
     @Environment(Preferences.self) private var preferences
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         SwipeToRevealRow(actionsWidth: Self.actionsWidth, isOpen: $isSwipeOpen) {
@@ -62,7 +63,8 @@ struct SetRow: View {
     private var rowContent: some View {
         HStack(spacing: showsSteppers ? DGSpace.s2 : DGSpace.s3) {
             SetKindBadge(kind: set.kind, index: badgeIndex)
-            if !showsSteppers { previousGhost }
+            // The ghost is the first thing to go when type is large: it's a hint, not a control.
+            if !showsSteppers, !dynamicTypeSize.isAccessibilitySize { previousGhost }
             if showsSteppers {
                 stepper(symbol: "minus", label: "Decrease weight") { onAdjustWeight(-weightStepKg) }
             }
@@ -109,6 +111,7 @@ struct SetRow: View {
             RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
                 .strokeBorder(rowStroke, lineWidth: isCurrent ? 1 : 0)
         }
+        .dgDenseType()
     }
 
     private var swipeActions: some View {
@@ -177,6 +180,10 @@ struct SetRow: View {
             .font(DGFont.footnote)
             .foregroundStyle(DGColor.ink3)
             .frame(minWidth: 44, alignment: .leading)
+            .accessibilityLabel(SetRowAccessibility.previousLabel(
+                weight: set.previousWeightKg.map { preferences.formatWeight(kg: $0) },
+                reps: set.previousReps, unit: preferences.weightUnit.symbol
+            ))
     }
 
     private var previousText: String {
@@ -191,7 +198,7 @@ struct SetRow: View {
                     Text(effort.displayValue(scale: effortScale))
                         .font(DGFont.condensedLabel(13))
                         .foregroundStyle(effort.color)
-                        .frame(width: 28, height: 28)
+                        .frame(minWidth: 28, minHeight: 28)
                         .background(
                             effort.color.opacity(0.18),
                             in: RoundedRectangle(cornerRadius: DGRadius.chip, style: .continuous)
@@ -224,6 +231,12 @@ struct SetRow: View {
         .accessibilityIdentifier(A11yID.setRowDone(rowIndex))
         .accessibilityLabel(doneButtonLabel)
         .accessibilityAddTraits(set.isDone ? .isSelected : [])
+        // The swipe tray is a drag; VoiceOver and Switch Control get the same four actions
+        // from the rotor on the row's done button instead.
+        .accessibilityAction(named: "Delete set", onDelete)
+        .accessibilityAction(named: "Change set type") { showKindPicker = true }
+        .accessibilityAction(named: "Add drop set") { onInsertBelow(.drop) }
+        .accessibilityAction(named: "Add rest-pause set") { onInsertBelow(.restPause) }
     }
 
     private var doneButtonLabel: String {
@@ -232,7 +245,8 @@ struct SetRow: View {
             weight: preferences.formatWeight(kg: set.weightKg),
             reps: repsText,
             unit: preferences.weightUnit.symbol,
-            done: set.isDone
+            done: set.isDone,
+            isCurrent: isCurrent
         )
     }
 

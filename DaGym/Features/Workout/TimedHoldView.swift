@@ -29,7 +29,7 @@ struct TimedHoldCard: View {
                 .trim(from: 0, to: progress)
                 .stroke(DGColor.success, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-                .animation(DGMotion.timer, value: hold.elapsed)
+                .dgAnimation(DGMotion.timer, value: hold.elapsed)
             VStack(spacing: 2) {
                 Text(exerciseName.uppercased())
                     .font(DGFont.condensedLabel(12))
@@ -41,8 +41,11 @@ struct TimedHoldCard: View {
                     Text("Target \(WorkoutSession.clock(target))").dgLabel()
                 }
             }
+            .accessibilityElement(children: .combine)
         }
         .frame(width: 148, height: 148)
+        // The ring's number must stay inside the ring; the card's label and buttons still grow.
+        .dgDenseType()
     }
 
     private var controls: some View {
@@ -53,7 +56,7 @@ struct TimedHoldCard: View {
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 44)
+                    .frame(minHeight: 44)
                     .dgGlass(.regular, in: Capsule())
             }
             .buttonStyle(.dgControl)
@@ -63,7 +66,7 @@ struct TimedHoldCard: View {
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.inkOnCoral)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 44)
+                    .frame(minHeight: 44)
                     .background(DGColor.coral, in: Capsule())
             }
             .buttonStyle(.dgControl)
@@ -99,10 +102,14 @@ struct TimedSetRow: View {
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
                 .frame(minWidth: 44, alignment: .leading)
+                .accessibilityLabel("Target")
+                .accessibilityValue(set.targetSeconds.map(WorkoutSession.clock) ?? "no target")
             Text(set.durationSeconds.map(WorkoutSession.clock) ?? "–")
                 .dgMetric(DGFont.metricM)
                 .foregroundStyle(set.isDone ? DGColor.ink1 : DGColor.ink3)
                 .frame(minWidth: 44, alignment: .leading)
+                .accessibilityLabel("Held")
+                .accessibilityValue(set.durationSeconds.map(WorkoutSession.clock) ?? "not logged")
             Spacer(minLength: 0)
             if set.isDone {
                 Button(action: onToggleDone) {
@@ -112,6 +119,8 @@ struct TimedSetRow: View {
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.dgControl)
+                .accessibilityLabel(Self.doneLabel(set: set))
+                .accessibilityAddTraits(.isSelected)
             } else {
                 Button(action: onStart) {
                     Text("Start")
@@ -119,19 +128,27 @@ struct TimedSetRow: View {
                         .textCase(.uppercase)
                         .foregroundStyle(isCurrent ? DGColor.inkOnCoral : DGColor.ink1)
                         .padding(.horizontal, DGSpace.s3)
-                        .frame(height: 36)
+                        .frame(minHeight: 36)
                         .background(isCurrent ? DGColor.coral : DGColor.surface3, in: Capsule())
                 }
                 .buttonStyle(.dgControl)
+                .accessibilityLabel(isCurrent ? "Start hold, current set" : "Start hold")
             }
         }
         .padding(.horizontal, DGSpace.s3)
         .frame(minHeight: DGTap.rowHeight)
+        .dgDenseType()
         .background(rowFill, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
                 .strokeBorder(DGColor.coral, lineWidth: isCurrent ? 1 : 0)
         }
+    }
+
+    /// "Hold done, 0:45, tap to undo" — the check is otherwise a bare symbol.
+    static func doneLabel(set: SetEntry) -> String {
+        let held = set.durationSeconds.map(WorkoutSession.clock) ?? "no time"
+        return "Hold done, \(held), tap to undo"
     }
 
     private var rowFill: Color {

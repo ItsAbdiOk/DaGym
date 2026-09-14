@@ -82,13 +82,14 @@ struct OnboardingFlow: View {
         if step != .welcome {
             HStack(spacing: DGSpace.s4) {
                 Button(action: back) {
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "chevron.left").accessibilityHidden(true)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(DGColor.ink2)
                         .frame(width: 36, height: 36)
                         .dgGlass(.thin, in: Circle())
                 }
                 .buttonStyle(.dgControl)
+                .accessibilityLabel("Back")
                 progressDots
                 Color.clear.frame(width: 36, height: 36)
             }
@@ -103,6 +104,15 @@ struct OnboardingFlow: View {
                     .frame(height: 4)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.progressLabel(step: step))
+    }
+
+    /// "Step 2 of 7" for the dots.
+    static func progressLabel(step: OnboardingStep) -> String {
+        let steps = OnboardingStep.progressSteps
+        let index = (steps.firstIndex(of: step) ?? 0) + 1
+        return "Step \(index) of \(steps.count)"
     }
 
     private func advance() {

@@ -43,7 +43,7 @@ struct AppleHealthSettingsCard: View {
     }
 
     private var chevron: some View {
-        Image(systemName: "chevron.right")
+        Image(systemName: "chevron.right").accessibilityHidden(true)
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(DGColor.ink4)
     }

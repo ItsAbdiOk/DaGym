@@ -143,8 +143,9 @@ private struct ProgramCard: View {
                     Text("W\(week.index)")
                         .font(DGFont.caption)
                         .foregroundStyle(week.index == program.currentWeek ? DGColor.ink1 : DGColor.ink3)
-                    Circle()
-                        .fill(color(week.kind))
+                    // Shape carries the kind as well as colour: a ring for a deload, a hollow
+                    // dot for rest, a filled dot for a normal week.
+                    weekDot(week.kind)
                         .frame(width: 10, height: 10)
                         .overlay(
                             Circle()
@@ -156,6 +157,15 @@ private struct ProgramCard: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(statusLine)
+    }
+
+    @ViewBuilder
+    private func weekDot(_ kind: ProgramWeekKind) -> some View {
+        switch kind {
+        case .normal: Circle().fill(color(kind))
+        case .deload: Circle().strokeBorder(color(kind), lineWidth: 3)
+        case .rest: Circle().strokeBorder(DGColor.ink4, lineWidth: 1)
+        }
     }
 
     private func color(_ kind: ProgramWeekKind) -> Color {

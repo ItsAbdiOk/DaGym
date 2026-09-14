@@ -78,7 +78,7 @@ struct PhotoCompareView: View {
                     .font(DGFont.footnote)
                     .foregroundStyle(DGColor.ink1)
                     .padding(.horizontal, DGSpace.s3)
-                    .frame(height: 36)
+                    .frame(minHeight: 36)
                     .dgGlass(.thin, radius: DGRadius.sm)
             }
         }
@@ -99,6 +99,8 @@ struct PhotoCompareView: View {
                 .clipShape(RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
             Text(Self.dateLabel(photos[index].date)).dgLabel()
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Progress photo, \(Self.dateLabel(photos[index].date))")
     }
 
     private var slider: some View {
@@ -116,6 +118,14 @@ struct PhotoCompareView: View {
             .gesture(dragGesture(width: width))
         }
         .aspectRatio(3 / 4, contentMode: .fit)
+        // A drag has no VoiceOver equivalent; swipe up/down moves the wipe in 10 % steps.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Photo comparison wipe")
+        .accessibilityValue("\(Int((sliderFraction * 100).rounded())) percent after photo")
+        .accessibilityAdjustableAction { direction in
+            let step: CGFloat = direction == .increment ? 0.1 : -0.1
+            sliderFraction = min(max(sliderFraction + step, 0), 1)
+        }
     }
 
     private func dragGesture(width: CGFloat) -> some Gesture {

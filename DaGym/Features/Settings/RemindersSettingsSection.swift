@@ -61,21 +61,26 @@ struct RemindersSettingsSection: View {
             Text("Reminders").dgLabel()
             VStack(spacing: 0) {
                 ReminderRow(label: "Streak reminders") {
-                    Toggle("", isOn: streakBinding).tint(DGColor.coral).labelsHidden()
+                    Toggle("Streak reminders", isOn: streakBinding)
+                        .tint(DGColor.coral).labelsHidden()
                 }
                 ReminderDivider()
                 ReminderRow(label: "Weekly recap") {
-                    Toggle("", isOn: recapBinding).tint(DGColor.coral).labelsHidden()
+                    Toggle("Weekly recap", isOn: recapBinding)
+                        .tint(DGColor.coral).labelsHidden()
                 }
                 ReminderDivider()
                 ReminderRow(label: "Reminder time") {
                     Stepper(value: hourBinding, in: 0...23) {
                         Text(hourLabel).font(DGFont.subhead).foregroundStyle(DGColor.ink3)
                     }
+                    .accessibilityLabel("Reminder time")
+                    .accessibilityValue(hourLabel)
                 }
                 ReminderDivider()
                 ReminderRow(label: "Workout day reminder") {
-                    Toggle("", isOn: workoutDayEnabledBinding).tint(DGColor.coral).labelsHidden()
+                    Toggle("Workout day reminder", isOn: workoutDayEnabledBinding)
+                        .tint(DGColor.coral).labelsHidden()
                 }
                 if preferences.workoutDayReminderEnabled {
                     ReminderDivider()
@@ -83,6 +88,8 @@ struct RemindersSettingsSection: View {
                         Stepper(value: workoutDayHourBinding, in: 0...23) {
                             Text(workoutDayHourLabel).font(DGFont.subhead).foregroundStyle(DGColor.ink3)
                         }
+                        .accessibilityLabel("Workout day time")
+                        .accessibilityValue(workoutDayHourLabel)
                     }
                 }
                 if showsDeniedRow {
@@ -126,7 +133,7 @@ struct RemindersSettingsSection: View {
                         .multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: DGSpace.s2)
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.right").accessibilityHidden(true)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(DGColor.ink4)
             }
@@ -221,7 +228,7 @@ private struct ReminderRow<Trailing: View>: View {
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
-        HStack {
+        DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
             Text(label).font(DGFont.body).foregroundStyle(DGColor.ink1)
             Spacer()
             trailing

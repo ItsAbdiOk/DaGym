@@ -222,7 +222,7 @@ struct ExerciseActionsCard: View {
                     .font(DGFont.body)
                     .foregroundStyle(tint)
                 Spacer()
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.right").accessibilityHidden(true)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(DGColor.ink4)
             }

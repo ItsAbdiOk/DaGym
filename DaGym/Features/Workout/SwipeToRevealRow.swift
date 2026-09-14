@@ -23,7 +23,7 @@ struct SwipeToRevealRow<Content: View, Actions: View>: View {
                 .offset(x: isOpen ? -actionsWidth : 0)
                 .gesture(dragGesture)
         }
-        .animation(DGMotion.standard, value: isOpen)
+        .dgAnimation(DGMotion.standard, value: isOpen)
     }
 
     private var dragGesture: some Gesture {

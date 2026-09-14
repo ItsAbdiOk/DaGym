@@ -59,7 +59,7 @@ struct BackfillSheet: View {
                         .textCase(.uppercase)
                         .foregroundStyle(DGColor.ink1)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 52)
+                        .frame(minHeight: 52)
                         .dgGlass(.regular, radius: DGRadius.lg)
                 }
                 .buttonStyle(.dgControl)
@@ -129,7 +129,7 @@ struct BackfillSheet: View {
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.inkOnCoral)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 52)
+                    .frame(minHeight: 52)
                     .background(DGColor.coral, in: Capsule())
                     .shadow(color: DGColor.coral.opacity(0.35), radius: 12, y: 6)
             }
@@ -214,18 +214,19 @@ private struct FieldRow<Control: View>: View {
     @ViewBuilder var control: Control
 
     var body: some View {
-        HStack {
+        DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
             Text(title)
                 .font(DGFont.body)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             control
+                .accessibilityLabel(title)
                 .padding(.horizontal, DGSpace.s3)
-                .frame(height: 34)
+                .frame(minHeight: 34)
                 .background(DGColor.surface3, in: Capsule())
         }
         .padding(.horizontal, DGSpace.s4)
-        .frame(height: 56)
+        .frame(minHeight: 56)
     }
 }
 

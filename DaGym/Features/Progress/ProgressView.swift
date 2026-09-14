@@ -51,17 +51,20 @@ struct ProgressScreen: View {
     }
 
     private var header: some View {
-        HStack {
+        DGAdaptiveStack(verticalAlignment: .center) {
             Text("Progress")
                 .font(DGFont.title1)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
-            Button("1RM Calc") { showingCalculator = true }
-                .buttonStyle(.dgControl)
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.coralText)
-            DGIconButton(symbol: "xmark", size: 36, accessibilityLabel: "Close") { dismiss() }
+            HStack(spacing: DGSpace.s3) {
+                Button("1RM Calc") { showingCalculator = true }
+                    .buttonStyle(.dgControl)
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.coralText)
+                DGIconButton(symbol: "xmark", size: 36, accessibilityLabel: "Close") { dismiss() }
+            }
+            .fixedSize(horizontal: true, vertical: false)
         }
     }
 
@@ -132,7 +135,7 @@ private struct ExercisePickerRow: View {
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Spacer()
-                Image(systemName: "chevron.up.chevron.down")
+                Image(systemName: "chevron.up.chevron.down").accessibilityHidden(true)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(DGColor.ink4)
             }

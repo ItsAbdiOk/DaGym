@@ -138,6 +138,7 @@ private struct FormulaValue: View {
                 .foregroundStyle(DGColor.ink1)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -153,7 +154,7 @@ private struct PercentRow: View {
             Text("\(percent)%")
                 .font(DGFont.title3)
                 .foregroundStyle(DGColor.ink1)
-                .frame(width: 48, alignment: .leading)
+                .frame(minWidth: 48, alignment: .leading)
             Text("\(preferences.formatWeight(kg: target)) \(preferences.unitSymbol)")
                 .font(DGFont.body)
                 .foregroundStyle(DGColor.ink2)
@@ -162,6 +163,7 @@ private struct PercentRow: View {
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
         }
+        .accessibilityElement(children: .combine)
         .padding(.horizontal, DGSpace.s5)
         .frame(minHeight: DGTap.min)
     }
@@ -235,6 +237,7 @@ private struct RepsStepperRow: View {
                 Text("\(reps)")
                     .dgMetric(DGFont.metricM, tracking: -0.5)
                     .foregroundStyle(DGColor.ink1)
+                    .accessibilityLabel("\(reps) reps")
                     .frame(minWidth: 40, alignment: .trailing)
             }
             .fixedSize()

@@ -67,7 +67,7 @@ struct ImportSettingsSection: View {
                 if isBusy {
                     ProgressView().tint(DGColor.ink3)
                 } else {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.right").accessibilityHidden(true)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(DGColor.ink4)
                 }
@@ -102,7 +102,7 @@ struct ImportSettingsSection: View {
                 if isBusy {
                     ProgressView().tint(DGColor.ink3)
                 } else {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.right").accessibilityHidden(true)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(DGColor.ink4)
                 }
@@ -384,7 +384,7 @@ private struct ImportCSVPreviewSheet: View {
 
     private var countsCard: some View {
         VStack(spacing: DGSpace.s2) {
-            HStack(spacing: 0) {
+            DGAdaptiveStack(spacing: 0, threshold: .accessibility3) {
                 StatTile(value: "\(preview.newWorkoutCount)", label: "Workouts")
                 StatTile(value: "\(preview.setsCount)", label: "Sets")
             }
@@ -446,7 +446,7 @@ private struct ImportCSVPreviewSheet: View {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink3)
                 .frame(maxWidth: .infinity)
-                .frame(height: 52)
+                .frame(minHeight: 52)
                 .dgGlass(.regular, radius: DGRadius.lg)
             DGPrimaryButton(title: "Import", action: onConfirm)
         }

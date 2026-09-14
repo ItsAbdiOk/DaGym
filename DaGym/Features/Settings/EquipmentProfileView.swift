@@ -99,7 +99,7 @@ struct EquipmentProfileView: View {
                 .font(DGFont.body)
                 .foregroundStyle(DGColor.ink1)
                 .padding(.horizontal, DGSpace.s5)
-                .frame(height: 52)
+                .frame(minHeight: 52)
                 .dgCard(padding: 0)
         }
     }
@@ -156,7 +156,7 @@ struct EquipmentProfileView: View {
     private func stepperRow(
         label: String, value: Binding<Double>, range: ClosedRange<Double>, step: Double, unit: WeightUnit
     ) -> some View {
-        HStack {
+        DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
             Text(label).font(DGFont.body).foregroundStyle(DGColor.ink1)
             Spacer()
             Stepper(value: value, in: range, step: step) {
@@ -164,13 +164,15 @@ struct EquipmentProfileView: View {
                     .font(DGFont.subhead)
                     .foregroundStyle(DGColor.ink3)
             }
+            .accessibilityLabel(label)
+            .accessibilityValue("\(unit.format(kg: value.wrappedValue)) \(unit.symbol)")
         }
         .padding(.horizontal, DGSpace.s5)
         .frame(minHeight: 52)
     }
 
     private func plateRow(index: Int, row: PlateRowDraft, unit: WeightUnit) -> some View {
-        HStack {
+        DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
             Text("\(unit.format(kg: row.weightKg)) \(unit.symbol)")
                 .font(DGFont.body)
                 .foregroundStyle(DGColor.ink1)
@@ -178,6 +180,8 @@ struct EquipmentProfileView: View {
             Stepper(value: countBinding(index: index), in: 0...40, step: 2) {
                 Text("×\(plateRows[index].count)").font(DGFont.subhead).foregroundStyle(DGColor.ink3)
             }
+            .accessibilityLabel("\(unit.format(kg: row.weightKg)) \(unit.symbol) plates")
+            .accessibilityValue("\(plateRows[index].count)")
         }
         .padding(.horizontal, DGSpace.s5)
         .frame(minHeight: 52)
@@ -188,10 +192,10 @@ struct EquipmentProfileView: View {
     }
 
     private func equipmentRow(_ option: EquipmentOption) -> some View {
-        HStack {
+        DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
             Text(option.title).font(DGFont.body).foregroundStyle(DGColor.ink1)
             Spacer()
-            Toggle("", isOn: equipmentBinding(option))
+            Toggle(option.title, isOn: equipmentBinding(option))
                 .labelsHidden()
                 .tint(DGColor.coral)
         }
@@ -223,7 +227,7 @@ struct EquipmentProfileView: View {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.danger)
                 .frame(maxWidth: .infinity)
-                .frame(height: 52)
+                .frame(minHeight: 52)
         }
         .buttonStyle(.dgCard)
     }

@@ -194,7 +194,7 @@ private struct WeekdayRow: View {
     var onRest: () -> Void
 
     var body: some View {
-        HStack {
+        DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
             Text(weekday.displayName)
                 .font(DGFont.body)
                 .foregroundStyle(DGColor.ink1)
@@ -211,13 +211,14 @@ private struct WeekdayRow: View {
                     Text(selectedName)
                         .font(DGFont.subhead)
                         .foregroundStyle(selectedRoutineIDs.isEmpty ? DGColor.ink3 : DGColor.ink1)
-                        .lineLimit(1)
+                        .lineLimit(2)
                         .truncationMode(.middle)
-                    Image(systemName: "chevron.up.chevron.down")
+                    Image(systemName: "chevron.up.chevron.down").accessibilityHidden(true)
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(DGColor.ink4)
                 }
             }
+            .accessibilityLabel("\(weekday.displayName), \(selectedName)")
         }
         .padding(.horizontal, DGSpace.s5)
         .frame(minHeight: DGTap.rowHeight)
@@ -243,6 +244,7 @@ private struct ThisWeekRow: View {
                     .font(DGFont.subhead)
                     .foregroundStyle(routines.isEmpty ? DGColor.ink3 : DGColor.ink1)
             }
+            .accessibilityElement(children: .combine)
             Spacer()
             if !routines.isEmpty {
                 Button("Move…", action: onMove)

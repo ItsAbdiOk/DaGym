@@ -133,6 +133,8 @@ private struct MilestoneCard: View {
         }
         .buttonStyle(.dgCard)
         .accessibilityElement(children: .combine)
+        // The bar is hidden; say what it shows.
+        .accessibilityValue("\(Int((item.progress * 100).rounded())) percent to next tier")
     }
 
     private var badge: some View {
@@ -226,6 +228,7 @@ private struct TierRow: View {
             Image(systemName: earnedLine != nil ? "star.fill" : "lock.fill")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(earnedLine != nil ? tierColor : DGColor.ink4)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(tier.displayName).dgLabel(earnedLine != nil ? tierColor : DGColor.ink3)
                 Text(earnedLine ?? "Locked · \(thresholdLabel)")
@@ -235,6 +238,7 @@ private struct TierRow: View {
             Spacer()
         }
         .frame(minHeight: DGTap.min)
+        .accessibilityElement(children: .combine)
     }
 
     private var thresholdLabel: String {

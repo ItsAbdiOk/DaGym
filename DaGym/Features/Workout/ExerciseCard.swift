@@ -85,6 +85,7 @@ private struct OnDeckExerciseCard: View {
     var onAdjustReps: (UUID, Int) -> Void
 
     @Environment(Preferences.self) private var preferences
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// "Add incline" on a cardio card whose kit has no incline dial.
     @State private var inclineRevealed = false
 
@@ -185,40 +186,52 @@ private struct OnDeckExerciseCard: View {
                     .font(DGFont.footnote)
                     .foregroundStyle(DGColor.ink2)
                 Spacer(minLength: DGSpace.s2)
+                // The three numbers beside it say the same thing in words.
                 Sparkline(values: entry.sparkline)
                     .frame(width: 60, height: 22)
+                    .accessibilityHidden(true)
             }
         }
+        .accessibilityElement(children: .combine)
     }
 
+    /// Column headers are sighted-only: every control in the rows below carries its own
+    /// VoiceOver label ("Weight", "Reps", …), so reading "SET PREV KG" first is noise. The
+    /// "Prev" column disappears with the row's ghost at accessibility sizes.
     private var columnHeader: some View {
         HStack(spacing: DGSpace.s3) {
-            Text("Set").frame(width: 28, alignment: .leading)
-            Text("Prev").frame(minWidth: 44, alignment: .leading)
+            Text("Set").frame(minWidth: 28, alignment: .leading)
+            if !dynamicTypeSize.isAccessibilitySize {
+                Text("Prev").frame(minWidth: 44, alignment: .leading)
+            }
             Text(preferences.unitSymbol.uppercased()).frame(minWidth: 44, alignment: .leading)
             Text("Reps").frame(minWidth: 30, alignment: .leading)
             if preferences.effortTrackingEnabled {
-                Text(effortScale == .rpe ? "Rpe" : "Rir").frame(width: 28, alignment: .leading)
+                Text(effortScale == .rpe ? "Rpe" : "Rir").frame(minWidth: 28, alignment: .leading)
             }
         }
         .dgLabel()
+        .dgDenseType()
+        .accessibilityHidden(true)
     }
 
     private var timedColumnHeader: some View {
         HStack(spacing: DGSpace.s3) {
-            Text("Set").frame(width: 28, alignment: .leading)
+            Text("Set").frame(minWidth: 28, alignment: .leading)
             Text("Target").frame(minWidth: 44, alignment: .leading)
             Text("Held").frame(minWidth: 44, alignment: .leading)
         }
         .dgLabel()
+        .dgDenseType()
+        .accessibilityHidden(true)
     }
 
     private var showsIncline: Bool { inclineRevealed || entry.showsInclineByDefault }
 
     private var cardioColumnHeader: some View {
         HStack(spacing: DGSpace.s3) {
-            Text("Set").frame(width: 28, alignment: .leading)
-            Text("").frame(width: 28)
+            Text("Set").frame(minWidth: 28, alignment: .leading)
+            Text("").frame(width: 28).accessibilityHidden(true)
             Text("Time").frame(minWidth: 44, alignment: .leading)
             Text(preferences.distanceUnit.symbol.uppercased()).frame(minWidth: 44, alignment: .leading)
             if showsIncline {
@@ -230,6 +243,7 @@ private struct OnDeckExerciseCard: View {
             }
         }
         .dgLabel()
+        .dgDenseType()
     }
 
     private func cardioRows(startSetID: UUID?) -> some View {
@@ -318,17 +332,21 @@ private struct CollapsedExerciseRow: View {
                         .textCase(.uppercase)
                         .foregroundStyle(DGColor.ink1)
                         .padding(.horizontal, DGSpace.s3)
-                        .frame(height: 36)
+                        .frame(minHeight: 36)
                         .dgGlass(.regular, in: Capsule())
                 }
                 .buttonStyle(.dgControl)
+                .accessibilityLabel("Start \(entry.exercise.name)")
             } else {
                 Text("\(entry.doneCount)/\(entry.sets.count)")
                     .dgMetric(DGFont.subhead)
                     .foregroundStyle(DGColor.ink3)
+                    .accessibilityLabel("\(entry.doneCount) of \(entry.sets.count) sets done")
             }
         }
         .dgCard(padding: DGSpace.s4)
+        // One row, one element — the "Start" button (timed holds) stays reachable as a child.
+        .accessibilityElement(children: entry.isTimed ? .contain : .combine)
     }
 
     private var summaryLine: String {
@@ -363,6 +381,7 @@ private struct CompletedExerciseRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .dgCard(padding: DGSpace.s4)
+        .accessibilityElement(children: .combine)
     }
 
     private var summary: String {
@@ -398,32 +417,8 @@ private struct ExerciseThumbnail: View {
             .padding(6)
             .frame(width: size, height: size)
             .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous))
-    }
-}
-
-/// Tiny trend line drawn from raw values, coral stroke.
-private struct Sparkline: View {
-    var values: [Double]
-
-    var body: some View {
-        GeometryReader { geo in
-            let low = values.min() ?? 0
-            let high = values.max() ?? 1
-            let span = max(high - low, 0.001)
-            Path { path in
-                for (index, value) in values.enumerated() {
-                    let x = values.count > 1
-                        ? geo.size.width * CGFloat(index) / CGFloat(values.count - 1) : 0
-                    let y = geo.size.height * (1 - CGFloat((value - low) / span))
-                    if index == 0 {
-                        path.move(to: CGPoint(x: x, y: y))
-                    } else {
-                        path.addLine(to: CGPoint(x: x, y: y))
-                    }
-                }
-            }
-            .stroke(DGColor.coral, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
-        }
+            // Decorative: the exercise name beside it is the content.
+            .accessibilityHidden(true)
     }
 }
 

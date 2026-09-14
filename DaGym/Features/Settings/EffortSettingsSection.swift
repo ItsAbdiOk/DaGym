@@ -14,7 +14,7 @@ struct EffortSettingsSection: View {
             Text("Effort").dgLabel()
             VStack(spacing: 0) {
                 row(label: "Track effort") {
-                    Toggle("", isOn: trackingBinding).tint(DGColor.coral).labelsHidden()
+                    Toggle("Track effort", isOn: trackingBinding).tint(DGColor.coral).labelsHidden()
                 }
                 if preferences.effortTrackingEnabled {
                     EffortSectionDivider()
@@ -30,7 +30,7 @@ struct EffortSettingsSection: View {
                     EffortSectionDivider()
                     Button { showingHelp = true } label: {
                         row(label: "What are RIR and RPE?") {
-                            Image(systemName: "chevron.right")
+                            Image(systemName: "chevron.right").accessibilityHidden(true)
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(DGColor.ink4)
                         }
@@ -44,7 +44,7 @@ struct EffortSettingsSection: View {
     }
 
     private func row<Trailing: View>(label: String, @ViewBuilder trailing: () -> Trailing) -> some View {
-        HStack {
+        DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
             Text(label).font(DGFont.body).foregroundStyle(DGColor.ink1)
             Spacer()
             trailing()

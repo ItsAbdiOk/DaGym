@@ -49,7 +49,7 @@ struct HomeView: View {
                             nextSessionText: nextSessionText, onFreestyle: onFreestyle, onBackfill: onBackfill
                         )
                     }
-                    HStack(spacing: DGSpace.s4) {
+                    DGAdaptiveStack(verticalAlignment: .top, spacing: DGSpace.s4) {
                         WeeklyGoalCard(done: thisWeekCount, total: preferences.weeklyGoal)
                         StreakCard(current: streakCurrent, longest: streakLongest)
                     }
@@ -162,6 +162,7 @@ private struct ScheduledCard: View {
                     .font(DGFont.footnote)
                     .foregroundStyle(DGColor.ink3)
                 }
+                .accessibilityElement(children: .combine)
                 Spacer()
                 BodyMapPair(intensity: routine.hitMap, height: 44)
             }
@@ -209,7 +210,7 @@ private struct RestDayCard: View {
             Text("No routine scheduled today. Start a freestyle workout whenever you're ready.")
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
-            HStack(spacing: DGSpace.s3) {
+            DGAdaptiveStack(spacing: DGSpace.s3) {
                 DGPrimaryButton(title: "Start a Freestyle Workout", symbol: "plus", action: onFreestyle)
                     .accessibilityIdentifier(A11yID.homeStart)
                 DGIconButton(
@@ -250,9 +251,12 @@ private struct WeeklyGoalCard: View {
                         .frame(height: 4)
                 }
             }
+            .accessibilityHidden(true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(DGSpace.s4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Weekly goal, \(done) of \(total) workouts")
         .background(DGColor.surface1, in: RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
@@ -283,6 +287,7 @@ private struct StreakCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(DGSpace.s4)
+        .accessibilityElement(children: .combine)
         .background(
             DGColor.prGold.opacity(0.10), in: RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
         )
@@ -312,7 +317,7 @@ private struct RecoveryCard: View {
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.coralText)
             }
-            HStack(alignment: .top, spacing: DGSpace.s4) {
+            DGAdaptiveStack(verticalAlignment: .top, spacing: DGSpace.s4) {
                 BodyMapPair(mode: .recovery, intensity: map, height: 56)
                 VStack(alignment: .leading, spacing: DGSpace.s1) {
                     Text(headline.title)
@@ -323,6 +328,7 @@ private struct RecoveryCard: View {
                         .foregroundStyle(DGColor.ink3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                .accessibilityElement(children: .combine)
             }
         }
         .dgCard()

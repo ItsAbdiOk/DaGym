@@ -98,7 +98,7 @@ struct AddExerciseButton: View {
             }
             .foregroundStyle(DGColor.ink2)
             .frame(maxWidth: .infinity)
-            .frame(height: 56)
+            .frame(minHeight: 56)
             .dgGlass(.thin, radius: DGRadius.lg)
             .overlay {
                 RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
@@ -118,7 +118,7 @@ struct BuilderCardioSetRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s2) {
-            HStack(spacing: DGSpace.s3) {
+            DGAdaptiveStack(spacing: DGSpace.s3) {
                 kindMenu
                 Stepper(value: minutesBinding, in: 0...300, step: 1) {
                     Text(timeLabel).font(DGFont.body).foregroundStyle(DGColor.ink1)
@@ -128,6 +128,7 @@ struct BuilderCardioSetRow: View {
                 Text(distanceLabel).font(DGFont.body).foregroundStyle(DGColor.ink1)
             }
             .accessibilityLabel("Target distance")
+            .accessibilityValue(distanceLabel)
         }
     }
 

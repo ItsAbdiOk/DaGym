@@ -10,10 +10,10 @@ struct ICloudSettingsSection: View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
             Text("iCloud").dgLabel()
             VStack(spacing: 0) {
-                HStack {
+                DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
                     Text("Sync with iCloud").font(DGFont.body).foregroundStyle(DGColor.ink1)
                     Spacer()
-                    Toggle("", isOn: syncBinding).tint(DGColor.coral).labelsHidden()
+                    Toggle("Sync with iCloud", isOn: syncBinding).tint(DGColor.coral).labelsHidden()
                 }
                 .padding(.horizontal, DGSpace.s5)
                 .frame(minHeight: 52)

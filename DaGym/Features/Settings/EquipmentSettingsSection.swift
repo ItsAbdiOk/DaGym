@@ -58,6 +58,7 @@ struct EquipmentSettingsSection: View {
                     .foregroundStyle(DGColor.coral)
             }
             .buttonStyle(.dgControl)
+            .accessibilityLabel("Add equipment profile")
         }
     }
 
@@ -69,17 +70,22 @@ struct EquipmentSettingsSection: View {
                     .foregroundStyle(profile.isActive ? DGColor.coral : DGColor.ink4)
             }
             .buttonStyle(.dgControl)
+            .accessibilityLabel(
+                profile.isActive ? "\(profile.name), active profile" : "Make \(profile.name) active"
+            )
+            .accessibilityAddTraits(profile.isActive ? .isSelected : [])
             Text(profile.name).font(DGFont.body).foregroundStyle(DGColor.ink1)
             Spacer()
             Button {
                 isNewProfile = false
                 editingProfile = profile
             } label: {
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.right").accessibilityHidden(true)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(DGColor.ink4)
             }
             .buttonStyle(.dgControl)
+            .accessibilityLabel("Edit \(profile.name)")
         }
         .padding(.horizontal, DGSpace.s5)
         .frame(minHeight: 52)

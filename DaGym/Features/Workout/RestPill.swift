@@ -50,12 +50,13 @@ struct RestPill: View {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.inkOnCoral)
                 .padding(.horizontal, DGSpace.s4)
-                .frame(height: 44)
+                .frame(minHeight: 44)
                 .background(DGColor.coral, in: Capsule())
         }
         .padding(.horizontal, DGSpace.s4)
         .padding(.vertical, DGSpace.s2)
         .dgGlass(.thick, in: Capsule())
+        .dgDenseType()
     }
 }
 
@@ -99,7 +100,7 @@ private struct RestRing: View {
                 .rotationEffect(.degrees(-90))
         }
         .frame(width: size, height: size)
-        .animation(DGMotion.timer, value: remaining)
+        .dgAnimation(DGMotion.timer, value: remaining)
     }
 
     private var ringColor: Color { isFinal ? DGColor.coralPress : DGColor.coral }

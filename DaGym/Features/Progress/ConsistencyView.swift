@@ -43,7 +43,7 @@ struct ConsistencyView: View {
     }
 
     private var streakTiles: some View {
-        HStack(spacing: DGSpace.s3) {
+        DGAdaptiveStack(spacing: DGSpace.s3) {
             StreakTile(title: "Current Streak", value: streak.current, tint: DGColor.prGoldText, gold: true)
             StreakTile(title: "Longest", value: streak.longest, tint: DGColor.ink1, gold: false)
         }
@@ -94,6 +94,7 @@ private struct StreakTile: View {
                 Text(value == 1 ? "week" : "weeks").dgLabel()
             }
         }
+        .accessibilityElement(children: .combine)
         .padding(DGSpace.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .dgGlass(.regular, radius: DGRadius.md)
@@ -182,12 +183,19 @@ private struct HeatmapCard: View {
         }
     }
 
+    /// A 10 pt square is a precision target by design (a year of days in one card); VoiceOver
+    /// gets each trained day as its own button, and the untrained ones are skipped as noise.
     @ViewBuilder
     private func square(for cell: DayCell?) -> some View {
         RoundedRectangle(cornerRadius: 2, style: .continuous)
             .fill(color(for: cell))
             .frame(width: Self.squareSize, height: Self.squareSize)
             .onTapGesture { if let cell { selectedCell = cell } }
+            .accessibilityHidden(cell.map { $0.sets == 0 } ?? true)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(cell.map(Self.footnote(for:)) ?? "")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { if let cell { selectedCell = cell } }
     }
 
     private func color(for cell: DayCell?) -> Color {
@@ -232,21 +240,21 @@ private struct HeatmapCard: View {
 }
 
 /// "WEEKLY RECAP" card: headline numbers with success/danger-tinted week-over-week deltas.
-private struct WeeklyRecapCard: View {
+struct WeeklyRecapCard: View {
     var recap: WeeklyRecap
     var preferences: Preferences
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s4) {
             Text("Weekly Recap").dgLabel()
-            HStack(spacing: DGSpace.s4) {
+            DGAdaptiveStack(spacing: DGSpace.s4) {
                 metric(
                     value: preferences.formatVolume(kg: recap.volumeKg),
                     unit: "\(preferences.unitSymbol) volume", delta: percentDelta
                 )
                 metric(value: "\(recap.sets)", unit: "sets", delta: countDelta(recap.setsDelta))
             }
-            HStack(spacing: DGSpace.s4) {
+            DGAdaptiveStack(spacing: DGSpace.s4) {
                 metric(
                     value: "\(recap.workouts)", unit: "workouts · goal \(recap.weeklyGoal)", delta: nil
                 )
@@ -286,6 +294,15 @@ private struct WeeklyRecapCard: View {
             Text(unit).font(DGFont.footnote).foregroundStyle(DGColor.ink3)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.metricLabel(value: value, unit: unit, delta: delta))
+    }
+
+    /// "12 sets, up 3 on last week" — the delta's colour and sign, in words.
+    static func metricLabel(value: String, unit: String, delta: (text: String, good: Bool)?) -> String {
+        guard let delta else { return "\(value) \(unit)" }
+        let amount = delta.text.trimmingCharacters(in: CharacterSet(charactersIn: "+-"))
+        return "\(value) \(unit), \(delta.good ? "up" : "down") \(amount) on last week"
     }
 }
 

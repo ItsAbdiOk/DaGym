@@ -41,11 +41,13 @@ struct MuscleDetailSheet: View {
                 .font(DGFont.subhead)
                 .foregroundStyle(DGColor.ink3)
         }
+        .accessibilityElement(children: .combine)
     }
 
     private var recoveredByRow: some View {
         HStack(spacing: DGSpace.s2) {
             Image(systemName: "clock").font(.system(size: 13, weight: .semibold))
+                .accessibilityHidden(true)
             Text(recoveredByText)
         }
         .font(DGFont.footnote)
@@ -73,7 +75,8 @@ struct MuscleDetailSheet: View {
                                 .font(DGFont.footnote)
                                 .foregroundStyle(DGColor.ink3)
                         }
-                        .frame(height: 28)
+                        .frame(minHeight: 28)
+                        .accessibilityElement(children: .combine)
                     }
                 }
             }

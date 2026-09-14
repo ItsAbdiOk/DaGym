@@ -58,31 +58,36 @@ struct RoutinesTabView: View {
     }
 
     private var header: some View {
-        HStack {
+        DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
             Text("Routines")
                 .font(DGFont.title1)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
-            programsButton
-            DGIconButton(symbol: "calendar", accessibilityLabel: "Schedule") {
-                path.append(Destination.schedule)
+            HStack(spacing: DGSpace.s2) {
+                programsButton
+                DGIconButton(symbol: "calendar", accessibilityLabel: "Schedule") {
+                    path.append(Destination.schedule)
+                }
+                DGIconButton(symbol: "plus", accessibilityLabel: "New routine") {
+                    path.append(Destination.new)
+                }
             }
-            DGIconButton(symbol: "plus", accessibilityLabel: "New routine") {
-                path.append(Destination.new)
-            }
+            // The buttons keep their width; the title is what wraps.
+            .fixedSize(horizontal: true, vertical: false)
         }
     }
 
     private var programsButton: some View {
         Button { path.append(Destination.programs) } label: {
             HStack(spacing: 6) {
-                Image(systemName: "calendar.badge.clock").font(.system(size: 13, weight: .semibold))
+                Image(systemName: "calendar.badge.clock").accessibilityHidden(true)
+                    .font(.system(size: 13, weight: .semibold))
                 Text("Programs").font(DGFont.condensedLabel(13)).tracking(1.2).textCase(.uppercase)
             }
             .foregroundStyle(DGColor.ink1)
             .padding(.horizontal, DGSpace.s3)
-            .frame(height: 36)
+            .frame(minHeight: 36)
             .dgGlass(.regular, in: Capsule())
         }
         .buttonStyle(.dgControl)
@@ -98,22 +103,28 @@ struct RoutinesTabView: View {
             )
         } else {
             ForEach(routines) { routine in
-                ZStack(alignment: .topTrailing) {
-                    Button { path.append(Destination.edit(routine.id)) } label: {
-                        RoutineCard(
-                            routine: routine, missingEquipment: missingEquipment(for: routine),
-                            profileName: activeProfile?.name ?? "", onStart: { onStart(routine) }
-                        )
-                    }
-                    .buttonStyle(.dgCard)
-                    .contextMenu {
-                        Button("Copy", systemImage: "doc.on.doc") { duplicate(routine) }
-                        Button("Delete", systemImage: "trash", role: .destructive) { delete(routine) }
-                    }
+                // Share and Start sit *over* the card button, never inside its label: a button
+                // nested in a button is undefined for hit-testing and unreachable for VoiceOver.
+                Button { path.append(Destination.edit(routine.id)) } label: {
+                    RoutineCard(
+                        routine: routine, missingEquipment: missingEquipment(for: routine),
+                        profileName: activeProfile?.name ?? ""
+                    )
+                }
+                .buttonStyle(.dgCard)
+                .contextMenu {
+                    Button("Copy", systemImage: "doc.on.doc") { duplicate(routine) }
+                    Button("Delete", systemImage: "trash", role: .destructive) { delete(routine) }
+                }
+                .overlay(alignment: .topTrailing) {
                     ShareRoutineButton(title: routine.name) {
                         PlanShareService.exportRoutine(id: routine.id, context: store.context)
                     }
                     .padding(DGSpace.s3)
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    RoutineStartPill(routineName: routine.name) { onStart(routine) }
+                        .padding(DGSpace.s5)
                 }
             }
         }
@@ -153,7 +164,6 @@ private struct RoutineCard: View {
     var routine: RoutineInfo
     var missingEquipment: [String] = []
     var profileName = ""
-    var onStart: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
@@ -176,30 +186,41 @@ private struct RoutineCard: View {
             if !missingEquipment.isEmpty {
                 equipmentBadge
             }
-            HStack(spacing: DGSpace.s2) {
+            DGAdaptiveStack(spacing: DGSpace.s2) {
                 ForEach(topMuscles) { muscle in
                     DGTag(text: muscle.displayName)
                 }
                 Spacer(minLength: DGSpace.s2)
-                startPill
-                    .accessibilityLabel("Start \(routine.name)")
+                // Reserves the pill's footprint; the live button is overlaid by the list.
+                RoutineStartPill(routineName: routine.name, action: {}).hidden()
             }
         }
         .dgCard()
     }
 
-    private var startPill: some View {
-        Button("Start", action: onStart)
+}
+
+/// The coral "Start" pill on a routine card, overlaid by `RoutinesTabView` so it is a sibling
+/// of the card button rather than a button inside a button.
+private struct RoutineStartPill: View {
+    var routineName: String
+    var action: () -> Void
+
+    var body: some View {
+        Button("Start", action: action)
             .buttonStyle(.dgControl)
             .font(DGFont.condensedLabel(13))
             .tracking(1.2)
             .textCase(.uppercase)
             .foregroundStyle(DGColor.inkOnCoral)
             .padding(.horizontal, DGSpace.s4)
-            .frame(height: 36)
+            .frame(minHeight: 36)
             .background(DGColor.coral, in: Capsule())
+            .accessibilityLabel("Start \(routineName)")
     }
+}
 
+extension RoutineCard {
     private var equipmentBadge: some View {
         HStack(spacing: DGSpace.s2) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -207,7 +228,6 @@ private struct RoutineCard: View {
                 .accessibilityHidden(true)
             Text("Needs \(missingNames) — not in \(profileName)")
                 .font(DGFont.footnote)
-                .lineLimit(1)
         }
         .foregroundStyle(DGColor.warning)
         .accessibilityLabel("Needs \(missingNames), not in the \(profileName) profile")

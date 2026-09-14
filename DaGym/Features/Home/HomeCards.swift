@@ -24,7 +24,7 @@ struct StarterPlanCard: View {
                         HStack {
                             Text(kind.rawValue).font(DGFont.body).foregroundStyle(DGColor.ink1)
                             Spacer()
-                            Image(systemName: "chevron.right")
+                            Image(systemName: "chevron.right").accessibilityHidden(true)
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(DGColor.ink4)
                         }
@@ -107,7 +107,7 @@ struct BodyweightTile: View {
                     }
                 }
                 Spacer()
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.right").accessibilityHidden(true)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(DGColor.ink4)
             }

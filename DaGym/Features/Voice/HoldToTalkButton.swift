@@ -35,7 +35,7 @@ struct HoldToTalkButton: View {
             .frame(width: 52, height: 52)
             .scaleEffect(isHeld ? 1.08 : 1)
             .shadow(color: isListening ? DGColor.coral.opacity(0.4) : .clear, radius: 12, y: 4)
-            .animation(DGMotion.tap, value: isListening)
+            .dgAnimation(DGMotion.tap, value: isListening)
             .contentShape(Circle())
             .gesture(
                 DragGesture(minimumDistance: 0)

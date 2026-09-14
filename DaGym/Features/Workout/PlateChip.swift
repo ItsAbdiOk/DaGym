@@ -22,11 +22,10 @@ struct PlateChip: View {
                     .font(DGFont.condensedLabel(12))
                     .tracking(0.8)
                     .textCase(.uppercase)
-                    .lineLimit(1)
             }
             .foregroundStyle(isLoadable ? DGColor.ink2 : DGColor.danger)
             .padding(.horizontal, DGSpace.s3)
-            .frame(height: 32)
+            .frame(minHeight: 32)
             .background(DGColor.surface2, in: Capsule())
             .overlay(Capsule().strokeBorder(DGColor.hairline))
         }

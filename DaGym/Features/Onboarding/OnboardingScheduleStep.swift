@@ -33,6 +33,8 @@ struct OnboardingScheduleStep: View {
                         .foregroundStyle(DGColor.ink1)
                     Text("sessions").dgLabel()
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(preferences.weeklyGoal) sessions a week")
                 Spacer()
                 stepperButton(symbol: "plus", coral: true) { adjustGoal(by: 1) }
             }
@@ -67,6 +69,7 @@ struct OnboardingScheduleStep: View {
                 .background(coral ? DGColor.coral : DGColor.surface3, in: Circle())
         }
         .buttonStyle(.dgControl)
+        .accessibilityLabel(symbol == "minus" ? "Fewer sessions" : "More sessions")
     }
 
     private func adjustGoal(by delta: Int) {

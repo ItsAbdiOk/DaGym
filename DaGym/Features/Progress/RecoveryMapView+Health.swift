@@ -114,7 +114,8 @@ extension RecoveryMapView {
             Text("Turn on in Settings \u{203A} Apple Health")
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink4)
+                .frame(minHeight: DGTap.min)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dgControl)
     }
 }

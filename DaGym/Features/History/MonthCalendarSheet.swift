@@ -134,7 +134,7 @@ struct MonthCalendarSheet: View {
         .clipShape(RoundedRectangle(cornerRadius: DGRadius.sheet, style: .continuous))
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
-        .animation(DGMotion.standard, value: selected)
+        .dgAnimation(DGMotion.standard, value: selected)
     }
 
     private var calendar: Calendar { preferences.trainingCalendar }
@@ -270,7 +270,7 @@ struct MonthCalendarSheet: View {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
                 .frame(maxWidth: .infinity)
-                .frame(height: 52)
+                .frame(minHeight: 52)
                 .dgGlass(.regular, radius: DGRadius.lg)
         }
         .buttonStyle(.dgControl)
@@ -362,6 +362,8 @@ private struct LegendDot: View {
             }
             Text(label).font(DGFont.footnote).foregroundStyle(DGColor.ink3)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
     }
 }
 

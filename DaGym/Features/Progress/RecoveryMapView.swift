@@ -162,8 +162,8 @@ private struct MuscleListRow: View {
                 Text(statusLabel)
                     .font(DGFont.footnote)
                     .foregroundStyle(DGColor.ink3)
-                    .frame(width: 120, alignment: .trailing)
-                Image(systemName: "chevron.right")
+                    .frame(minWidth: 120, alignment: .trailing)
+                Image(systemName: "chevron.right").accessibilityHidden(true)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(DGColor.ink4)
             }
@@ -252,7 +252,8 @@ private struct BalanceSection: View {
                         .font(DGFont.footnote)
                         .foregroundStyle(DGColor.ink3)
                 }
-                .frame(height: 28)
+                .frame(minHeight: 28)
+                .accessibilityElement(children: .combine)
             }
         }
     }

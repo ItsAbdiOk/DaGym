@@ -44,20 +44,23 @@ struct ProgressChartsSection: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: DGSpace.s3) {
+        DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s3) {
             Text("Progress")
                 .font(DGFont.title1)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
-            Button("1RM Calc") { showingCalculator = true }
-                .buttonStyle(.dgControl)
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink3)
-            Button("See All") { showingProgress = true }
-                .buttonStyle(.dgControl)
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.coralText)
+            HStack(spacing: DGSpace.s3) {
+                Button("1RM Calc") { showingCalculator = true }
+                    .buttonStyle(.dgControl)
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.ink3)
+                Button("See All") { showingProgress = true }
+                    .buttonStyle(.dgControl)
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.coralText)
+            }
+            .fixedSize(horizontal: true, vertical: false)
         }
     }
 
@@ -75,7 +78,8 @@ struct ThisWeekStrip: View {
     @Environment(Preferences.self) private var preferences
 
     var body: some View {
-        HStack(spacing: 0) {
+        // Four across normally; a 2×2 grid at accessibility sizes so the numbers keep their font.
+        DGAdaptiveGrid(columns: 4) {
             DeltaStat(
                 value: preferences.formatVolume(kg: thisWeek.volumeKg), label: "Volume",
                 delta: percentDelta(thisWeek.volumeKg, lastWeek.volumeKg)
@@ -120,7 +124,7 @@ struct ThisWeekStrip: View {
 }
 
 /// One stat with a small success/danger-coloured delta underneath.
-private struct DeltaStat: View {
+struct DeltaStat: View {
     var value: String
     var label: String
     var delta: String?
@@ -137,8 +141,19 @@ private struct DeltaStat: View {
                     .foregroundStyle(delta.hasPrefix("-") ? DGColor.danger : DGColor.success)
             }
         }
+        .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
         .padding(.vertical, DGSpace.s3)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.accessibilityLabel(value: value, label: label, delta: delta))
+    }
+
+    /// "Volume, 4 280, up 12 percent on last week" — the sign is otherwise colour plus a glyph.
+    static func accessibilityLabel(value: String, label: String, delta: String?) -> String {
+        guard let delta else { return "\(label), \(value)" }
+        let direction = delta.hasPrefix("-") ? "down" : "up"
+        let amount = delta.replacingOccurrences(of: "%", with: " percent").dropFirst()
+        return "\(label), \(value), \(direction) \(amount) on last week"
     }
 }
 
@@ -182,6 +197,11 @@ struct WeeklyVolumeCard: View {
                 }
             }
             .frame(height: 120)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(ChartAccessibility.periodSummary(
+                title: "Weekly volume", periodNoun: "weeks", values: weeks.map(\.volumeKg),
+                format: { "\(preferences.formatVolume(kg: $0)) \(preferences.unitSymbol)" }
+            ))
         }
     }
 
@@ -256,7 +276,7 @@ private struct MuscleBarRow: View {
             Text(muscle.displayName)
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink2)
-                .frame(width: 72, alignment: .leading)
+                .frame(minWidth: 72, alignment: .leading)
             GeometryReader { geo in
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
                     .fill(DGColor.surface3)
@@ -270,8 +290,10 @@ private struct MuscleBarRow: View {
             Text(Self.setsLabel(sets))
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
-                .frame(width: 28, alignment: .trailing)
+                .frame(minWidth: 28, alignment: .trailing)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(muscle.displayName), \(Self.setsLabel(sets)) sets")
     }
 
     private static func setsLabel(_ sets: Double) -> String {

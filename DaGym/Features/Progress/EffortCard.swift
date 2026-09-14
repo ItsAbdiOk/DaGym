@@ -82,7 +82,7 @@ struct EffortCard: View {
                     Text("\(scaleName) \(bin.effort.displayValue(scale: scale))")
                         .font(DGFont.footnote)
                         .foregroundStyle(DGColor.ink2)
-                        .frame(width: 56, alignment: .leading)
+                        .frame(minWidth: 56, alignment: .leading)
                     GeometryReader { geo in
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
                             .fill(DGColor.surface3)
@@ -96,7 +96,7 @@ struct EffortCard: View {
                     Text("\(bin.count)")
                         .font(DGFont.footnote)
                         .foregroundStyle(DGColor.ink3)
-                        .frame(width: 28, alignment: .trailing)
+                        .frame(minWidth: 28, alignment: .trailing)
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(

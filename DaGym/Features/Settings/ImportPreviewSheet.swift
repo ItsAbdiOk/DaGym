@@ -51,7 +51,7 @@ struct ImportPreviewSheet: View {
     }
 
     private var countsCard: some View {
-        HStack(spacing: 0) {
+        DGAdaptiveStack(spacing: 0, threshold: .accessibility3) {
             StatTile(value: "\(report.workoutsImported)", label: "Workouts")
             StatTile(value: "\(report.routinesImported)", label: "Routines")
             StatTile(value: "\(report.exercisesImported)", label: "Exercises")
@@ -84,7 +84,7 @@ struct ImportPreviewSheet: View {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink3)
                 .frame(maxWidth: .infinity)
-                .frame(height: 52)
+                .frame(minHeight: 52)
                 .dgGlass(.regular, radius: DGRadius.lg)
             DGPrimaryButton(title: "Import", action: onConfirm)
         }

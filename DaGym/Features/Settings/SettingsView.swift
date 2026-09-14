@@ -79,6 +79,8 @@ struct SettingsView: View {
                 Stepper(value: binding(\.defaultRestSeconds), in: 0...300, step: 15) {
                     Text(restTimerLabel).font(DGFont.subhead).foregroundStyle(DGColor.ink3)
                 }
+                .accessibilityLabel("Default rest")
+                .accessibilityValue(restTimerLabel)
             }
             SettingsDivider()
             SettingsRow(label: "Rest-pause rest") {
@@ -87,22 +89,25 @@ struct SettingsView: View {
                         .font(DGFont.subhead)
                         .foregroundStyle(DGColor.ink3)
                 }
+                .accessibilityLabel("Rest-pause rest")
+                .accessibilityValue(WorkoutSession.clock(preferences.restPauseSeconds))
             }
             SettingsDivider()
             SettingsRow(label: "Sound") {
-                Toggle("", isOn: binding(\.restSound)).tint(DGColor.coral).labelsHidden()
+                Toggle("Sound", isOn: binding(\.restSound)).tint(DGColor.coral).labelsHidden()
             }
             SettingsDivider()
             SettingsRow(label: "Play on silent") {
-                Toggle("", isOn: binding(\.playRestSoundOnSilent)).tint(DGColor.coral).labelsHidden()
+                Toggle("Play on silent", isOn: binding(\.playRestSoundOnSilent))
+                    .tint(DGColor.coral).labelsHidden()
             }
             SettingsDivider()
             SettingsRow(label: "Haptics") {
-                Toggle("", isOn: binding(\.restHaptics)).tint(DGColor.coral).labelsHidden()
+                Toggle("Haptics", isOn: binding(\.restHaptics)).tint(DGColor.coral).labelsHidden()
             }
             SettingsDivider()
             SettingsRow(label: "Screen flash") {
-                Toggle("", isOn: binding(\.restScreenFlash)).tint(DGColor.coral).labelsHidden()
+                Toggle("Screen flash", isOn: binding(\.restScreenFlash)).tint(DGColor.coral).labelsHidden()
             }
         }
     }
@@ -123,6 +128,8 @@ struct SettingsView: View {
                 Stepper(value: weeklyGoalBinding, in: 1...7) {
                     Text("\(preferences.weeklyGoal)").font(DGFont.subhead).foregroundStyle(DGColor.ink3)
                 }
+                .accessibilityLabel("Weekly goal")
+                .accessibilityValue("\(preferences.weeklyGoal) workouts")
             }
             SettingsDivider()
             SettingsRow(label: "Week starts") {
@@ -136,7 +143,8 @@ struct SettingsView: View {
             }
             SettingsDivider()
             SettingsRow(label: "Weigh in before workouts") {
-                Toggle("", isOn: binding(\.weighInBeforeWorkout)).tint(DGColor.coral).labelsHidden()
+                Toggle("Weigh in before workouts", isOn: binding(\.weighInBeforeWorkout))
+                    .tint(DGColor.coral).labelsHidden()
             }
             SettingsDivider()
             CheckInCardButton()
@@ -155,13 +163,16 @@ struct SettingsView: View {
     private var calendarRows: some View {
         SettingsSection(title: "Calendar") {
             SettingsRow(label: "Add my schedule to Calendar") {
-                Toggle("", isOn: calendarSyncBinding).tint(DGColor.coral).labelsHidden()
+                Toggle("Add my schedule to Calendar", isOn: calendarSyncBinding)
+                    .tint(DGColor.coral).labelsHidden()
             }
             SettingsDivider()
             SettingsRow(label: "Start time") {
                 Stepper(value: binding(\.scheduledStartHour), in: 0...23) {
                     Text(startHourLabel).font(DGFont.subhead).foregroundStyle(DGColor.ink3)
                 }
+                .accessibilityLabel("Start time")
+                .accessibilityValue(startHourLabel)
             }
         }
     }
@@ -223,7 +234,7 @@ struct SettingsView: View {
     private var acknowledgementsRow: some View {
         Button { showingAcknowledgements = true } label: {
             SettingsRow(label: "Acknowledgements") {
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.right").accessibilityHidden(true)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(DGColor.ink4)
             }
@@ -234,7 +245,7 @@ struct SettingsView: View {
     private var privacyPolicyRow: some View {
         Button { showingPrivacyPolicy = true } label: {
             SettingsRow(label: "Privacy") {
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.right").accessibilityHidden(true)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(DGColor.ink4)
             }
@@ -299,7 +310,7 @@ struct SettingsRow<Trailing: View>: View {
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
-        HStack {
+        DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
             Text(label).font(DGFont.body).foregroundStyle(DGColor.ink1)
             Spacer()
             trailing

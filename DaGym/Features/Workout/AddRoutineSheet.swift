@@ -59,6 +59,7 @@ struct AddRoutineSheet: View {
                 }
                 Spacer(minLength: DGSpace.s2)
                 Image(systemName: "plus")
+                    .accessibilityHidden(true)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(DGColor.coralText)
             }

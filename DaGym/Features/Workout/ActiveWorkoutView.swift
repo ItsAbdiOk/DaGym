@@ -95,65 +95,6 @@ struct ActiveWorkoutView: View {
         }
     }
 
-    // MARK: Header
-
-    private var navHeader: some View {
-        HStack(alignment: .top, spacing: DGSpace.s3) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(startedAtLabel).dgLabel()
-                Text(session.title)
-                    .font(DGFont.title1)
-                    .textCase(.uppercase)
-                    .foregroundStyle(DGColor.ink1)
-            }
-            Spacer(minLength: DGSpace.s2)
-            if !session.isBackfilled {
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("Elapsed").dgLabel()
-                    TimelineView(.periodic(from: session.startedAt, by: 1)) { context in
-                        Text(WorkoutSession.clock(session.elapsedSeconds(at: context.date)))
-                            .dgMetric(DGFont.metricL)
-                            .foregroundStyle(DGColor.ink1)
-                    }
-                }
-            }
-            DGPrimaryButton(title: "Finish", height: 44) { showFinishConfirm = true }
-                .frame(width: 96)
-                .accessibilityIdentifier(A11yID.workoutFinish)
-            // Voice logging entry point (plan: DaGym/Features/Voice). Self-contained — owns its
-            // own controller — so this is the one line the rest of the screen needs.
-            VoiceLogEntryPoint(
-                session: session, store: store, preferences: preferences, undoAction: $undoAction
-            )
-            headerMenu
-        }
-        .padding(.horizontal, DGSpace.s4)
-        .padding(.top, DGSpace.s2)
-        .padding(.bottom, DGSpace.s3)
-        .dgGlass(.regular, radius: 0)
-    }
-
-    private var statStrip: some View {
-        HStack(spacing: 0) {
-            StatTile(
-                value: preferences.formatWeight(kg: session.volumeKg),
-                label: "\(preferences.unitSymbol) volume"
-            )
-            Divider().overlay(DGColor.hairline)
-            StatTile(value: "\(session.setsDone) / \(session.setsTotal)", label: "sets")
-            Divider().overlay(DGColor.hairline)
-            StatTile(value: "\(session.prCount)", label: "pr", tint: DGColor.prGoldText)
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .background(DGColor.surface1, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
-                .strokeBorder(DGColor.hairline, lineWidth: 1)
-        }
-        .padding(.horizontal, DGSpace.s4)
-        .padding(.bottom, DGSpace.s3)
-    }
-
     // MARK: Muscles + PR
 
     private var musclesCard: some View {
@@ -165,6 +106,7 @@ struct ActiveWorkoutView: View {
                     .font(DGFont.body)
                     .foregroundStyle(DGColor.ink1)
             }
+            .accessibilityElement(children: .combine)
             Spacer(minLength: 0)
         }
         .dgCard(padding: DGSpace.s4)
@@ -298,9 +240,12 @@ private struct WorkoutActionBar: View {
             actionItem(title: "Reorder", symbol: "list.bullet", tint: DGColor.ink2, action: onReorder)
             actionItem(title: "Coach", symbol: "sparkles", tint: DGColor.ink4, action: {})
                 .opacity(0.5)
+                .disabled(true)
+                .accessibilityHint("Coming soon")
         }
-        .frame(height: 56)
+        .frame(minHeight: 56)
         .dgGlass(.thick, in: Capsule())
+        .dgDenseType()
     }
 
     private func actionItem(
@@ -309,6 +254,7 @@ private struct WorkoutActionBar: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: symbol).font(.system(size: 14, weight: .bold))
+                    .accessibilityHidden(true)
                 Text(title).font(DGFont.condensedLabel(13)).textCase(.uppercase)
             }
             .foregroundStyle(tint)
@@ -331,6 +277,7 @@ private struct PRBanner: View {
                 .background(
                     DGColor.prGold, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
                 )
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text("New PR — \(info.exerciseName)").dgLabel(DGColor.prGoldText)
                 Text(info.line)
@@ -343,6 +290,7 @@ private struct PRBanner: View {
             radius: DGRadius.md, fill: DGColor.prGold.opacity(0.14),
             stroke: DGColor.prGold.opacity(0.4), padding: DGSpace.s4
         )
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -354,7 +302,7 @@ private struct PRBanner: View {
     }
 }
 
-private extension ActiveWorkoutView {
+extension ActiveWorkoutView {
     /// "SUNDAY · 13 SEP", or "BACKFILL · 11 SEP" for a session logged after the fact.
     var startedAtLabel: String {
         let formatter = DateFormatter()
