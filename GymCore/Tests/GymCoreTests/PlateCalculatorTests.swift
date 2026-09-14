@@ -29,7 +29,7 @@ struct PlateCalculatorTests {
         #expect(PlateCalculator.load(target: 15) == .tooLight(bar: .olympic))
     }
 
-    @Test("respects pair counts: only two 15s means 50 kg uses 10 + 5")
+    @Test("respects pair counts: one pair of 15s covers 50 kg, but 80 kg can't use 15 + 15")
     func pairs() {
         guard case .exact(let load) = PlateCalculator.load(target: 50) else {
             Issue.record("expected exact load")

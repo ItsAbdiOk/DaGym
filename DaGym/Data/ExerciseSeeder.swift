@@ -68,8 +68,10 @@ enum ExerciseSeeder {
 
     /// How long a folded-away row is kept before it is really deleted. CloudKit imports a
     /// record's children long after the record itself, so a loser is only safe to delete once
-    /// nothing has pointed at it for well past any plausible import window.
-    static let tombstoneGracePeriod: TimeInterval = 7 * 24 * 60 * 60
+    /// nothing has pointed at it for well past any plausible import window — and a second
+    /// device can sit offline (signed out, Wi-Fi-only, on holiday) for weeks while still
+    /// logging against its copy. A tombstone is cheap; a lost session is not.
+    static let tombstoneGracePeriod: TimeInterval = 30 * 24 * 60 * 60
 
     /// Folds rows that share a `seedID` (two devices each seeded before the other's rows synced)
     /// into one survivor — the oldest, by `id` on a tie so every device picks the same one — and
@@ -174,16 +176,17 @@ enum ExerciseSeeder {
 
     /// Carries the loser's user-editable fields onto the survivor. Anything the survivor still
     /// holds at its seeded value is treated as unedited, so a rest time, increment or bar the
-    /// user changed on whichever copy lost the fold is kept rather than discarded.
+    /// user changed on whichever copy lost the fold is kept rather than discarded. Rest is the
+    /// exception: its unedited value is 0 ("use the default"), not the seed's number.
     private static func mergeFields(
         from duplicate: ExerciseModel, into survivor: ExerciseModel, seed: SeedExercise?
     ) {
         survivor.isFavorite = survivor.isFavorite || duplicate.isFavorite
         if survivor.notes.isEmpty { survivor.notes = duplicate.notes }
-        guard let seed else { return }
-        if survivor.restSeconds == seed.restSeconds, duplicate.restSeconds != seed.restSeconds {
+        if survivor.restSeconds == 0, duplicate.restSeconds != 0 {
             survivor.restSeconds = duplicate.restSeconds
         }
+        guard let seed else { return }
         if survivor.incrementKg == seed.incrementKg, duplicate.incrementKg != seed.incrementKg {
             survivor.incrementKg = duplicate.incrementKg
         }
@@ -231,7 +234,9 @@ enum ExerciseSeeder {
                 seedID: item.id, name: item.name, primaryMuscles: item.primary,
                 secondaryMuscles: item.secondary, equipment: item.equipment, mechanic: item.mechanic,
                 loggingStyle: item.loggingStyle, isPerSide: item.isPerSide, barType: item.bar,
-                incrementKg: item.incrementKg, restSeconds: item.restSeconds,
+                // 0 = "use Settings → Default rest". The seed's own `restSeconds` is only ever
+                // an explicit per-exercise override, and a fresh row has none.
+                incrementKg: item.incrementKg, restSeconds: 0,
                 instructions: item.instructions ?? "", dataSource: item.source ?? "",
                 sourceURL: item.sourceURL ?? "", licence: item.licence ?? "",
                 authors: item.authors ?? []
@@ -248,6 +253,11 @@ enum ExerciseSeeder {
 
     /// Updates instructions/provenance on rows that already exist, matched by
     /// `seedID`. Never inserts or duplicates rows.
+    ///
+    /// Seed version 4 also migrates rest: seeded rows used to carry the seed's `restSeconds` as
+    /// their own value, so Settings → Default rest never applied to them. A row still at its
+    /// seed item's number is unedited and becomes 0 ("use the default"); one the lifter changed
+    /// is an override and is kept. Runs once per store because it is gated on the version.
     private static func updateExisting(_ items: [SeedExercise], in context: ModelContext) throws {
         let existing = try context.fetch(FetchDescriptor<ExerciseModel>())
         var bySeedID: [String: ExerciseModel] = [:]
@@ -259,19 +269,24 @@ enum ExerciseSeeder {
         var updatedCount = 0
         for item in items {
             guard let model = bySeedID[item.id] else { continue }
-            if let instructions = item.instructions, !instructions.isEmpty {
-                model.instructions = instructions
-            }
-            if let source = item.source { model.dataSource = source }
-            if let sourceURL = item.sourceURL { model.sourceURL = sourceURL }
-            if let licence = item.licence { model.licence = licence }
-            if let authors = item.authors { model.authors = authors }
+            refresh(model, from: item)
             updatedCount += 1
         }
         if updatedCount > 0 {
             try context.save()
             seedLogger.info("Updated \(updatedCount, privacy: .public) exercises to newer seed version")
         }
+    }
+
+    private static func refresh(_ model: ExerciseModel, from item: SeedExercise) {
+        if let instructions = item.instructions, !instructions.isEmpty {
+            model.instructions = instructions
+        }
+        if let source = item.source { model.dataSource = source }
+        if let sourceURL = item.sourceURL { model.sourceURL = sourceURL }
+        if let licence = item.licence { model.licence = licence }
+        if let authors = item.authors { model.authors = authors }
+        if model.restSeconds == item.restSeconds { model.restSeconds = 0 }
     }
 
     /// The seed JSON lives at `Resources/Seed/exercises.json`. Swift Testing

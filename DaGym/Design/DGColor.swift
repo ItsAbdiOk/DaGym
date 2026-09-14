@@ -141,6 +141,47 @@ enum DGColor {
         Color(hex: 0xF5943A), Color(hex: 0xEE4B3C)
     ]
 
+    /// Colour-blind-safe alternative to `recovery`. `recovery`'s green→yellow→red hue sweep is
+    /// exactly the axis deuteranopes and protanopes (red/green colour blindness — the two most
+    /// common forms) can't separate: the amber/orange/red stops read as one indistinguishable
+    /// blob. This ramp instead sweeps blue→yellow while climbing steadily in *lightness* at
+    /// every stop — the one property that survives every common form of colour blindness,
+    /// deuteranopia/protanopia (red-green) and tritanopia (blue-yellow) alike, because it isn't
+    /// carried by hue at all. Same 5-stop "fresh → spent" cardinality as `recovery`, so callers
+    /// can index the two ramps identically.
+    ///
+    /// Stops are matplotlib's "viridis" colormap sampled at 0 / .25 / .5 / .75 / 1 — a palette
+    /// purpose-built and validated (Nuñez, Anderton & Renslow, "Optimizing colormaps with
+    /// consideration for color vision deficiency...", 2018) to stay monotonic in perceived
+    /// lightness under deuteranopia/protanopia/tritanopia simulation:
+    ///   0. `#440154` — dark violet (fresh)
+    ///   1. `#3B528B` — blue
+    ///   2. `#21918C` — teal
+    ///   3. `#5EC962` — green
+    ///   4. `#FDE725` — yellow (spent)
+    /// `HeatmapPaletteTests` checks the monotonic-lightness property directly rather than just
+    /// trusting the citation.
+    static let recoveryAccessible: [Color] = [
+        Color(hex: 0x440154), Color(hex: 0x3B528B), Color(hex: 0x21918C),
+        Color(hex: 0x5EC962), Color(hex: 0xFDE725)
+    ]
+
+    /// Colour-blind-safe alternative to the consistency calendar's coral ramp (built locally in
+    /// `ConsistencyView.HeatmapCard`, not stored here, since its "no activity" stop needs the
+    /// dynamic `surface3` rather than a fixed hex). Reuses `recoveryAccessible`'s stops verbatim
+    /// — the property that matters, monotonic lightness on a non-red/green axis, is identical
+    /// for a "fewer sets → more sets" ramp as it is for "fresh → spent".
+    static let consistencyAccessible: [Color] = recoveryAccessible
+
+    /// Picks `recovery` or `recoveryAccessible` for the recovery body map. Either trigger is
+    /// enough on its own: the system-wide "Differentiate Without Color" accessibility setting
+    /// (`\.accessibilityDifferentiateWithoutColor`), or the user's own in-app
+    /// `Preferences.colorBlindHeatmaps` toggle for someone who wants the safer ramp without
+    /// flipping the system-wide setting (which also affects other apps).
+    static func recoveryRamp(differentiateWithoutColor: Bool, colorBlindHeatmaps: Bool) -> [Color] {
+        differentiateWithoutColor || colorBlindHeatmaps ? recoveryAccessible : recovery
+    }
+
     // MARK: Semantic
     static let success = Color(hex: 0x3FCB8E)
     static let warning = Color(hex: 0xF5B23C)

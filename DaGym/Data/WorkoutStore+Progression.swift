@@ -127,21 +127,27 @@ extension WorkoutStore {
 
     /// The equipment-appropriate rounding grid (F3/A2): plates for a bar lift, a fixed step for
     /// dumbbells/kettlebells/machines, `.free` for bodyweight/assisted/timed work where there's
-    /// nothing to round.
-    func loadGrid(for exerciseInfo: ExerciseInfo, equipment: ProgressionEquipment) -> LoadGrid {
+    /// nothing to round. The fixed steps follow the lifter's unit (`unit`, the stored preference
+    /// by default): a rack of 2 kg dumbbells is a rack of 5 lb ones in the US, and a 4 kg step
+    /// on a 25 lb pair prescribes 26.5 lb — a weight no such rack holds.
+    func loadGrid(
+        for exerciseInfo: ExerciseInfo, equipment: ProgressionEquipment, unit: WeightUnit? = nil
+    ) -> LoadGrid {
         switch exerciseInfo.loggingStyle {
         case .bodyweightReps, .assisted, .timedHold, .cardio:
             return .free
         case .weightReps, .weightedBodyweight:
             break
         }
+        let unit = unit ?? preferredWeightUnit
         switch exerciseInfo.equipment.lowercased() {
         case "dumbbell":
-            return .step(2)
+            return .step(unit == .kg ? 2 : unit.toKg(5))
         case "kettlebell":
-            return .step(4)
+            return .step(unit == .kg ? 4 : unit.toKg(10))
         case "machine", "cable":
-            return .step(exerciseInfo.incrementKg > 0 ? exerciseInfo.incrementKg : 5)
+            let fallback = unit == .kg ? 5 : unit.toKg(10)
+            return .step(exerciseInfo.incrementKg > 0 ? exerciseInfo.incrementKg : fallback)
         default:
             return .plates(
                 bar: exerciseInfo.bar ?? equipment.bar, plates: equipment.plates,
@@ -270,8 +276,14 @@ extension WorkoutStore {
     /// number instead makes a plan override (a hand edit, or an approved Coach deload) last
     /// exactly one session: finishing that session records the new target, and the two match.
     /// No recorded target at all means the engine has never judged this lift, so the plan wins.
+    ///
+    /// "The plan target" is the *first working set's* target, nil included — the same set the
+    /// engine records (`ProgressionEngine.planTargetWeightKg`). Reading the first working set
+    /// *with* a target instead meant a top-set-only plan (set 1 open, set 2 at 80 kg) compared
+    /// 80 against a recorded nil on every session, so any routine save at all — a rename, a
+    /// glyph — put the plan back in front of the engine for one session.
     static func planTargetWeightChanged(_ plannedSets: [PlannedSetModel]) -> Bool {
-        let working = plannedSets.first { $0.setKind.countsTowardStats && $0.targetWeightKg != nil }
+        let working = plannedSets.sorted { $0.order < $1.order }.first { $0.setKind.countsTowardStats }
         guard let target = working?.targetWeightKg else { return false }
         let seen = working?.routineExercise?.stallStateValue.lastPlanTargetWeightKg
         return seen.map { !StallState.sameWeight($0, target) } ?? true

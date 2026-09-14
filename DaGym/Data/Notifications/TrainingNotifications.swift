@@ -92,13 +92,17 @@ final class TrainingNotificationScheduler {
         ) else { return }
         let content = UNMutableNotificationContent()
         content.title = "Weekly recap"
-        // The numbers are only allowed in when the notification fires for the week they describe.
-        // A recap scheduled after Sunday's hour has already passed lands *next* Sunday, and a
-        // one-shot request's body is frozen at schedule time — so a lifter who finished on Sunday
-        // evening and then skipped the whole next week got "This week: 3 workouts" for a week in
-        // which they trained nothing. When the fire date isn't in this week, say nothing specific.
-        if calendar.isDate(fireDate, equalTo: now, toGranularity: .weekOfYear) {
-            let recap = store.weeklyRecap(for: now, weeklyGoal: preferences.weeklyGoal, calendar: calendar)
+        // The numbers are only allowed in when they describe a week that can't change any more
+        // by the time the notification fires. A one-shot request's body is frozen at schedule
+        // time, and a recap scheduled after Sunday's hour has passed lands *next* Sunday — so a
+        // lifter who finished on Sunday evening and then skipped the whole next week got "This
+        // week: 3 workouts" for a week in which they trained nothing. When the week the recap
+        // closes is still ahead of `now`, say nothing specific.
+        let recapWeek = Self.weekClosed(by: fireDate, calendar: calendar)
+        if calendar.compare(recapWeek, to: now, toGranularity: .weekOfYear) != .orderedDescending {
+            let recap = store.weeklyRecap(
+                for: recapWeek, weeklyGoal: preferences.weeklyGoal, calendar: calendar
+            )
             content.body = Self.recapBody(recap, unit: preferences.weightUnit)
         } else {
             content.body = Self.pendingRecapBody
@@ -114,6 +118,15 @@ final class TrainingNotificationScheduler {
         let interval = max(0.1, fireDate.timeIntervalSince(now))
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
         center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger))
+    }
+
+    /// A date inside the training week a Sunday-evening recap describes. With a Monday-start
+    /// calendar Sunday is the last day of the week it sums up; with a Sunday-start calendar Sunday
+    /// *opens* a week, so the recap is for the Sun–Sat week that ended the day before — the fire
+    /// date itself would name a week with nothing in it yet.
+    static func weekClosed(by fireDate: Date, calendar: Calendar) -> Date {
+        guard calendar.firstWeekday == 1 else { return fireDate }
+        return calendar.date(byAdding: .day, value: -1, to: fireDate) ?? fireDate
     }
 
     /// The next Sunday at `hour:00` strictly after `now` — this week's if it hasn't happened yet,

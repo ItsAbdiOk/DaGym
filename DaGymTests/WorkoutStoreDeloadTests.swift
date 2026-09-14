@@ -14,7 +14,13 @@ struct WorkoutStoreDeloadTests {
     }
 
     /// A routine with one main-lift exercise, a finished session for history, and a stalled
-    /// `RoutineExerciseModel` (3 consecutive misses) — the shape `deloadSuggestion` needs.
+    /// `RoutineExerciseModel` — the shape `deloadSuggestion` needs.
+    ///
+    /// The helper logs one real miss (6 of 8 at 80 kg) and then hand-sets the persisted counter
+    /// to 1. `coachInput` re-judges the lift over current history rather than reading the
+    /// persisted copy, so that fresh judgement counts the logged miss on top of the seeded
+    /// streak: 1 → 2, which is `TrainingConstants.deloadStallCount`. Seeding 3 would only be
+    /// masked by the same re-judgement.
     private func stalledLift(_ store: WorkoutStore, name: String) {
         let exercise = store.createCustomExercise(
             name: name, primary: [.chest], equipment: "Barbell", style: .weightReps
@@ -32,11 +38,11 @@ struct WorkoutStoreDeloadTests {
 
         let routineModel = store.fetchRoutineModel(id: routine.id)
         guard let routineExercise = routineModel?.exercises?.first else { return }
-        routineExercise.stallStateValue = StallState(consecutiveMisses: 3, lastWeightKg: 80)
+        routineExercise.stallStateValue = StallState(consecutiveMisses: 1, lastWeightKg: 80)
         store.save()
     }
 
-    @Test("a deload suggestion appears with 3 stalls on 2 main lifts")
+    @Test("a deload suggestion appears with 2 stalls on 2 main lifts")
     func suggestionAppearsWithTwoStalledLifts() throws {
         let store = try makeStore()
         stalledLift(store, name: "Bench Press")

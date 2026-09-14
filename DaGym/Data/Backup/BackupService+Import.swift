@@ -142,7 +142,7 @@ extension BackupService {
     ) {
         let seeded = baseline.values(for: item.seedID)
         if item.isFavorite { model.isFavorite = true }
-        if item.restSeconds != seeded.restSeconds { model.restSeconds = item.restSeconds }
+        if item.restSeconds != 0 { model.restSeconds = item.restSeconds }
         if item.incrementKg != seeded.incrementKg { model.incrementKg = item.incrementKg }
         if item.barType != seeded.barType { model.barType = item.barType }
         if model.notes.isEmpty { model.notes = item.notes }
@@ -389,15 +389,24 @@ extension BackupService {
         row.updatedAt = item.updatedAt
     }
 
-    /// A lazily-created row the user never filled in: no JSON, or JSON with no day entries.
-    private static func isBlank(_ model: ScheduleModel) -> Bool {
+    /// A lazily-created row the user never filled in, or one they emptied again: no JSON, or
+    /// JSON with no day entries. An empty `WeeklySchedule` encodes as
+    /// `{"dayRoutines":[],"dateOverrides":{}}` — the overrides map is a dictionary, so an
+    /// empty dictionary value counts as blank too.
+    static func isBlank(_ model: ScheduleModel) -> Bool {
         let trimmed = model.scheduleJSON.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty || trimmed == "{}" || trimmed == "[]" { return true }
         guard let data = trimmed.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: data) else { return false }
         if let dictionary = object as? [String: Any] {
-            return dictionary.values.allSatisfy { ($0 as? [Any])?.isEmpty ?? false }
+            return dictionary.values.allSatisfy(isEmptyCollection)
         }
         return (object as? [Any])?.isEmpty ?? false
+    }
+
+    private static func isEmptyCollection(_ value: Any) -> Bool {
+        if let array = value as? [Any] { return array.isEmpty }
+        if let dictionary = value as? [String: Any] { return dictionary.isEmpty }
+        return false
     }
 }

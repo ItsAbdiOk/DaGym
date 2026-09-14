@@ -94,11 +94,17 @@ struct ScheduleView: View {
     private var footnote: some View {
         Text(footnoteText)
             .font(DGFont.footnote)
-            .foregroundStyle(syncProblem == nil ? DGColor.ink4 : DGColor.danger)
+            .foregroundStyle(syncProblemMessage == nil ? DGColor.ink4 : DGColor.danger)
+    }
+
+    /// This screen's own sync result first; otherwise what the last launch / foreground sync
+    /// recorded on `CalendarSyncCoordinator.status` (`@Observable`, so `body` tracks it).
+    private var syncProblemMessage: String? {
+        syncProblem ?? CalendarSyncCoordinator.status.problemMessage
     }
 
     private var footnoteText: String {
-        if let syncProblem { return syncProblem }
+        if let syncProblemMessage { return syncProblemMessage }
         return preferences.calendarSyncEnabled
             ? "Synced to your \"DaGym\" calendar."
             : "Turn on calendar sync in Settings → Calendar to keep these sessions on your calendar."

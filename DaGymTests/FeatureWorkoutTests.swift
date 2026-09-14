@@ -271,4 +271,21 @@ struct FeatureWorkoutTests {
         // Never smaller than the lightest pair an lb rack can build.
         #expect(abs(WeightUnit.lb.display(kg: KeypadStep.kg(0.5, unit: .lb)) - 2.5) < 0.01)
     }
+
+    @Test("the set-row ± steppers move by the same snapped step as the keypad")
+    func setRowSteppersSnapForLbLifters() {
+        // Raw 2.5 kg walked a lb lifter 135 → 140.5 → 146; the keypad on the same set moved by 5.
+        #expect(abs(WeightUnit.lb.display(kg: SetRow.weightStepKg(2.5, unit: .lb)) - 5) < 0.01)
+        #expect(SetRow.weightStepKg(2.5, unit: .kg) == 2.5)
+    }
+
+    @Test("a bodyweight keypad keeps the 0.5 lb fine step instead of snapping to plates")
+    func bodyweightKeypadKeepsFineStep() {
+        let fine = WeightUnit.lb.toKg(0.5)
+        let unsnapped = WeightUnit.lb.display(kg: KeypadStep.kg(fine, unit: .lb, snapToPlates: false))
+        #expect(abs(unsnapped - 0.5) < 0.01)
+        // Logging a set still snaps.
+        let snapped = WeightUnit.lb.display(kg: KeypadStep.kg(fine, unit: .lb, snapToPlates: true))
+        #expect(abs(snapped - 2.5) < 0.01)
+    }
 }

@@ -50,9 +50,20 @@ public enum TrainingConstants {
     /// lighter than the bar (a 12 kg dumbbell can't be "rounded onto" a 20 kg bar).
     public static let defaultStepKg = 2.5
 
-    /// The most any rule may add in one session as a fraction of the previous load (a plate
-    /// grid can still force one grid step); explicit deloads are exempt.
+    /// The most any rule may add in one session as a fraction of the previous load; explicit
+    /// deloads are exempt. A grid step may still exceed it — a 12 kg dumbbell has nothing
+    /// between it and 14 — but only within `maxGridStepIncrements`; a coarser rung is a hold.
     public static let maxSessionIncreaseFraction = 0.10
+
+    /// How many of the rule's own increments the next loadable rung may be past the current
+    /// load before the engine holds rather than prescribes it (`RuleContext.oversizedRung`).
+    /// The fraction alone can't draw this line: 6 → 8 kg dumbbells (+33 %) is an ordinary step
+    /// and must stay allowed, while 40 → 70 kg on a rack of 25s and 10s (+75 %) is what the cap
+    /// exists to stop. Measured against the increment, a 2 kg dumbbell step is under one
+    /// increment and the 30 kg rung is twelve; a rack of 20s and 10s at 60 kg (→ 80, eight
+    /// increments) holds too. Two increments (an empty bar with only 2.5 kg plates, 20 → 25) and
+    /// an AMRAP double-increment session both fall inside the line.
+    public static let maxGridStepIncrements = 4.0
 
     /// RPE-based rule: the most the load may move in one session, as a fraction of the previous
     /// load, whatever the raw e1RM arithmetic says (a single "@5 → @10" pair allows +14 %).
@@ -101,20 +112,20 @@ public enum TrainingConstants {
 
     /// Deload detection thresholds (plan.md §7).
     ///
-    /// `DeloadDetector` is fed `StallState.consecutiveMisses` as the app persists it, and that
-    /// number cannot reach `linearMissesBeforeDeload`. Two things cap it: the persisted counter
-    /// lags a session (`WorkoutStore.finish` commits the judgement `startWorkout` already
-    /// computed, so the session just logged has not been judged yet), and every rule that
-    /// counts misses zeroes the counter on the miss that trips its own deload. The reachable
-    /// persisted values are therefore {0, 1, 2} for linear, double progression and timed,
-    /// {0, 1} for linear + AMRAP (`amrapMissesBeforeReset` is 2), and always 0 for
-    /// RPE / training-max / bodyweight / assisted, which never increment it at all.
+    /// `DeloadDetector` is fed `StallState.consecutiveMisses` as the engine judges it *now* —
+    /// `WorkoutStore+Coach.swift` re-runs the engine over current history so the newest logged
+    /// session is counted (the persisted copy lags one session; see `coachStalledLiftMisses`).
+    /// Even so the number cannot reach `linearMissesBeforeDeload`: every rule that counts misses
+    /// zeroes the counter on the miss that trips its own deload, so the reachable values are
+    /// {0, 1, 2} for linear, double progression and timed, {0, 1} for linear + AMRAP
+    /// (`amrapMissesBeforeReset` is 2), and always 0 for RPE / training-max / bodyweight /
+    /// assisted, which never increment it at all.
     ///
     /// 3 was consequently dead: no lift ever reached it, so the stall arm of
     /// `DeloadDetector.stallReasons` — and `CoachLiftSnapshot.drivesDeloadSuggestion`, which
     /// shares this constant — could never fire. 2 is the top of the reachable range and means
-    /// what a deload suggestion should mean: two sessions judged short at the same weight, with
-    /// the engine's own deload as the next prescription. Requiring `deloadMinLiftsStalling` of
+    /// what a deload suggestion should mean: two sessions in a row judged short at the same
+    /// weight, one more miss from the engine's own deload. Requiring `deloadMinLiftsStalling` of
     /// them keeps it a programme-wide signal rather than one bad lift.
     public static let deloadStallCount = 2
     /// How many recent sessions `LiftSnapshot.e1rmTrend`/`rpeAtSameLoadTrend` carry for
@@ -199,35 +210,26 @@ extension TrainingConstants {
     /// Muscle coverage: at most this many gap muscles are named in one card.
     public static let coachCoverageMaxNamedMuscles = 3
 
-    /// Stalled lift: the persisted `StallState.consecutiveMisses` at which the per-lift card
-    /// fires. Deliberately *not* `linearMissesBeforeDeload`, and the arithmetic is not obvious.
+    /// Stalled lift: the `StallState.consecutiveMisses` at which the per-lift card fires — two
+    /// sessions in a row missed at the same weight, one short of `linearMissesBeforeDeload`, so
+    /// the card lands while the engine is still offering "repeat the same weight" and says
+    /// something the app hasn't yet.
     ///
-    /// `WorkoutStore.finish` commits the stall that `startWorkout` already computed for the
-    /// session being finished, so the persisted counter is always one session behind reality.
-    /// Read it precisely: **persisted `n` means `n` sessions in a row were judged as misses at
-    /// this weight, and one further session has been logged but not yet judged.** It does *not*
-    /// mean `n + 1` missed sessions — the unjudged session may well have been a hit. (The
-    /// previous wording here claimed persisted 1 meant "two sessions short of target"; it
-    /// doesn't, and the card is written on the weaker claim accordingly.)
-    ///
-    /// The reachable persisted range is 0…2 for every rule that counts misses — see
-    /// `deloadStallCount` for why — and at 2 the engine's next prescription *is already* its own
-    /// deload, so a card there only repeats a number the app is about to show anyway. 1 is
-    /// therefore the only value at which this card says something the engine hasn't: at least one
-    /// judged miss, at most one session before the automatic deload, with "repeat the same
-    /// weight" still on offer.
-    ///
-    /// Known limit of the lag, not fixed by any value of this constant: if the unjudged session
-    /// was a hit, the counter still reads 1 while the next prescription is an increase, and the
-    /// card fires saying the lift has stalled. Removing that needs the rule to also see whether
-    /// the newest session cleared its target (`CoachLiftSnapshot.consecutiveFailedSessions`
-    /// already carries exactly that, judged over real history with no lag) — a change to
-    /// `CoachRules+StalledLift`, not to this number.
+    /// The number is only honest against an **un-lagged** stall state. `WorkoutStore.finish`
+    /// commits the stall that `startWorkout` computed for the session being finished, so the
+    /// *persisted* counter is always one session behind: persisted `n` means `n` judged misses
+    /// plus one logged session not yet judged — which may have been a hit. Reading the persisted
+    /// value here (as this once did, at 1, with a `+ 1` in the copy) carded a lift after one
+    /// miss and one clean hit, while the engine's next prescription was an increase, and the
+    /// approved deload then overrode that increase. `CoachLiftSnapshot.stallState` is therefore
+    /// built by re-running the engine over current history (`WorkoutStore+Coach.swift`), which
+    /// judges the newest session too; the same snapshot feeds `DeloadDetector`, whose
+    /// `deloadStallCount` is read on the same footing.
     ///
     /// (Values of 3 and above do still occur, but only via `RuleContext.lightestLoadPrescribed`
     /// — a lift with nothing lighter on the equipment, which the card handles with no weight to
     /// suggest.)
-    public static let coachStalledLiftMisses = 1
+    public static let coachStalledLiftMisses = 2
     public static let coachStalledLiftCooldownDays = 7
 
     /// e1RM downtrend: the trailing session count the trend is judged over, and how far the most

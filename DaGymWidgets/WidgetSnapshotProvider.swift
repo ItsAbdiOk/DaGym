@@ -34,12 +34,19 @@ struct WidgetSnapshotProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<WidgetSnapshotEntry>) -> Void) {
+        let now = Date.now
         let snapshot = current()
-        let entries = Self.entries(for: snapshot, now: .now)
-        // `.after` the last midnight we have a plan for: WidgetKit comes back for a fresh timeline
-        // exactly when this one runs out of true days to show.
-        let policy: TimelineReloadPolicy = entries.last.map { .after($0.date) } ?? .never
+        let entries = Self.entries(for: snapshot, now: now)
+        let policy = Self.reloadPolicy(entryDates: entries.map(\.date), now: now)
         completion(Timeline(entries: entries, policy: policy))
+    }
+
+    /// `.after` the last midnight we have a plan for, or `.never` when the timeline has no
+    /// look-ahead — the reasoning (and the test) is on `WidgetSnapshot.reloadDate(after:now:)`,
+    /// which lives in the shared file because `DaGymTests` cannot import this target.
+    static func reloadPolicy(entryDates: [Date], now: Date) -> TimelineReloadPolicy {
+        guard let date = WidgetSnapshot.reloadDate(after: entryDates, now: now) else { return .never }
+        return .after(date)
     }
 
     /// One entry per date `WidgetSnapshot.entryDates(from:)` names — that function lives in the

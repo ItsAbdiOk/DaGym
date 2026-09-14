@@ -204,6 +204,9 @@ actor HealthKitStore: HealthStoring {
     /// which holds the observer methods (kept out of this file to stay under the file-length
     /// lint limit) — `private` is file-scoped in Swift, so a same-module extension can't see it.
     var workoutObserver: HKObserverQuery?
+    /// True while `observeWorkoutChanges` is suspended in `enableBackgroundDelivery`, so a
+    /// reentrant second call doesn't register a second query — see that method.
+    var isRegisteringWorkoutObserver = false
 
     func requestAuthorization() async throws {
         guard isAvailable else { return }

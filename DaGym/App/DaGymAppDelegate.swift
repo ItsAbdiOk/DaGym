@@ -24,6 +24,12 @@ import UserNotifications
 /// `HealthKitStore.shared` (one observer per type either way).
 @MainActor
 final class DaGymAppDelegate: NSObject, UIApplicationDelegate {
+    /// The process's one `Preferences`. `AppRootContainer` is handed this same instance (see
+    /// `DaGymApp.body`) and puts it in the SwiftUI environment, so the Settings toggles mutate
+    /// exactly what the Health observer below reads on every delivery. A private `Preferences()`
+    /// here used to be a snapshot frozen at launch: turning "Import automatically" off in Settings
+    /// changed nothing about the background observer until the next relaunch.
+    let preferences = Preferences()
     /// Kept alive for the life of the process: the observer's `onChange` holds this weakly, so a
     /// service that goes out of scope would silently stop importing.
     private var healthSync: HealthSyncService?
@@ -39,7 +45,6 @@ final class DaGymAppDelegate: NSObject, UIApplicationDelegate {
         // never calls that, and would get a banner over their own workout screen.
         UNUserNotificationCenter.current().delegate = RestNotificationDelegate.shared
         RestActivityController.endStaleActivitiesAtLaunch()
-        let preferences = Preferences()
         guard let store = ContainerProvider.shared.store(cloudKitEnabled: preferences.iCloudSyncEnabled)
         else { return true }
         let sync = HealthSyncService(workoutStore: store, preferences: preferences)

@@ -16,7 +16,7 @@ struct DaGymApp: App {
             if let route = DebugRoute.fromLaunchArguments {
                 DebugRootView(route: route)
             } else {
-                AppRootContainer()
+                AppRootContainer(preferences: appDelegate.preferences)
             }
         }
     }
@@ -36,18 +36,17 @@ struct AppRootContainer: View {
     // Mirrors `preferences.hasCompletedOnboarding` in `@State` so finishing onboarding is
     // guaranteed to invalidate this view. `preferences` is a plain `let`: reading its properties
     // from `body` only reliably drives a re-render while this struct's own identity is stable,
-    // and `AppRootContainer` can be re-initialized (a fresh `Preferences()`) by its parent scene,
-    // which would otherwise leave onboarding stuck showing its last screen after `onComplete`.
+    // and `AppRootContainer` can be re-initialized by its parent scene, which would otherwise
+    // leave onboarding stuck showing its last screen after `onComplete`.
     // The container itself is not stored here for the same reason: `ContainerProvider.shared`
     // resolves it once, so a re-init never opens a second container on the same store files.
     @State private var hasCompletedOnboarding: Bool
 
-    init() {
+    /// `preferences` is the app delegate's instance — the one process-wide `Preferences`, so the
+    /// HealthKit background observer and the scenes read and write the same object.
+    init(preferences: Preferences) {
         if LaunchFlags.isUITesting {
             UIView.setAnimationsEnabled(false)
-        }
-        let preferences = Preferences()
-        if LaunchFlags.isUITesting {
             // `-dgUITest` alone should land existing smoke tests straight on the tab bar;
             // `-dgUITest -dgOnboarding` resets onboarding so `testOnboardingCompletes` always
             // starts fresh, regardless of what a previous simulator run left in UserDefaults.
@@ -139,7 +138,6 @@ struct AppRootContainer: View {
             .environment(healthInsights)
             .modelContainer(container)
             .preferredColorScheme(preferences.appearance.colorScheme)
-            .task { healthSync.bind(to: store) }
         }
     }
 
@@ -162,16 +160,20 @@ struct AppRootContainer: View {
         // A second iCloud device imports the first one's seeded rows after launch; fold those
         // as they land. Kept in `phase` so the observer lives as long as the store does.
         let deduper = store.startRemoteChangeDedupe()
+        let healthSync = HealthSyncService(workoutStore: store, preferences: preferences)
+        let healthInsights = HealthInsightsService(workoutStore: store, preferences: preferences)
+        // Both finish hooks are wired *before* the stale-workout purge below: it auto-finishes
+        // forgotten sessions through `finish(session:)`, and a session finished before the
+        // hooks existed never reached Apple Health or rescheduled the streak/recap reminders.
+        healthSync.bind(to: store)
+        TrainingNotificationScheduler().bind(store: store, preferences: preferences)
         // Workouts left open for more than a day are cleared out before `RootView` offers to
         // resume anything newer. Nothing logged is destroyed: one with completed sets in it is
         // auto-finished at its own last set, and only an empty shell is deleted — see
         // `purgeUnfinished(olderThan:)`.
         store.purgeUnfinished(olderThan: Date().addingTimeInterval(-24 * 60 * 60))
-        let healthSync = HealthSyncService(workoutStore: store, preferences: preferences)
-        let healthInsights = HealthInsightsService(workoutStore: store, preferences: preferences)
-        TrainingNotificationScheduler().bind(store: store, preferences: preferences)
         // Background delivery is registered in `DaGymAppDelegate` instead — a HealthKit
-        // background launch renders no scenes, so this `.task` would never run on exactly the
+        // background launch renders no scenes, so a `.task` would never run on exactly the
         // launches that need it.
         phase = .ready(store, healthSync, healthInsights, deduper)
     }

@@ -198,6 +198,10 @@ struct RuleContext {
     /// capped at `maxSessionIncreaseFraction` — the grid's single step always wins,
     /// so a 12 kg dumbbell can still go to 14. An unloaded (0 kg) start has no
     /// fraction to cap by, so the first load is the increment itself.
+    ///
+    /// Callers must ask `oversizedRung` first: "the single step wins" is only safe while that
+    /// step is a step. On a rack of 25s and 10s the step above 40 kg is 70, and this would
+    /// hand back +75 % as if it were the capped answer.
     func increased(_ current: Double, by incrementKg: Double) -> Double {
         let oneStep = grid.nearestAbove(current)
         let candidate = rounded(current + incrementKg)
@@ -205,6 +209,41 @@ struct RuleContext {
         guard current > 0.001 else { return raised }
         let cap = roundedDown(current * (1 + TrainingConstants.maxSessionIncreaseFraction))
         return min(raised, max(oneStep, cap))
+    }
+
+    /// The next loadable rung above `current` when it is too big a jump to prescribe: past the
+    /// `maxSessionIncreaseFraction` cap *and* more than `maxGridStepIncrements` of the rule's own
+    /// increment away. Nil when `increased` can be trusted — including at the top of the rack,
+    /// where there is no rung and `increased` already answers "repeat".
+    func oversizedRung(above current: Double, by incrementKg: Double) -> Double? {
+        guard current > 0.001, incrementKg > 0 else { return nil }
+        let oneStep = grid.nearestAbove(current)
+        let jump = oneStep - current
+        guard jump > 0.001 else { return nil }
+        let cap = roundedDown(current * (1 + TrainingConstants.maxSessionIncreaseFraction))
+        guard oneStep > cap + 0.001 else { return nil }
+        return jump > incrementKg * TrainingConstants.maxGridStepIncrements ? oneStep : nil
+    }
+
+    /// The hold for a hit whose next rung is oversized (`oversizedRung`): same weight, streak
+    /// cleared (the session was a hit), and a reason that names the rung and the gap so the
+    /// lifter knows it is the equipment, not the engine, saying stay.
+    func oversizedRungHold(
+        current: Double, rung: Double, summary: String, stall: StallState, baselineDate: Date?
+    ) -> Prescribed {
+        let jump = rung - current
+        let percent = Int((jump / current * 100).rounded())
+        let reason = PrescriptionReason(
+            title: "Repeat \(formatted(kg: current))",
+            body: "You hit \(summary) last session, but the next weight this equipment can load is "
+                + "\(formatted(kg: rung)) — +\(formatted(kg: jump)), \(percent) % more — too big a jump for "
+                + "one session. Add smaller plates, or repeat and add reps.",
+            kind: .repeat
+        )
+        return ProgressionEngine.prescribedResult(
+            self, weightKg: current, reason: reason,
+            stall: stall.advancing(misses: 0, weightKg: current), baselineDate: baselineDate
+        )
     }
 
     /// Clamps a deload candidate onto the grid between its lightest positive load and

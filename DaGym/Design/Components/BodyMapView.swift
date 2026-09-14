@@ -32,6 +32,7 @@ struct BodyMapView: View {
     var onTap: ((Muscle) -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
     @Environment(Preferences.self) private var preferences
 
     /// One drawable region of the figure: `muscle` is nil for parts that aren't one of our
@@ -121,8 +122,17 @@ struct BodyMapView: View {
             return DGColor.hitSteps[min(3, max(0, idx))]
         case .recovery:
             let idx = Int((value * 4).rounded())
-            return DGColor.recovery[min(4, max(0, idx))]
+            return recoveryRamp[min(4, max(0, idx))]
         }
+    }
+
+    /// `DGColor.recovery` unless the system's "Differentiate Without Color" setting or the
+    /// user's own `Preferences.colorBlindHeatmaps` toggle asks for the colour-blind-safe ramp.
+    private var recoveryRamp: [Color] {
+        DGColor.recoveryRamp(
+            differentiateWithoutColor: differentiateWithoutColor,
+            colorBlindHeatmaps: preferences.colorBlindHeatmaps
+        )
     }
 
     private var accessibilityDescription: String { BodyMapAccessibility.label(intensity: intensity) }

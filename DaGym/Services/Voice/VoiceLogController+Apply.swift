@@ -115,9 +115,11 @@ extension VoiceLogController {
 
     /// Speaks a short confirmation via `AVSpeechSynthesis`. Callers already checked
     /// `Preferences.voiceSpeakBackOnHeadphones`; this only gates on the route — silent unless
-    /// audio is currently going to headphones/AirPods.
+    /// audio was going to headphones/AirPods when the turn's mic opened
+    /// (`wornOutputAtListenStart`; asking the route now, with the recording session already
+    /// torn down, can't see a Bluetooth headset's mic and would refuse every AirPods user).
     func speakBack(_ message: String) {
-        guard speaker.isRoutedToHeadphones else { return }
+        guard wornOutputAtListenStart else { return }
         speaker.speak(message)
     }
 }

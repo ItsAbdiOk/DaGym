@@ -1,6 +1,7 @@
 import Foundation
 import GymCore
 import SwiftData
+import SwiftUI
 import Testing
 import UserNotifications
 
@@ -274,6 +275,42 @@ struct ReminderPermissionStateTests {
         await state.refresh()
 
         #expect(state.isDenied)
+    }
+}
+
+/// `SettingsView.body` rebuilds `RemindersSettingsSection` on every stepper tap up there. While
+/// `permission` was a plain stored property each rebuild got a fresh, unread `.notDetermined`
+/// state and the "Notifications are off" row vanished until Settings was reopened; `@State`
+/// keeps the first instance for the life of the view.
+@MainActor
+@Suite("Reminders section state")
+struct RemindersSectionStateTests {
+    @Test("the permission state survives the section being rebuilt")
+    func permissionIsViewState() {
+        let section = RemindersSettingsSection(permission: ReminderPermissionState())
+        let permission = Mirror(reflecting: section).children.first { $0.label == "_permission" }
+        #expect(permission?.value is State<ReminderPermissionState>)
+    }
+}
+
+/// Picking a unit in the CSV preview re-parses the file. `.sheet(item:)` keys the sheet on `id`,
+/// so a re-parse that minted a new UUID dismissed the sheet and presented a new one mid-tap.
+@Suite("CSV import preview identity")
+struct FeatureImportSheetTests {
+    @Test("a re-parse keeps the pending import's identity")
+    func reparseKeepsIdentity() {
+        let preview = ImportPreview(
+            source: .strong, workouts: [], setsCount: 0, unmatchedExerciseNames: [], problems: []
+        )
+        let pending = PendingCSVImport(preview: preview, csv: "Date,Exercise")
+        var lbPreview = preview
+        lbPreview.weightUnit = .lb
+
+        let reparsed = pending.reparsed(preview: lbPreview)
+
+        #expect(reparsed.id == pending.id)
+        #expect(reparsed.csv == pending.csv)
+        #expect(reparsed.preview.weightUnit == .lb)
     }
 }
 

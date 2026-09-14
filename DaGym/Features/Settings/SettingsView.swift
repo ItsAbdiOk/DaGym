@@ -80,8 +80,8 @@ struct SettingsView: View {
     private var restTimerCard: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
             restTimerRows
-            Text("Default rest is used for any exercise that has no rest of its own. \"Off\" turns"
-                + " the rest timer off completely — no countdown, no Lock Screen alert.")
+            Text("Default rest applies to every exercise unless you set its own rest timer in"
+                + " Exercise Detail. \"Off\" turns the rest timer off completely — no countdown, no alert.")
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink4)
         }
@@ -160,8 +160,8 @@ struct SettingsView: View {
     private var calendarCard: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
             calendarRows
-            if let syncProblem {
-                Text(syncProblem).font(DGFont.footnote).foregroundStyle(DGColor.danger)
+            if let message = calendarProblemMessage {
+                Text(message).font(DGFont.footnote).foregroundStyle(DGColor.danger)
             }
         }
     }
@@ -364,6 +364,15 @@ struct TrainingGoalRow: View {
 struct SettingsDivider: View {
     var body: some View {
         Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
+    }
+}
+
+extension SettingsView {
+    /// The toggle's own sync result first; otherwise whatever the last launch / foreground
+    /// sync recorded on `CalendarSyncCoordinator.status`, which no view awaits. `status` is
+    /// `@Observable`, so reading it from `body` re-renders the calendar card when it changes.
+    fileprivate var calendarProblemMessage: String? {
+        syncProblem ?? CalendarSyncCoordinator.status.problemMessage
     }
 }
 

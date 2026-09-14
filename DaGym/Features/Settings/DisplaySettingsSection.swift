@@ -16,6 +16,8 @@ struct DisplaySettingsSection: View {
                 SettingsSectionDivider()
                 accentRow
                 SettingsSectionDivider()
+                colorBlindHeatmapsRow
+                SettingsSectionDivider()
                 appearanceRow
                 SettingsSectionDivider()
                 bodyFigureRow
@@ -52,6 +54,20 @@ struct DisplaySettingsSection: View {
         }
         .padding(.horizontal, DGSpace.s5)
         .padding(.vertical, DGSpace.s3)
+    }
+
+    /// Forces the recovery map and consistency calendar onto the blue→yellow accessible ramp
+    /// (`DGColor.recoveryAccessible`/`consistencyAccessible`) even when the system-wide
+    /// "Differentiate Without Color" setting is off — see `Preferences.colorBlindHeatmaps`.
+    private var colorBlindHeatmapsRow: some View {
+        VStack(alignment: .leading, spacing: DGSpace.s1) {
+            row(label: "Colour-blind-friendly heatmaps", isOn: colorBlindHeatmapsBinding)
+            Text("Swaps the recovery map and consistency calendar to a scale that avoids red vs. green.")
+                .font(DGFont.footnote)
+                .foregroundStyle(DGColor.ink3)
+                .padding(.horizontal, DGSpace.s5)
+                .padding(.bottom, DGSpace.s3)
+        }
     }
 
     /// System/Light/Dark, applied by whatever reads `preferences.appearance.colorScheme` further
@@ -103,6 +119,12 @@ struct DisplaySettingsSection: View {
 
     private var keepScreenAwakeBinding: Binding<Bool> {
         Binding(get: { preferences.keepScreenAwake }, set: { preferences.keepScreenAwake = $0 })
+    }
+
+    private var colorBlindHeatmapsBinding: Binding<Bool> {
+        Binding(
+            get: { preferences.colorBlindHeatmaps }, set: { preferences.colorBlindHeatmaps = $0 }
+        )
     }
 
     private var lockPhotosBinding: Binding<Bool> {

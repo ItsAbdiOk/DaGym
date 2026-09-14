@@ -117,9 +117,12 @@ extension WorkoutStore {
         name: String, primary: [Muscle], equipment: String, style: ExerciseInfo.LoggingStyle,
         isPerSide: Bool = false, barType: String? = nil
     ) -> ExerciseInfo {
+        // `restSeconds: 0` means "use Settings → Default rest"; the lifter can override it per
+        // exercise from Exercise Detail.
         let model = ExerciseModel(
             name: name, primaryMuscles: primary.map(\.rawValue), equipment: equipment,
-            loggingStyle: style.rawKey, isPerSide: isPerSide, isCustom: true, barType: barType
+            loggingStyle: style.rawKey, isPerSide: isPerSide, isCustom: true, barType: barType,
+            restSeconds: 0
         )
         context.insert(model)
         save()

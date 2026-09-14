@@ -186,9 +186,11 @@ enum PlanNumber {
         return min(value, PlanLimits.maxIncrementKg)
     }
 
-    /// A rest default in seconds: negative falls back to the app default, absurd is capped.
+    /// A rest default in seconds. 0 is a real value — "use the app's default rest" — and passes
+    /// through, so a shared exercise keeps "Default" rather than becoming a 150 s override.
+    /// Negative falls back to 0 (the same "Default"), absurd is capped.
     static func rest(_ value: Int) -> Int {
-        guard value > 0 else { return 150 }
+        guard value >= 0 else { return 0 }
         return min(value, PlanLimits.maxRestSeconds)
     }
 }

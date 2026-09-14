@@ -140,10 +140,10 @@ struct HealthImportTombstoneTests {
         #expect(!store.isIgnoredHealthWorkout(healthKitID: sample.uuid))
     }
 
-    // MARK: - Observer ordering
+    // MARK: - Observer
 
-    @Test("the observer's completion handler is only signalled after the import has landed")
-    func observerCompletesAfterTheImport() async throws {
+    @Test("a Health change delivered to the registered observer imports the new session")
+    func observerImportsOnDelivery() async throws {
         let store = try makeStore()
         let preferences = Preferences(suite: makeSuite(#function))
         preferences.healthImportWorkouts = true
@@ -156,14 +156,30 @@ struct HealthImportTombstoneTests {
         let registered = await health.workoutObserverRegistered
         #expect(registered)
 
-        // `triggerWorkoutChange` awaits the handler and only then marks the completion handler
-        // as called — the contract `HealthKitStore.observeWorkoutChanges` now implements. The
-        // import must therefore already be in the store when it returns.
         let fired = await health.triggerWorkoutChange()
         #expect(fired)
         #expect(store.importedHealthWorkouts().count == 1)
-        let completed = await health.completionCalledAfterPull
-        #expect(completed)
+    }
+
+    /// There is no way to un-register a live `HKObserverQuery`, so the toggles have to be
+    /// re-read on every delivery. Before that, the observer kept importing until the next
+    /// relaunch after "Import automatically" was switched off.
+    @Test("turning automatic import off after registration stops the observer importing")
+    func observerHonoursAToggleFlippedAfterRegistration() async throws {
+        let store = try makeStore()
+        let preferences = Preferences(suite: makeSuite(#function))
+        preferences.healthImportWorkouts = true
+        preferences.healthAutoImportWorkouts = true
+        let health = FakeHealthStore()
+        await health.setExternalWorkoutsToReturn([external("hk-observer-2")])
+        let sync = HealthSyncService(healthStore: health, workoutStore: store, preferences: preferences)
+        await sync.startObservingHealthChanges()
+
+        preferences.healthAutoImportWorkouts = false
+        let fired = await health.triggerWorkoutChange()
+
+        #expect(fired)
+        #expect(store.importedHealthWorkouts().isEmpty)
     }
 
     @Test("the background observer is not registered until the user opts into automatic import")

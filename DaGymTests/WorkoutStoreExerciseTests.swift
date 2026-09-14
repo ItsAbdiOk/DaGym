@@ -41,7 +41,8 @@ struct WorkoutStoreExerciseTests {
         let created = store.createCustomExercise(
             name: "Incline Press", primary: [.chest], equipment: "Barbell", style: .weightReps
         )
-        #expect(created.restSeconds == 150)
+        // 0 = "use Settings → Default rest" until the lifter picks a rest of its own.
+        #expect(created.restSeconds == 0)
 
         store.updateExerciseSettings(id: created.id, restSeconds: 120, barType: "ezBar", incrementKg: 1.25)
 

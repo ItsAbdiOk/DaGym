@@ -114,12 +114,23 @@ private struct HeatmapCard: View {
     @Binding var shadeBySets: Bool
     @Binding var selectedCell: DayCell?
 
+    @Environment(Preferences.self) private var preferences
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
+
     private static let squareSize: CGFloat = 10
     private static let spacing: CGFloat = 3
-    private static let ramp: [Color] = [
+    private static let defaultRamp: [Color] = [
         DGColor.surface3, DGColor.coral.opacity(0.22), DGColor.coral.opacity(0.46),
         DGColor.coral.opacity(0.72), DGColor.coral
     ]
+
+    /// `defaultRamp` unless the system's "Differentiate Without Color" setting or the user's own
+    /// `Preferences.colorBlindHeatmaps` toggle asks for `DGColor.consistencyAccessible`.
+    private var ramp: [Color] {
+        differentiateWithoutColor || preferences.colorBlindHeatmaps
+            ? DGColor.consistencyAccessible
+            : Self.defaultRamp
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s4) {
@@ -182,7 +193,7 @@ private struct HeatmapCard: View {
     private func color(for cell: DayCell?) -> Color {
         guard let cell else { return .clear }
         let level = shadeBySets ? cell.level : timeLevel(for: cell)
-        return Self.ramp[min(4, max(0, level))]
+        return ramp[min(4, max(0, level))]
     }
 
     /// A lightweight local quantile ramp for minutes — mirrors `ConsistencyCalendar`'s sets ramp
@@ -197,10 +208,13 @@ private struct HeatmapCard: View {
         return 4
     }
 
+    /// "None" and "4+ Sets" bracket the ramp in text, not just colour, whichever ramp is active —
+    /// so a colour-blind lifter (or anyone squinting) can still read low vs. high without relying
+    /// on hue discrimination.
     private var legend: some View {
         HStack(spacing: DGSpace.s1) {
             Text("None").dgLabel()
-            ForEach(Array(Self.ramp.enumerated()), id: \.offset) { _, tint in
+            ForEach(Array(ramp.enumerated()), id: \.offset) { _, tint in
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
                     .fill(tint)
                     .frame(width: Self.squareSize, height: Self.squareSize)

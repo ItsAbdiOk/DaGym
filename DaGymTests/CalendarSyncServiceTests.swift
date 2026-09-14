@@ -29,7 +29,14 @@ final class FakeEventStore: EventStoring, @unchecked Sendable {
     private(set) var createCalendarCount = 0
     private var nextEventNumber = 0
 
-    func requestAccess() async throws -> CalendarAccess { access }
+    private(set) var requestAccessCount = 0
+
+    func requestAccess() async throws -> CalendarAccess {
+        requestAccessCount += 1
+        return access
+    }
+
+    func currentAccess() -> CalendarAccess { access }
 
     /// `EKEventStore.calendars(for:)` comes back empty under write-only access.
     func calendars() -> [CalendarInfo] { access == .full ? storedCalendars : [] }

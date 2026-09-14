@@ -59,7 +59,12 @@ enum CalendarSyncError: Error, Equatable {
 /// revise what you cannot look up — so DaGym asks for full access and refuses to sync without
 /// it. It still only ever reads its own "DaGym" calendar (plan.md §6.8).
 protocol EventStoring: Sendable {
+    /// Puts the system permission sheet up when the user has never been asked (or upgraded
+    /// them from "Add Events Only"). Only ever called behind an explicit action in Settings or
+    /// the Schedule screen — see `CalendarSyncCoordinator.Trigger`.
     func requestAccess() async throws -> CalendarAccess
+    /// What is granted right now, without prompting.
+    func currentAccess() -> CalendarAccess
     func calendars() -> [CalendarInfo]
     func createCalendar(named name: String) throws -> String
     /// Creates a new event when `id` is `nil`, otherwise updates the
@@ -77,7 +82,11 @@ final class EventKitStore: EventStoring, @unchecked Sendable {
 
     func requestAccess() async throws -> CalendarAccess {
         _ = try await store.requestFullAccessToEvents()
-        return Self.access(for: EKEventStore.authorizationStatus(for: .event))
+        return currentAccess()
+    }
+
+    func currentAccess() -> CalendarAccess {
+        Self.access(for: EKEventStore.authorizationStatus(for: .event))
     }
 
     /// A lifter who granted "Add Events Only" on an older build lands here as `.writeOnly`;
@@ -180,9 +189,14 @@ struct CalendarSyncService: Sendable {
     /// schedule on the 22nd erased the lifter's own calendar record of the 14th–21st. Past keys
     /// are now carried forward untouched (and simply forgotten, without deleting their events,
     /// once they age past `retentionDays`).
+    ///
+    /// `promptForAccess: false` checks what is already granted instead of asking: the launch /
+    /// foreground / midnight syncs run with nothing on screen to explain a permission sheet, so
+    /// they must never put one up.
     @discardableResult
-    func sync(_ request: ScheduleSyncRequest) async throws -> [String: String] {
-        switch try await eventStore.requestAccess() {
+    func sync(_ request: ScheduleSyncRequest, promptForAccess: Bool = true) async throws -> [String: String] {
+        let access = promptForAccess ? try await eventStore.requestAccess() : eventStore.currentAccess()
+        switch access {
         case .denied: throw CalendarSyncError.accessDenied
         case .writeOnly: throw CalendarSyncError.writeOnlyAccess
         case .full: break
@@ -300,93 +314,5 @@ struct CalendarSyncService: Sendable {
         components.hour = hour
         components.minute = 0
         return calendar.date(from: components) ?? date
-    }
-}
-
-/// The one place a calendar sync is started from. Three things were wrong with syncing straight
-/// from a view: it only ran from two settings screens (so the rolling 14-day window stopped
-/// advancing 14 days after the last edit — `syncInBackground` now also runs on launch, on every
-/// foreground and at midnight, via `RootView.refresh`); failures were swallowed by `try?` (so
-/// denied access left the toggle on and the footnote still claiming "Synced" — an `Outcome`
-/// comes back instead, and a refusal turns `calendarSyncEnabled` back off); and each screen kept
-/// its own serialising `Task` chain, so two screens could still sync concurrently over the same
-/// event ids and duplicate a week. The chain is process-wide now.
-@MainActor
-enum CalendarSyncCoordinator {
-    enum Outcome: Equatable {
-        /// `Preferences.calendarSyncEnabled` is off — nothing was attempted.
-        case disabled
-        case synced(events: Int)
-        /// Access was refused, or only "Add Events Only" was granted (which cannot be synced
-        /// correctly — see `EventStoring`). `calendarSyncEnabled` has been turned back off.
-        case denied(CalendarSyncError)
-        case failed(String)
-
-        /// What the Schedule screen's footnote should say, or nil when there is nothing to say.
-        var problemMessage: String? {
-            switch self {
-            case .disabled, .synced: nil
-            case .denied(.accessDenied):
-                "Calendar sync is off: DaGym doesn't have access to your calendars. "
-                    + "Allow Full Access in Settings → Privacy → Calendars."
-            case .denied(.writeOnlyAccess):
-                "Calendar sync is off: \"Add Events Only\" isn't enough to keep your sessions "
-                    + "up to date. Allow Full Access in Settings → Privacy → Calendars."
-            case .failed(let message): "Couldn't update your \"DaGym\" calendar: \(message)"
-            }
-        }
-    }
-
-    /// Serialises every sync in the process: two overlapping runs would read the same
-    /// `existingEventIDs` and each create its own copy of the week.
-    private static var chain: Task<Void, Never> = Task {}
-
-    @discardableResult
-    static func sync(
-        store: WorkoutStore, preferences: Preferences, eventStore: EventStoring = EventKitStore(),
-        now: Date = Date(), calendar: Calendar = .current
-    ) async -> Outcome {
-        guard preferences.calendarSyncEnabled else { return .disabled }
-        let previous = chain
-        let task = Task { @MainActor () -> Outcome in
-            await previous.value
-            return await run(
-                store: store, preferences: preferences, eventStore: eventStore, now: now,
-                calendar: calendar
-            )
-        }
-        chain = Task { _ = await task.value }
-        return await task.value
-    }
-
-    /// Fire-and-forget entry point for the places that can't await (a `View` body's lifecycle
-    /// hooks). Inert in a test process, like `WidgetSnapshotWriter.live` and
-    /// `ResetSideEffects.live`: a unit or UI test must never touch the developer's real calendar
-    /// or trigger a permission prompt.
-    static func syncInBackground(store: WorkoutStore, preferences: Preferences) {
-        guard !LaunchFlags.isTesting, preferences.calendarSyncEnabled else { return }
-        Task { await sync(store: store, preferences: preferences) }
-    }
-
-    private static func run(
-        store: WorkoutStore, preferences: Preferences, eventStore: EventStoring, now: Date,
-        calendar: Calendar
-    ) async -> Outcome {
-        let service = CalendarSyncService(eventStore: eventStore)
-        let request = ScheduleSyncRequest(
-            schedule: store.schedule(), routines: store.routines(), startDate: now,
-            defaultStartHour: preferences.scheduledStartHour,
-            existingEventIDs: store.scheduleEventIDs(), calendar: calendar
-        )
-        do {
-            let updated = try await service.sync(request)
-            store.saveScheduleEventIDs(updated)
-            return .synced(events: updated.count)
-        } catch let error as CalendarSyncError {
-            preferences.calendarSyncEnabled = false
-            return .denied(error)
-        } catch {
-            return .failed(error.localizedDescription)
-        }
     }
 }

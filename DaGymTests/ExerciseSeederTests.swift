@@ -47,10 +47,10 @@ struct ExerciseSeederTests {
         SeedState.row(in: context).exerciseSeedVersion = 0
         try context.save()
 
-        // Now seed again as if the bundled seed bumped to version 3 (its real value) — this must
+        // Now seed again as if the bundled seed bumped to version 4 (its real value) — this must
         // refresh the stale row in place, not skip it because `insertMissing` already saw the ID.
         ExerciseSeeder.seedIfNeeded(context: context)
-        #expect(SeedState.row(in: context).exerciseSeedVersion == 3)
+        #expect(SeedState.row(in: context).exerciseSeedVersion == 4)
 
         let benchPress = try #require(
             try context.fetch(FetchDescriptor<ExerciseModel>()).first {
@@ -67,6 +67,42 @@ struct ExerciseSeederTests {
         let count = try context.fetch(FetchDescriptor<ExerciseModel>()).count
         #expect(count == seededCount)
         #expect(count == 1466)
+    }
+
+    @Test("a fresh seed leaves rest at 0 so Settings → Default rest applies")
+    func freshRowsHaveNoRestOverride() throws {
+        let container = try ModelContainer.dagym(inMemory: true)
+        let context = ModelContext(container)
+
+        ExerciseSeeder.seedIfNeeded(context: context)
+        let models = try context.fetch(FetchDescriptor<ExerciseModel>())
+        #expect(models.allSatisfy { $0.restSeconds == 0 })
+    }
+
+    @Test("an existing install's unedited seeded rest migrates to 0; an edited one is kept")
+    func versionBumpMigratesUneditedRestToDefault() throws {
+        let container = try ModelContainer.dagym(inMemory: true)
+        let context = ModelContext(container)
+        ExerciseSeeder.seedIfNeeded(context: context)
+        let seed = try ExerciseSeeder.loadSeed(bundle: Bundle(for: BundleAnchor.self))
+        let benchID = "Barbell_Bench_Press_-_Medium_Grip"
+        let squatID = "Barbell_Squat"
+        let seededBenchRest = try #require(seed.exercises.first { $0.id == benchID }).restSeconds
+        let models = try context.fetch(FetchDescriptor<ExerciseModel>())
+        let bench = try #require(models.first { $0.seedID == benchID })
+        let squat = try #require(models.first { $0.seedID == squatID })
+        // What a pre-version-4 install holds: every seeded row carrying the seed's own number
+        // (bench), except the ones the lifter changed by hand (squat).
+        bench.restSeconds = seededBenchRest
+        squat.restSeconds = 240
+        SeedState.row(in: context).exerciseSeedVersion = 3
+        try context.save()
+
+        ExerciseSeeder.seedIfNeeded(context: context)
+
+        #expect(bench.restSeconds == 0)
+        #expect(squat.restSeconds == 240)
+        #expect(SeedState.row(in: context).exerciseSeedVersion == 4)
     }
 
     @Test("every seeded exercise has non-empty instructions within a sane length")

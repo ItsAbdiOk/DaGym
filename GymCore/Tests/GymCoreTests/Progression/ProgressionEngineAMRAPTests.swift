@@ -102,4 +102,18 @@ struct ProgressionEngineAMRAPTests {
         )
         #expect(result.sets.allSatisfy { $0.weightKg == 102.5 })
     }
+
+    @Test("a big AMRAP on a coarse rack holds rather than jumping to the next rung")
+    func oversizedRungHolds() {
+        // 25s and 10s: above 40 kg the rack's next load is 70. A doubled increment (5 kg) is
+        // still nowhere near a 30 kg rung.
+        let coarse = [PlateStock(weightKg: 25, count: 4), PlateStock(weightKg: 10, count: 2)]
+        let result = ProgressionEngine.prescribe(
+            rule: rule, planned: planned, history: [entry(amrapReps: 16, weightKg: 40)],
+            stall: StallState(), grid: .plates(bar: .olympic, plates: coarse, collarsKg: 0)
+        )
+        #expect(result.reason.kind == .repeat)
+        #expect(result.sets.allSatisfy { $0.weightKg == 40 })
+        #expect(result.reason.body.contains("70 kg"))
+    }
 }

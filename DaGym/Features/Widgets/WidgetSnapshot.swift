@@ -167,6 +167,18 @@ struct WidgetSnapshot: Codable, Equatable {
         return dates
     }
 
+    /// When WidgetKit should come back for a fresh timeline: the last of `dates`, but only if it
+    /// is still ahead of `now`. A timeline whose only entry is `now` (no look-ahead — a fresh
+    /// install, or a snapshot from a build that predates `days`) has nothing date-dependent in
+    /// it, and `.after(now)` is already in the past by the time WidgetKit reads it, so it
+    /// reloaded immediately and burned the daily budget on nothing. Nil means "never": the app
+    /// reloads the timeline itself when it writes a new snapshot. Lives here, not in the widget
+    /// target, so `DaGymTests` can reach it.
+    static func reloadDate(after dates: [Date], now: Date) -> Date? {
+        guard let last = dates.last, last > now else { return nil }
+        return last
+    }
+
     /// The 7 days ending on `date`, oldest first, `true` where a finished workout landed.
     static func trainedDays(_ workoutDays: [Date], endingOn date: Date, calendar: Calendar) -> [Bool] {
         (0..<7).reversed().map { offset -> Bool in

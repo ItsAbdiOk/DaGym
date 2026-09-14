@@ -16,6 +16,11 @@ struct WidgetPalette {
     var accent: Color
     var green: Color
     var inkOnAccent: Color
+    /// Fresh→spent recovery ramp, mirroring `DGColor.recovery`/`recoveryAccessible`. No widget
+    /// draws a recovery heatmap today, but this keeps the colour-blind selection logic in one
+    /// place so a future one doesn't have to re-derive it — see `DGColor.recoveryRamp` for why
+    /// these particular hexes.
+    var recoveryRamp: [Color]
 
     var inkMuted: Color { ink.opacity(0.66) }
 
@@ -26,7 +31,12 @@ struct WidgetPalette {
     ///   - accent: a `DGAccent` raw value.
     ///   - appearance: a `Preferences.Appearance` raw value; "system" defers to `systemIsDark`.
     ///   - systemIsDark: the viewer's current `colorScheme`.
-    init(accent: String, appearance: String, systemIsDark: Bool) {
+    ///   - colorBlindHeatmaps: `Preferences.colorBlindHeatmaps`, read by the caller from the App
+    ///     Group's shared defaults (the widget process can't reach `@Environment(Preferences.self)`
+    ///     or `\.accessibilityDifferentiateWithoutColor` the way the app target does). Defaults to
+    ///     `false` so existing call sites (`TodayWorkoutWidget`, `RestLiveActivity`) keep compiling
+    ///     until they're wired up to pass the real value.
+    init(accent: String, appearance: String, systemIsDark: Bool, colorBlindHeatmaps: Bool = false) {
         let isDark: Bool
         switch appearance {
         case "light": isDark = false
@@ -44,14 +54,33 @@ struct WidgetPalette {
             ? Color(red: 0x3F / 255, green: 0xCB / 255, blue: 0x8E / 255)
             : Color(red: 0x2E / 255, green: 0xA2 / 255, blue: 0x6E / 255)
         inkOnAccent = Color(red: 0x2B / 255, green: 0x0C / 255, blue: 0x07 / 255)
+        recoveryRamp = Self.recoveryRamp(colorBlind: colorBlindHeatmaps)
     }
 
-    private init(background: Color, ink: Color, accent: Color, green: Color, inkOnAccent: Color) {
+    private init(
+        background: Color, ink: Color, accent: Color, green: Color, inkOnAccent: Color,
+        recoveryRamp: [Color]
+    ) {
         self.background = background
         self.ink = ink
         self.accent = accent
         self.green = green
         self.inkOnAccent = inkOnAccent
+        self.recoveryRamp = recoveryRamp
+    }
+
+    /// `DGColor.recovery`/`recoveryAccessible`, transcribed (this target can't import `DGColor`
+    /// — see the file-level comment).
+    private static func recoveryRamp(colorBlind: Bool) -> [Color] {
+        colorBlind
+            ? [
+                Color(hex: 0x440154), Color(hex: 0x3B528B), Color(hex: 0x21918C),
+                Color(hex: 0x5EC962), Color(hex: 0xFDE725)
+            ]
+            : [
+                Color(hex: 0x3FCB8E), Color(hex: 0x9BD75E), Color(hex: 0xF2C33F),
+                Color(hex: 0xF5943A), Color(hex: 0xEE4B3C)
+            ]
     }
 
     /// `DGAccent.base(dark:)`, transcribed. Unknown raw values fall back to the brand coral, the

@@ -166,6 +166,30 @@ struct WidgetTimelineTests {
         #expect(later[4])
     }
 
+    /// `WidgetSnapshotProvider.reloadPolicy` asks WidgetKit back `.after` the last entry only
+    /// when that entry is in the future, and `.never` otherwise. This pins the input side of
+    /// that rule: a snapshot with no look-ahead (nothing written yet, or written by a build
+    /// before `days`) has exactly one entry, `now` — which is why `.after(entries.last)` was a
+    /// reload loop for it, and why the policy has to look at the date rather than the count.
+    @Test("a snapshot with no look-ahead has one entry at `now` and nothing after it")
+    func noLookAheadMeansASingleEntryAtNow() throws {
+        let now = Date()
+
+        let empty = WidgetSnapshot.empty.entryDates(from: now)
+        #expect(empty == [now])
+
+        let legacy = WidgetSnapshot(
+            routineName: "Push A", exerciseCount: 5, streakWeeks: 2,
+            trainedDays: Array(repeating: false, count: 7), updatedAt: now
+        )
+        #expect(legacy.entryDates(from: now) == [now])
+
+        // With a plan for tomorrow there is a future entry to hand WidgetKit.
+        let planned = snapshot(now: now, plans: ["Push A", "Pull B"]).entryDates(from: now)
+        #expect(planned.count == 2)
+        #expect(try #require(planned.last) > now)
+    }
+
     @Test("the streak decays once a week with no training rolls past, without the app running")
     func streakDecaysAcrossAWeekBoundary() throws {
         let calendar = Self.calendar()
@@ -187,6 +211,17 @@ struct WidgetTimelineTests {
         // open the app to work that out.
         let nextMonday = try #require(calendar.date(byAdding: .day, value: 7, to: monday))
         #expect(snapshot.resolved(on: nextMonday).streakWeeks == 0)
+    }
+
+    @Test("a timeline with no look-ahead never asks WidgetKit to reload; one with days does")
+    func reloadDateOnlyWhenThereIsALookAhead() throws {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let later = now.addingTimeInterval(24 * 60 * 60)
+
+        // `.after(now)` is already in the past when WidgetKit reads it — an immediate reload.
+        #expect(WidgetSnapshot.reloadDate(after: [now], now: now) == nil)
+        #expect(WidgetSnapshot.reloadDate(after: [], now: now) == nil)
+        #expect(WidgetSnapshot.reloadDate(after: [now, later], now: now) == later)
     }
 
     @Test("before the app has ever run the widget says so instead of claiming a rest day")

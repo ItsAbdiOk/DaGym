@@ -190,20 +190,50 @@ extension WorkoutStore {
             if let existing = byExerciseID[exercise.id], !(existing.plannedSets ?? []).isEmpty { continue }
             byExerciseID[exercise.id] = routineExercise
         }
-        // Resolved once for the whole set rather than per lift — it's a store query.
+        // Resolved once for the whole set rather than per lift — it's a store query. The
+        // per-routine `SessionFacts` the fresh stall judgement needs are cached the same way
+        // `persistProgression` caches them: one build per routine, however many lifts it has.
         let equipment = activeEquipment()
+        var factsByRoutine: [UUID: SessionFacts] = [:]
         return byExerciseID.values
             .compactMap {
                 liftSnapshot(
-                    routineExercise: $0, finishedWorkouts: finishedWorkouts, equipment: equipment
+                    routineExercise: $0, finishedWorkouts: finishedWorkouts, equipment: equipment,
+                    factsByRoutine: &factsByRoutine
                 )
             }
             .sorted { $0.name < $1.name }
     }
 
+    /// The engine's *current* judgement of this lift — the stall `startWorkout` would compute
+    /// right now, with the newest logged session counted — rather than `stallStateValue`, which
+    /// `finish` writes one session behind (`persistProgression` runs before `endedAt` is
+    /// stamped, so the session being finished is outside its own history). Fed the persisted
+    /// copy, the stalled-lift card fired after one miss and one clean hit while the engine's next
+    /// prescription was an increase, and approving it deloaded the lifter off that increase; the
+    /// `DeloadDetector` stall arm read the same stale number. See
+    /// `TrainingConstants.coachStalledLiftMisses`.
+    ///
+    /// A slot the engine doesn't judge (no rule, or excluded from progression) has nothing
+    /// fresher than the persisted state, so that is what it gets.
+    private func currentStallState(
+        routineExercise: RoutineExerciseModel, factsByRoutine: inout [UUID: SessionFacts]
+    ) -> StallState {
+        guard let routine = routineExercise.routine, let exerciseModel = routineExercise.exercise,
+              let plannedSets = routineExercise.plannedSets else { return routineExercise.stallStateValue }
+        let facts = factsByRoutine[routine.id] ?? makeSessionFacts(routineID: routine.id)
+        factsByRoutine[routine.id] = facts
+        let result = computeProgression(
+            routine: routine, routineExercise: routineExercise,
+            exerciseInfo: exerciseInfo(for: exerciseModel, facts: facts), plannedSets: plannedSets,
+            facts: facts
+        )
+        return result?.stall ?? routineExercise.stallStateValue
+    }
+
     private func liftSnapshot(
         routineExercise: RoutineExerciseModel, finishedWorkouts: [WorkoutModel],
-        equipment: ProgressionEquipment
+        equipment: ProgressionEquipment, factsByRoutine: inout [UUID: SessionFacts]
     ) -> CoachLiftSnapshot? {
         guard let exerciseModel = routineExercise.exercise else { return nil }
         let history = exerciseHistory(
@@ -237,7 +267,9 @@ extension WorkoutStore {
         return CoachLiftSnapshot(
             name: exerciseModel.name,
             exerciseID: exerciseModel.id,
-            stallState: routineExercise.stallStateValue,
+            stallState: currentStallState(
+                routineExercise: routineExercise, factsByRoutine: &factsByRoutine
+            ),
             e1rmTrend: Array(e1rms.suffix(window)),
             rpeAtSameLoadTrend: rpes.count >= 2 ? Array(rpes.suffix(window)) : nil,
             loadGrid: loadGrid(for: info, equipment: equipment),

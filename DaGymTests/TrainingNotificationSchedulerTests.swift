@@ -166,6 +166,75 @@ struct TrainingNotificationSchedulerTests {
         #expect(!calendar.isDate(fireDate, equalTo: sundayEvening, toGranularity: .weekOfYear))
     }
 
+    /// The Sunday-start twin of the guard above. With `firstWeekday == 1` Sunday *opens* a week,
+    /// so the coming Sunday's recap is for the Sun–Sat week that is under way now — comparing the
+    /// fire date's week to `now`'s week said "different week" every day but Sunday, and
+    /// Sunday-start lifters never got numbers at all.
+    @Test("Sunday-start calendar: a mid-week reschedule still carries this week's numbers")
+    func sundayStartRecapCarriesThisWeeksNumbers() throws {
+        let store = try makeStore()
+        let exercise = store.createCustomExercise(
+            name: "Bench Press", primary: [.chest], equipment: "Barbell", style: .weightReps
+        )
+        let draft = RoutineExerciseDraft(
+            exerciseID: exercise.id,
+            sets: [PlannedSetDraft(kind: .working, targetReps: 8, targetWeightKg: 60)]
+        )
+        let routineID = store.saveRoutine(id: nil, name: "Push A", exercises: [draft]).id
+        var sundayStart = calendar
+        sundayStart.firstWeekday = 1
+        // Monday 2026-09-07 at 12:00 (UTC): the week that started on Sunday the 6th.
+        let monday = try #require(
+            sundayStart.date(from: DateComponents(year: 2026, month: 9, day: 7, hour: 12))
+        )
+        let session = store.startBackfill(date: monday, durationMinutes: 40, routineID: routineID)
+        session.exercises[0].sets[0].weightKg = 60
+        session.exercises[0].sets[0].reps = 8
+        session.exercises[0].sets[0].isDone = true
+        _ = store.finish(session: session)
+        let preferences = Preferences(suite: makeSuite(#function))
+        preferences.weeklyRecapEnabled = true
+        preferences.reminderHour = 18
+        let center = FakeNotificationCenter()
+        let scheduler = TrainingNotificationScheduler(center: center, calendar: sundayStart)
+
+        scheduler.rescheduleAll(store: store, preferences: preferences, now: monday.addingTimeInterval(3_600))
+
+        let recap = try #require(center.addedRequests.first { $0.identifier == "weekly-recap" })
+        #expect(recap.content.body.hasPrefix("This week: 1 workout"))
+        let trigger = try #require(recap.trigger as? UNTimeIntervalNotificationTrigger)
+        let fireDate = monday.addingTimeInterval(3_600 + trigger.timeInterval)
+        #expect(sundayStart.component(.weekday, from: fireDate) == 1)
+        #expect(sundayStart.component(.day, from: fireDate) == 13)
+    }
+
+    /// Sunday evening on a Sunday-start calendar: the next recap fires in seven days but closes
+    /// the week that began this morning, so what it reports is this week — numbers are honest.
+    @Test("Sunday-start calendar: a Sunday-evening reschedule describes the week just begun")
+    func sundayStartRecapOnSundayEveningDescribesTheNewWeek() throws {
+        let store = try makeStore()
+        let preferences = Preferences(suite: makeSuite(#function))
+        preferences.weeklyRecapEnabled = true
+        preferences.reminderHour = 18
+        var sundayStart = calendar
+        sundayStart.firstWeekday = 1
+        let center = FakeNotificationCenter()
+        let scheduler = TrainingNotificationScheduler(center: center, calendar: sundayStart)
+        // Sunday 2026-09-13 at 19:00: today's recap has gone; the next one closes the week that
+        // only started today.
+        let sundayEvening = try #require(
+            sundayStart.date(from: DateComponents(year: 2026, month: 9, day: 13, hour: 19))
+        )
+
+        scheduler.rescheduleAll(store: store, preferences: preferences, now: sundayEvening)
+
+        let recap = try #require(center.addedRequests.first { $0.identifier == "weekly-recap" })
+        #expect(recap.content.body.hasPrefix("This week: 0 workouts"))
+        let trigger = try #require(recap.trigger as? UNTimeIntervalNotificationTrigger)
+        let fireDate = sundayEvening.addingTimeInterval(trigger.timeInterval)
+        #expect(sundayStart.component(.day, from: fireDate) == 20)
+    }
+
     // MARK: - No duplicates
 
     @Test("rescheduling twice cancels both identifiers each time, never leaving duplicates")

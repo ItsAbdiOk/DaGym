@@ -59,9 +59,10 @@ struct WorkoutStoreCoachTests {
     /// The real sequence, which is not the obvious one. `finish` commits the stall that
     /// `startWorkout` already computed for the session being finished, so the persisted counter
     /// is always one session behind: after N logged misses, N-1 of them have been judged.
-    /// `linearMissesBeforeDeload` is 3, so the persisted value only ever reaches 2 — and at 2 the
-    /// engine's next prescription is already the deload. 1 is the only value where the card says
-    /// something the engine hasn't yet.
+    /// `linearMissesBeforeDeload` is 3, so the persisted value only ever reaches 2. The coach
+    /// does not read this lagged copy — `coachInput` re-judges each lift over current history,
+    /// so its `consecutiveMisses` is the true number of logged misses, and
+    /// `coachStalledLiftMisses` (2) means "two real misses, engine still offering a repeat".
     @Test("the persisted miss counter lags a session, and tops out at 2 before the engine deloads")
     func stallCounterFollowsTheRealProgressionPath() throws {
         let store = try makeStore()

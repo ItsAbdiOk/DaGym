@@ -54,6 +54,28 @@ struct PreferencesTests {
         #expect(session.restSeconds(after: 0, set: 0) == 45)
     }
 
+    @Test("an exercise starts at 0 = 'use the default', so the setting actually governs it")
+    func exercisesFollowTheDefaultUntilOverridden() throws {
+        // `ExerciseInfo` (and every custom exercise) carries no rest of its own until the lifter
+        // picks one in Exercise Detail; the seeded value used to be 150 everywhere, which made
+        // Settings → Default rest and the training goal's 210/90 unreachable decoration.
+        let fresh = ExerciseInfo(name: "Bench Press", primary: [.chest], equipment: "Barbell")
+        #expect(fresh.restSeconds == 0)
+        #expect(fresh.restSeconds(defaultingTo: 210) == 210)
+
+        var pinned = fresh
+        pinned.restSeconds = 90
+        #expect(pinned.restSeconds(defaultingTo: 210) == 90)
+    }
+
+    @Test("Exercise Detail offers a Default choice that stores 0 and names the setting's value")
+    func exerciseDetailOffersDefaultRest() throws {
+        #expect(ExerciseDetailView.restOptions.first == 0)
+        #expect(ExerciseDetailView.restLabel(0, defaultSeconds: 210) == "Default · 3:30")
+        #expect(ExerciseDetailView.restLabel(0, defaultSeconds: 0) == "Default · Off")
+        #expect(ExerciseDetailView.restLabel(90, defaultSeconds: 210) == "1:30")
+    }
+
     @Test("an exercise with its own rest keeps it; defaultRestSeconds does not override")
     func exerciseRestWinsOverTheDefault() throws {
         let session = makeSession(restSeconds: 90)

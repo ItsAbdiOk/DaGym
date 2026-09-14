@@ -146,8 +146,11 @@ private struct OnDeckExerciseCard: View {
 
     private var footnote: String {
         let step = entry.doneCount + 1 <= entry.sets.count ? entry.doneCount + 1 : entry.sets.count
-        let rest = WorkoutSession.clock(entry.exercise.restSeconds)
-        let incrementValue = preferences.formatWeight(kg: entry.exercise.incrementKg)
+        let restSeconds = entry.exercise.restSeconds(defaultingTo: preferences.defaultRestSeconds)
+        let rest = restSeconds > 0 ? WorkoutSession.clock(restSeconds) : "off"
+        // The same snapped step the ± steppers and keypad actually move by.
+        let stepKg = SetRow.weightStepKg(entry.exercise.incrementKg, unit: preferences.weightUnit)
+        let incrementValue = preferences.formatWeight(kg: stepKg)
         let increment = "\(incrementValue) \(preferences.unitSymbol)"
         return "Set \(step) of \(entry.sets.count) · rest \(rest) · increment \(increment)"
     }

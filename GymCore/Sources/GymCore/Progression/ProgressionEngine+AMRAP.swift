@@ -45,13 +45,10 @@ extension ProgressionEngine {
         let summary = "\(amrapReps) reps on the AMRAP set (target \(target))"
         switch amrapOutcome(amrapReps: amrapReps, target: target) {
         case .double:
-            let newWeight = context.increased(
-                weightKg, by: incrementKg * TrainingConstants.amrapDoubleIncrementMultiple
-            )
-            return amrapIncrease(context, from: weightKg, to: newWeight, summary: summary, stall: stall)
+            let step = incrementKg * TrainingConstants.amrapDoubleIncrementMultiple
+            return amrapIncrease(context, from: weightKg, by: step, summary: summary, stall: stall)
         case .normal:
-            let newWeight = context.increased(weightKg, by: incrementKg)
-            return amrapIncrease(context, from: weightKg, to: newWeight, summary: summary, stall: stall)
+            return amrapIncrease(context, from: weightKg, by: incrementKg, summary: summary, stall: stall)
         case .miss:
             return linearMissForAMRAP(
                 context, weightKg: weightKg, incrementKg: incrementKg, stall: stall,
@@ -61,10 +58,17 @@ extension ProgressionEngine {
     }
 
     private static func amrapIncrease(
-        _ context: RuleContext, from weightKg: Double, to newWeight: Double, summary: String,
+        _ context: RuleContext, from weightKg: Double, by incrementKg: Double, summary: String,
         stall: StallState
     ) -> Prescribed {
-        prescribedResult(
+        if let rung = context.oversizedRung(above: weightKg, by: incrementKg) {
+            return context.oversizedRungHold(
+                current: weightKg, rung: rung, summary: summary, stall: stall,
+                baselineDate: context.baseline?.date
+            )
+        }
+        let newWeight = context.increased(weightKg, by: incrementKg)
+        return prescribedResult(
             context, weightKg: newWeight,
             reason: PrescriptionReason(
                 title: context.increaseTitle(from: weightKg, to: newWeight),

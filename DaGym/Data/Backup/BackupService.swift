@@ -57,7 +57,9 @@ enum BackupService {
     /// What a seeded exercise looked like before the user touched it. A seeded row is exported
     /// (and, on import, applied) as an override only where it differs from this, so a backup
     /// carries the user's edits and nothing else. Falls back to the library defaults for a
-    /// `seedID` the bundled seed no longer knows.
+    /// `seedID` the bundled seed no longer knows. Rest is never taken from the seed: a seeded
+    /// row's unedited rest is 0 ("use Settings → Default rest"), so any non-zero value is an
+    /// override.
     struct SeedBaseline {
         struct Values {
             var restSeconds: Int
@@ -66,13 +68,13 @@ enum BackupService {
         }
 
         private let bySeedID: [String: Values]
-        private let fallback = Values(restSeconds: 150, incrementKg: 2.5, barType: nil)
+        private let fallback = Values(restSeconds: 0, incrementKg: 2.5, barType: nil)
 
         init(bundle: Bundle = .main) {
             let seed = try? ExerciseSeeder.loadSeed(bundle: bundle)
             bySeedID = Dictionary(
                 (seed?.exercises ?? []).map {
-                    ($0.id, Values(restSeconds: $0.restSeconds, incrementKg: $0.incrementKg, barType: $0.bar))
+                    ($0.id, Values(restSeconds: 0, incrementKg: $0.incrementKg, barType: $0.bar))
                 },
                 uniquingKeysWith: { first, _ in first }
             )
@@ -84,7 +86,7 @@ enum BackupService {
 
         func isOverridden(_ model: ExerciseModel) -> Bool {
             let seeded = values(for: model.seedID)
-            return model.isFavorite || !model.notes.isEmpty || model.restSeconds != seeded.restSeconds
+            return model.isFavorite || !model.notes.isEmpty || model.restSeconds != 0
                 || model.incrementKg != seeded.incrementKg || model.barType != seeded.barType
         }
     }

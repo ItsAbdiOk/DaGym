@@ -168,6 +168,16 @@ final class Preferences {
         }
     }
 
+    /// "Colour-blind-friendly heatmaps" in Settings › Display: forces the recovery map and
+    /// consistency calendar onto `DGColor.recoveryAccessible`/`consistencyAccessible` even when
+    /// the system-wide "Differentiate Without Color" setting is off. Off by default — that
+    /// system setting already forces the accessible ramp regardless of this toggle, so this only
+    /// matters to someone who wants the safer ramp without changing an OS-wide setting that
+    /// affects every other app too.
+    var colorBlindHeatmaps: Bool {
+        didSet { defaults.set(colorBlindHeatmaps, forKey: Key.colorBlindHeatmaps) }
+    }
+
     /// Active workout: hide the last-3 strip, chips and plate line (OpenGym parity, features 24).
     var compactWorkoutLayout: Bool {
         didSet { defaults.set(compactWorkoutLayout, forKey: Key.compactWorkoutLayout) }
@@ -297,6 +307,7 @@ final class Preferences {
         trainingGoal = TrainingGoal(rawValue: suite.string(forKey: Key.trainingGoal) ?? "") ?? .general
         deloadSnoozedUntil = suite.object(forKey: Key.deloadSnoozedUntil) as? Date
         accent = DGAccent(rawValue: suite.string(forKey: Key.accent) ?? "") ?? .coral
+        colorBlindHeatmaps = Self.boolValue(suite, Key.colorBlindHeatmaps, default: false)
         DGColor.current = accent
     }
 

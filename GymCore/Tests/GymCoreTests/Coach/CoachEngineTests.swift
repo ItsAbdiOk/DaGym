@@ -146,7 +146,7 @@ struct CoachEngineTests {
     @Test("a dismissal lasts exactly its cooldown, then the card comes back")
     func dismissalExpiresOnSchedule() {
         let lift = CoachLiftSnapshot(
-            name: "Bench Press", stallState: StallState(consecutiveMisses: 1, lastWeightKg: 60),
+            name: "Bench Press", stallState: StallState(consecutiveMisses: 2, lastWeightKg: 60),
             e1rmTrend: [], loadGrid: .step(2.5), lastWorkingWeightKg: 60
         )
         let fingerprint = CoachCard.makeFingerprint(rule: .stalledLift, key: "Bench Press")

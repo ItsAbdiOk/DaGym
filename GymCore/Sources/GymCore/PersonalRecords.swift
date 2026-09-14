@@ -237,11 +237,15 @@ public enum PersonalRecords {
 
     /// Per weight, more reps than the existing record at that same weight. Weights are keyed
     /// on a 0.25 kg grid so an lb re-entry (60.0004 kg) doesn't open a second "at 60 kg" row.
+    /// Assisted sets are skipped: they carry `weightKg == 0` by convention, so counting them
+    /// banked "8 reps bodyweight" for a pull-up done with 30 kg of help — and then blocked the
+    /// real bodyweight rep PR when the lifter finally did one unassisted. Their record is
+    /// `leastAssistance`.
     private static func maxRepsAtWeightRecords(
         sets: [PerformedSet], date: Date, existing: [PersonalRecord]
     ) -> [PersonalRecord] {
         var bestRepsByWeight: [Double: Int] = [:]
-        for set in sets where set.reps >= 1 {
+        for set in sets where set.reps >= 1 && set.assistanceKg == nil {
             let key = weightKey(set.weightKg)
             let current = bestRepsByWeight[key] ?? 0
             if set.reps > current {

@@ -97,7 +97,7 @@ final class OnDeviceSpeechRecognizer: SpeechRecognizing {
         if let error {
             // A failed recognition — including the routine "no speech detected" — used to leave
             // the tap, engine and audio session live with the user's music still ducked.
-            continuation.finish(throwing: error)
+            continuation.finish(throwing: failure(for: error, hadTranscript: resources?.hasEmitted ?? false))
             finished()
             return
         }
@@ -114,6 +114,23 @@ final class OnDeviceSpeechRecognizer: SpeechRecognizing {
         )
         continuation.finish()
         finished()
+    }
+
+    /// Speech's own error domain and its "no speech detected" code — what the recognizer ends
+    /// with when the button was released with nothing said.
+    nonisolated private static let assistantErrorDomain = "kAFAssistantErrorDomain"
+    nonisolated private static let noSpeechDetectedCode = 1110
+
+    /// What a recognition error means for the turn. Ending with nothing recognised is the
+    /// ordinary "I said nothing" outcome, not a broken microphone: forwarded raw, the controller
+    /// mapped it to "audio failure" and told a lifter who simply let go early to check their
+    /// audio setup instead of "Didn't catch that". A failure after words *were* heard is a real
+    /// failure and passes through unchanged.
+    nonisolated static func failure(for error: Error, hadTranscript: Bool) -> Error {
+        let nsError = error as NSError
+        let isNoSpeech = nsError.domain == assistantErrorDomain && nsError.code == noSpeechDetectedCode
+        guard isNoSpeech || !hadTranscript else { return error }
+        return SpeechRecognitionFailure.noSpeechDetected
     }
 
     /// The recognizer's own certainty about the words it returned: the mean of

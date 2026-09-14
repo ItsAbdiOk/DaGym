@@ -182,13 +182,25 @@ final class HealthSyncService {
               preferences.healthAutoImportWorkouts else { return }
         do {
             try await healthStore.observeWorkoutChanges { [weak self] in
-                await self?.pullExternalWorkouts()
+                await self?.pullExternalWorkoutsIfAutoImportEnabled()
             }
         } catch {
             healthLogger.error(
                 "Workout observer registration failed: \(error.localizedDescription, privacy: .public)"
             )
         }
+    }
+
+    /// What the background observer runs. There is no way to un-register an `HKObserverQuery`
+    /// once it's live, so the toggles are re-read here, on every delivery, rather than only at
+    /// registration: a lifter who turns "Import automatically" (or the import itself) off must
+    /// stop getting rows in History straight away, not at the next relaunch. `preferences` is the
+    /// one instance the Settings toggles mutate (`DaGymAppDelegate.preferences`), which is what
+    /// makes this read see the flip.
+    @discardableResult
+    func pullExternalWorkoutsIfAutoImportEnabled() async -> Int {
+        guard preferences.healthImportWorkouts, preferences.healthAutoImportWorkouts else { return 0 }
+        return await pullExternalWorkouts()
     }
 
     /// A rough active-energy estimate for `syncFinishedWorkout`, using the bodyweight recorded on

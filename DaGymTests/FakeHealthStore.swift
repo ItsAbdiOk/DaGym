@@ -76,24 +76,16 @@ actor FakeHealthStore: HealthStoring {
         sharingAuthorizationToReturn = value
     }
 
-    /// Fires the registered workout observer exactly the way `HealthKitStore` does: run the
-    /// handler to completion, *then* signal HealthKit that the delivery is finished.
-    ///
-    /// The order matters — HealthKit's completion handler means "I'm done, you may suspend me",
-    /// and the old code called it before the pull's `Task` had even started. Because the handler
-    /// is `async`, this call only returns once the import has actually landed, which is what the
-    /// ordering test asserts. `completionCalledAfterPull` records whether that held.
+    /// Fires the registered workout observer's handler and waits for it to finish, the way
+    /// `HealthKitStore.deliver` does before it signals HealthKit's completion handler. Returns
+    /// false when nothing is registered. (The pull-then-complete ordering itself is pinned down
+    /// by `ServiceHealthObserverTests`, against the real `deliver`.)
     @discardableResult
     func triggerWorkoutChange() async -> Bool {
         guard let workoutOnChange else { return false }
         await workoutOnChange()
-        completionCalledAfterPull = true
         return true
     }
-
-    /// Set by `triggerWorkoutChange()` once the handler has returned — i.e. the point at which
-    /// `HealthKitStore` calls HealthKit's completion handler.
-    private(set) var completionCalledAfterPull = false
 
     func requestAuthorization() async throws {
         authorizationRequested = true

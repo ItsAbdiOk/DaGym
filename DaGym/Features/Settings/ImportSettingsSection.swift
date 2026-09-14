@@ -169,7 +169,7 @@ struct ImportSettingsSection: View {
               let preview = WorkoutImportService.preview(
                   csv: csv, store: store, assumedWeightUnit: unit
               ) else { return }
-        pendingImport = PendingCSVImport(preview: preview, csv: csv)
+        pendingImport = pending.reparsed(preview: preview)
     }
 
     private func readCSV(url: URL) async -> String? {
@@ -282,12 +282,23 @@ private struct HevyAPIKeySheet: View {
 }
 
 /// Wraps `ImportPreview` for `.sheet(item:)`, which needs `Identifiable`.
-private struct PendingCSVImport: Identifiable {
-    let id = UUID()
+/// Not private: `FeatureImportSheetTests` checks `reparsed(preview:)` keeps the sheet's identity.
+struct PendingCSVImport: Identifiable {
+    /// Explicit so a re-parse can keep it: `.sheet(item:)` keys the sheet on `id`, and a fresh
+    /// UUID on every unit pick dismissed and re-presented the sheet mid-tap.
+    var id = UUID()
     var preview: ImportPreview
     /// The file's text, kept so the preview can be re-parsed in a different weight unit. Nil for
     /// the Hevy API path, whose weights are already unambiguously kg.
     var csv: String?
+
+    /// The same pending import (same `id`, same file) with the preview from a re-parse, so the
+    /// open sheet updates in place instead of animating down and back up.
+    func reparsed(preview: ImportPreview) -> PendingCSVImport {
+        var copy = self
+        copy.preview = preview
+        return copy
+    }
 }
 
 /// Source badge, counts, unmatched exercises and problems for one parsed CSV, before the user

@@ -69,8 +69,7 @@ extension WorkoutSession {
 
     /// One exercise's rest, falling back to `defaultRestSeconds` when it carries none.
     private func rest(of exerciseIndex: Int) -> Int {
-        let own = exercises[exerciseIndex].exercise.restSeconds
-        return own > 0 ? own : defaultRestSeconds
+        exercises[exerciseIndex].exercise.restSeconds(defaultingTo: defaultRestSeconds)
     }
 
     func supersetMembers(containing exerciseIndex: Int) -> [Int] {

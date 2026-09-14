@@ -99,12 +99,17 @@ struct RecoveryMapView: View {
     }
 }
 
-/// 5-stop "FRESH … SPENT" legend row under the map.
+/// 5-stop "FRESH … RECOVERING … SPENT" legend row under the map. Text labels sit under the
+/// ramp regardless of which ramp is active, so a colour-blind lifter reading the accessible
+/// ramp (or anyone glancing quickly) never has to infer status from colour alone.
 private struct RecoveryLegend: View {
+    @Environment(Preferences.self) private var preferences
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
+
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s1) {
             HStack(spacing: 4) {
-                ForEach(Array(DGColor.recovery.enumerated()), id: \.offset) { _, color in
+                ForEach(Array(ramp.enumerated()), id: \.offset) { _, color in
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
                         .fill(color)
                         .frame(height: 6)
@@ -113,9 +118,18 @@ private struct RecoveryLegend: View {
             HStack {
                 Text("Fresh").dgLabel()
                 Spacer()
+                Text("Recovering").dgLabel()
+                Spacer()
                 Text("Spent").dgLabel()
             }
         }
+    }
+
+    private var ramp: [Color] {
+        DGColor.recoveryRamp(
+            differentiateWithoutColor: differentiateWithoutColor,
+            colorBlindHeatmaps: preferences.colorBlindHeatmaps
+        )
     }
 }
 
@@ -123,6 +137,9 @@ private struct RecoveryLegend: View {
 private struct MuscleListRow: View {
     var recovery: MuscleRecovery
     var onTap: () -> Void
+
+    @Environment(Preferences.self) private var preferences
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
 
     var body: some View {
         Button(action: onTap) {
@@ -163,7 +180,11 @@ private struct MuscleListRow: View {
 
     private var rampColor: Color {
         let index = Int((recovery.spent * 4).rounded())
-        return DGColor.recovery[min(4, max(0, index))]
+        let ramp = DGColor.recoveryRamp(
+            differentiateWithoutColor: differentiateWithoutColor,
+            colorBlindHeatmaps: preferences.colorBlindHeatmaps
+        )
+        return ramp[min(4, max(0, index))]
     }
 
     private var statusLabel: String { recovery.easesOffLabel }

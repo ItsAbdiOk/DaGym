@@ -167,6 +167,9 @@ struct TrainingCalendarTests {
         logSundaySession(store)
 
         let preferences = Preferences(suite: makeSuite(#function))
+        // Off by default (the onboarding copy promises "never nagging") — without this the
+        // scheduler never runs and the assertion below holds for any calendar at all.
+        preferences.streakRemindersEnabled = true
         preferences.weekStartsMonday = false
         preferences.weeklyGoal = 1
 
@@ -177,6 +180,14 @@ struct TrainingCalendarTests {
         scheduler.rescheduleAll(store: store, preferences: preferences, now: wednesday)
 
         #expect(center.addedRequests.contains { $0.identifier == "streak-reminder" } == false)
+
+        // Same data, Monday-start week: the Sunday session now belongs to *last* week, this
+        // week's goal is unmet and Saturday is still ahead — so a reminder is scheduled. This is
+        // what makes the assertion above mean something.
+        preferences.weekStartsMonday = true
+        scheduler.rescheduleAll(store: store, preferences: preferences, now: wednesday)
+
+        #expect(center.addedRequests.contains { $0.identifier == "streak-reminder" })
     }
 
     private final class FakeNotificationCenter: RestNotificationCenter {

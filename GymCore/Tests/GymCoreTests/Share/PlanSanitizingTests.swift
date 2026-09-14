@@ -173,7 +173,13 @@ struct PlanSanitizingTests {
             PlanExercise(id: UUID(), name: "Squat", incrementKg: -5, restSeconds: -30).sanitised()
         )
         #expect(negative.incrementKg == 2.5)
-        #expect(negative.restSeconds == 150)
+        #expect(negative.restSeconds == 0)
+
+        // 0 means "use the app's default rest" and must survive a share as exactly that.
+        let defaultRest = try #require(
+            PlanExercise(id: UUID(), name: "Squat", incrementKg: 2.5, restSeconds: 0).sanitised()
+        )
+        #expect(defaultRest.restSeconds == 0)
 
         let absurd = try #require(
             PlanExercise(

@@ -91,21 +91,37 @@ extension HealthKitStore {
     }
 
     func observeWorkoutChanges(onChange: @escaping @Sendable () async -> Void) async throws {
-        guard isAvailable, workoutObserver == nil else { return }
+        guard isAvailable, workoutObserver == nil, !isRegisteringWorkoutObserver else { return }
+        // Actors are reentrant across an `await`: the app delegate and the two Settings toggles
+        // can all call this within one `enableBackgroundDelivery` round-trip, and without this
+        // flag each of them passed the `workoutObserver == nil` check and executed its own query —
+        // two live observers, two pulls per Health change, and no way to cancel the first.
+        isRegisteringWorkoutObserver = true
+        defer { isRegisteringWorkoutObserver = false }
         try await store.enableBackgroundDelivery(for: Self.workoutType, frequency: .immediate)
         let query = HKObserverQuery(sampleType: Self.workoutType, predicate: nil) { _, completion, _ in
-            // `completion()` is HealthKit's "I'm done, you may suspend me" signal, so it has to
-            // come *after* the pull. Calling it first (as this did) let iOS suspend the app
-            // mid-fetch on a foreground delivery; never calling it at all makes iOS give up on
-            // background delivery for this type after a few strikes.
             let done = ObserverCompletion(call: completion)
-            Task {
-                await onChange()
-                done.call()
-            }
+            Self.deliver(onChange: onChange) { done.call() }
         }
         workoutObserver = query
         store.execute(query)
+    }
+
+    /// Runs one observer delivery: the pull first, then HealthKit's completion handler.
+    ///
+    /// `completion()` is HealthKit's "I'm done, you may suspend me" signal, so it has to come
+    /// *after* the pull. Calling it first (as this once did) let iOS suspend the app mid-fetch
+    /// on a foreground delivery; never calling it at all makes iOS give up on background
+    /// delivery for this type after a few strikes. Static and non-isolated so
+    /// `ServiceHealthObserverTests` can pin the ordering down without an `HKObserverQuery`.
+    @discardableResult
+    nonisolated static func deliver(
+        onChange: @escaping @Sendable () async -> Void, completion: @escaping @Sendable () -> Void
+    ) -> Task<Void, Never> {
+        Task {
+            await onChange()
+            completion()
+        }
     }
 
     /// HealthKit hands back a plain Objective-C block that carries no `Sendable` annotation,

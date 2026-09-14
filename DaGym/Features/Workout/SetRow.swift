@@ -50,13 +50,21 @@ struct SetRow: View {
     private static let swipeButtonWidth: CGFloat = 52
     private static let actionsWidth = swipeButtonWidth * 4
     private var showsSteppers: Bool { preferences.showSetSteppers }
+    private var weightStepKg: Double { Self.weightStepKg(incrementKg, unit: preferences.weightUnit) }
+
+    /// What the ± steppers move weight by: the exercise's increment, snapped to the lb plate
+    /// grid the same way the keypad's ± is. Raw kg here walked a lb lifter 135 → 140.5 → 146
+    /// (2.5 kg is 5.51 lb) while the keypad on the same set moved by a clean 5 lb.
+    static func weightStepKg(_ incrementKg: Double, unit: WeightUnit) -> Double {
+        KeypadStep.kg(incrementKg, unit: unit)
+    }
 
     private var rowContent: some View {
         HStack(spacing: showsSteppers ? DGSpace.s2 : DGSpace.s3) {
             SetKindBadge(kind: set.kind, index: badgeIndex)
             if !showsSteppers { previousGhost }
             if showsSteppers {
-                stepper(symbol: "minus", label: "Decrease weight") { onAdjustWeight(-incrementKg) }
+                stepper(symbol: "minus", label: "Decrease weight") { onAdjustWeight(-weightStepKg) }
             }
             Button(action: onTapWeight) {
                 Text(preferences.formatWeight(kg: set.weightKg))
@@ -70,7 +78,7 @@ struct SetRow: View {
                 "\(preferences.formatWeight(kg: set.weightKg)) \(preferences.weightUnit.symbol)"
             )
             if showsSteppers {
-                stepper(symbol: "plus", label: "Increase weight") { onAdjustWeight(incrementKg) }
+                stepper(symbol: "plus", label: "Increase weight") { onAdjustWeight(weightStepKg) }
                 stepper(symbol: "minus", label: "Decrease reps") { onAdjustReps(-1) }
             }
             Button(action: onTapReps) {

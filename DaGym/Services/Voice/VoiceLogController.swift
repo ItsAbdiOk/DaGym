@@ -88,6 +88,15 @@ final class VoiceLogController {
     let recognizer: any SpeechRecognizing
     let speaker: VoiceSpeechSynthesizing
 
+    /// Whether audio was going to something worn when this turn's mic opened. Sampled while the
+    /// recording session is live (see `stream()`), because that is the only time AVAudioSession
+    /// lists a Bluetooth headset's microphone among `availableInputs` — the tie-breaker
+    /// `VoiceSpeechSynthesizer.isRoutedToHeadphones` uses to tell AirPods from a gym speaker.
+    /// Read at speak-back time, which happens after `stopListening()` has put the session back
+    /// and that input has gone — asked live there, AirPods never qualified. Same file-split
+    /// convention as `state`: set here, read from `VoiceLogController+Apply.swift`.
+    var wornOutputAtListenStart = false
+
     private var listenTask: Task<Void, Never>?
     /// True between press and release. The permission prompts cancel the drag gesture holding
     /// the button, so this is how the listen task knows nobody is holding it any more.
@@ -159,6 +168,7 @@ final class VoiceLogController {
         defer { streamEnded = true }
         do {
             let events = try recognizer.startListening()
+            wornOutputAtListenStart = speaker.isRoutedToHeadphones
             for try await event in events {
                 guard !Task.isCancelled else { return }
                 switch event {

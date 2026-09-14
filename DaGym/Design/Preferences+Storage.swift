@@ -33,6 +33,7 @@ extension Preferences {
         static let trainingGoal = "trainingGoal"
         static let deloadSnoozedUntil = "deloadSnoozedUntil"
         static let accent = "accent"
+        static let colorBlindHeatmaps = "colorBlindHeatmaps"
         static let compactWorkoutLayout = "compactWorkoutLayout"
         static let showSetSteppers = "showSetSteppers"
         static let restPauseSeconds = "restPauseSeconds"

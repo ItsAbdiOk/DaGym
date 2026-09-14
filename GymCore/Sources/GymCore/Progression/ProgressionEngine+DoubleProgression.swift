@@ -27,6 +27,11 @@ extension ProgressionEngine {
         }
         let judged = plannedCount > 0 ? Array(workingSets.prefix(plannedCount)) : workingSets
         if judged.allSatisfy({ $0.reps >= high }) {
+            if let rung = context.oversizedRung(above: weightKg, by: incrementKg) {
+                return context.oversizedRungHold(
+                    current: weightKg, rung: rung, summary: summary, stall: stall, baselineDate: baseline.date
+                )
+            }
             let newWeight = context.increased(weightKg, by: incrementKg)
             return doubleProgressionResult(context, RuleOutcome(
                 weightKg: newWeight, reps: low,

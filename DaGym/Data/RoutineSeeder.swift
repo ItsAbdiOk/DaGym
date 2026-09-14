@@ -291,9 +291,16 @@ enum RoutineSeeder {
 
 extension WorkoutStore {
     /// Folds routines that share an `importedFromID` — starter routines seeded by two devices, or
-    /// the same shared plan imported twice — into the most recently edited one (by `id` on a tie,
-    /// so every device agrees). Workouts, programs and the schedule that named a removed copy are
+    /// the same shared plan imported twice — into the *oldest* one (by `id` on a tie, so every
+    /// device agrees). Workouts, programs and the schedule that named a removed copy are
     /// re-pointed at the survivor. Returns the number removed.
+    ///
+    /// Oldest, not most recently edited: the copy the user has had is the one they edited and
+    /// trained, and the other copy is always a fresh seed — a second device's first launch, or
+    /// the re-seed after a wipe that a backup restore then imports on top of. A fresh seed is
+    /// stamped `updatedAt = now`, so "newest wins" handed every one of those folds to the
+    /// pristine copy and the user's planned sets, swapped exercises and stall state went with
+    /// the tombstone. Same rule as `ExerciseSeeder.survivesFirst` and `EquipmentDedupe`.
     @discardableResult
     func dedupeRoutines() -> Int {
         let models = (try? context.fetch(FetchDescriptor<RoutineModel>())) ?? []
@@ -322,7 +329,7 @@ extension WorkoutStore {
     }
 
     private static func routineSurvivesFirst(_ lhs: RoutineModel, _ rhs: RoutineModel) -> Bool {
-        if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
+        if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
         return lhs.id.uuidString < rhs.id.uuidString
     }
 
@@ -333,7 +340,7 @@ extension WorkoutStore {
     /// left attached here; the sweep reclaims them with the tombstone once the grace period is
     /// up. Returns whether anything changed, so a settled tombstone stops counting as work.
     private func foldRoutine(_ duplicate: RoutineModel, into survivor: RoutineModel) -> Bool {
-        let merged = mergeProgressionState(from: duplicate.exercises ?? [], into: survivor)
+        let merged = mergeProgressionState(from: duplicate, into: survivor)
         let changed = duplicate.mergedIntoID != survivor.id || merged
         // The loser's slots are left attached to the tombstone rather than deleted, exactly as
         // `ExerciseSeeder.dedupe` leaves a loser alive: they are the only record of that
@@ -345,25 +352,24 @@ extension WorkoutStore {
     }
 
     /// Carries each losing slot's engine memory (`stallJSON`, `trainingMaxKg`) onto the
-    /// survivor's slot for the same exercise, when the survivor's slot has none.
-    ///
-    /// `WorkoutStore.persistProgression` writes those two fields without touching
-    /// `RoutineModel.updatedAt`, so a device that trained five times can easily look "older"
-    /// than a device that merely renamed the routine — and used to lose every stall streak and
-    /// rolling training max to it.
+    /// survivor's slot for the same exercise: when the survivor's slot has none, or — for the
+    /// stall state — when the loser was trained more recently (`persistProgression` stamps
+    /// `updatedAt` with the session start), so the survivor being the older *row* never means
+    /// keeping the older *judgement*.
     /// Returns whether anything was actually written, so a settled tombstone stops counting as
     /// work on every remote-change pass.
     @discardableResult
-    private func mergeProgressionState(
-        from slots: [RoutineExerciseModel], into survivor: RoutineModel
-    ) -> Bool {
+    private func mergeProgressionState(from duplicate: RoutineModel, into survivor: RoutineModel) -> Bool {
         let survivorSlots = survivor.exercises ?? []
+        let loserIsNewer = duplicate.updatedAt > survivor.updatedAt
         var merged = false
-        for slot in slots {
+        for slot in duplicate.exercises ?? [] {
             guard let exerciseID = slot.exercise?.id,
                   let target = survivorSlots.first(where: { $0.exercise?.id == exerciseID })
             else { continue }
-            if target.stallJSON.isEmpty || target.stallJSON == "{}", slot.stallJSON != target.stallJSON {
+            let targetBlank = target.stallJSON.isEmpty || target.stallJSON == "{}"
+            let slotBlank = slot.stallJSON.isEmpty || slot.stallJSON == "{}"
+            if targetBlank || (loserIsNewer && !slotBlank), slot.stallJSON != target.stallJSON {
                 target.stallJSON = slot.stallJSON
                 merged = true
             }
@@ -376,23 +382,67 @@ extension WorkoutStore {
     }
 
     /// Deletes routine tombstones that have been merged for longer than
-    /// `ExerciseSeeder.tombstoneGracePeriod` and have had no slots arrive since.
+    /// `ExerciseSeeder.tombstoneGracePeriod` — but only once nothing depends on them.
+    ///
+    /// Unlike an exercise tombstone, a folded routine keeps its own slots (see `foldRoutine`),
+    /// so it is never childless by itself: every slot is dealt with here first. A slot for a
+    /// lift the survivor also has is redundant once its progression state has been merged and
+    /// is dropped. A slot for a lift the survivor does *not* have is moved across when the
+    /// tombstone was edited after the fold — a device that kept training and editing its copy
+    /// while it was offline for longer than the grace period — and dropped otherwise (it was
+    /// on the losing side of the fold and the user chose the survivor's plan). A workout still
+    /// naming the tombstone (again: a late-syncing device) holds the delete until the pass that
+    /// follows has re-pointed it. Nothing is ever cascade-deleted through the tombstone.
     private func sweepRoutineTombstones(_ models: [RoutineModel]) -> Int {
         let cutoff = Date().addingTimeInterval(-ExerciseSeeder.tombstoneGracePeriod)
+        let byID = Dictionary(models.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         var swept = 0
         for model in models {
-            // Deliberately NOT gated on being childless, unlike the exercise sweep. A folded
-            // routine keeps its own slots (the exercise fold moves children onto the survivor
-            // instead), so a childless test would never pass and every folded routine — with
-            // its slots and planned sets — would live in the store and in CloudKit forever.
-            // The grace period is what makes this safe: by then the progression has been merged
-            // and CloudKit has long delivered anything that was in flight.
             guard model.isMergedAway, let mergedAt = model.mergedAt, mergedAt < cutoff
             else { continue }
+            let survivor = model.mergedIntoID.flatMap { byID[$0] }.flatMap { $0.isMergedAway ? nil : $0 }
+            if let survivor {
+                mergeProgressionState(from: model, into: survivor)
+                retireSlots(of: model, into: survivor, editedAfterFold: model.updatedAt > mergedAt)
+            } else {
+                // The survivor is gone too (the user deleted the routine), so there is nothing
+                // to carry the slots to — but they still go one by one, not by cascade.
+                for slot in model.exercises ?? [] { context.delete(slot) }
+            }
+            // Read through the relationship, which lags the deletes and moves just made until
+            // the context processes them.
+            let remaining = (model.exercises ?? []).filter { !$0.isDeleted && $0.routine?.id == model.id }
+            guard remaining.isEmpty, !workoutsReference(routineID: model.id) else { continue }
             context.delete(model)
             swept += 1
         }
         return swept
+    }
+
+    /// Moves the tombstone's slots for lifts the survivor lacks onto the survivor when
+    /// `editedAfterFold`, and deletes every other slot individually.
+    private func retireSlots(of tombstone: RoutineModel, into survivor: RoutineModel, editedAfterFold: Bool) {
+        var survivorExerciseIDs = Set((survivor.exercises ?? []).compactMap { $0.exercise?.id })
+        var nextOrder = ((survivor.exercises ?? []).map(\.order).max() ?? -1) + 1
+        for slot in (tombstone.exercises ?? []).sorted(by: { $0.order < $1.order }) {
+            if editedAfterFold, let exerciseID = slot.exercise?.id,
+               !survivorExerciseIDs.contains(exerciseID) {
+                slot.order = nextOrder
+                slot.supersetGroup = nil
+                slot.routine = survivor
+                survivorExerciseIDs.insert(exerciseID)
+                nextOrder += 1
+            } else {
+                context.delete(slot)
+            }
+        }
+    }
+
+    private func workoutsReference(routineID: UUID) -> Bool {
+        let count = try? context.fetchCount(
+            FetchDescriptor<WorkoutModel>(predicate: #Predicate { $0.routineID == routineID })
+        )
+        return (count ?? 0) > 0
     }
 
     private func repointRoutineReferences(_ replacements: [UUID: UUID]) {

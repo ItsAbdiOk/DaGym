@@ -12,7 +12,9 @@ struct ExerciseInfo: Identifiable, Hashable {
     var secondary: [Muscle]
     var equipment: String
     var incrementKg: Double = 2.5
-    var restSeconds: Int = 150
+    /// Rest after each set, or `0` for "use the app default" (Settings → Default rest). Seeded
+    /// and custom exercises start at 0; a value here is the lifter's explicit override.
+    var restSeconds: Int = 0
     var bar: Bar? = .olympic
     var isFavorite = false
     var isCustom = false
@@ -43,7 +45,7 @@ struct ExerciseInfo: Identifiable, Hashable {
 
     init(
         id: UUID = UUID(), name: String, primary: [Muscle], secondary: [Muscle] = [],
-        equipment: String, incrementKg: Double = 2.5, restSeconds: Int = 150, bar: Bar? = .olympic,
+        equipment: String, incrementKg: Double = 2.5, restSeconds: Int = 0, bar: Bar? = .olympic,
         isFavorite: Bool = false, isCustom: Bool = false, isPerSide: Bool = false, bestE1RM: Double? = nil,
         bestSet: String? = nil, sessions: Int = 0, instructions: String = "",
         loggingStyle: LoggingStyle = .weightReps, dataSource: String = "", sourceURL: String = "",
@@ -70,6 +72,12 @@ struct ExerciseInfo: Identifiable, Hashable {
         self.licence = licence
         self.authors = authors
         self.seedID = seedID
+    }
+
+    /// The rest this exercise actually gets: its own override, or `fallback` (the lifter's
+    /// Settings → Default rest) when `restSeconds` is 0.
+    func restSeconds(defaultingTo fallback: Int) -> Int {
+        restSeconds > 0 ? restSeconds : fallback
     }
 
     /// "Chest · front delts · triceps"

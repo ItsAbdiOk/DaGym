@@ -40,13 +40,21 @@ final class ReminderPermissionState {
 /// automatically after every finished workout, but a toggle here needs an immediate reschedule
 /// too, so this section triggers one itself — and now asks for permission first.
 struct RemindersSettingsSection: View {
-    /// Injectable so `FeatureSettingsTests` can drive the granted/denied/not-determined states.
-    var permission = ReminderPermissionState()
+    /// `@State`, not a plain stored property: `SettingsView.body` rebuilds this section on every
+    /// stepper tap up there, and a stored property would hand each rebuild a fresh, unread
+    /// `.notDetermined` state — so the "Notifications are off" row vanished the moment the lifter
+    /// touched anything else in Settings, and `.task` never re-ran to bring it back.
+    @State private var permission: ReminderPermissionState
 
     @Environment(Preferences.self) private var preferences
     @Environment(WorkoutStore.self) private var store
 
     private let scheduler = TrainingNotificationScheduler()
+
+    /// Injectable so `FeatureSettingsTests` can drive the granted/denied/not-determined states.
+    init(permission: ReminderPermissionState = ReminderPermissionState()) {
+        _permission = State(initialValue: permission)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {

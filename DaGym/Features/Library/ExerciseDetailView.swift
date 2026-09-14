@@ -22,7 +22,18 @@ struct ExerciseDetailView: View {
     @State private var confirmingDelete = false
     @State private var routinesUsing: [RoutineInfo] = []
 
-    private static let restOptions = [60, 90, 120, 150, 180, 210, 240, 300]
+    /// Rest choices; `0` is "Default" — follow Settings → Default rest (and the training goal
+    /// that set it) rather than pinning this exercise to its own number.
+    static let restOptions = [0, 60, 90, 120, 150, 180, 210, 240, 300]
+
+    /// "Default · 2:30" for the follow-the-setting choice (or "Default · Off"), else the clock.
+    static func restLabel(_ seconds: Int, defaultSeconds: Int) -> String {
+        guard seconds > 0 else {
+            let fallback = defaultSeconds > 0 ? WorkoutSession.clock(defaultSeconds) : "Off"
+            return "Default · \(fallback)"
+        }
+        return WorkoutSession.clock(seconds)
+    }
 
     /// Increment choices in kg, in the lifter's unit: the standard kg microplate steps, or a
     /// lb lifter's own steps (0.5 lb up to a 25 lb jump) converted to kg — offering "5 lb" rather
@@ -94,9 +105,9 @@ struct ExerciseDetailView: View {
 
     private var settingsCard: some View {
         VStack(spacing: 0) {
-            MenuSettingsRow(label: "Rest timer", value: WorkoutSession.clock(restSeconds)) {
+            MenuSettingsRow(label: "Rest timer", value: restLabel(restSeconds)) {
                 ForEach(Self.restOptions, id: \.self) { seconds in
-                    Button(WorkoutSession.clock(seconds)) { updateRest(seconds) }
+                    Button(restLabel(seconds)) { updateRest(seconds) }
                 }
             }
             Divider().overlay(DGColor.hairline)
@@ -149,6 +160,10 @@ struct ExerciseDetailView: View {
     func toggleFavorite() {
         store.toggleFavorite(id: exercise.id)
         refresh()
+    }
+
+    private func restLabel(_ seconds: Int) -> String {
+        Self.restLabel(seconds, defaultSeconds: preferences.defaultRestSeconds)
     }
 
     private func updateRest(_ seconds: Int) {

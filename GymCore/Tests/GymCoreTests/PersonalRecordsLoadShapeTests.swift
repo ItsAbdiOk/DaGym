@@ -91,7 +91,23 @@ struct PersonalRecordsLoadShapeTests {
         let prs = PersonalRecords.evaluate(newSets: sets, existing: [], workoutDate: Self.day1)
         #expect(!prs.contains { $0.kind == .maxWeight })
         #expect(!prs.contains { $0.kind == .volume })
+        // Nor "8 reps bodyweight": that row belongs to an unassisted set, and an assisted one
+        // sitting there would block the real rep PR when the lifter first manages one alone.
+        #expect(!prs.contains { $0.kind == .maxRepsAtWeight })
         #expect(prs.contains { $0.kind == .leastAssistance && $0.value == 30 })
+    }
+
+    @Test("an assisted set never blocks the bodyweight rep PR a later unassisted set earns")
+    func assistedSetDoesNotOccupyTheBodyweightRepRow() {
+        let assisted = PersonalRecords.evaluate(
+            newSets: [set(weight: 0, reps: 8, assistance: 30, bodyweight: 80)], existing: [],
+            workoutDate: Self.day1
+        )
+        // One unassisted pull-up the following session is a rep PR at 0 kg — the only one.
+        let unassisted = PersonalRecords.evaluate(
+            newSets: [set(weight: 0, reps: 1)], existing: assisted, workoutDate: Self.day2
+        )
+        #expect(unassisted.contains { $0.kind == .maxRepsAtWeight && $0.reps == 1 && $0.weightKg == 0 })
     }
 
     @Test("less assistance raises the e1RM, so dialling help down earns the PR")

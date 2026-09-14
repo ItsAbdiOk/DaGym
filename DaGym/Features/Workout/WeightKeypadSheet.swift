@@ -147,7 +147,12 @@ struct WeightKeypadSheet: View {
         return unit.format(kg: effectiveStep)
     }
 
-    private var effectiveStep: Double { KeypadStep.kg(step, unit: unit) }
+    /// Snapped to the lb plate grid only when logging a set: a bodyweight is not loaded on a
+    /// bar, so its 0.5 lb fine step must survive (`KeypadStep.kg` would clamp it up to 2.5 lb,
+    /// leaving the sheet's ± moving five times further than the ± outside it).
+    private var effectiveStep: Double {
+        KeypadStep.kg(step, unit: unit, snapToPlates: purpose.showsPlateLine)
+    }
 
     /// The quick ± key's amount: the unit's own default increment for a weight field
     /// (2.5 kg, or 5 lb), 2.5 raw for reps — unchanged from the original quick-jump.
@@ -213,8 +218,10 @@ enum KeypadStep {
     /// rack builds), never below that. Reps and kg are untouched.
     static let poundQuantum = 2.5
 
-    static func kg(_ step: Double, unit: WeightUnit?) -> Double {
-        guard let unit, unit == .lb else { return step }
+    /// `snapToPlates: false` returns `step` untouched for a weight that isn't loaded on a bar
+    /// (a bodyweight), where the 2.5 lb floor would swallow the unit's own 0.5 lb fine step.
+    static func kg(_ step: Double, unit: WeightUnit?, snapToPlates: Bool = true) -> Double {
+        guard snapToPlates, let unit, unit == .lb else { return step }
         let pounds = max(poundQuantum, (unit.display(kg: step) / poundQuantum).rounded() * poundQuantum)
         return unit.toKg(pounds)
     }

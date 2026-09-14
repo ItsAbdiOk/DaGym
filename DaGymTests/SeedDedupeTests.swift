@@ -71,10 +71,16 @@ struct SeedDedupeTests {
             let exerciseID = try #require(slot.exercise?.id)
             #expect(survivorIDs.contains(exerciseID))
         }
-        // The remote routine was newer, so it survived; its slot now points at the original bench.
+        // The remote routine was the newer *row* — a fresh seed — so the original, the copy the
+        // user has had and may have edited, survived. The remote copy is a tombstone whose slot
+        // now points at the original bench.
         let pushA = try #require(routines.first { $0.name == "Push A" })
-        #expect(pushA.id == remoteRoutineID)
-        #expect(pushA.exercises?.first?.exercise?.seedID == "Barbell_Bench_Press_-_Medium_Grip")
+        #expect(pushA.id != remoteRoutineID)
+        let remote = try #require(
+            try context.fetch(FetchDescriptor<RoutineModel>()).first { $0.id == remoteRoutineID }
+        )
+        #expect(remote.mergedIntoID == pushA.id)
+        #expect(remote.exercises?.first?.exercise?.seedID == "Barbell_Bench_Press_-_Medium_Grip")
     }
 
     /// `ExerciseNoteModel.exerciseID` is a bare id, not a SwiftData relationship (CloudKit-legal,
@@ -118,13 +124,15 @@ struct SeedDedupeTests {
     func foldedRoutineRepointsWorkouts() throws {
         let (store, context) = try seededStore()
         let original = try #require(store.routines().first { $0.name == "Legs" })
-        let workout = WorkoutModel(title: "Legs", endedAt: Date(), routineID: original.id)
-        context.insert(workout)
+        // The other device's copy is older, so it wins the fold; the workout logged here
+        // against the local copy follows it.
         let remote = RoutineModel(
-            name: "Legs", updatedAt: Date().addingTimeInterval(60),
+            name: "Legs", createdAt: Date().addingTimeInterval(-600),
             importedFromID: RoutineSeeder.starterIDs["Legs"]
         )
         context.insert(remote)
+        let workout = WorkoutModel(title: "Legs", endedAt: Date(), routineID: original.id)
+        context.insert(workout)
         try context.save()
 
         store.dedupeSeededRows()
@@ -135,7 +143,7 @@ struct SeedDedupeTests {
     @Test("the seed version lives in the store: a stale store is refreshed even after another store seeded")
     func seedVersionIsPerStore() throws {
         let (_, freshContext) = try seededStore()
-        #expect(SeedState.row(in: freshContext).exerciseSeedVersion == 3)
+        #expect(SeedState.row(in: freshContext).exerciseSeedVersion == 4)
 
         let staleContainer = try ModelContainer.dagym(inMemory: true)
         let staleContext = ModelContext(staleContainer)
@@ -151,7 +159,7 @@ struct SeedDedupeTests {
 
         ExerciseSeeder.seedIfNeeded(context: staleContext)
         #expect(bench.instructions != "stale placeholder instructions")
-        #expect(SeedState.row(in: staleContext).exerciseSeedVersion == 3)
+        #expect(SeedState.row(in: staleContext).exerciseSeedVersion == 4)
         #expect(try staleContext.fetch(FetchDescriptor<ExerciseModel>()).count == 1466)
     }
 
@@ -352,9 +360,10 @@ struct SeedTombstoneTests {
         trainedSlot.trainingMaxKg = 142.5
         let exercise = try #require(trainedSlot.exercise)
 
-        // A newer row that only carries a rename — and its own untouched slot for the same lift.
+        // An older row that only carries a rename — and its own untouched slot for the same
+        // lift. Oldest wins the fold, so it is the survivor and the trained copy the loser.
         let renamed = RoutineModel(
-            name: "Leg Day", updatedAt: Date().addingTimeInterval(600),
+            name: "Leg Day", createdAt: Date().addingTimeInterval(-600),
             importedFromID: RoutineSeeder.starterIDs["Legs"]
         )
         context.insert(renamed)
@@ -380,7 +389,7 @@ struct SeedTombstoneTests {
         store.saveSchedule(schedule)
 
         let remote = RoutineModel(
-            name: "Legs", updatedAt: Date().addingTimeInterval(600),
+            name: "Legs", createdAt: Date().addingTimeInterval(-600),
             importedFromID: RoutineSeeder.starterIDs["Legs"]
         )
         context.insert(remote)

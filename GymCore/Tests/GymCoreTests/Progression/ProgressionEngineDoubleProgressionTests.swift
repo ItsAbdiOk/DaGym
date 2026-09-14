@@ -148,4 +148,17 @@ struct ProgressionEngineDoubleProgressionTests {
         )
         #expect(result.reason.kind == .firstTime)
     }
+
+    @Test("topping the range on a coarse rack holds at the weight instead of jumping a rung")
+    func oversizedRungHolds() {
+        let coarse = [PlateStock(weightKg: 25, count: 4), PlateStock(weightKg: 10, count: 2)]
+        let result = ProgressionEngine.prescribe(
+            rule: rule, planned: planned, history: [entry(reps: [12, 12, 12], weightKg: 40)],
+            stall: StallState(), grid: .plates(bar: .olympic, plates: coarse, collarsKg: 0)
+        )
+        #expect(result.reason.kind == .repeat)
+        #expect(result.sets.allSatisfy { $0.weightKg == 40 })
+        #expect(result.reason.body.contains("70 kg"))
+        #expect(result.stall.consecutiveMisses == 0)
+    }
 }

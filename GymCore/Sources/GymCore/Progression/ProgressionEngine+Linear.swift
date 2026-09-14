@@ -42,6 +42,12 @@ extension ProgressionEngine {
                     baselineDate: baseline.date
                 )
             }
+            if let rung = context.oversizedRung(above: baselineWeight, by: incrementKg) {
+                return context.oversizedRungHold(
+                    current: baselineWeight, rung: rung, summary: summary, stall: stall,
+                    baselineDate: baseline.date
+                )
+            }
             let newWeight = context.increased(baselineWeight, by: incrementKg)
             return prescribedResult(
                 context, weightKg: newWeight,
