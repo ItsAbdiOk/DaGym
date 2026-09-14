@@ -63,7 +63,10 @@ enum WorkoutImportService {
     static func preview(result: ImportResult, store: WorkoutStore) -> ImportPreview {
         let context = matchContext(store: store)
         let names = Set(result.workouts.flatMap { $0.exercises.map(\.name) })
-        let unmatched = names.filter { matchedExerciseID($0, context: context) == nil }.sorted()
+        let unmatched = names
+            .filter { seededExerciseID(for: $0, store: store) == nil }
+            .filter { matchedExerciseID($0, context: context) == nil }
+            .sorted()
         let setsCount = result.workouts.reduce(0) { total, workout in
             total + workout.exercises.reduce(0) { $0 + $1.sets.count }
         }
@@ -110,6 +113,14 @@ enum WorkoutImportService {
         return ParseContext(unit: .kg, library: candidates)
     }
 
+    /// The curated alias table (`GymCore.ImportAliases`) first: an export's "Bench Press
+    /// (Barbell)" or bare "Squat" names a specific seed exercise, and fuzzy matching on a
+    /// 1,466-row library can't be trusted to pick it over a near-namesake.
+    static func seededExerciseID(for name: String, store: WorkoutStore) -> UUID? {
+        guard let seedID = ImportAliases.seedID(for: name) else { return nil }
+        return store.exerciseID(seedID: seedID)
+    }
+
     /// A match has to clear the floor *and* stand clear of the runner-up
     /// (`ExerciseMatcher.isConfident`): "Incline Bench Press" against both an incline barbell
     /// and an incline dumbbell press is a coin toss, so it's left unmatched rather than guessed.
@@ -131,6 +142,10 @@ enum WorkoutImportService {
     ) -> UUID {
         let key = exercise.name.lowercased()
         if let cached = exerciseCache[key] { return cached }
+        if let seeded = seededExerciseID(for: exercise.name, store: store) {
+            exerciseCache[key] = seeded
+            return seeded
+        }
         if let matched = matchedExerciseID(exercise.name, context: context) {
             exerciseCache[key] = matched
             return matched

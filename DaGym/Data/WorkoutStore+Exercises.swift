@@ -206,3 +206,13 @@ extension WorkoutStore {
         return (try? context.fetchCount(FetchDescriptor(predicate: predicate))) ?? 0
     }
 }
+
+extension WorkoutStore {
+    /// The library exercise carrying this seed id, for the import alias table. Nil when the row
+    /// was deleted or the id isn't in this seed version.
+    func exerciseID(seedID: String) -> UUID? {
+        var descriptor = FetchDescriptor<ExerciseModel>(predicate: #Predicate { $0.seedID == seedID })
+        descriptor.fetchLimit = 1
+        return (try? context.fetch(descriptor))?.first?.id
+    }
+}
