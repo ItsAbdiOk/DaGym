@@ -38,6 +38,9 @@ struct SettingsView: View {
                     ImportSettingsSection()
                     EquipmentSettingsSection()
                     AppleHealthSettingsCard()
+                    #if DEBUG
+                    DeveloperSettingsSection()
+                    #endif
                     aboutCard
                 }
                 .padding(.horizontal, DGSpace.s4)
