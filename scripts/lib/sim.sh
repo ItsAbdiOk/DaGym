@@ -76,6 +76,14 @@ print(best[2])
 ' "$1" "${2:-}" "${3:-iOS}"
 }
 
-sim_resolve_iphone_pro() { _sim_resolve pro "" iOS; }
+# DAGYM_IPHONE_SIM=<exact device name> overrides the automatic pick — for when another job on
+# the machine already owns the newest Pro simulator and two test hosts would collide on it.
+sim_resolve_iphone_pro() {
+    if [ -n "${DAGYM_IPHONE_SIM:-}" ]; then
+        _sim_resolve name "$DAGYM_IPHONE_SIM" iOS
+    else
+        _sim_resolve pro "" iOS
+    fi
+}
 sim_resolve_by_name() { _sim_resolve name "$1" "${2:-iOS}"; }
 sim_resolve_watch() { _sim_resolve watch "${1:-}" watchOS; }
