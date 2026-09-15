@@ -67,12 +67,17 @@ xcodegen generate --quiet --project "$TMP_PROJECT" 2>/dev/null || xcodegen gener
 python3 - "$TMP_PROJECT/DaGym.xcodeproj/project.pbxproj" "$ROOT" "$TMP_PROJECT" <<'PY'
 import os, re, sys
 path, root, tmp = sys.argv[1:4]
-rel = os.path.relpath(root, tmp)
+# XcodeGen resolves the temp dir through its symlink (/var → /private/var), so the relative
+# prefix it wrote may differ from the one computed on the raw paths; fold both spellings.
+rels = {os.path.relpath(root, tmp), os.path.relpath(os.path.realpath(root), os.path.realpath(tmp))}
 text = open(path).read()
 def fold(m):
     inner = m.group(1)
     return inner if re.fullmatch(r"[A-Za-z0-9_./]+", inner) else '"%s"' % inner
-text = re.sub(r'"' + re.escape(rel) + r'/([^"]*)"', fold, text)
+for rel in rels:
+    # Quoted (any path with a space or dash) and bare (plain [A-Za-z0-9_./] paths) forms.
+    text = re.sub(r'"' + re.escape(rel) + r'/([^"]*)"', fold, text)
+    text = re.sub(r'(?<=[ =(])' + re.escape(rel) + r'/([A-Za-z0-9_./]+)', r'\1', text)
 # In-place generation omits a group's `name` when it equals its `path`; folding makes them
 # equal again (file references keep both either way).
 text = re.sub(r"name = ([^;]+);\n(\t+)path = \1;", r"path = \1;", text)
