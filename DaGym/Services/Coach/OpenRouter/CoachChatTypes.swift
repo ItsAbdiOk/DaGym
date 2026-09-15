@@ -36,6 +36,9 @@ struct CoachChatMessage: Identifiable, Codable, Equatable, Sendable {
     var isToolError = false
     /// The lifter tapped stop mid-answer; the bubble shows a "stopped" marker.
     var isStopped = false
+    /// An app-written line ("Couldn't reach OpenRouter…"), not the model's words: drawn muted
+    /// and never replayed to the model. Optional so threads archived before it existed decode.
+    var isNote: Bool?
     var sentAt: Date
 
     static func user(_ text: String, at date: Date) -> CoachChatMessage {
@@ -44,6 +47,10 @@ struct CoachChatMessage: Identifiable, Codable, Equatable, Sendable {
 
     static func assistant(_ text: String, at date: Date) -> CoachChatMessage {
         CoachChatMessage(id: UUID(), role: .assistant, text: text, sentAt: date)
+    }
+
+    static func note(_ text: String, at date: Date) -> CoachChatMessage {
+        CoachChatMessage(id: UUID(), role: .assistant, text: text, isNote: true, sentAt: date)
     }
 
     static func tool(_ name: String, at date: Date) -> CoachChatMessage {

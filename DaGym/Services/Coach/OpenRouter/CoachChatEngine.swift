@@ -104,17 +104,20 @@ final class CoachChatEngine {
                 tools: tools.isEmpty ? nil : tools, toolChoice: forceText ? "none" : nil,
                 maxTokens: configuration.maxTokens
             )
+            Self.trace("round \(round): \(request.messages.count) messages, tools \(tools.count)"
+                + (forceText ? ", text forced" : ""))
             let reply: Reply
             do {
                 reply = try await consume(request)
+                Self.trace("reply: \(reply.text.count) chars, \(reply.calls.count) tool calls "
+                    + reply.calls.map { "\($0.function.name)(\($0.function.arguments.count)b)" }
+                        .joined(separator: " "))
             } catch is CancellationError {
                 return abandonTurn(from: wireBase, stopped: true)
             } catch let error as OpenRouterError {
-                lastError = error
-                return abandonTurn(from: wireBase, stopped: false)
+                return fail(error, from: wireBase)
             } catch {
-                lastError = .network(error)
-                return abandonTurn(from: wireBase, stopped: false)
+                return fail(.network(error), from: wireBase)
             }
             wire.append(.assistant(
                 reply.text.isEmpty ? nil : reply.text, toolCalls: reply.calls.isEmpty ? nil : reply.calls
@@ -125,6 +128,29 @@ final class CoachChatEngine {
                 let content = await execute(call)
                 wire.append(.tool(callID: call.id, content: content))
             }
+        }
+    }
+
+    /// A failed round: the banner gets the typed error, and the transcript gets a line saying so
+    /// in place — a turn that ends in nothing after a row of tool chips reads as "it broke", and
+    /// the banner alone was easy to scroll past.
+    private func fail(_ error: OpenRouterError, from wireBase: Int) {
+        lastError = error
+        Self.logger.error("Coach turn failed: \(error.logDescription, privacy: .public)")
+        abandonTurn(from: wireBase, stopped: false)
+        messages.append(.note(Self.failureLine(for: error), at: clock()))
+    }
+
+    static func failureLine(for error: OpenRouterError) -> String {
+        switch error.kind {
+        case .missingKey: "No OpenRouter key is set — add one in Settings › Coach."
+        case .unauthorized: "OpenRouter rejected the key. Check it in Settings › Coach."
+        case .insufficientCredits: "The OpenRouter account is out of credit."
+        case .rateLimited: "OpenRouter is rate-limiting this key. Try again in a moment."
+        case .badRequest: "The model rejected that request. \(error.detail)"
+        case .server: "OpenRouter had a server error. Try again."
+        case .network: "Couldn't reach OpenRouter. Check the connection and try again."
+        case .decoding: "OpenRouter sent something this build couldn't read."
         }
     }
 
@@ -164,7 +190,18 @@ final class CoachChatEngine {
         // A cancelled consumer sees the stream end rather than throw; make it throw here so the
         // turn is abandoned instead of a half-reply being sent back as if it were whole.
         try Task.checkCancellation()
-        reply.calls = calls.keys.sorted().compactMap { calls[$0] }.filter { !$0.function.name.isEmpty }
+        reply.calls = calls.keys.sorted().compactMap { calls[$0] }
+            .filter { !$0.function.name.isEmpty }
+            .map { call in
+                // A tool with no parameters streams no argument fragments at all. Replaying the
+                // call with `"arguments": ""` is rejected as invalid JSON on the next round, which
+                // silently killed every turn that began with `get_profile`.
+                var call = call
+                if call.function.arguments.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    call.function.arguments = "{}"
+                }
+                return call
+            }
         return reply
     }
 
@@ -192,6 +229,16 @@ final class CoachChatEngine {
             Self.logger.notice("Tool \(name, privacy: .public) failed: \(reason, privacy: .public)")
             return Self.errorJSON(error.localizedDescription)
         }
+    }
+
+    /// `-dgCoachTrace` (Debug only) logs each round's shape — counts, tool names, argument
+    /// sizes, never message text or the key — so a silent turn can be read off `log stream`.
+    static func trace(_ line: @autoclosure () -> String) {
+        #if DEBUG
+        guard ProcessInfo.processInfo.arguments.contains("-dgCoachTrace") else { return }
+        let text = line()
+        logger.notice("trace: \(text, privacy: .public)")
+        #endif
     }
 
     static func errorJSON(_ message: String) -> String {
@@ -232,7 +279,7 @@ final class CoachChatEngine {
         messages.compactMap { message in
             switch message.role {
             case .user: .user(message.text)
-            case .assistant: message.text.isEmpty ? nil : .assistant(message.text)
+            case .assistant: message.text.isEmpty || message.isNote == true ? nil : .assistant(message.text)
             case .tool, .draft: nil
             }
         }

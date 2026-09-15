@@ -39,6 +39,26 @@ enum OpenRouterError: Error, Sendable {
         case missingKey, unauthorized, rateLimited, insufficientCredits, badRequest, server, network, decoding
     }
 
+    /// The provider's own words for a rejected request; empty for the other cases.
+    var detail: String {
+        if case .badRequest(let message) = self { return message }
+        return ""
+    }
+
+    /// One line for os.Logger — the key is never part of any case, so nothing here is secret.
+    var logDescription: String {
+        switch self {
+        case .missingKey: "missing key"
+        case .unauthorized: "unauthorized"
+        case .rateLimited(let retryAfter): "rate limited (retry after \(retryAfter ?? 0)s)"
+        case .insufficientCredits: "insufficient credits"
+        case .badRequest(let message): "bad request: \(message)"
+        case .server(let status): "server error \(status)"
+        case .network(let error): "network: \(error.localizedDescription)"
+        case .decoding: "undecodable response"
+        }
+    }
+
     /// Maps a non-2xx reply (status + decoded error message, if any) to a case.
     static func from(status: Int, message: String?, retryAfter: TimeInterval?) -> OpenRouterError {
         switch status {

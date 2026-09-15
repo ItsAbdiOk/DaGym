@@ -154,7 +154,9 @@ struct CoachChatEngineTests {
         let engine = engine(transport)
         await engine.send("Hello")
         #expect(engine.lastError?.kind == .unauthorized)
-        #expect(engine.messages.map(\.role) == [.user])
+        // The failure is written into the transcript as a note — and a note is never replayed.
+        #expect(engine.messages.map(\.role) == [.user, .assistant])
+        #expect(engine.messages.last?.isNote == true)
         await engine.send("Again")
         #expect(engine.lastError == nil)
         let second = try #require(transport.chatRequest(at: 1))

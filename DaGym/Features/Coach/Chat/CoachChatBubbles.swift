@@ -11,7 +11,12 @@ struct CoachChatMessageRow: View {
     var body: some View {
         switch message.role {
         case .user: CoachUserBubble(text: message.text)
-        case .assistant: CoachAssistantBubble(text: message.text, isStopped: message.isStopped)
+        case .assistant:
+            if message.isNote == true {
+                CoachNoteRow(text: message.text)
+            } else {
+                CoachAssistantBubble(text: message.text, isStopped: message.isStopped)
+            }
         case .tool: CoachToolChip(label: message.text, failed: message.isToolError)
         case .draft: EmptyView()
         }
@@ -157,5 +162,25 @@ struct CoachThinkingRow: View {
         .frame(minHeight: 28)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Coach is thinking")
+    }
+}
+
+/// An app-written line in the transcript — why a turn ended without a reply.
+struct CoachNoteRow: View {
+    var text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: DGSpace.s2) {
+            Image(systemName: "exclamationmark.circle")
+                .font(.system(size: 12, weight: .semibold))
+                .accessibilityHidden(true)
+            Text(text)
+                .font(DGFont.footnote)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(DGColor.warning)
+        .padding(.horizontal, DGSpace.s3)
+        .frame(minHeight: 28)
+        .accessibilityElement(children: .combine)
     }
 }
