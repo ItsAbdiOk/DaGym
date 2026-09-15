@@ -42,6 +42,8 @@ generate` again after adding or moving files, and before opening `DaGym.xcodepro
 `scripts/verify.sh` lints, runs the GymCore unit tests, and runs the app + UI test suites on
 a simulator; it's the same check the pre-push hook runs.
 
+Schema changes: `scripts/cloudkit-schema.sh` (dry run) then `--deploy`.
+
 To have the pre-push hook run automatically:
 
 ```sh

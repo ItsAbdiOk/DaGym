@@ -66,4 +66,16 @@ enum LaunchFlags {
         false
         #endif
     }
+
+    /// Whether this process was launched with `-dgInitCloudKitSchema`: the app shows nothing but
+    /// `SchemaInitStatusView`, which runs `CloudKitSchemaInitializer` against a throwaway store
+    /// and writes `Documents/schema-init.json` for `scripts/cloudkit-schema.sh` to read. The real
+    /// store, HealthKit and every other launch-time service stay untouched.
+    static var initializesCloudKitSchema: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-dgInitCloudKitSchema")
+        #else
+        false
+        #endif
+    }
 }

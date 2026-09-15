@@ -13,7 +13,10 @@ struct DaGymApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if LaunchFlags.isScreenshotting {
+            if LaunchFlags.initializesCloudKitSchema {
+                // Never reaches `AppRootContainer`, so the real store is never opened.
+                schemaInitView
+            } else if LaunchFlags.isScreenshotting {
                 ScreenshotRootView(screen: ScreenshotScreen.fromLaunchArguments)
             } else if let route = DebugRoute.fromLaunchArguments {
                 DebugRootView(route: route)
@@ -21,6 +24,15 @@ struct DaGymApp: App {
                 AppRootContainer(preferences: appDelegate.preferences)
             }
         }
+    }
+
+    @ViewBuilder
+    private var schemaInitView: some View {
+        #if DEBUG
+        SchemaInitStatusView()
+        #else
+        EmptyView()
+        #endif
     }
 }
 

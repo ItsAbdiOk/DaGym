@@ -38,8 +38,9 @@ final class DaGymAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        // Test hosts open their own in-memory containers and must not touch HealthKit.
-        guard !LaunchFlags.isTesting else { return true }
+        // Test hosts open their own in-memory containers and must not touch HealthKit; a
+        // `-dgInitCloudKitSchema` launch must not open the real store at all.
+        guard !LaunchFlags.isTesting, !LaunchFlags.initializesCloudKitSchema else { return true }
         // One delegate for the life of the process, set here rather than only inside
         // `NotificationPermission.requestIfNeeded` — a user who has already granted permission
         // never calls that, and would get a banner over their own workout screen.

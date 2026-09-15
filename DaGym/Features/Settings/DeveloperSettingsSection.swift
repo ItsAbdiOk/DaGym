@@ -1,9 +1,13 @@
 #if DEBUG
 import SwiftUI
 
+// @available(*, deprecated, message: "Use scripts/cloudkit-schema.sh instead of the probe button")
 /// Debug builds only: tools for the developer, never compiled into a release. Today that is
 /// the CloudKit schema probe — see `CloudKitSchemaProbe` for why the Development schema needs
 /// forcing before "Deploy Schema Changes" can promote every type and field to Production.
+///
+/// DEPRECATED: the probe is superseded by `scripts/cloudkit-schema.sh` (dry run, then
+/// `--deploy`), which needs no tap in the app. This section stays as a manual fallback only.
 struct DeveloperSettingsSection: View {
     @Environment(WorkoutStore.self) private var store
     @State private var probePresent = false

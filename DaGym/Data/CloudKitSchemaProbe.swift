@@ -3,6 +3,7 @@ import Foundation
 import GymCore
 import SwiftData
 
+// @available(*, deprecated, message: "Use scripts/cloudkit-schema.sh (CloudKitSchemaInitializer) instead")
 /// Debug-only rows that force every synced record type and field into the CloudKit
 /// Development schema. SwiftData creates a CloudKit record type the first time a row of it
 /// exports, and a field the first time a row carrying a non-nil value for it exports — so a
@@ -12,6 +13,11 @@ import SwiftData
 ///
 /// Usage: insert, save, wait for the export (about a minute), remove, save. The record types survive the
 /// delete; only the rows go. Every optional is populated so no field is left behind.
+///
+/// DEPRECATED: superseded by `scripts/cloudkit-schema.sh`, which launches the app with
+/// `-dgInitCloudKitSchema` (`CloudKitSchemaInitializer`) and deploys with `cktool` — no probe
+/// rows, no waiting, no console. Kept only as a manual fallback until the script has been
+/// through a real deploy; delete it (and `DeveloperSettingsSection`) after that.
 @MainActor
 enum CloudKitSchemaProbe {
     static let marker = "CloudKit schema probe"

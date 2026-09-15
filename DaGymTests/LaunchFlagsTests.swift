@@ -17,4 +17,20 @@ struct LaunchFlagsTests {
     func schemePassesTestHostFlag() {
         #expect(ProcessInfo.processInfo.arguments.contains("-dgTestHost"))
     }
+
+    /// The test host is launched without `-dgInitCloudKitSchema`, so the flag is off; and it is
+    /// `#if DEBUG` like every other launch flag — in Release the body is the literal `false`,
+    /// which `releaseBuildCompilesFlagOut` pins by mirroring the same gate.
+    @Test("-dgInitCloudKitSchema is off unless passed, and compiled out of Release")
+    func schemaInitFlagIsDebugOnly() {
+        #expect(!LaunchFlags.initializesCloudKitSchema)
+        #if DEBUG
+        #expect(
+            LaunchFlags.initializesCloudKitSchema
+                == ProcessInfo.processInfo.arguments.contains("-dgInitCloudKitSchema")
+        )
+        #else
+        #expect(!LaunchFlags.initializesCloudKitSchema)
+        #endif
+    }
 }
