@@ -127,12 +127,23 @@ enum PlanPDFRenderer {
         return "\(sets.count) × \(reps)"
     }
 
+    /// The first set's target: a weight in the lifter's unit, an RPE, or for cardio/timed work
+    /// a clock time ("20:00", not "1200s") and/or a distance in the unit that pairs with the
+    /// weight unit (km for kg lifters, miles for lb).
     static func targetText(_ exercise: PlanRoutineExercise, unit: WeightUnit) -> String {
         guard let first = exercise.sets.min(by: { $0.order < $1.order }) else { return "–" }
         if let weight = first.targetWeightKg { return "\(unit.format(kg: weight)) \(unit.symbol)" }
-        if let rpe = first.targetRPE { return "RPE \(WeightFormat.kg(rpe))" }
-        if let seconds = first.targetSeconds { return "\(seconds)s" }
-        return "–"
+        if let rpe = first.targetRPE { return "RPE \(rpeText(rpe))" }
+        var parts: [String] = []
+        if let meters = first.targetDistanceMeters {
+            parts.append(DistanceUnit.matching(unit).formatWithSymbol(meters: meters))
+        }
+        if let seconds = first.targetSeconds { parts.append(CardioPace.clock(seconds)) }
+        return parts.isEmpty ? "–" : parts.joined(separator: " · ")
+    }
+
+    private static func rpeText(_ rpe: Double) -> String {
+        rpe == rpe.rounded() ? String(Int(rpe)) : String(format: "%.1f", rpe)
     }
 
     private static func restText(_ seconds: Int?) -> String {

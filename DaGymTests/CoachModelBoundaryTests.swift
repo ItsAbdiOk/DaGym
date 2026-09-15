@@ -58,6 +58,35 @@ struct CoachModelBoundaryTests {
         }
     }
 
+    /// The simulator has no Apple Intelligence, so `toggleOnFollowsAvailability` only ever sees
+    /// one branch there. An injected model pins both: an available one is used and reported as
+    /// the language model; an unavailable one falls back to the rules with its reason.
+    @Test("with the toggle on, an available injected model is used and an unavailable one names its reason")
+    func injectedModelPinsBothBranches() {
+        let preferences = makePreferences("coach.pref.injected")
+        let services = CoachServices.make(preferences: preferences)
+        let mock = MockCoachModel()
+
+        mock.availability = .available
+        services.refresh(preferences: preferences, foundation: mock)
+        #expect(services.model is MockCoachModel)
+        #expect(services.isUsingLanguageModel)
+        #expect(services.statusLine == "On-device AI: ready")
+
+        mock.availability = .unavailable(reason: "the model is still downloading")
+        services.refresh(preferences: preferences, foundation: mock)
+        #expect(services.model is RuleCoachModel)
+        #expect(!services.isUsingLanguageModel)
+        #expect(services.statusLine == "On-device AI: unavailable — the model is still downloading")
+
+        // The toggle off wins over an available model.
+        mock.availability = .available
+        preferences.onDeviceCoachEnabled = false
+        services.refresh(preferences: preferences, foundation: mock)
+        #expect(services.model is RuleCoachModel)
+        #expect(!services.isUsingLanguageModel)
+    }
+
     @Test("finishing a workout attaches debrief facts: skipped sets, sets below last, PR names")
     func finishAttachesDebriefFacts() throws {
         let store = try makeStore()

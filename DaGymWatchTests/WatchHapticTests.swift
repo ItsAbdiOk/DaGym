@@ -1,3 +1,5 @@
+import Foundation
+import GymCore
 import Testing
 import WatchKit
 
@@ -20,14 +22,30 @@ struct WatchHapticTests {
         #expect(WatchHaptic.voiceFailed.wkType == .failure)
     }
 
-    @Test("rest remaining maps to click at 3, 2, 1, success at 0, nothing otherwise")
+    /// Drives the real path — `WorkoutSession.tickRest` calling `Haptics` — rather than a
+    /// lookup table nothing calls: a 5 s rest ticked second by second clicks at 3, 2 and 1 and
+    /// fires success at zero, and nothing before that.
+    @Test("the rest countdown clicks at 3, 2, 1 and fires success at 0 through tickRest")
+    @MainActor
     func restCountdown() {
-        #expect(WatchHaptic.forRest(remaining: 3) == .restTick)
-        #expect(WatchHaptic.forRest(remaining: 2) == .restTick)
-        #expect(WatchHaptic.forRest(remaining: 1) == .restTick)
-        #expect(WatchHaptic.forRest(remaining: 0) == .restEnd)
-        #expect(WatchHaptic.forRest(remaining: 4) == nil)
-        #expect(WatchHaptic.forRest(remaining: 30) == nil)
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        var clock = start
+        let bench = ExerciseInfo(
+            name: "Bench", primary: [.chest], equipment: "barbell", loggingStyle: .weightReps
+        )
+        let entry = WorkoutExerciseEntry(exercise: bench, sets: [SetEntry(weightKg: 60, reps: 5)])
+        let session = WorkoutSession(title: "t", subtitle: "", startedAt: start, exercises: [entry])
+        session.now = { clock }
+        session.restHaptics = true
+        session.startRest(seconds: 5, after: 0, set: 0)
+        Haptics.recorded = []
+
+        for second in 1...5 {
+            clock = start.addingTimeInterval(Double(second))
+            session.tickRest()
+        }
+
+        #expect(Haptics.recorded == [.restTick, .restTick, .restTick, .restEnd])
     }
 
     @Test("with haptics off only the unseen confirmations still play")

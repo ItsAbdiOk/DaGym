@@ -9,14 +9,15 @@ import Foundation
 /// app computes when it starts a workout), not the persisted counter, which lags a session —
 /// see `TrainingConstants.coachStalledLiftMisses`. Fed that, `consecutiveMisses` is literally
 /// the number of sessions in a row missed at `lastWeightKg`, and the card says exactly that.
+/// The threshold is the lift's own (`CoachLiftSnapshot.stalledLiftMisses`): one short of its
+/// rule's reset, so a linear + AMRAP lift — whose counter never passes 1 — still gets a card.
 extension CoachRules {
     /// The one lift this rule would card: the longest-stalled, ties broken by name so the choice
     /// is deterministic. Exposed so `CoachEngine` can tell the later rules which lift is already
     /// spoken for without having to read a name back out of a finished card.
     static func stalledLift(input: CoachInput) -> CoachLiftSnapshot? {
-        let threshold = TrainingConstants.coachStalledLiftMisses
-        return input.lifts
-            .filter { $0.stallState.consecutiveMisses >= threshold && isStillAtStalledWeight($0) }
+        input.lifts
+            .filter { $0.isStalled && isStillAtStalledWeight($0) }
             .min { lhs, rhs in
                 lhs.stallState.consecutiveMisses == rhs.stallState.consecutiveMisses
                     ? lhs.name < rhs.name
@@ -60,7 +61,8 @@ extension CoachRules {
     /// Two shapes, because a lift with nowhere lighter to go can't be told to back off — the
     /// same distinction `RuleContext.lightestLoadPrescribed` already draws in the engine.
     private static func body(name: String, misses: Int, hasTarget: Bool) -> String {
-        let opening = "\(name) hasn't moved at the same weight for \(misses) sessions in a row"
+        let sessions = misses == 1 ? "session" : "sessions"
+        let opening = "\(name) hasn't moved at the same weight for \(misses) \(sessions) in a row"
         guard hasTarget else {
             return opening + " — there's nothing lighter on this equipment, so a lighter "
                 + "variation or fewer reps is the way forward."

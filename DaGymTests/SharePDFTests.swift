@@ -132,6 +132,24 @@ struct SharePDFTests {
         #expect(shared.routines.first?.exercises.first?.sets.first?.targetWeightKg == nil)
     }
 
+    @Test("cardio and timed targets print as a clock time and a distance in the lifter's unit, RPE as itself")
+    func cardioAndRPETargets() {
+        func exercise(_ set: PlanSet) -> PlanRoutineExercise {
+            PlanRoutineExercise(order: 0, exerciseName: "Run", sets: [set])
+        }
+        let run = exercise(PlanSet(order: 0, kind: "working", targetSeconds: 1_200))
+        #expect(PlanPDFRenderer.targetText(run, unit: .kg) == "20:00")
+        let distance = exercise(
+            PlanSet(order: 0, kind: "working", targetSeconds: 3_600, targetDistanceMeters: 5_000)
+        )
+        #expect(PlanPDFRenderer.targetText(distance, unit: .kg) == "5.00 km · 1:00:00")
+        #expect(PlanPDFRenderer.targetText(distance, unit: .lb) == "3.11 mi · 1:00:00")
+        let rpe = exercise(PlanSet(order: 0, kind: "working", targetRPE: 8.5))
+        #expect(PlanPDFRenderer.targetText(rpe, unit: .kg) == "RPE 8.5")
+        let wholeRPE = exercise(PlanSet(order: 0, kind: "working", targetRPE: 8))
+        #expect(PlanPDFRenderer.targetText(wholeRPE, unit: .kg) == "RPE 8")
+    }
+
     @Test("deload subtitle names the engine's set and load fractions")
     func deloadSubtitle() {
         #expect(PlanPDFRenderer.weekSubtitle(PlanProgramWeek(index: 2, kind: "deload")).contains("60%"))

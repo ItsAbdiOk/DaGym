@@ -87,6 +87,34 @@ struct DataRereviewFixTests {
         try upperAIsTheEditedCopy(store, routineID: edited)
     }
 
+    /// The inverse of the two cases above: the *older* copy is the pristine one. Phone A seeded
+    /// Upper A in January and never opened it; the lifter rebuilt it on new phone B in March,
+    /// then signed into iCloud. "Oldest wins" handed the fold to A's untouched seed.
+    @Test("a routine rebuilt on a newer device beats an older device's never-opened seed")
+    func editedNewerCopyBeatsPristineOlderSeed() throws {
+        let (store, context) = try seededStore()
+        let edited = try editUpperA(store)
+        let day: TimeInterval = 24 * 60 * 60
+        let local = try #require(store.fetchRoutineModel(id: edited))
+        local.createdAt = Date().addingTimeInterval(-10 * day)
+        local.updatedAt = Date().addingTimeInterval(-5 * day)
+        let bench = try #require(store.exercises(matching: "Barbell Bench Press - Medium Grip").first)
+        let remote = RoutineModel(
+            name: "Upper A", createdAt: Date().addingTimeInterval(-60 * day),
+            updatedAt: Date().addingTimeInterval(-60 * day + 0.2),
+            importedFromID: RoutineSeeder.starterIDs["Upper A"]
+        )
+        context.insert(remote)
+        let slot = RoutineExerciseModel(
+            order: 0, exercise: store.fetchExerciseModel(id: bench.id), routine: remote
+        )
+        context.insert(slot)
+        try context.save()
+
+        store.dedupeSeededRows()
+        try upperAIsTheEditedCopy(store, routineID: edited)
+    }
+
     /// The survivor is the older *row*, which must never mean keeping the older *judgement*: a
     /// loser trained more recently carries its stall state across even when the survivor has one.
     @Test("a more recently trained loser's stall state replaces the survivor's")
@@ -294,5 +322,36 @@ struct DataRereviewFixTests {
         #expect(store.loadGrid(for: dumbbell, equipment: equipment, unit: .lb) == .step(fiveLb))
         #expect(store.loadGrid(for: kettlebell, equipment: equipment, unit: .lb) == .step(tenLb))
         #expect(store.loadGrid(for: machine, equipment: equipment, unit: .lb) == .step(tenLb))
+    }
+}
+
+/// The routine fold's survivor rule on its own: edited beats pristine, then two pristine copies
+/// fold to the oldest and two edited ones to the latest edit.
+@MainActor
+@Suite("Routine fold survivor rule")
+struct RoutineFoldSurvivorTests {
+    private let day: TimeInterval = 24 * 60 * 60
+
+    @Test("edited beats pristine; pristine pairs go oldest-first, edited pairs latest-edit-first")
+    func survivorOrder() {
+        let pristineOld = RoutineModel(
+            createdAt: Date().addingTimeInterval(-2 * day), updatedAt: Date().addingTimeInterval(-2 * day)
+        )
+        let pristineNew = RoutineModel(
+            createdAt: Date().addingTimeInterval(-day), updatedAt: Date().addingTimeInterval(-day)
+        )
+        #expect(WorkoutStore.routineSurvivesFirst(pristineOld, pristineNew))
+        #expect(!WorkoutStore.routineSurvivesFirst(pristineNew, pristineOld))
+        let editedOld = RoutineModel(
+            createdAt: Date().addingTimeInterval(-9 * day), updatedAt: Date().addingTimeInterval(-8 * day)
+        )
+        let editedNew = RoutineModel(
+            createdAt: Date().addingTimeInterval(-3 * day), updatedAt: Date().addingTimeInterval(-day)
+        )
+        #expect(WorkoutStore.routineSurvivesFirst(editedNew, editedOld))
+        #expect(WorkoutStore.routineSurvivesFirst(editedNew, pristineOld))
+        #expect(!WorkoutStore.routineSurvivesFirst(pristineOld, editedNew))
+        // A fresh seed's `updatedAt` lands milliseconds after its `createdAt`: not an edit.
+        #expect(!WorkoutStore.routineWasEdited(RoutineModel()))
     }
 }

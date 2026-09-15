@@ -198,9 +198,8 @@ private final class BodyMapRegionCache {
     /// the same one of our 14 muscles. Filled separately at `bodyMapInert`'s 10% alpha, each
     /// overlap compounded — two layers read as 19%, three as 27% — which is what put dark
     /// blotches on the chest, abs, knees and inner thighs of an otherwise flat silhouette.
-    /// Appending the subpaths into one `Path` and filling it once makes an overlap invisible
-    /// (non-zero winding fills it exactly once), and incidentally cuts the figure from ~60
-    /// filled shapes to at most 15.
+    /// Uniting the subpaths into one `Path` and filling it once makes an overlap invisible,
+    /// and incidentally cuts the figure from ~60 filled shapes to at most 15.
     func regions(gender: BodyGender, side: BodySide) -> [BodyMapView.Region] {
         let key = Key(gender: gender, side: side)
         if let cached = storage[key] { return cached }
@@ -218,10 +217,14 @@ private final class BodyMapRegionCache {
             }
             for svgPath in part.allPaths {
                 let path = PathBuilder.buildPath(from: svgPath, scale: 1, offsetX: 0, offsetY: 0)
+                // A geometric union, not `addPath`: upstream winds some sub-regions the
+                // opposite way to their parent, and under non-zero filling an opposite-wound
+                // overlap sums to zero — a hole. Appending the subpaths is what punched holes
+                // in the pec and inner thigh; the union fills the shape exactly once.
                 if let muscle {
-                    byMuscle[muscle, default: Path()].addPath(path)
+                    byMuscle[muscle] = Self.union(byMuscle[muscle], path)
                 } else {
-                    inert.addPath(path)
+                    inert = Self.union(inert, path)
                 }
             }
         }
@@ -234,6 +237,11 @@ private final class BodyMapRegionCache {
         }
         storage[key] = built
         return built
+    }
+
+    private static func union(_ existing: Path?, _ path: Path) -> Path {
+        guard let existing else { return path }
+        return Path(existing.cgPath.union(path.cgPath, using: .winding))
     }
 }
 

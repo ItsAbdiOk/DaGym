@@ -46,6 +46,19 @@ struct SessionDebriefTests {
         #expect(validated.watch.isEmpty)
     }
 
+    @Test("a bullet with a number the facts never stated is dropped; one that repeats a fact's number stays")
+    func inventedNumbersAreDropped() throws {
+        let volumeChange = SessionSummaryFacts.FactID.volumeChange
+        // The fact says +7 %; the model wrote 40 %.
+        let invented = CoachClaim(text: "Volume was up 40% on last time.", citedFactIDs: [volumeChange])
+        let repeated = CoachClaim(text: "Volume was up 7% on last time.", citedFactIDs: [volumeChange])
+        let rpe = CoachClaim(text: "RPE crept up 0.8.", citedFactIDs: [SessionSummaryFacts.FactID.rpeDrift])
+        let debrief = SessionDebrief(score: 7, wentWell: [invented, repeated], watch: [rpe], tryNext: [])
+        let validated = try #require(DebriefValidator.validate(debrief, facts: facts))
+        #expect(validated.wentWell == [repeated])
+        #expect(validated.watch == [rpe])
+    }
+
     @Test("nothing cited at all means no debrief, not an empty card")
     func allDroppedIsNil() {
         let debrief = SessionDebrief(

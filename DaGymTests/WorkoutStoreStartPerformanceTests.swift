@@ -28,7 +28,9 @@ struct WorkoutStoreStartPerformanceTests {
     /// of planned sets, then a few finished sessions of history behind it — the same shape
     /// `computeProgression`/`withHistoryStrip` read from for prescriptions, ghosts, the
     /// last-sessions strip and the sparkline.
-    private func makeRoutineWithHistory(store: WorkoutStore, exerciseCount: Int) -> UUID {
+    private func makeRoutineWithHistory(
+        store: WorkoutStore, exerciseCount: Int, rule: ProgressionRule? = .linear(incrementKg: 2.5)
+    ) -> UUID {
         var drafts: [RoutineExerciseDraft] = []
         for index in 0..<exerciseCount {
             let exercise = store.createCustomExercise(
@@ -43,8 +45,8 @@ struct WorkoutStoreStartPerformanceTests {
             ))
         }
         let routine = store.saveRoutine(
-            id: nil, name: "Big Routine", progressionRule: "linear",
-            rule: .linear(incrementKg: 2.5), exercises: drafts
+            id: nil, name: "Big Routine", progressionRule: rule == nil ? "" : "linear",
+            rule: rule, exercises: drafts
         )
 
         // A few finished sessions of history per exercise, so progression, the ghost and the
@@ -66,10 +68,11 @@ struct WorkoutStoreStartPerformanceTests {
     /// Runs `body` against a freshly seeded store of `exerciseCount` exercises and reports how
     /// many queries it issued — the setup itself is never measured.
     private func queries(
-        exerciseCount: Int, _ body: (WorkoutStore, UUID) -> Void
+        exerciseCount: Int, rule: ProgressionRule? = .linear(incrementKg: 2.5),
+        _ body: (WorkoutStore, UUID) -> Void
     ) throws -> Int {
         let store = try makeStore()
-        let routineID = makeRoutineWithHistory(store: store, exerciseCount: exerciseCount)
+        let routineID = makeRoutineWithHistory(store: store, exerciseCount: exerciseCount, rule: rule)
         let before = store.queryCount
         body(store, routineID)
         return store.queryCount - before
@@ -87,6 +90,21 @@ struct WorkoutStoreStartPerformanceTests {
             "\(label): query count grew with exercise count — \(small) for 2, \(big) for 12"
         )
         return big
+    }
+
+    /// `coachInput` re-runs the progression engine per programmed lift for a fresh stall
+    /// judgement, on every Home refresh. The routine's `SessionFacts` are built once per routine
+    /// however many lifts it has, and not at all for a routine the engine doesn't judge.
+    @Test("coachInput builds a routine's session facts once, and not at all without a rule")
+    func coachInputFactsAreSharedAndSkipped() throws {
+        let ruled = try expectFlat("coachInput") { store, _ in _ = store.coachInput() }
+        let smallUnruled = try queries(exerciseCount: 2, rule: nil) { store, _ in _ = store.coachInput() }
+        let bigUnruled = try queries(exerciseCount: 12, rule: nil) { store, _ in _ = store.coachInput() }
+        #expect(smallUnruled == bigUnruled, "coachInput without a rule grew with exercise count")
+        #expect(
+            bigUnruled < ruled,
+            "an un-ruled routine still paid for session facts: \(bigUnruled) vs \(ruled) with a rule"
+        )
     }
 
     @Test("startWorkout issues the same number of queries for 2 and for 12 exercises")

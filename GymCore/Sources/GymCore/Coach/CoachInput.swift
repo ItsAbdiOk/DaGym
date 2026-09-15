@@ -47,13 +47,21 @@ public struct CoachLiftSnapshot: Hashable, Sendable {
     /// app hasn't resolved a library entry for it (the struggling-exercise rule then stays quiet
     /// for this lift rather than guessing).
     public var substitutionCandidate: SubstitutionCandidate?
+    /// The miss streak at which this lift counts as stalled for the stalled-lift card and the
+    /// deload detector: `TrainingConstants.coachStalledLiftMisses`, capped one short of the
+    /// lift's own rule's reset (`ProgressionRule.missesBeforeReset`). Linear + AMRAP zeroes its
+    /// counter on the second miss, so against the flat constant its streak of {0, 1} could never
+    /// count as stalled and the card silently stopped firing for that rule.
+    public var stalledLiftMisses: Int
 
     public init(
         name: String, exerciseID: UUID? = nil, stallState: StallState, e1rmTrend: [Double],
         rpeAtSameLoadTrend: [Double]? = nil, loadGrid: LoadGrid? = nil,
         lastWorkingWeightKg: Double? = nil, lastWorkingSetCount: Int? = nil,
-        consecutiveFailedSessions: Int = 0, substitutionCandidate: SubstitutionCandidate? = nil
+        consecutiveFailedSessions: Int = 0, substitutionCandidate: SubstitutionCandidate? = nil,
+        stalledLiftMisses: Int = TrainingConstants.coachStalledLiftMisses
     ) {
+        self.stalledLiftMisses = stalledLiftMisses
         self.name = name
         self.exerciseID = exerciseID
         self.stallState = stallState
@@ -71,10 +79,20 @@ public struct CoachLiftSnapshot: Hashable, Sendable {
     /// specified over: `DeloadDetector.isNotProgressing` compares the *first* element against the
     /// last, so handing it a longer history would read "higher than a season ago" as "not
     /// progressing" for anyone who has ever had a better month.
+    /// `stalledLiftMisses(for:)` — the threshold a rule's own reset allows.
+    public static func stalledLiftMisses(for rule: ProgressionRule?) -> Int {
+        let base = TrainingConstants.coachStalledLiftMisses
+        guard let reset = rule?.missesBeforeReset else { return base }
+        return max(1, min(base, reset - 1))
+    }
+
+    /// Sessions in a row judged short at the same weight, against this lift's own threshold.
+    public var isStalled: Bool { stallState.consecutiveMisses >= stalledLiftMisses }
+
     var deloadSnapshot: LiftSnapshot {
         let window = TrainingConstants.deloadTrendSessions
         return LiftSnapshot(
-            name: name, stalls: stallState.consecutiveMisses,
+            name: name, stalls: stallState.consecutiveMisses, stallThreshold: stalledLiftMisses,
             e1rmTrend: Array(e1rmTrend.suffix(window)),
             rpeAtSameLoadTrend: rpeAtSameLoadTrend.map { Array($0.suffix(window)) }
         )
@@ -85,7 +103,7 @@ public struct CoachLiftSnapshot: Hashable, Sendable {
     /// evidence. The stall arm is checked directly because `DeloadDetector` only reports stalls
     /// once `deloadMinLiftsStalling` lifts share one.
     var drivesDeloadSuggestion: Bool {
-        if stallState.consecutiveMisses >= TrainingConstants.deloadStallCount { return true }
+        if isStalled { return true }
         return DeloadDetector.evaluate(lifts: [deloadSnapshot], hardWeeks: 0) != nil
     }
 }

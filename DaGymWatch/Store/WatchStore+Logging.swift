@@ -35,6 +35,7 @@ extension WatchStore {
               let si = currentSetIndex(in: session.exercises[ei]) else { return }
         let entry = session.exercises[ei]
         let set = entry.sets[si]
+        acknowledgeRestEnd()
         session.completeSet(exerciseID: exerciseID, setID: set.id, effort: effort)
         if set.kind == .warmup, session.isResting, session.restRemaining > 60 {
             session.adjustRest(by: 60 - session.restRemaining)
@@ -75,6 +76,7 @@ extension WatchStore {
     func stopHold(exerciseID: UUID) {
         guard let session else { return }
         guard session.stopTimedHold() != nil else { return }
+        acknowledgeRestEnd()
         store.sync(session: session)
         if let ei = session.exercises.firstIndex(where: { $0.id == exerciseID }),
            session.exercises[ei].isComplete { advancePage(after: ei) }
@@ -95,10 +97,9 @@ extension WatchStore {
     // MARK: - Records
 
     private func checkRecord(entry: WorkoutExerciseEntry, set: SetEntry) {
-        let style = entry.exercise.loggingStyle
-        guard style == .weightReps || style == .weightedBodyweight,
-              OneRepMax.isEligible(weight: set.weightKg, reps: set.reps),
-              let e1rm = OneRepMax.estimate(weight: set.weightKg, reps: set.reps) else { return }
+        guard let session, let load = previewLoadKg(entry: entry, set: set, asOf: session.startedAt),
+              OneRepMax.isEligible(weight: load, reps: set.reps),
+              let e1rm = OneRepMax.estimate(weight: load, reps: set.reps) else { return }
         let best = entry.exercise.bestE1RM ?? 0
         guard e1rm > best + 0.05 else { return }
         recordCard = WatchRecordCard(
@@ -108,8 +109,27 @@ extension WatchStore {
         Haptics.personalRecord()
         // The next set of this exercise compares against the new best, as the phone's cache
         // would after finish.
-        if let session, let ei = session.exercises.firstIndex(where: { $0.id == entry.id }) {
+        if let ei = session.exercises.firstIndex(where: { $0.id == entry.id }) {
             session.exercises[ei].exercise.bestE1RM = e1rm
+        }
+    }
+
+    /// The load the preview estimates from — the same number `WorkoutStore.evaluatePRs` will use
+    /// at finish (`PerformedSet.effectiveWeightKg`): the bar weight for a weight × reps lift,
+    /// bodyweight plus the added load for a weighted dip or pull-up. Comparing the added load
+    /// alone against a cache that holds the total either never fires or fires on every set.
+    /// Nil for the styles that have no e1RM preview.
+    func previewLoadKg(entry: WorkoutExerciseEntry, set: SetEntry, asOf: Date) -> Double? {
+        switch entry.exercise.loggingStyle {
+        case .weightReps:
+            return set.weightKg
+        case .weightedBodyweight:
+            let bodyweight = store.latestBodyMeasurement(asOf: asOf)?.bodyweightKg
+            return PerformedSet(
+                kind: set.kind, weightKg: set.weightKg, reps: set.reps, bodyweightKg: bodyweight, date: asOf
+            ).effectiveWeightKg
+        default:
+            return nil
         }
     }
 

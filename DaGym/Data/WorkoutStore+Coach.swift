@@ -215,11 +215,15 @@ extension WorkoutStore {
     /// `TrainingConstants.coachStalledLiftMisses`.
     ///
     /// A slot the engine doesn't judge (no rule, or excluded from progression) has nothing
-    /// fresher than the persisted state, so that is what it gets.
+    /// fresher than the persisted state, so that is what it gets — checked *before* the
+    /// routine's `SessionFacts` are built, since those are eight queries the engine would only
+    /// throw away, paid on every Home refresh for every un-ruled lift.
     private func currentStallState(
-        routineExercise: RoutineExerciseModel, factsByRoutine: inout [UUID: SessionFacts]
+        routineExercise: RoutineExerciseModel, rule: ProgressionRule?,
+        factsByRoutine: inout [UUID: SessionFacts]
     ) -> StallState {
-        guard let routine = routineExercise.routine, let exerciseModel = routineExercise.exercise,
+        guard rule != nil, !routineExercise.excludeFromProgression,
+              let routine = routineExercise.routine, let exerciseModel = routineExercise.exercise,
               let plannedSets = routineExercise.plannedSets else { return routineExercise.stallStateValue }
         let facts = factsByRoutine[routine.id] ?? makeSessionFacts(routineID: routine.id)
         factsByRoutine[routine.id] = facts
@@ -263,12 +267,17 @@ extension WorkoutStore {
             return set.effort?.rpe
         }
         let lastWorking = history.first?.workingSets ?? []
-        let info = exerciseInfo(for: exerciseModel)
+        // The grid only needs the model's own fields (bar, style, increment) — `exerciseInfo(for:)`
+        // without facts also fetches the PR cache and the session count, two queries per lift.
+        let info = ExerciseInfo(model: exerciseModel)
+        let rule = routineExercise.routine.flatMap {
+            effectiveRule(routine: $0, routineExercise: routineExercise)
+        }
         return CoachLiftSnapshot(
             name: exerciseModel.name,
             exerciseID: exerciseModel.id,
             stallState: currentStallState(
-                routineExercise: routineExercise, factsByRoutine: &factsByRoutine
+                routineExercise: routineExercise, rule: rule, factsByRoutine: &factsByRoutine
             ),
             e1rmTrend: Array(e1rms.suffix(window)),
             rpeAtSameLoadTrend: rpes.count >= 2 ? Array(rpes.suffix(window)) : nil,
@@ -278,7 +287,8 @@ extension WorkoutStore {
             consecutiveFailedSessions: consecutiveFailedSessions(
                 history: history, plannedSets: routineExercise.plannedSets ?? []
             ),
-            substitutionCandidate: substitutionCandidate(for: exerciseModel)
+            substitutionCandidate: substitutionCandidate(for: exerciseModel),
+            stalledLiftMisses: CoachLiftSnapshot.stalledLiftMisses(for: rule)
         )
     }
 
@@ -321,8 +331,10 @@ extension WorkoutStore {
             $0.kind == headline && $0.date >= since && $0.date <= now
         }
         let events = (try? context.fetch(FetchDescriptor(predicate: predicate))) ?? []
+        // One query for every exercise named, not one per event — a good week is a PR per lift.
+        let exercises = fetchExerciseModels(ids: Set(events.compactMap(\.exerciseID)))
         return events.compactMap { event -> CoachPersonalRecordHighlight? in
-            guard let exerciseID = event.exerciseID, let exercise = fetchExerciseModel(id: exerciseID),
+            guard let exerciseID = event.exerciseID, let exercise = exercises[exerciseID],
                   let kind = PRKind(rawValue: event.kind) else { return nil }
             let record = PersonalRecord(
                 kind: kind, value: event.value, weightKg: event.weightKg, reps: event.reps, date: event.date

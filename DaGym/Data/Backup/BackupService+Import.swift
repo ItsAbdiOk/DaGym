@@ -142,7 +142,9 @@ extension BackupService {
     ) {
         let seeded = baseline.values(for: item.seedID)
         if item.isFavorite { model.isFavorite = true }
-        if item.restSeconds != 0 { model.restSeconds = item.restSeconds }
+        if baseline.isRestOverride(item.restSeconds, seedID: item.seedID) {
+            model.restSeconds = item.restSeconds
+        }
         if item.incrementKg != seeded.incrementKg { model.incrementKg = item.incrementKg }
         if item.barType != seeded.barType { model.barType = item.barType }
         if model.notes.isEmpty { model.notes = item.notes }
@@ -154,11 +156,13 @@ extension BackupService {
         // Tombstones included on purpose: an older file can carry both halves of a fold, and a
         // routine whose local row is a tombstone is already represented by its survivor. Matching
         // it keeps the id unique and lets `dedupeRoutines()` converge the rest.
-        let existingByID = Dictionary(
-            uniqueKeysWithValues: ((try? context.fetch(FetchDescriptor<RoutineModel>())) ?? [])
-                .map { ($0.id, $0) }
-        )
-        for item in items where existingByID[item.id] == nil {
+        // A `Set`, not `Dictionary(uniqueKeysWithValues:)`, which traps on a repeated key: a store
+        // can hold two routines with one id (an earlier file that carried the same routine twice,
+        // or an unmerged sync ghost), and a restore is the wrong moment to crash over it.
+        var existingIDs = Set(((try? context.fetch(FetchDescriptor<RoutineModel>())) ?? []).map(\.id))
+        // Tracked as the loop goes so a file that carries the same routine twice inserts it once.
+        for item in items where !existingIDs.contains(item.id) {
+            existingIDs.insert(item.id)
             let routine = RoutineModel(
                 id: item.id, name: item.name, notes: item.notes, progressionRule: item.progressionRule,
                 repRangeLow: item.repRangeLow, repRangeHigh: item.repRangeHigh,
@@ -204,9 +208,9 @@ extension BackupService {
         for set in draft.plannedSets {
             context.insert(PlannedSetModel(
                 order: set.order, kind: set.kind, targetReps: set.targetReps,
-                targetRepsHigh: set.targetRepsHigh, targetWeightKg: set.targetWeightKg,
-                targetRPE: set.targetRPE, targetSeconds: set.targetSeconds,
-                targetDistanceMeters: set.targetDistanceMeters, routineExercise: model
+                targetRepsHigh: set.targetRepsHigh, targetWeightKg: finite(set.targetWeightKg),
+                targetRPE: finite(set.targetRPE), targetSeconds: set.targetSeconds,
+                targetDistanceMeters: finite(set.targetDistanceMeters), routineExercise: model
             ))
         }
         return model
@@ -216,12 +220,13 @@ extension BackupService {
     private static func importWorkouts(
         _ items: [BackupWorkout], index: ExerciseIndex, context: ModelContext, report: inout ImportReport
     ) -> Int {
-        let existingIDs = Set(
+        var existingIDs = Set(
             ((try? context.fetch(FetchDescriptor<WorkoutModel>())) ?? []).map(\.id)
         )
         var inserted = 0
         for item in items {
-            guard !existingIDs.contains(item.id) else {
+            // `insert` rather than a one-off check: the same workout twice in one file imports once.
+            guard existingIDs.insert(item.id).inserted else {
                 report.workoutsSkipped += 1
                 continue
             }
@@ -232,8 +237,13 @@ extension BackupService {
                 sourceDevice: item.sourceDevice, healthKitID: item.healthKitID
             )
             context.insert(workout)
-            // Linked through `WorkoutExerciseModel.workout` only — see `importRoutines`.
-            for draft in item.exercises {
+            // Linked through `WorkoutExerciseModel.workout` only — see `importRoutines`. Entry ids
+            // are re-keyed when a file repeats one: `WorkoutStore.sync(session:)` indexes a
+            // workout's entries (and each entry's sets) by id with `uniqueKeysWithValues`, so a
+            // duplicate imported verbatim trapped the first time the workout was resumed or edited.
+            var entryIDs = Set<UUID>()
+            for var draft in item.exercises {
+                if !entryIDs.insert(draft.id).inserted { draft.id = UUID() }
                 _ = makeWorkoutExercise(
                     draft, index: index, workout: workout, context: context, report: &report
                 )
@@ -262,17 +272,30 @@ extension BackupService {
             routineID: draft.routineID, exercise: exercise, workout: workout
         )
         context.insert(model)
-        // `workoutExercise:` is the whole link; `model.sets` must not also be assigned.
+        // `workoutExercise:` is the whole link; `model.sets` must not also be assigned. A repeated
+        // set id gets a fresh one, for the reason given in `importWorkouts`.
+        var setIDs = Set<UUID>()
         for set in draft.sets {
+            let id = setIDs.insert(set.id).inserted ? set.id : UUID()
+            // Non-finite numbers can't come from a `.json` file (the decoder rejects them) but can
+            // from any other producer of a `BackupDocument`; stored, they make every later export
+            // throw, so they're dropped here rather than trusted.
             context.insert(SetLogModel(
-                id: set.id, order: set.order, kind: set.kind, weightKg: set.weightKg, reps: set.reps,
-                durationSeconds: set.durationSeconds, distanceMeters: set.distanceMeters,
-                inclinePercent: set.inclinePercent, assistanceKg: set.assistanceKg, rpe: set.rpe,
+                id: id, order: set.order, kind: set.kind, weightKg: finite(set.weightKg) ?? 0,
+                reps: set.reps, durationSeconds: set.durationSeconds,
+                distanceMeters: finite(set.distanceMeters), inclinePercent: finite(set.inclinePercent),
+                assistanceKg: finite(set.assistanceKg), rpe: finite(set.rpe),
                 isCompleted: set.isCompleted, completedAt: set.completedAt,
                 prescriptionReason: set.prescriptionReason, workoutExercise: model
             ))
         }
         return model
+    }
+
+    /// `value` when it is a real number, `nil` for NaN or an infinity (see `makeWorkoutExercise`).
+    private static func finite(_ value: Double?) -> Double? {
+        guard let value, value.isFinite else { return nil }
+        return value
     }
 
     /// Recreates a missing exercise as a custom one so its sets survive. `nil` only for a draft

@@ -130,10 +130,17 @@ struct CoachFlowTests {
         store.undoReviewChange(added)
         #expect(store.routineDrafts(id: routine.id)?.drafts.map(\.exerciseID) == [bench.id])
 
+        // Two misses into a Bench stall: the swap takes Bench off the routine, so `saveRoutine`
+        // has nothing to carry its streak on, and Undo must put it back itself.
+        let benchStall = #"{"consecutiveMisses":2,"lastWeightKg":60,"lastPlanTargetWeightKg":60}"#
+        try #require(store.fetchRoutineModel(id: routine.id)?.exercises?.first).stallJSON = benchStall
+        store.save()
         let swapped = try #require(store.applyReviewChange(.swapExercise(from: bench.id, to: fly.id)))
         #expect(store.routineDrafts(id: routine.id)?.drafts.map(\.exerciseID) == [fly.id])
         store.undoReviewChange(swapped)
         #expect(store.routineDrafts(id: routine.id)?.drafts.map(\.exerciseID) == [bench.id])
+        let restored = try #require(store.fetchRoutineModel(id: routine.id)?.exercises?.first)
+        #expect(restored.stallJSON == benchStall, "undoing a swap dropped the lift's stall memory")
 
         let rule = ProgressionRule.doubleProgression(low: 8, high: 12, incrementKg: 2.5)
         let reruled = try #require(
@@ -171,6 +178,32 @@ struct CoachFlowTests {
         #expect(digest.adherencePercent == 0)
         #expect(digest.trainingDays == [.monday])
         #expect(digest.factIDs.contains(TrainingDigest.FactID.lift(0)))
+    }
+
+    @Test("a proposed progression rule steps by the lift's own increment, not a hard-coded 2.5 kg")
+    func reviewRuleUsesTheLiftsIncrement() throws {
+        let store = try makeStore()
+        let (bench, _) = benchRoutine(store)
+        store.updateExerciseSettings(id: bench.id, restSeconds: 0, barType: nil, incrementKg: 1)
+        let digest = store.trainingDigest()
+        #expect(digest.lifts[0].incrementKg == 1)
+
+        let squat = ExerciseInfo(name: "Squat", primary: [.quads], equipment: "barbell", incrementKg: 2.5)
+        #expect(WorkoutStore.reviewIncrementKg(for: squat, unit: .kg) == 5)
+        #expect(WorkoutStore.reviewIncrementKg(for: squat, unit: .lb) == WeightUnit.lb.toKg(10))
+        let cable = ExerciseInfo(name: "Cable Fly", primary: [.chest], equipment: "cable", incrementKg: 1)
+        #expect(WorkoutStore.reviewIncrementKg(for: cable, unit: .kg) == 1)
+        #expect(WorkoutStore.reviewIncrementKg(for: cable, unit: .lb) == WeightUnit.lb.toKg(5))
+
+        #if canImport(FoundationModels)
+        let generated = GeneratedChange(
+            kind: .changeProgressionRule, lift: 1, pool: 0, repLow: 0, repHigh: 0, progressionRule: .linear,
+            fromWeekday: 0, toWeekday: 0, evidence: "Bench has stalled.", citedFactIDs: ["lift1"]
+        )
+        let proposal = try #require(generated.proposal(digest: digest))
+        let expected = ReviewChange.changeProgressionRule(exerciseID: bench.id, rule: .linear(incrementKg: 1))
+        #expect(proposal.change == expected)
+        #endif
     }
 
     // MARK: - Questions
@@ -218,5 +251,51 @@ struct CoachFlowTests {
             question: "what did I bench last time", model: mock, source: source
         )
         #expect(spoken.contains("No logged sessions of Bench Press"))
+    }
+
+    @Test("a Foundation reply that called no tool is replaced by the rule matcher's grounded answer")
+    func toolLessReplyFallsBackToRules() async throws {
+        let store = try makeStore()
+        _ = benchRoutine(store)
+        let source = CoachFactsSource(store: store, unit: .kg)
+        // The model answered from its own head — nothing from the tools stands behind it.
+        let resolved = try await FoundationCoachModel.resolvedAnswer(
+            text: "You benched 85 kg last time.", results: [], question: "what did I bench last time",
+            tools: source
+        )
+        #expect(resolved.isGrounded)
+        #expect(resolved.text.contains("No logged sessions of Bench Press"))
+        #expect(resolved.toolResults.count == 1)
+        // With a tool result behind it, the reply itself is kept and value-checked as before.
+        let tool = CoachToolResult(text: "Last bench: 80 kg × 8")
+        let kept = try await FoundationCoachModel.resolvedAnswer(
+            text: "You benched 80 kg for 8.", results: [tool], question: "bench?", tools: source
+        )
+        #expect(kept.isGrounded)
+        #expect(kept.text == "You benched 80 kg for 8.")
+        let invented = try await FoundationCoachModel.resolvedAnswer(
+            text: "You benched 85 kg.", results: [tool], question: "bench?", tools: source
+        )
+        #expect(!invented.isGrounded)
+    }
+
+    @Test("when neither model has anything grounded to say, the intent and the card say so — never nothing")
+    func unansweredFallsBackToOneLine() async throws {
+        let store = try makeStore()
+        let source = CoachFactsSource(store: store, unit: .kg)
+        let mock = MockCoachModel()
+        // Ungrounded with no tool results behind it: nothing to show instead of the sentence.
+        mock.answerToReturn = CoachAnswer(text: "You slept badly.", toolResults: [], isGrounded: false)
+        let spoken = await AskDaGymIntent.answer(question: "how's my sleep", model: mock, source: source)
+        #expect(spoken == CoachAskFallback.unanswered)
+        #expect(!spoken.isEmpty)
+
+        // Model failed: the rule matcher can't parse the question but still says what it can
+        // answer — a grounded, non-empty line. Only a rule model that throws reaches the
+        // fallback sentence.
+        mock.shouldFail = true
+        let ruleless = await AskDaGymIntent.answer(question: "how's my sleep", model: mock, source: source)
+        #expect(ruleless.contains("try naming an exercise"))
+        #expect(CoachAskFallback.spokenText(for: nil) == CoachAskFallback.unanswered)
     }
 }

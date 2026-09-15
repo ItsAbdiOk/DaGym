@@ -15,6 +15,10 @@ final class WatchWorkoutRuntime: NSObject {
     private let healthStore = HKHealthStore()
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
+    /// The start that is still awaiting HealthKit's authorisation sheet, if any. `end` and
+    /// `discard` cancel it, so a workout discarded during that wait never leaves a strength
+    /// session running behind nothing (and stealing the next workout's runtime).
+    private var pendingStart = StartToken()
     /// Off for the sample store, the test host and any test that builds its own `WatchStore`:
     /// `requestAuthorization` would otherwise block on a permission sheet nobody can answer.
     private let isEnabled: Bool
@@ -26,18 +30,23 @@ final class WatchWorkoutRuntime: NSObject {
     }
 
     func start(isFreestyle: Bool, startedAt: Date) {
-        guard isEnabled, HKHealthStore.isHealthDataAvailable(), session == nil else { return }
+        guard isEnabled, HKHealthStore.isHealthDataAvailable(), session == nil, !pendingStart.isPending else {
+            return
+        }
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = isFreestyle ? .functionalStrengthTraining : .traditionalStrengthTraining
         configuration.locationType = .indoor
-        Task { await begin(configuration: configuration, startedAt: startedAt) }
+        let token = pendingStart.request()
+        Task { await begin(configuration: configuration, startedAt: startedAt, token: token) }
     }
 
-    private func begin(configuration: HKWorkoutConfiguration, startedAt: Date) async {
+    private func begin(configuration: HKWorkoutConfiguration, startedAt: Date, token: Int) async {
         let share: Set<HKSampleType> = [HKObjectType.workoutType()]
         let read: Set<HKObjectType> = [HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned)]
         do {
             try await healthStore.requestAuthorization(toShare: share, read: read)
+            // The workout was ended or discarded while the sheet was up: nothing to run for.
+            guard pendingStart.isCurrent(token) else { return }
             let session = try HKWorkoutSession(healthStore: healthStore, configuration: configuration)
             let builder = session.associatedWorkoutBuilder()
             builder.dataSource = HKLiveWorkoutDataSource(
@@ -46,18 +55,38 @@ final class WatchWorkoutRuntime: NSObject {
             session.delegate = self
             self.session = session
             self.builder = builder
+            pendingStart.clear()
             session.startActivity(with: startedAt)
             try await builder.beginCollection(at: startedAt)
         } catch {
             runtimeLogger.error("Workout session failed: \(error.localizedDescription, privacy: .public)")
+            pendingStart.clear()
             self.session = nil
             self.builder = nil
         }
     }
 
+    /// Re-attaches to a session watchOS kept running after DaGym was killed mid-workout
+    /// (`WKApplicationDelegate.handleActiveWorkoutRecovery`). With it adopted, "Resume" carries
+    /// on with background runtime instead of failing to open a second session next to the
+    /// orphan. `keep` false ends it straight away — nothing in the store to run for.
+    func adopt(recovered session: HKWorkoutSession, keep: Bool) {
+        guard isEnabled, self.session == nil else { return }
+        pendingStart.clear()
+        session.delegate = self
+        let builder = session.associatedWorkoutBuilder()
+        builder.dataSource = HKLiveWorkoutDataSource(
+            healthStore: healthStore, workoutConfiguration: session.workoutConfiguration
+        )
+        self.session = session
+        self.builder = builder
+        if !keep { discard() }
+    }
+
     /// Ends the session and saves the workout so the rings get credit. `volumeKg` is not
     /// written anywhere — HealthKit has no field for it and the store already has it.
     func end(volumeKg: Double) {
+        pendingStart.cancel()
         guard let session, let builder else { return }
         self.session = nil
         self.builder = nil
@@ -74,6 +103,7 @@ final class WatchWorkoutRuntime: NSObject {
 
     /// A discarded workout is not exercise: end the session and drop the builder.
     func discard() {
+        pendingStart.cancel()
         guard let session, let builder else { return }
         self.session = nil
         self.builder = nil
@@ -82,6 +112,28 @@ final class WatchWorkoutRuntime: NSObject {
             try? await builder.endCollection(at: Date())
             builder.discardWorkout()
         }
+    }
+
+    /// One outstanding start at a time. `request` hands out a token; the start that holds it
+    /// may only go ahead while it `isCurrent` — `cancel` (from `end`/`discard`) retires it and
+    /// `clear` marks it done. A later `request` retires any earlier token too.
+    struct StartToken {
+        private var current: Int?
+        private var last = 0
+
+        var isPending: Bool { current != nil }
+
+        mutating func request() -> Int {
+            last += 1
+            current = last
+            return last
+        }
+
+        func isCurrent(_ token: Int) -> Bool { current == token }
+
+        mutating func cancel() { current = nil }
+
+        mutating func clear() { current = nil }
     }
 }
 

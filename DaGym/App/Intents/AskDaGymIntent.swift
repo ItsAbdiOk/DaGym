@@ -34,7 +34,8 @@ struct AskDaGymIntent: AppIntent {
     }
 
     /// The spoken line: the model's sentence when it's grounded, the tool results when it isn't,
-    /// and the rule matcher's answer when the model fails outright.
+    /// the rule matcher's answer when the model fails outright, and `CoachAskFallback.unanswered`
+    /// when even that has nothing — Siri must never be handed an empty string.
     static func answer(
         question: String, model: any CoachLanguageModel, source: any CoachToolAnswering
     ) async -> String {
@@ -44,8 +45,6 @@ struct AskDaGymIntent: AppIntent {
         } else {
             answer = try? await RuleCoachModel().answer(question: question, tools: source)
         }
-        guard let answer else { return "I couldn't look that up right now." }
-        if answer.isGrounded { return answer.text }
-        return answer.toolResults.map(\.text).joined(separator: " ")
+        return CoachAskFallback.spokenText(for: answer)
     }
 }

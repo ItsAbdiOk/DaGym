@@ -23,6 +23,11 @@ struct RoutineSnapshot {
     var repRangeHigh: Int
     var rule: ProgressionRule?
     var drafts: [RoutineExerciseDraft]
+    /// The engine's stall memory per exercise id. `saveRoutine` carries it only for exercises
+    /// still on the routine, so a swap loses the swapped-out lift's streak and last plan target
+    /// — Undo has to write it back explicitly, or Bench comes back at 0 misses and the plan
+    /// overrides the engine for one session (`planTargetWeightChanged`).
+    var stallJSON: [UUID: String] = [:]
 }
 
 /// Applying an approved training-review card (plan.md §6.6: "the user approves every change,
@@ -81,11 +86,14 @@ extension WorkoutStore {
         if let deload = application.deload { undoCoachDeload(deload) }
         if let schedule = application.previousSchedule { saveSchedule(schedule) }
         for snapshot in application.previousRoutines {
-            saveRoutine(
-                id: snapshot.id, name: snapshot.name, notes: snapshot.notes,
-                progressionRule: snapshot.progressionRule, repRangeLow: snapshot.repRangeLow,
-                repRangeHigh: snapshot.repRangeHigh, rule: snapshot.rule, exercises: snapshot.drafts
-            )
+            resave(snapshot, drafts: snapshot.drafts)
+            guard let model = fetchRoutineModel(id: snapshot.id) else { continue }
+            for slot in model.exercises ?? [] {
+                guard let exerciseID = slot.exercise?.id, let stall = snapshot.stallJSON[exerciseID],
+                      slot.stallJSON != stall else { continue }
+                slot.stallJSON = stall
+            }
+            save()
         }
     }
 
@@ -172,10 +180,14 @@ extension WorkoutStore {
 
     private func routineSnapshot(_ model: RoutineModel) -> RoutineSnapshot? {
         guard let (_, drafts) = routineDrafts(id: model.id) else { return nil }
+        var stallJSON: [UUID: String] = [:]
+        for slot in model.exercises ?? [] {
+            if let exerciseID = slot.exercise?.id { stallJSON[exerciseID] = slot.stallJSON }
+        }
         return RoutineSnapshot(
             id: model.id, name: model.name, notes: model.notes, progressionRule: model.progressionRule,
             repRangeLow: model.repRangeLow, repRangeHigh: model.repRangeHigh,
-            rule: model.progressionRuleValue, drafts: drafts
+            rule: model.progressionRuleValue, drafts: drafts, stallJSON: stallJSON
         )
     }
 

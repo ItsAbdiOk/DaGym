@@ -81,8 +81,10 @@ final class CoachServices {
         return services
     }
 
-    func refresh(preferences: Preferences) {
-        let foundation = FoundationCoachModel()
+    /// `foundation` is the language model the toggle chooses between (Apple's on-device model
+    /// in the app); tests inject a `MockCoachModel` to pin both branches on a simulator that
+    /// has no Apple Intelligence.
+    func refresh(preferences: Preferences, foundation: any CoachLanguageModel = FoundationCoachModel()) {
         switch (preferences.onDeviceCoachEnabled, foundation.availability) {
         case (true, .available):
             model = foundation
@@ -98,5 +100,5 @@ final class CoachServices {
 
     /// True when the words on screen come from the language model rather than the rules —
     /// the Coach screens say which, since the two read differently.
-    var isUsingLanguageModel: Bool { model.availability.isAvailable && model is FoundationCoachModel }
+    var isUsingLanguageModel: Bool { model.availability.isAvailable && !(model is RuleCoachModel) }
 }

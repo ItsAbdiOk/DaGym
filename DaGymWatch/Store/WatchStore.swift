@@ -1,5 +1,6 @@
 import Foundation
 import GymCore
+import HealthKit
 import SwiftData
 import SwiftUI
 
@@ -12,7 +13,10 @@ struct WatchHomeState {
     var routines: [RoutineInfo] = []
     var streakWeeks = 0
     var nextLabel: String?
+    /// An unfinished workout this wrist may pick up (see `WatchStore.resumeGate`).
     var resumableWorkoutID: UUID?
+    /// An unfinished workout that is live on the iPhone right now — shown, never offered.
+    var inProgressElsewhereTitle: String?
 }
 
 /// The watch's front door to the shared `WorkoutStore`. Everything that persists — building
@@ -33,8 +37,11 @@ final class WatchStore {
     var summary: WorkoutSummary?
     /// The record card (screen 5); cleared by its own auto-dismiss or any tap.
     var recordCard: WatchRecordCard?
-    /// Which exercise page is showing, so voice and rest know the on-deck context.
-    var pageIndex = 0
+    /// Which exercise page is showing, so voice and rest know the on-deck context. Moving
+    /// page acknowledges a rest that just ended (see `scheduleRestEndRepeat`).
+    var pageIndex = 0 {
+        didSet { if pageIndex != oldValue { acknowledgeRestEnd() } }
+    }
 
     /// Left-side reps held between "Log left" and "Log right" (2G), per exercise entry.
     var pendingLeftReps: [UUID: Int] = [:]
@@ -70,7 +77,7 @@ final class WatchStore {
     // MARK: - Home
 
     func refreshHome(now: Date = Date()) {
-        let calendar = Calendar.current
+        let calendar = preferences.trainingCalendar
         var state = WatchHomeState()
         state.routines = store.routines()
         state.todaysRoutine = store.todaysRoutine(calendar: calendar, now: now)
@@ -85,8 +92,40 @@ final class WatchStore {
             let day = next.date.formatted(.dateTime.weekday(.abbreviated))
             state.nextLabel = "\(next.routine.name) \(day)"
         }
-        state.resumableWorkoutID = store.unfinishedWorkouts().first?.id
+        if let unfinished = store.unfinishedWorkouts().first {
+            let lastLogged = (unfinished.exercises ?? []).flatMap { $0.sets ?? [] }
+                .compactMap(\.completedAt).max()
+            let verdict = Self.resumeGate(
+                sourceDevice: unfinished.sourceDevice, startedAt: unfinished.startedAt,
+                lastLoggedAt: lastLogged, now: now
+            )
+            switch verdict {
+            case .resumable:
+                state.resumableWorkoutID = unfinished.id
+            case .liveElsewhere:
+                state.inProgressElsewhereTitle = unfinished.title.isEmpty ? "Workout" : unfinished.title
+            }
+        }
         home = state
+    }
+
+    enum ResumeVerdict: Equatable {
+        case resumable
+        case liveElsewhere
+    }
+
+    /// Whether Home may offer "Resume" for an unfinished workout. The watch and the phone mirror
+    /// one `WorkoutModel` through CloudKit, and `sync` on either side deletes rows the other
+    /// added — so a session the phone is still logging must never be adopted here. A workout
+    /// this wrist started is always its own to resume; one from another device is only offered
+    /// once nothing has been logged on it for `staleAfter`, i.e. it was abandoned, not paused.
+    static func resumeGate(
+        sourceDevice: String, startedAt: Date, lastLoggedAt: Date?, now: Date,
+        staleAfter: TimeInterval = 10 * 60
+    ) -> ResumeVerdict {
+        if sourceDevice == "Apple Watch" { return .resumable }
+        let lastActivity = lastLoggedAt ?? startedAt
+        return now.timeIntervalSince(lastActivity) >= staleAfter ? .resumable : .liveElsewhere
     }
 
     /// "4×5" from the routine's planned working sets, "3×8–12" for a range, "3×0:45" for holds.
@@ -132,6 +171,14 @@ final class WatchStore {
         guard let session = store.resumeSession(for: workoutID) else { return }
         adopt(session)
         runtime.start(isFreestyle: session.exercises.isEmpty, startedAt: session.startedAt)
+    }
+
+    /// After a kill mid-workout (see `WatchAppDelegate`): the HealthKit session watchOS kept
+    /// alive is handed to the runtime when there is a wrist workout to resume into, and ended
+    /// when there isn't — a finished or discarded workout has nothing to run for.
+    func adoptRecoveredRuntime(_ hkSession: HKWorkoutSession) {
+        refreshHome()
+        runtime.adopt(recovered: hkSession, keep: home.resumableWorkoutID != nil)
     }
 
     private func adopt(_ session: WorkoutSession) {
@@ -225,6 +272,19 @@ final class WatchStore {
             guard !Task.isCancelled, let session, session === self.session, !session.isResting else { return }
             Haptics.restEnd()
         }
+    }
+
+    /// True while the five-second repeat is still armed.
+    var isRestEndRepeatPending: Bool {
+        guard let restEndRepeat else { return false }
+        return !restEndRepeat.isCancelled
+    }
+
+    /// Anything that shows the lifter has moved on — a set logged, a hold stopped, a page
+    /// swiped — cancels the repeat: the spec repeats it "if unacknowledged", and starting a new
+    /// rest is not the only acknowledgement.
+    func acknowledgeRestEnd() {
+        restEndRepeat?.cancel()
     }
 
     private func restStateChanged(_ state: RestState) {

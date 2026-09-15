@@ -12,6 +12,8 @@ struct CoachAskSection: View {
     @State private var question = ""
     @State private var answer: CoachAnswer?
     @State private var isAsking = false
+    /// Neither model could answer — shown in the card's place so a tap never ends in nothing.
+    @State private var failed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
@@ -39,6 +41,13 @@ struct CoachAskSection: View {
             }
             if let answer {
                 answerCard(answer)
+            } else if failed {
+                Text(CoachAskFallback.unanswered)
+                    .font(DGFont.subhead)
+                    .foregroundStyle(DGColor.ink2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .dgCard(padding: DGSpace.s4)
+                    .accessibilityIdentifier(A11yID.coachAnswer)
             }
         }
     }
@@ -50,6 +59,13 @@ struct CoachAskSection: View {
                 Text(answer.text)
                     .font(DGFont.subhead)
                     .foregroundStyle(DGColor.ink1)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if answer.toolResults.isEmpty {
+                // Ungrounded and nothing from the tools to show instead: say so rather than
+                // rendering a header over an empty card.
+                Text(CoachAskFallback.unanswered)
+                    .font(DGFont.subhead)
+                    .foregroundStyle(DGColor.ink2)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 // The sentence had a number no tool produced, so it isn't shown — the tool
@@ -83,5 +99,22 @@ struct CoachAskSection: View {
         } else {
             answer = try? await RuleCoachModel().answer(question: text, tools: source)
         }
+        failed = answer == nil
+    }
+}
+
+/// The one line both the Coach tab and `AskDaGymIntent` fall back to when there is nothing
+/// grounded to say — a question neither model could parse, or an ungrounded sentence with no
+/// tool results behind it. Never an empty card, never an empty Siri reply.
+enum CoachAskFallback {
+    static let unanswered = "I couldn't answer that from your log."
+
+    /// The text to show or speak for `answer`: its sentence when grounded, the tool results
+    /// when it isn't, and `unanswered` when there are none.
+    static func spokenText(for answer: CoachAnswer?) -> String {
+        guard let answer else { return unanswered }
+        if answer.isGrounded { return answer.text }
+        let fromTools = answer.toolResults.map(\.text).joined(separator: " ")
+        return fromTools.isEmpty ? unanswered : fromTools
     }
 }

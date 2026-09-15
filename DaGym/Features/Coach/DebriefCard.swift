@@ -96,16 +96,41 @@ struct DebriefCard: View {
     /// Streams the model's debrief; on any failure shows the rule debrief instead, and hides
     /// the card when even that has nothing to say (`DebriefValidator` returned nil).
     private func load() async {
-        do {
-            for try await snapshot in coach.model.debrief(facts: facts) {
-                debrief = snapshot
-            }
-        } catch {
-            debrief = nil
-        }
-        if debrief == nil {
-            debrief = DebriefValidator.validate(DebriefRules.debrief(from: facts), facts: facts)
-        }
+        debrief = await DebriefLoader.load(facts: facts, model: coach.model)
         isHidden = debrief == nil
+    }
+}
+
+/// The debrief's fallback ladder, off the view so it can be pinned in a test: the model's last
+/// streamed snapshot; the rule debrief when the stream throws, yields nothing, or has not
+/// yielded within `timeout` (a model that is warming up or throttled never throws — it just
+/// never answers, and the skeleton would shimmer for good); nil when even the rules have
+/// nothing cited to say.
+enum DebriefLoader {
+    static let defaultTimeout: Duration = .seconds(8)
+
+    static func load(
+        facts: SessionSummaryFacts, model: any CoachLanguageModel, timeout: Duration = defaultTimeout
+    ) async -> SessionDebrief? {
+        let streamed = await withTaskGroup(of: SessionDebrief?.self) { group in
+            group.addTask {
+                var last: SessionDebrief?
+                do {
+                    for try await snapshot in model.debrief(facts: facts) { last = snapshot }
+                } catch {
+                    return nil
+                }
+                return last
+            }
+            group.addTask {
+                try? await Task.sleep(for: timeout)
+                return nil
+            }
+            let first = await group.next().flatMap { $0 }
+            group.cancelAll()
+            return first
+        }
+        if let streamed { return streamed }
+        return DebriefValidator.validate(DebriefRules.debrief(from: facts), facts: facts)
     }
 }

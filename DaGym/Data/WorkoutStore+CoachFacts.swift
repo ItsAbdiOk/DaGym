@@ -63,6 +63,8 @@ extension WorkoutStore {
         let input = coachInput(now: now, calendar: calendar)
         let since = calendar.date(byAdding: .weekOfYear, value: -weeks, to: now) ?? now
         let finished = finishedWorkoutModelsNewestFirst().filter { $0.startedAt >= since }
+        let models = fetchExerciseModels(ids: Set(input.lifts.compactMap(\.exerciseID)))
+        let unit = preferredWeightUnit
         let lifts = input.lifts.compactMap { lift -> LiftDigest? in
             guard let exerciseID = lift.exerciseID else { return nil }
             let sessions = finished.filter { workout in
@@ -72,10 +74,14 @@ extension WorkoutStore {
                 ? ((lift.e1rmTrend.last ?? 0) - (lift.e1rmTrend.first ?? 0)) / (lift.e1rmTrend.first ?? 1)
                 : nil
             let range = repRange(exerciseID: exerciseID)
+            let increment = models[exerciseID].map {
+                Self.reviewIncrementKg(for: exerciseInfo(for: $0), unit: unit)
+            }
             return LiftDigest(
                 id: exerciseID, name: lift.name, e1rmChangeFraction: change, sessions: sessions,
-                isStalled: lift.stallState.consecutiveMisses >= TrainingConstants.coachStalledLiftMisses,
-                repLow: range?.low, repHigh: range?.high
+                isStalled: lift.isStalled,
+                repLow: range?.low, repHigh: range?.high,
+                incrementKg: increment ?? TrainingConstants.defaultUpperBodyIncrementKg
             )
         }
         let adherence = AdherenceSummary.over(
@@ -101,6 +107,20 @@ extension WorkoutStore {
             weeks: weeks, lifts: lifts, adherencePercent: adherence.percent, coverageGaps: gaps,
             trainingDays: input.schedule.dayRoutines.keys.sorted { $0.rawValue < $1.rawValue }, pool: pool
         )
+    }
+
+    /// The step a review-proposed rule climbs this lift by: the same choice the starter routines
+    /// and the rule picker make for a hand-built rule — a lower-body lift on the region's
+    /// 5 kg / 10 lb, a lb lifter otherwise on a round 5 lb, and a kg lifter on the exercise's
+    /// own library increment (dumbbells 2 kg, a cable stack 1 kg…).
+    static func reviewIncrementKg(for exercise: ExerciseInfo, unit: WeightUnit) -> Double {
+        let isLowerBody = exercise.primary.contains(where: \.isLowerBody)
+        switch unit {
+        case .kg:
+            return isLowerBody ? TrainingConstants.defaultLowerBodyIncrementKg : exercise.incrementKg
+        case .lb:
+            return unit.toKg(isLowerBody ? 10 : 5)
+        }
     }
 
     /// The lowest working-set rep target across every routine slot for this exercise.

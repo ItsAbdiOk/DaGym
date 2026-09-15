@@ -30,6 +30,7 @@ enum A11yID {
     static let coachReview = "coach.review"
     static let coachQuestion = "coach.question"
     static let coachAnswer = "coach.answer"
+    static let coachApplyFailure = "coach.applyFailure"
     static let programBuild = "program.build"
     static let programApply = "program.apply"
     static let coachStatus = "coach.status"

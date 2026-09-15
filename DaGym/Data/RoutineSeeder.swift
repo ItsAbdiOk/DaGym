@@ -303,12 +303,17 @@ extension WorkoutStore {
     /// device agrees). Workouts, programs and the schedule that named a removed copy are
     /// re-pointed at the survivor. Returns the number removed.
     ///
-    /// Oldest, not most recently edited: the copy the user has had is the one they edited and
-    /// trained, and the other copy is always a fresh seed — a second device's first launch, or
-    /// the re-seed after a wipe that a backup restore then imports on top of. A fresh seed is
-    /// stamped `updatedAt = now`, so "newest wins" handed every one of those folds to the
+    /// An edited copy beats a pristine one, then oldest, not most recently stamped: the other
+    /// copy is usually a fresh seed — a second device's first launch, or the re-seed after a
+    /// wipe that a backup restore then imports on top of — and a fresh seed is stamped
+    /// `updatedAt = now`, so plain "newest wins" handed every one of those folds to the
     /// pristine copy and the user's planned sets, swapped exercises and stall state went with
-    /// the tombstone. Same rule as `ExerciseSeeder.survivesFirst` and `EquipmentDedupe`.
+    /// the tombstone. Plain "oldest wins" lost the inverse case: a January seed never opened on
+    /// the old phone against the copy the lifter rebuilt on the new phone before signing into
+    /// iCloud. So a copy edited since it was seeded (`routineWasEdited`) outranks one that
+    /// wasn't; two edited copies fall back to the most recent edit, two pristine ones to the
+    /// oldest (by `id` on a tie, so every device agrees — the rule `ExerciseSeeder.survivesFirst`
+    /// and `EquipmentDedupe` use).
     @discardableResult
     func dedupeRoutines() -> Int {
         let models = (try? context.fetch(FetchDescriptor<RoutineModel>())) ?? []
@@ -336,10 +341,23 @@ extension WorkoutStore {
         return folded + swept
     }
 
-    private static func routineSurvivesFirst(_ lhs: RoutineModel, _ rhs: RoutineModel) -> Bool {
+    static func routineSurvivesFirst(_ lhs: RoutineModel, _ rhs: RoutineModel) -> Bool {
+        let lhsEdited = routineWasEdited(lhs)
+        let rhsEdited = routineWasEdited(rhs)
+        if lhsEdited != rhsEdited { return lhsEdited }
+        if lhsEdited, lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
         if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
         return lhs.id.uuidString < rhs.id.uuidString
     }
+
+    /// A routine saved, or trained, since it was seeded. A fresh seed's `updatedAt` is stamped
+    /// within milliseconds of its `createdAt`; anything the lifter did to it comes later than
+    /// `routineEditSlack`.
+    static func routineWasEdited(_ model: RoutineModel) -> Bool {
+        model.updatedAt.timeIntervalSince(model.createdAt) > routineEditSlack
+    }
+
+    static let routineEditSlack: TimeInterval = 60
 
     /// Tombstones `duplicate` rather than deleting it, for the same reason
     /// `ExerciseSeeder.dedupe` does: CloudKit delivers a routine's slots after the routine, and

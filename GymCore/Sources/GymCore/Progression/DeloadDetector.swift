@@ -13,7 +13,15 @@ public struct LiftSnapshot: Hashable, Sendable {
     /// Average RPE at the same load, oldest first, spanning about 2 weeks. Nil when untracked.
     public var rpeAtSameLoadTrend: [Double]?
 
-    public init(name: String, stalls: Int, e1rmTrend: [Double], rpeAtSameLoadTrend: [Double]? = nil) {
+    /// The streak that counts as a stall for this lift — `TrainingConstants.deloadStallCount`
+    /// unless the lift's rule resets its counter sooner (`CoachLiftSnapshot.stalledLiftMisses`).
+    public var stallThreshold: Int
+
+    public init(
+        name: String, stalls: Int, stallThreshold: Int = TrainingConstants.deloadStallCount,
+        e1rmTrend: [Double], rpeAtSameLoadTrend: [Double]? = nil
+    ) {
+        self.stallThreshold = stallThreshold
         self.name = name
         self.stalls = stalls
         self.e1rmTrend = e1rmTrend
@@ -70,13 +78,13 @@ public enum DeloadDetector {
     }
 
     private static func stallReasons(_ lifts: [LiftSnapshot]) -> [String] {
-        let stalled = lifts.filter { $0.stalls >= TrainingConstants.deloadStallCount }
+        let stalled = lifts.filter { $0.stalls >= $0.stallThreshold }
         guard stalled.count >= TrainingConstants.deloadMinLiftsStalling else { return [] }
         let names = stalled.map(\.name).joined(separator: ", ")
         // The counter is "sessions judged as misses", which is what the copy now claims. It used
         // to say `deloadStallCount`+ *sessions*, which overstated the evidence by one because the
         // persisted counter lags a session (see `TrainingConstants.deloadStallCount`).
-        let streak = TrainingConstants.deloadStallCount
+        let streak = stalled.map(\.stallThreshold).min() ?? TrainingConstants.deloadStallCount
         return [
             "\(stalled.count) lifts (\(names)) have stalled — \(streak)+ sessions in a row missing "
                 + "their target"

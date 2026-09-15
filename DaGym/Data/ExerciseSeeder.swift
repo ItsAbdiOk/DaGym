@@ -61,7 +61,7 @@ enum ExerciseSeeder {
             try insertMissing(seed.exercises, into: context)
             let state = SeedState.row(in: context)
             if seed.version > state.exerciseSeedVersion {
-                try updateExisting(seed.exercises, in: context)
+                try updateExisting(seed.exercises, from: state.exerciseSeedVersion, in: context)
                 state.exerciseSeedVersion = seed.version
                 state.updatedAt = Date()
                 try context.save()
@@ -195,13 +195,16 @@ enum ExerciseSeeder {
     /// Carries the loser's user-editable fields onto the survivor. Anything the survivor still
     /// holds at its seeded value is treated as unedited, so a rest time, increment or bar the
     /// user changed on whichever copy lost the fold is kept rather than discarded. Rest is the
-    /// exception: its unedited value is 0 ("use the default"), not the seed's number.
+    /// exception: its unedited value is 0 ("use the default"), not the seed's number — and a
+    /// copy seeded by a device still on seed v3 carries the seed's number for unedited rest,
+    /// which must not land on the survivor as an override.
     private static func mergeFields(
         from duplicate: ExerciseModel, into survivor: ExerciseModel, seed: SeedExercise?
     ) {
         if !survivor.isFavorite, duplicate.isFavorite { survivor.isFavorite = true }
         if survivor.notes.isEmpty, !duplicate.notes.isEmpty { survivor.notes = duplicate.notes }
-        if survivor.restSeconds == 0, duplicate.restSeconds != 0 {
+        if survivor.restSeconds == 0, duplicate.restSeconds != 0,
+           duplicate.restSeconds != seed?.restSeconds {
             survivor.restSeconds = duplicate.restSeconds
         }
         guard let seed else { return }
@@ -263,8 +266,12 @@ enum ExerciseSeeder {
     /// Seed version 4 also migrates rest: seeded rows used to carry the seed's `restSeconds` as
     /// their own value, so Settings → Default rest never applied to them. A row still at its
     /// seed item's number is unedited and becomes 0 ("use the default"); one the lifter changed
-    /// is an override and is kept. Runs once per store because it is gated on the version.
-    private static func updateExisting(_ items: [SeedExercise], in context: ModelContext) throws {
+    /// is an override and is kept. The rest migration runs once per store — only when the store
+    /// is coming from a version before `restMigrationVersion` — so a rest the lifter later sets
+    /// to exactly the seed's number is not flipped back to "default" by every future bump.
+    static func updateExisting(
+        _ items: [SeedExercise], from previousVersion: Int, in context: ModelContext
+    ) throws {
         let existing = try context.fetch(FetchDescriptor<ExerciseModel>())
         var bySeedID: [String: ExerciseModel] = [:]
         for model in existing where !model.isMergedAway {
@@ -275,7 +282,7 @@ enum ExerciseSeeder {
         var updatedCount = 0
         for item in items {
             guard let model = bySeedID[item.id] else { continue }
-            refresh(model, from: item)
+            refresh(model, from: item, migrateRest: previousVersion < restMigrationVersion)
             updatedCount += 1
         }
         if updatedCount > 0 {
@@ -284,7 +291,10 @@ enum ExerciseSeeder {
         }
     }
 
-    private static func refresh(_ model: ExerciseModel, from item: SeedExercise) {
+    /// The seed version that moved unedited rest from the seed's number to 0.
+    static let restMigrationVersion = 4
+
+    private static func refresh(_ model: ExerciseModel, from item: SeedExercise, migrateRest: Bool) {
         if let instructions = item.instructions, !instructions.isEmpty {
             model.instructions = instructions
         }
@@ -292,7 +302,7 @@ enum ExerciseSeeder {
         if let sourceURL = item.sourceURL { model.sourceURL = sourceURL }
         if let licence = item.licence { model.licence = licence }
         if let authors = item.authors { model.authors = authors }
-        if model.restSeconds == item.restSeconds { model.restSeconds = 0 }
+        if migrateRest, model.restSeconds == item.restSeconds { model.restSeconds = 0 }
     }
 
     /// The seed JSON lives at `Resources/Seed/exercises.json`. Swift Testing
@@ -342,14 +352,19 @@ extension ExerciseSeeder {
             for note in fetch(FetchDescriptor<ExerciseNoteModel>(), in: context) {
                 if let id = note.exerciseID { notes[id, default: []].append(note) }
             }
+            // Filtered on the Date twin of `mergedIntoID` (stamped and cleared together in
+            // `dedupe`/`fold`): the same optional-UUID-against-nil shape that
+            // `WorkoutStore.liveExercises` documents as silently empty is avoided here on
+            // principle, and `SeedDedupePerformanceTests.tombstoneChildPrefetchIsExact` pins
+            // that the fetch returns exactly the tombstones' children.
             let tombstoneSlots = FetchDescriptor<RoutineExerciseModel>(
-                predicate: #Predicate { $0.exercise?.mergedIntoID != nil }
+                predicate: #Predicate { $0.exercise?.mergedAt != nil }
             )
             for slot in fetch(tombstoneSlots, in: context) {
                 if let owner = slot.exercise { slots[owner.persistentModelID, default: []].append(slot) }
             }
             let tombstoneEntries = FetchDescriptor<WorkoutExerciseModel>(
-                predicate: #Predicate { $0.exercise?.mergedIntoID != nil }
+                predicate: #Predicate { $0.exercise?.mergedAt != nil }
             )
             for entry in fetch(tombstoneEntries, in: context) {
                 if let owner = entry.exercise { entries[owner.persistentModelID, default: []].append(entry) }

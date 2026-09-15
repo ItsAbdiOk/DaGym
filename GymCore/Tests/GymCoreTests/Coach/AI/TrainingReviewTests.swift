@@ -59,6 +59,40 @@ struct TrainingReviewTests {
         ])
     }
 
+    @Test("a claim whose number no fact, pool name or the change itself states is refused")
+    func inventedNumbersAreRefused() {
+        let lift2 = TrainingDigest.FactID.lift(1)
+        let gap = TrainingDigest.FactID.gap(.hams)
+        let proposals = [
+            // The fact says e1RM +5 %; the model wrote 15 %.
+            ReviewProposal(
+                change: .deloadLift(squat),
+                claim: CoachClaim(text: "Squat is up 15% — deload anyway.", citedFactIDs: [lift2])
+            ),
+            ReviewProposal(
+                change: .deloadLift(squat),
+                claim: CoachClaim(text: "Squat is up 5% over 5 sessions.", citedFactIDs: [lift2])
+            ),
+            // The proposed range is the change's own number, not an invention.
+            ReviewProposal(
+                change: .changeRepRange(exerciseID: squat, low: 8, high: 12),
+                claim: CoachClaim(text: "Move Squat to 8–12 reps.", citedFactIDs: [lift2])
+            ),
+            ReviewProposal(
+                change: .changeRepRange(exerciseID: bench, low: 8, high: 12),
+                claim: CoachClaim(text: "Move Bench to 8–12 reps after 20 sessions.", citedFactIDs: [lift2])
+            ),
+            ReviewProposal(
+                change: .addExercise(poolRow), claim: CoachClaim(text: "Add Leg Curl.", citedFactIDs: [gap])
+            )
+        ]
+        let kept = TrainingReviewValidator.validate(proposals, digest: digest)
+        #expect(kept.map(\.change) == [
+            .deloadLift(squat), .changeRepRange(exerciseID: squat, low: 8, high: 12), .addExercise(poolRow)
+        ])
+        #expect(kept.first?.claim.text == "Squat is up 5% over 5 sessions.")
+    }
+
     @Test("a non-positive progression increment is refused")
     func progressionRuleGuard() {
         let bad = ReviewProposal(

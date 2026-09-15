@@ -43,12 +43,8 @@ struct LibraryView: View {
                     Button("New exercise", systemImage: "plus") { showingNewExercise = true }
                 }
             }
-            // Explicit placement: on iOS 27 a `.searchable` inside a plain `Tab` without a
-            // placement no longer shows a field at all (the system reserves search for a
-            // `role: .search` tab), which made the library unsearchable.
             .searchable(
-                text: $searchText, placement: .navigationBarDrawer(displayMode: .always),
-                prompt: "Search \(totalCount) exercises"
+                text: $searchText, placement: searchPlacement, prompt: "Search \(totalCount) exercises"
             )
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
@@ -122,6 +118,18 @@ struct LibraryView: View {
         .navigationDestination(for: ExerciseInfo.self) { exercise in
             ExerciseDetailView(exercise: exercise)
         }
+    }
+
+    /// On iOS 27 a `.searchable` inside a plain `Tab` without an explicit placement shows no
+    /// field at all (the system reserves search for a `role: .search` tab), which made the
+    /// library unsearchable — so the drawer is pinned there. On iOS 26 the default drawer that
+    /// collapses on scroll is kept: pinning it would cost ~52 pt of the list on the shipping OS
+    /// for a problem it does not have, and would differ from `ExercisePickerSheet`'s field.
+    private var searchPlacement: SearchFieldPlacement {
+        if #available(iOS 27, *) {
+            return .navigationBarDrawer(displayMode: .always)
+        }
+        return .navigationBarDrawer(displayMode: .automatic)
     }
 
     private func refresh() {

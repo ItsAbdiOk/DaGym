@@ -16,6 +16,8 @@ struct CoachReviewSection: View {
     @State private var expanded: Set<String> = []
     @State private var isReviewing = false
     @State private var hasReviewed = false
+    /// Why the last Approve did nothing, shown under the cards until the next tap.
+    @State private var applyFailure: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
@@ -46,6 +48,13 @@ struct CoachReviewSection: View {
                     onToggle: { toggle(card) }, onApprove: { approve(card) }, onDismiss: { dismiss(card) }
                 )
             }
+            if let applyFailure {
+                Text(applyFailure)
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier(A11yID.coachApplyFailure)
+            }
         }
     }
 
@@ -54,12 +63,8 @@ struct CoachReviewSection: View {
         defer { isReviewing = false; hasReviewed = true }
         let now = Date()
         let digest = store.trainingDigest(now: now, calendar: preferences.trainingCalendar)
-        let proposals: [ReviewProposal]
-        if let fromModel = try? await coach.model.reviewTraining(digest: digest) {
-            proposals = fromModel
-        } else {
-            proposals = TrainingReviewRules.proposals(from: digest)
-        }
+        let fromModel = try? await coach.model.reviewTraining(digest: digest)
+        let proposals = ReviewApproval.proposals(fromModel: fromModel, digest: digest)
         let interactions = store.coachInteractions()
         var built: [CoachCard] = []
         var byFingerprint: [String: ReviewChange] = [:]
@@ -82,19 +87,24 @@ struct CoachReviewSection: View {
     }
 
     private func approve(_ card: CoachCard) {
-        let interactionID = store.recordCoachInteraction(
-            rule: card.rule, fingerprint: card.fingerprint, outcome: .approved
-        )
-        let applied = changes[card.fingerprint].flatMap(store.applyReviewChange)
-        undoAction = UndoAction(message: applied?.message ?? "Approved \"\(card.title)\"") {
-            if let applied { store.undoReviewChange(applied) }
-            store.removeCoachInteraction(id: interactionID)
-            cards.append(card)
+        applyFailure = nil
+        switch ReviewApproval.approve(card: card, change: changes[card.fingerprint], store: store) {
+        case .applied(let applied, let interactionID):
+            undoAction = UndoAction(message: applied.message) {
+                store.undoReviewChange(applied)
+                store.removeCoachInteraction(id: interactionID)
+                cards.append(card)
+            }
+            cards.removeAll { $0.fingerprint == card.fingerprint }
+        case .refused(let reason):
+            // The card stays and nothing is recorded: a "yes" that changed nothing would hide
+            // the card for its cool-down while the lifter believes the plan moved.
+            applyFailure = reason
         }
-        cards.removeAll { $0.fingerprint == card.fingerprint }
     }
 
     private func dismiss(_ card: CoachCard) {
+        applyFailure = nil
         let interactionID = store.recordCoachInteraction(
             rule: card.rule, fingerprint: card.fingerprint, outcome: .dismissed
         )
@@ -103,6 +113,35 @@ struct CoachReviewSection: View {
             cards.append(card)
         }
         cards.removeAll { $0.fingerprint == card.fingerprint }
+    }
+}
+
+/// What Approve on a review card does, kept off the view so it can be pinned in a test: the
+/// change is applied *first*, and only a change that took is recorded as approved (the
+/// approval is what `CoachEngine.isSuppressed` keys its cool-down on).
+@MainActor
+enum ReviewApproval {
+    enum Outcome {
+        case applied(ReviewApplication, interactionID: UUID)
+        case refused(String)
+    }
+
+    static func approve(card: CoachCard, change: ReviewChange?, store: WorkoutStore) -> Outcome {
+        guard let change, let applied = store.applyReviewChange(change) else {
+            return .refused("Couldn't apply \"\(card.title)\" — it no longer matches your plan.")
+        }
+        let interactionID = store.recordCoachInteraction(
+            rule: card.rule, fingerprint: card.fingerprint, outcome: .approved
+        )
+        return .applied(applied, interactionID: interactionID)
+    }
+
+    /// The model's validated proposals, or the rules' when the model threw *or* had every
+    /// proposal rejected — an empty list from the model means "nothing survived validation",
+    /// not "the plan is fine", and `DebriefCard` already treats its stream the same way.
+    static func proposals(fromModel: [ReviewProposal]?, digest: TrainingDigest) -> [ReviewProposal] {
+        if let fromModel, !fromModel.isEmpty { return fromModel }
+        return TrainingReviewRules.proposals(from: digest)
     }
 }
 

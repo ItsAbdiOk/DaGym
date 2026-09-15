@@ -57,6 +57,36 @@ struct SeedDedupePerformanceTests {
         #expect(big == 6, "a settled dedupe pass issued \(big) queries for 12 tombstones")
     }
 
+    /// The two relationship prefetches filter on an optional through a relationship keypath.
+    /// This project has twice seen an optional UUID compared against nil come back *empty*
+    /// (`WorkoutStore.liveExercises`, `BackupService.liveExercises`), and an empty prefetch
+    /// here would mean late CloudKit children of a tombstone were never re-pointed and the
+    /// 30-day sweep then detached them. Pins that the fetch returns exactly the tombstone's
+    /// children — not none, and not the live rows' as well.
+    @Test("the tombstone-child prefetch returns exactly the rows pointing at tombstones")
+    func tombstoneChildPrefetchIsExact() throws {
+        let context = try seededContext()
+        try settleTombstones(count: 3, in: context)
+        let all = try context.fetch(FetchDescriptor<ExerciseModel>())
+        let tombstone = try #require(all.first { $0.isMergedAway })
+        let live = try #require(all.first { !$0.isMergedAway })
+        let workout = WorkoutModel(title: "Push A", endedAt: Date())
+        context.insert(workout)
+        context.insert(WorkoutExerciseModel(order: 0, exercise: tombstone, workout: workout))
+        context.insert(WorkoutExerciseModel(order: 1, exercise: live, workout: workout))
+        let routine = RoutineModel(name: "Push A")
+        context.insert(routine)
+        context.insert(RoutineExerciseModel(order: 0, exercise: tombstone, routine: routine))
+        context.insert(RoutineExerciseModel(order: 1, exercise: live, routine: routine))
+        try context.save()
+
+        let children = ExerciseSeeder.FoldChildren(context: context)
+        #expect(children.entries(of: tombstone).count == 1, "tombstone entry prefetch came back wrong")
+        #expect(children.slots(of: tombstone).count == 1, "tombstone slot prefetch came back wrong")
+        #expect(children.entries(of: live).count == 1)
+        #expect(children.slots(of: live).count == 1)
+    }
+
     @Test("a clean store costs one query — the pass runs after every remote change")
     func cleanStoreIsOneQuery() throws {
         let context = try seededContext()

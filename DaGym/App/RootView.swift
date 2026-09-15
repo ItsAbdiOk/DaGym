@@ -242,12 +242,17 @@ struct RootView: View {
     }
 
     /// "Start today's workout" Siri Shortcut hookup (`StartWorkoutIntent`/
-    /// `PendingWorkoutIntentAction`): the intent opened the app, so if nothing is already in
-    /// progress, start today's scheduled routine — same as tapping "Start" on Home. Leaves an
-    /// already-active session alone rather than replacing it.
+    /// `PendingWorkoutIntentAction`): the intent opened the app, so do what its dialog promised
+    /// (`StartWorkoutIntent.dialog`): carry on an unfinished session if there is one, otherwise
+    /// start today's scheduled routine, or a freestyle session on a rest day — the same choices
+    /// Home's button offers. Leaves an already-active session alone rather than replacing it.
     private func startPendingWorkout() {
         guard session == nil else { return }
-        startFromScheduledRoutine()
+        guard let unfinished = UnfinishedWorkoutPrompt.newest(in: store) else {
+            if let routine { startWorkout(routine) } else { startFreestyle() }
+            return
+        }
+        resumeUnfinished(unfinished)
     }
 
     /// Handles the `dagym://start?routine=<uuid>` deep link a synced calendar event opens

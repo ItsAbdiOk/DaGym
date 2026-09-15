@@ -11,10 +11,15 @@ public struct LiftDigest: Hashable, Sendable, Identifiable {
     /// The plan's current rep target on this lift (low…high), when it has one.
     public var repLow: Int?
     public var repHigh: Int?
+    /// The step a progression rule proposed for this lift should climb by — the lift's own
+    /// increment on the lifter's grid (5 kg on a squat, 1 kg on a cable, 5 lb for a lb lifter),
+    /// so a "put Squat on linear" card doesn't hard-code 2.5 kg.
+    public var incrementKg: Double
 
     public init(
         id: UUID, name: String, e1rmChangeFraction: Double? = nil, sessions: Int, isStalled: Bool = false,
-        repLow: Int? = nil, repHigh: Int? = nil
+        repLow: Int? = nil, repHigh: Int? = nil,
+        incrementKg: Double = TrainingConstants.defaultUpperBodyIncrementKg
     ) {
         self.id = id
         self.name = name
@@ -23,6 +28,7 @@ public struct LiftDigest: Hashable, Sendable, Identifiable {
         self.isStalled = isStalled
         self.repLow = repLow
         self.repHigh = repHigh
+        self.incrementKg = incrementKg
     }
 }
 
@@ -122,9 +128,14 @@ public enum TrainingReviewValidator {
         _ proposals: [ReviewProposal], digest: TrainingDigest
     ) -> [ReviewProposal] {
         let known = digest.factIDs
+        // Pool names are fair game for a number ("add Cable Row 2"), and so is the change's own
+        // value ("move to 8–12 reps") — everything else must be a value one of the facts states.
+        let knownText = digest.facts.map(\.text) + digest.pool.map(\.name)
         var seen = Set<ReviewChange>()
         var result: [ReviewProposal] = []
-        for proposal in proposals where proposal.claim.isGrounded(in: known) {
+        for proposal in proposals where proposal.claim.isGrounded(
+            in: known, numbersFrom: knownText + [statedNumbers(in: proposal.change)]
+        ) {
             guard isAllowed(proposal.change, digest: digest), !seen.contains(proposal.change) else {
                 continue
             }
@@ -133,6 +144,15 @@ public enum TrainingReviewValidator {
             if result.count == ReviewProposal.maxProposals { break }
         }
         return result
+    }
+
+    /// The numbers a change itself carries, as one line of text for the number check.
+    static func statedNumbers(in change: ReviewChange) -> String {
+        switch change {
+        case .changeRepRange(_, let low, let high): "\(low) \(high)"
+        case .changeProgressionRule(_, let rule): rule.explanation()
+        case .addExercise, .swapExercise, .moveRestDay, .deloadLift: ""
+        }
     }
 
     static func isAllowed(_ change: ReviewChange, digest: TrainingDigest) -> Bool {

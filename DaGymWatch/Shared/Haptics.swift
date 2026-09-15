@@ -46,7 +46,16 @@ enum Haptics {
     /// A timed hold reaching its target.
     static func holdTarget() { play(.holdTarget) }
 
+    #if DEBUG
+    /// Every event `play` was asked for, in order, so a test can drive the real
+    /// `WorkoutSession.tickRest` path and read the haptics it fired.
+    static var recorded: [WatchHaptic] = []
+    #endif
+
     private static func play(_ event: WatchHaptic) {
+        #if DEBUG
+        recorded.append(event)
+        #endif
         guard let type = event.type(hapticsEnabled: enabled) else { return }
         WKInterfaceDevice.current().play(type)
     }
@@ -79,15 +88,5 @@ enum WatchHaptic: CaseIterable, Sendable {
     /// What actually plays under the Haptics setting: nil when the event is gated off.
     func type(hapticsEnabled: Bool) -> WKHapticType? {
         hapticsEnabled || alwaysFires ? wkType : nil
-    }
-
-    /// The rest countdown's haptic for a remaining second: a click at 3, 2 and 1, success at
-    /// zero, nothing otherwise. What `WorkoutSession.tickRest` fires through `Haptics`.
-    static func forRest(remaining: Int) -> WatchHaptic? {
-        switch remaining {
-        case 0: .restEnd
-        case 1...3: .restTick
-        default: nil
-        }
     }
 }

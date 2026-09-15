@@ -174,13 +174,17 @@ extension GeneratedChange {
         case .changeRepRange:
             change = liftID.map { .changeRepRange(exerciseID: $0, low: repLow, high: repHigh) }
         case .changeProgressionRule:
+            // The lift's own step, not a hard-coded 2.5 kg: a squat climbs by 5 kg, a lb lifter
+            // by a round 5 lb.
+            let increment = digest.lifts.indices.contains(lift - 1)
+                ? digest.lifts[lift - 1].incrementKg : TrainingConstants.defaultUpperBodyIncrementKg
             let rule: ProgressionRule
             switch progressionRule {
-            case .linear, .none: rule = .linear(incrementKg: 2.5)
+            case .linear, .none: rule = .linear(incrementKg: increment)
             case .doubleProgression:
                 let low = repLow > 0 ? repLow : 8
                 let high = repHigh > 0 ? repHigh : 12
-                rule = .doubleProgression(low: low, high: high, incrementKg: 2.5)
+                rule = .doubleProgression(low: low, high: high, incrementKg: increment)
             }
             change = liftID.map { .changeProgressionRule(exerciseID: $0, rule: rule) }
         case .moveRestDay:

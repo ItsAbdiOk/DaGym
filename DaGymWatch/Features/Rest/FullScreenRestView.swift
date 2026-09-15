@@ -2,14 +2,15 @@ import GymCore
 import SwiftUI
 
 /// 3B: rests over 45 s take the whole screen — the ring, the remaining time over the total,
-/// the next set, +30s / Skip. The crown scrubs the remaining time in 15 s detents. For the
+/// the next set, +30s / Skip. The crown scrubs the remaining time in 15 s detents, each detent
+/// a step from the current countdown. For the
 /// final three seconds (3C) the buttons clear so a stray palm can't skip, and at zero it hands
 /// straight back to the next set.
 struct FullScreenRestView: View {
     @Environment(WatchStore.self) private var store
     @Environment(WatchPreferences.self) private var preferences
     @State private var crown: Double = 0
-    @State private var isScrubbing = false
+    @State private var scrubber = CrownRestScrubber(position: 0)
 
     private var session: WorkoutSession? { store.session }
     private var remaining: Int { session?.restRemaining ?? 0 }
@@ -32,14 +33,16 @@ struct FullScreenRestView: View {
             isContinuous: false,
             isHapticFeedbackEnabled: true
         )
-        .onAppear { crown = Double(remaining) }
-        .onChange(of: crown) { _, value in
-            let target = Int(value.rounded())
-            guard abs(target - remaining) >= 8 else { return }
-            store.scrubRest(to: target)
+        .onAppear {
+            // Parked mid-range so a turn in either direction has room; the position itself
+            // means nothing — only movement does (`CrownRestScrubber`).
+            crown = 300
+            scrubber = CrownRestScrubber(position: crown)
         }
-        .onChange(of: remaining) { _, value in
-            if abs(Double(value) - crown) > 20 { crown = Double(value) }
+        .onChange(of: crown) { _, value in
+            let delta = scrubber.turned(to: value)
+            guard delta != 0 else { return }
+            store.scrubRest(to: remaining + delta)
         }
     }
 

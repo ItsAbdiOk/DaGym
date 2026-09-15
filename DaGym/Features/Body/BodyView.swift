@@ -11,7 +11,6 @@ struct BodyView: View {
     // same-type extension in a different file can't see a `private` member. Still internal to
     // the module either way.
     @Environment(Preferences.self) var preferences
-    @Environment(HealthSyncService.self) private var healthSync
     @Environment(HealthInsightsService.self) var healthInsights
 
     @State private var series: [BodyMeasurementInfo] = []

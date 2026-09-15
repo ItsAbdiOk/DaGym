@@ -142,6 +142,9 @@ private struct HomeFooter: View {
     }
 
     private var footerLine: String {
+        // A session the phone is logging right now is shown, never offered: adopting it here
+        // would have both devices syncing one workout and deleting each other's sets.
+        if store.home.inProgressElsewhereTitle != nil { return "In progress on iPhone" }
         var parts: [String] = []
         if store.home.streakWeeks > 0 { parts.append("\(store.home.streakWeeks)-week streak") }
         if let next = store.home.nextLabel { parts.append(next) }

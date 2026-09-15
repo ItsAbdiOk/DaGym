@@ -35,4 +35,17 @@ public struct CoachClaim: Hashable, Sendable {
         guard !trimmed.isEmpty, !citedFactIDs.isEmpty else { return false }
         return citedFactIDs.allSatisfy { knownIDs.contains($0) }
     }
+
+    /// `isGrounded(in:)` plus the number check the Ask feature applies to a model sentence:
+    /// every numeric token in the claim must be a value that appears in `knownText` (the
+    /// fact lines and any names the claim may repeat). Citations alone let "Volume was up
+    /// 40 %" through against a fact that said +4 % — the model does no maths, so a number the
+    /// facts never stated is a number it invented, and the claim is dropped.
+    public func isGrounded(in knownIDs: Set<String>, numbersFrom knownText: [String]) -> Bool {
+        guard isGrounded(in: knownIDs) else { return false }
+        let allowed = knownText.flatMap { CoachAnswerValidator.numbers(in: $0) }
+        return CoachAnswerValidator.numbers(in: text).allSatisfy { number in
+            allowed.contains { abs($0 - number) < 0.001 }
+        }
+    }
 }

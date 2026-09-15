@@ -35,12 +35,31 @@ final class WatchPreferences {
 
     var distanceUnit: DistanceUnit { DistanceUnit.matching(weightUnit) }
 
+    /// Which day the streak's weeks start on. Not a Settings row (the phone's `weekStartsMonday`
+    /// does not sync); the phone's default is Monday and the watch must count the same weeks,
+    /// or the two devices quote different streaks. Read under the phone's key so a value that
+    /// ever does arrive is honoured. Stored, not derived from the locale: `Calendar.current`
+    /// starts on Sunday for a US watch and put Sunday's session in a different week than the
+    /// phone did.
+    var weekStartsMonday: Bool {
+        didSet { defaults.set(weekStartsMonday, forKey: Preferences.Key.weekStartsMonday) }
+    }
+
+    /// The calendar every streak, week and "next session" on the wrist is computed with — the
+    /// same shape as the phone's `Preferences.trainingCalendar`.
+    var trainingCalendar: Calendar {
+        var calendar = Calendar.current
+        calendar.firstWeekday = weekStartsMonday ? 2 : 1
+        return calendar
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         weightUnit = WeightUnit(rawValue: defaults.string(forKey: Preferences.Key.weightUnit) ?? "") ?? .kg
         haptics = defaults.object(forKey: Key.haptics) as? Bool ?? true
         voiceLog = defaults.object(forKey: Key.voiceLog) as? Bool ?? true
         lastSavedAt = defaults.object(forKey: Key.lastSavedAt) as? Date
+        weekStartsMonday = defaults.object(forKey: Preferences.Key.weekStartsMonday) as? Bool ?? true
     }
 
     private enum Key {

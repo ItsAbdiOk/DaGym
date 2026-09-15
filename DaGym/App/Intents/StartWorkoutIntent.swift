@@ -33,10 +33,17 @@ struct StartWorkoutIntent: AppIntent {
         return .result(dialog: IntentDialog(stringLiteral: Self.dialog()))
     }
 
-    /// `RootView` resolves today's routine itself; this only previews the name for the dialog.
+    /// `RootView` resolves the session itself (`startPendingWorkout`); this previews the same
+    /// decision for the dialog: an unfinished workout is continued, today's routine is started,
+    /// and a rest day starts a freestyle session.
     @MainActor
     static func dialog(now: Date = Date()) -> String {
         guard let store = IntentStoreAccess.makeStore() else { return "Starting your workout." }
+        if let unfinished = store.unfinishedWorkouts().first {
+            return IntentFormatting.continueWorkoutDialog(
+                title: unfinished.title.isEmpty ? "your workout" : unfinished.title
+            )
+        }
         let calendar = IntentStoreAccess.preferences().trainingCalendar
         return IntentFormatting.startWorkoutDialog(
             routineName: store.todaysRoutine(calendar: calendar, now: now)?.name

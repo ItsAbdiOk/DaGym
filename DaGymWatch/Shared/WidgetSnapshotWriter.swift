@@ -27,8 +27,10 @@ enum WatchSnapshotWriter {
         WidgetCenter.shared.reloadAllTimelines()
     }
 
-    static func snapshot(store: WorkoutStore, now: Date = Date()) -> WatchSnapshot {
-        let calendar = Calendar.current
+    static func snapshot(
+        store: WorkoutStore, now: Date = Date(),
+        calendar: Calendar = WatchPreferences.shared.trainingCalendar
+    ) -> WatchSnapshot {
         let dates = store.finishedWorkoutModelsNewestFirst().map(\.startedAt)
         let streak = Streaks.weekly(
             workoutDates: dates, weeklyGoal: WatchPreferences.weeklyGoal, calendar: calendar, now: now

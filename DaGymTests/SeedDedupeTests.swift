@@ -6,7 +6,10 @@ import Testing
 @testable import DaGym
 
 @MainActor
-@Suite("Seed state and dedupe")
+// Serialized: every test here seeds ~1,466 exercises into a fresh in-memory store. Run in
+// parallel with itself under a loaded machine, the host has been SIGTERMed by the test runner's
+// watchdog ("test crashed with signal term") — the only failure mode this suite has ever shown.
+@Suite("Seed state and dedupe", .serialized)
 struct SeedDedupeTests {
     private func seededStore() throws -> (store: WorkoutStore, context: ModelContext) {
         let container = try ModelContainer.dagym(inMemory: true)
@@ -241,7 +244,7 @@ private func makeSeededStore() throws -> (store: WorkoutStore, context: ModelCon
 /// The fold's tombstone contract (finding 1), the multi-routine schedule re-point (finding 2),
 /// the `SeedState` tiebreak, and the CloudKit-legality of the mirrored schema.
 @MainActor
-@Suite("Seed fold tombstones and schema legality")
+@Suite("Seed fold tombstones and schema legality", .serialized)
 struct SeedTombstoneTests {
     private func seededStore() throws -> (store: WorkoutStore, context: ModelContext) {
         try makeSeededStore()

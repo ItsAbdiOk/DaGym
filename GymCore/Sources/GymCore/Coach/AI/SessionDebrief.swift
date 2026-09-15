@@ -145,16 +145,21 @@ public struct SessionDebrief: Hashable, Sendable {
 }
 
 /// The strict gate every debrief passes through before the card shows it: the score must be in
-/// range, and a bullet that cites nothing — or cites a fact id the input never contained — is
-/// dropped rather than shown. Nil means "nothing survived", and the card hides itself.
+/// range, and a bullet that cites nothing — or cites a fact id the input never contained, or
+/// carries a number the facts never stated — is dropped rather than shown. Nil means "nothing
+/// survived", and the card hides itself.
 public enum DebriefValidator {
     public static func validate(_ debrief: SessionDebrief, facts: SessionSummaryFacts) -> SessionDebrief? {
         guard SessionDebrief.scoreRange.contains(debrief.score) else { return nil }
         let known = facts.factIDs
+        let knownText = facts.facts.map(\.text)
         let cap = SessionDebrief.maxBulletsPerList
-        let wentWell = Array(debrief.wentWell.filter { $0.isGrounded(in: known) }.prefix(cap))
-        let watch = Array(debrief.watch.filter { $0.isGrounded(in: known) }.prefix(cap))
-        let tryNext = Array(debrief.tryNext.filter { $0.isGrounded(in: known) }.prefix(cap))
+        func grounded(_ claims: [CoachClaim]) -> [CoachClaim] {
+            Array(claims.filter { $0.isGrounded(in: known, numbersFrom: knownText) }.prefix(cap))
+        }
+        let wentWell = grounded(debrief.wentWell)
+        let watch = grounded(debrief.watch)
+        let tryNext = grounded(debrief.tryNext)
         guard !(wentWell.isEmpty && watch.isEmpty && tryNext.isEmpty) else { return nil }
         return SessionDebrief(score: debrief.score, wentWell: wentWell, watch: watch, tryNext: tryNext)
     }

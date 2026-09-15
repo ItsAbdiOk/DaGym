@@ -93,4 +93,17 @@ public enum ProgressionRule: Codable, Hashable, Sendable {
     private func rpeText(_ rpe: Double) -> String {
         rpe == rpe.rounded() ? String(Int(rpe)) : String(rpe)
     }
+
+    /// The consecutive-miss count at which this rule backs the load off *and zeroes the
+    /// counter* — so `StallState.consecutiveMisses` never reaches it, and "stalled" for the
+    /// coach has to be judged one short of it (`CoachLiftSnapshot.stalledLiftMisses`). Nil for
+    /// the rules that never count misses (RPE, training max, bodyweight, assisted).
+    public var missesBeforeReset: Int? {
+        switch self {
+        case .linear, .timed: TrainingConstants.linearMissesBeforeDeload
+        case .doubleProgression: TrainingConstants.doubleProgressionMissesBeforeDeload
+        case .linearAMRAP: TrainingConstants.amrapMissesBeforeReset
+        case .rpeBased, .percentOfTrainingMax, .bodyweight, .assisted: nil
+        }
+    }
 }

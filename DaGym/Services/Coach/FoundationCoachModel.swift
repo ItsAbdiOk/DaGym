@@ -144,16 +144,28 @@ struct FoundationCoachModel: CoachLanguageModel {
             instructions: CoachPrompts.answerInstructions, tools: toolCallTools
         )
         let response = try await session.respond(to: question)
-        let results = await log.results
         let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isGrounded = !results.isEmpty
-            && CoachAnswerValidator.isGrounded(answer: text, toolResults: results)
-        return CoachAnswer(
-            text: text, toolResults: results,
-            isGrounded: isGrounded
+        return try await Self.resolvedAnswer(
+            text: text, results: await log.results, question: question, tools: tools
         )
         #else
         throw CoachModelError.unavailable
         #endif
+    }
+
+    /// Turns the model's reply into the answer a caller shows. A reply that called no tool has
+    /// nothing behind it — the model answered from its own head ("Which exercise do you mean?",
+    /// a nutrition refusal, or a number it made up) — so it is replaced by the rule matcher's
+    /// answer, grounded by construction: the tool's own numbers when the question parses, its
+    /// help line when it doesn't. The Ask card and Siri then always get a sentence; before this
+    /// the ungrounded, tool-less reply reached them as an empty card and an empty spoken line.
+    static func resolvedAnswer(
+        text: String, results: [CoachToolResult], question: String, tools: any CoachToolAnswering
+    ) async throws -> CoachAnswer {
+        guard !results.isEmpty else {
+            return try await RuleCoachModel().answer(question: question, tools: tools)
+        }
+        let isGrounded = CoachAnswerValidator.isGrounded(answer: text, toolResults: results)
+        return CoachAnswer(text: text, toolResults: results, isGrounded: isGrounded)
     }
 }

@@ -99,7 +99,29 @@ struct IntentPerformTests {
 
         #expect(PendingIntentHandoff.consume(routineLoaded: true) == [.startWorkout])
         #expect(StartWorkoutIntent.dialog() == "Starting Push A.")
+        // A rest day starts a freestyle session for real (`RootView.startPendingWorkout`), so
+        // the dialog may promise one.
         #expect(IntentFormatting.startWorkoutDialog(routineName: nil) == "Starting a freestyle workout.")
+    }
+
+    @Test("with a session already in progress the dialog says it is continued, not started")
+    func startWorkoutContinuesUnfinished() async throws {
+        let (store, _) = try install(#function)
+        defer { IntentStoreAccess.testOverride = nil }
+        _ = PendingIntentHandoff.consume(routineLoaded: true)
+        let exercise = store.createCustomExercise(
+            name: "Bench", primary: [.chest], equipment: "Barbell", style: .weightReps
+        )
+        let draft = RoutineExerciseDraft(exerciseID: exercise.id, sets: [PlannedSetDraft(kind: .working)])
+        let routine = store.saveRoutine(id: nil, name: "Push A", exercises: [draft])
+        let live = store.startWorkout(routineID: routine.id)
+        store.sync(session: live)
+
+        _ = try await StartWorkoutIntent().perform()
+
+        #expect(PendingIntentHandoff.consume(routineLoaded: true) == [.startWorkout])
+        #expect(StartWorkoutIntent.dialog() == "Continuing Push A.")
+        #expect(IntentFormatting.continueWorkoutDialog(title: "Legs") == "Continuing Legs.")
     }
 
     @Test("the rest timer intent queues its hand-off without needing a store")

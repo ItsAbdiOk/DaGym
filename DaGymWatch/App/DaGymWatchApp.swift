@@ -1,8 +1,11 @@
+import HealthKit
 import SwiftData
 import SwiftUI
+import WatchKit
 
 @main
 struct DaGymWatchApp: App {
+    @WKApplicationDelegateAdaptor private var delegate: WatchAppDelegate
     @State private var root = WatchRoot()
 
     var body: some Scene {
@@ -47,6 +50,7 @@ final class WatchRoot {
         let watchStore = WatchStore(store: workoutStore)
         watchStore.refreshHome()
         store = watchStore
+        WatchWorkoutRecovery.shared.attach(to: watchStore)
         WatchSnapshotWriter.refresh(store: workoutStore, rest: nil)
     }
 
@@ -54,5 +58,43 @@ final class WatchRoot {
         if WatchLaunchFlags.isSample { return try? ModelContainer.dagym(inMemory: true) }
         if let cloud = try? ModelContainer.dagym(cloudKitEnabled: true) { return cloud }
         return try? ModelContainer.dagym(cloudKitEnabled: false)
+    }
+}
+
+/// watchOS relaunches DaGym after it was killed mid-workout (memory pressure, a force-quit)
+/// so it can re-attach to the `HKWorkoutSession` still running; ignoring the call leaves that
+/// session orphaned and the next `HKWorkoutSession(...)` failing as "already active".
+final class WatchAppDelegate: NSObject, WKApplicationDelegate {
+    func handleActiveWorkoutRecovery() {
+        HKHealthStore().recoverActiveWorkoutSession { session, _ in
+            guard let session else { return }
+            Task { @MainActor in WatchWorkoutRecovery.shared.offer(session) }
+        }
+    }
+}
+
+/// Meets the recovered session and the opened store in either order: the delegate may be told
+/// before or after `WatchRoot.open` has run.
+@MainActor
+final class WatchWorkoutRecovery {
+    static let shared = WatchWorkoutRecovery()
+
+    private var pending: HKWorkoutSession?
+    private weak var store: WatchStore?
+
+    func offer(_ session: HKWorkoutSession) {
+        pending = session
+        deliver()
+    }
+
+    func attach(to store: WatchStore) {
+        self.store = store
+        deliver()
+    }
+
+    private func deliver() {
+        guard let store, let session = pending else { return }
+        pending = nil
+        store.adoptRecoveredRuntime(session)
     }
 }

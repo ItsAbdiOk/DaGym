@@ -59,25 +59,41 @@ enum BackupService {
     /// carries the user's edits and nothing else. Falls back to the library defaults for a
     /// `seedID` the bundled seed no longer knows. Rest is never taken from the seed: a seeded
     /// row's unedited rest is 0 ("use Settings → Default rest"), so any non-zero value is an
-    /// override.
+    /// override — except the seed's own number, which is what every backup written before seed
+    /// v4 carries for an unedited row (`legacyRestSeconds`).
     struct SeedBaseline {
         struct Values {
-            var restSeconds: Int
+            /// The seed item's `restSeconds`: the value an unedited seeded row held before seed
+            /// v4 moved unedited rest to 0, and so the value a pre-v4 backup or a pre-v4 device's
+            /// copy carries for a row the lifter never touched.
+            var legacyRestSeconds: Int
             var incrementKg: Double
             var barType: String?
         }
 
         private let bySeedID: [String: Values]
-        private let fallback = Values(restSeconds: 0, incrementKg: 2.5, barType: nil)
+        private let fallback = Values(legacyRestSeconds: 0, incrementKg: 2.5, barType: nil)
 
         init(bundle: Bundle = .main) {
             let seed = try? ExerciseSeeder.loadSeed(bundle: bundle)
             bySeedID = Dictionary(
-                (seed?.exercises ?? []).map {
-                    ($0.id, Values(restSeconds: 0, incrementKg: $0.incrementKg, barType: $0.bar))
+                (seed?.exercises ?? []).map { item in
+                    let values = Values(
+                        legacyRestSeconds: item.restSeconds, incrementKg: item.incrementKg, barType: item.bar
+                    )
+                    return (item.id, values)
                 },
                 uniquingKeysWith: { first, _ in first }
             )
+        }
+
+        /// Whether `restSeconds` on a seeded row is a real per-exercise override: not 0 ("use
+        /// the default") and not the seed's own number, which is unedited rest as a pre-v4
+        /// export or device wrote it. Restoring last week's backup used to turn every
+        /// favourited seeded lift's 90/120 s into a permanent override that Settings → Default
+        /// rest no longer reached.
+        func isRestOverride(_ restSeconds: Int, seedID: String?) -> Bool {
+            restSeconds != 0 && restSeconds != values(for: seedID).legacyRestSeconds
         }
 
         func values(for seedID: String?) -> Values {

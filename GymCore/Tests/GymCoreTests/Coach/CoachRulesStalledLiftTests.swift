@@ -48,6 +48,27 @@ struct CoachRulesStalledLiftTests {
         #expect(!cards.contains { $0.rule == .stalledLift })
     }
 
+    /// Linear + AMRAP backs off and zeroes its counter on the second miss, so its streak is only
+    /// ever 0 or 1: against the flat threshold the card could never fire for that rule. Its
+    /// threshold is one short of its own reset, the same footing linear gets (2 of 3).
+    @Test("a linear + AMRAP lift is stalled one miss short of its own reset, and the deload arm agrees")
+    func amrapThresholdIsOneShortOfItsReset() {
+        let amrap = ProgressionRule.linearAMRAP(incrementKg: 2.5)
+        let reset = TrainingConstants.amrapMissesBeforeReset
+        #expect(CoachLiftSnapshot.stalledLiftMisses(for: amrap) == reset - 1)
+        #expect(CoachLiftSnapshot.stalledLiftMisses(for: .linear(incrementKg: 2.5)) == 2)
+        #expect(CoachLiftSnapshot.stalledLiftMisses(for: .rpeBased(targetRPE: 8)) == 2)
+        #expect(CoachLiftSnapshot.stalledLiftMisses(for: nil) == 2)
+
+        var single = lift(misses: 1)
+        single.stalledLiftMisses = CoachLiftSnapshot.stalledLiftMisses(for: amrap)
+        #expect(single.isStalled)
+        #expect(single.drivesDeloadSuggestion)
+        let cards = CoachEngine.cards(for: CoachInput(lifts: [single]), now: now, calendar: calendar)
+        #expect(cards.contains { $0.rule == .stalledLift })
+        #expect(cards.first { $0.rule == .stalledLift }?.body.contains("1 session in a row") == true)
+    }
+
     @Test("the card reports exactly the sessions the streak counts, no lag arithmetic")
     func bodyReportsTheStreak() {
         let card = CoachEngine.cards(for: CoachInput(lifts: [lift(misses: 2)]), now: now, calendar: calendar)

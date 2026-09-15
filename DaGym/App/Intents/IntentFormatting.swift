@@ -64,9 +64,16 @@ enum IntentFormatting {
     }
 
     /// "Starting Push Day A." / "Starting a freestyle workout." for `StartWorkoutIntent`, spoken
-    /// as the app opens. `nil` means no routine is scheduled today.
+    /// as the app opens. `nil` means no routine is scheduled today, and `RootView` really does
+    /// start a freestyle session then (`startPendingWorkout`).
     static func startWorkoutDialog(routineName: String?) -> String {
         guard let routineName else { return "Starting a freestyle workout." }
         return "Starting \(routineName)."
+    }
+
+    /// "Continuing Push Day A." when a session is already in progress — the intent never
+    /// replaces one, so the dialog must not claim to.
+    static func continueWorkoutDialog(title: String) -> String {
+        "Continuing \(title)."
     }
 }
