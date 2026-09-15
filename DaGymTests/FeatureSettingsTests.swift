@@ -420,6 +420,8 @@ struct WorkoutStoreWipeAllDataTests {
         preferences.voiceSpeakBackOnHeadphones = false
         preferences.voiceAutoLogEnabled = true
         preferences.sampleDataMode = true
+        preferences.coachModelID = "openai/gpt-5"
+        preferences.coachChatConsentGiven = true
 
         store.wipeAllData(preferences: preferences, effects: .inert)
 
@@ -427,6 +429,8 @@ struct WorkoutStoreWipeAllDataTests {
         #expect(preferences.voiceSpeakBackOnHeadphones == fresh.voiceSpeakBackOnHeadphones)
         #expect(preferences.voiceAutoLogEnabled == fresh.voiceAutoLogEnabled)
         #expect(preferences.sampleDataMode == fresh.sampleDataMode)
+        #expect(preferences.coachModelID == fresh.coachModelID)
+        #expect(preferences.coachChatConsentGiven == fresh.coachChatConsentGiven)
     }
 
     /// The side effects a wipe has outside the store. Each one left something behind that

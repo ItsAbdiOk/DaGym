@@ -315,6 +315,7 @@ targets:
           - "WorkoutStore+Notes.swift"
           - "WorkoutStore+ProgramGenerator.swift"
           - "WorkoutStore+ReviewActions.swift"
+          - "WorkoutStore+CoachChat.swift"
       - path: DaGym/SampleData
       - path: DaGym/Features/Workout/WorkoutSession+Supersets.swift
       - path: DaGym/Features/Workout/WorkoutSession+TimedHold.swift

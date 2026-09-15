@@ -58,6 +58,10 @@ public struct BackupPreferences: Codable, Sendable {
     public var weighInBeforeWorkout: Bool?
     public var voiceSpeakBackOnHeadphones: Bool?
     public var voiceAutoLogEnabled: Bool?
+    /// The cloud coach's OpenRouter model id and the data-sharing consent. The API key is
+    /// never exported: it lives in the Keychain only.
+    public var coachModelID: String?
+    public var coachChatConsentGiven: Bool?
     /// `DistanceUnit` raw value ("km"/"mi").
     public var distanceUnit: String?
 

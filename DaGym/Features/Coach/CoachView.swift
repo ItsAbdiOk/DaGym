@@ -5,7 +5,9 @@ import SwiftUI
 /// Approve/Dismiss on every one — replaces `CoachPlaceholderView`. The ten rule checks are always
 /// rule-based; below them sit the two on-device coach features (`CoachReviewSection`,
 /// `CoachAskSection`), which fall back to the same rules when the model isn't available. The
-/// header says which is running, so the screen never implies AI it isn't using.
+/// header says which is running, so the screen never implies AI it isn't using. Above the
+/// cards, `CoachChatEntryCard` opens the cloud coach (the lifter's own OpenRouter key) — the
+/// one feature here that sends data anywhere, and it says so before it does.
 struct CoachView: View {
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
@@ -25,6 +27,7 @@ struct CoachView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: DGSpace.s5) {
                     header
+                    CoachChatEntryCard()
                     if cards.isEmpty {
                         emptyState
                     } else {

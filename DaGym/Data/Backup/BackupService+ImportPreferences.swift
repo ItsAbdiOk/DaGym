@@ -19,6 +19,7 @@ extension BackupService {
         applyHealth(backup, to: preferences)
         applyNotifications(backup, to: preferences)
         applyDisplay(backup, to: preferences)
+        applyCoach(backup, to: preferences)
     }
 
     private static func applyCore(_ backup: BackupPreferences, to preferences: Preferences) {
@@ -88,5 +89,11 @@ extension BackupService {
         if let unit = backup.distanceUnit.flatMap(DistanceUnit.init(rawValue:)) {
             preferences.distanceUnit = unit
         }
+    }
+
+    /// The cloud coach's model and consent; the API key is never in a backup.
+    private static func applyCoach(_ backup: BackupPreferences, to preferences: Preferences) {
+        if let value = backup.coachModelID, !value.isEmpty { preferences.coachModelID = value }
+        if let value = backup.coachChatConsentGiven { preferences.coachChatConsentGiven = value }
     }
 }

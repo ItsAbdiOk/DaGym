@@ -189,5 +189,8 @@ extension WorkoutStore {
         preferences.sampleDataMode = false
         preferences.voiceSpeakBackOnHeadphones = true
         preferences.voiceAutoLogEnabled = false
+        preferences.onDeviceCoachEnabled = true
+        preferences.coachModelID = CoachChatConfiguration.defaultModelID
+        preferences.coachChatConsentGiven = false
     }
 }

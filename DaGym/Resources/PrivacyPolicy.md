@@ -42,7 +42,13 @@ Two things can cause data to leave your device, both of which are actions you ta
    which run entirely on your phone. If you choose to add your own API key for a third-party AI
    provider, the specific training data needed for that feature is sent to the provider you
    selected, under that provider's own terms. This is off by default and only happens if you
-   set it up yourself.
+   set it up yourself. Today that means the coach chat: with your own OpenRouter key saved in
+   Settings, each question you ask sends a short profile (units, goal, bodyweight, equipment),
+   the conversation so far, and whatever the coach then looks up — workouts, exercise history,
+   routines, schedule, records, recovery, body measurements — to OpenRouter and the model you
+   picked. You are asked to agree before the first question and can revoke that agreement or
+   remove the key in Settings → Coach. Your key is stored in the Keychain; chats are kept on
+   your phone only and never sync through iCloud.
 2. **Sharing a file.** If you export or share a routine, program, or other file yourself (for
    example, via Messages, AirDrop, or Files), that file leaves your phone because you chose to
    share it.

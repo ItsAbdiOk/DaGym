@@ -202,6 +202,8 @@ struct BackupCoverageTests {
         value.weighInBeforeWorkout = true
         value.voiceSpeakBackOnHeadphones = false
         value.voiceAutoLogEnabled = true
+        value.coachModelID = "anthropic/claude-sonnet-5"
+        value.coachChatConsentGiven = true
         value.distanceUnit = "mi"
         return value
     }

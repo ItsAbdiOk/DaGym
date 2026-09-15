@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// The Settings "Coach" section: the on-device AI status line, the switch that lets the coach
-/// use Apple's on-device model at all, and the privacy note. Same layout as
+/// use Apple's on-device model at all, and the privacy note, then the cloud coach's own card
+/// (`CoachChatSettingsCard`: key, model, consent, what's sent). Same layout as
 /// `VoiceSettingsSection`. Toggling re-runs `CoachServices.refresh`, so the status line and
 /// every coach screen pick up the change at once.
 struct CoachSettingsSection: View {
@@ -24,6 +25,8 @@ struct CoachSettingsSection: View {
                 )
             }
             .dgCard(padding: 0)
+            Text("Cloud coach").dgLabel()
+            CoachChatSettingsCard()
         }
     }
 

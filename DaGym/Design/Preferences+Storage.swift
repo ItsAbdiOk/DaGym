@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// `UserDefaults` key names and the small typed-read helpers `Preferences.init` uses to pull each
 /// stored value back out with its default — split out from `UnitEnvironment.swift` to stay under
@@ -49,6 +50,23 @@ extension Preferences {
         static let voiceSpeakBackOnHeadphones = "voiceSpeakBackOnHeadphones"
         static let voiceAutoLogEnabled = "voiceAutoLogEnabled"
         static let onDeviceCoachEnabled = "onDeviceCoachEnabled"
+        static let coachModelID = "coachModelID"
+        static let coachChatConsentGiven = "coachChatConsentGiven"
+    }
+
+    enum Appearance: String, CaseIterable, Codable {
+        case system, light, dark
+        var colorScheme: ColorScheme? {
+            switch self {
+            case .system: nil
+            case .light: .light
+            case .dark: .dark
+            }
+        }
+    }
+
+    enum BodyFigure: String, CaseIterable, Codable {
+        case neutral, male, female
     }
 
     static func intValue(_ suite: UserDefaults, _ key: String, default value: Int) -> Int {

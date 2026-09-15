@@ -255,20 +255,15 @@ final class Preferences {
     var onDeviceCoachEnabled: Bool {
         didSet { defaults.set(onDeviceCoachEnabled, forKey: Key.onDeviceCoachEnabled) }
     }
-
-    enum Appearance: String, CaseIterable, Codable {
-        case system, light, dark
-        var colorScheme: ColorScheme? {
-            switch self {
-            case .system: nil
-            case .light: .light
-            case .dark: .dark
-            }
-        }
+    /// The OpenRouter model the cloud coach talks to, by its OpenRouter id. The key itself is
+    /// in the Keychain (`CoachChatSettings`), never here.
+    var coachModelID: String {
+        didSet { defaults.set(coachModelID, forKey: Key.coachModelID) }
     }
-
-    enum BodyFigure: String, CaseIterable, Codable {
-        case neutral, male, female
+    /// The lifter agreed that their training data is sent to OpenRouter and the chosen model.
+    /// Shown once when a key is first saved; nothing is sent until this is true.
+    var coachChatConsentGiven: Bool {
+        didSet { defaults.set(coachChatConsentGiven, forKey: Key.coachChatConsentGiven) }
     }
 
     init(suite: UserDefaults = .standard) {
@@ -287,6 +282,8 @@ final class Preferences {
         voiceSpeakBackOnHeadphones = Self.boolValue(suite, Key.voiceSpeakBackOnHeadphones, default: true)
         voiceAutoLogEnabled = Self.boolValue(suite, Key.voiceAutoLogEnabled, default: false)
         onDeviceCoachEnabled = Self.boolValue(suite, Key.onDeviceCoachEnabled, default: true)
+        coachModelID = suite.string(forKey: Key.coachModelID) ?? CoachChatConfiguration.defaultModelID
+        coachChatConsentGiven = Self.boolValue(suite, Key.coachChatConsentGiven, default: false)
         let unit = WeightUnit(rawValue: suite.string(forKey: Key.weightUnit) ?? "") ?? .kg
         weightUnit = unit
         if let stored = DistanceUnit(rawValue: suite.string(forKey: Key.distanceUnit) ?? "") {

@@ -95,7 +95,9 @@ extension WorkoutStore {
         return (slot?.repLow ?? 6, slot?.repHigh ?? 8)
     }
 
-    private static func ruleKey(_ rule: ProgressionRule) -> String {
+    /// The legacy `RoutineModel.progressionRule` key for a rule — shared with the chat coach's
+    /// routine proposals.
+    static func ruleKey(_ rule: ProgressionRule) -> String {
         switch rule {
         case .linear: "linear"
         case .doubleProgression: "doubleProgression"

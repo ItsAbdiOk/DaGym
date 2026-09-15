@@ -178,7 +178,9 @@ extension WorkoutStore {
         }
     }
 
-    private func routineSnapshot(_ model: RoutineModel) -> RoutineSnapshot? {
+    /// Not private: the chat coach's swap (`WorkoutStore+CoachChat.swift`) undoes through the
+    /// same snapshot.
+    func routineSnapshot(_ model: RoutineModel) -> RoutineSnapshot? {
         guard let (_, drafts) = routineDrafts(id: model.id) else { return nil }
         var stallJSON: [UUID: String] = [:]
         for slot in model.exercises ?? [] {
@@ -191,7 +193,7 @@ extension WorkoutStore {
         )
     }
 
-    private func resave(_ snapshot: RoutineSnapshot, drafts: [RoutineExerciseDraft]) {
+    func resave(_ snapshot: RoutineSnapshot, drafts: [RoutineExerciseDraft]) {
         saveRoutine(
             id: snapshot.id, name: snapshot.name, notes: snapshot.notes,
             progressionRule: snapshot.progressionRule, repRangeLow: snapshot.repRangeLow,
