@@ -72,6 +72,12 @@ public struct ScoredSubstitute: Identifiable, Hashable, Sendable {
     /// One line explaining the pick, e.g. "Same muscles, dumbbells only".
     public var reason: String
     public var id: UUID { candidate.id }
+
+    public init(candidate: SubstitutionCandidate, score: Double, reason: String) {
+        self.candidate = candidate
+        self.score = score
+        self.reason = reason
+    }
 }
 
 /// Rule-based mid-workout exercise substitution (plan §6.6). No ML, no

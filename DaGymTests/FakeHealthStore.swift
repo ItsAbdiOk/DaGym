@@ -2,6 +2,11 @@ import Foundation
 
 @testable import DaGym
 
+/// What a `FakeHealthStore` throws when a test asks it to fail.
+struct HealthStoreFailure: Error, Equatable {
+    var reason: String
+}
+
 /// In-memory `HealthStoring` double for `HealthSyncServiceTests`. Records every call so a test
 /// can assert on what was (or wasn't) written, and lets a test seed what a "read" returns.
 actor FakeHealthStore: HealthStoring {
@@ -25,6 +30,12 @@ actor FakeHealthStore: HealthStoring {
     var externalWorkoutsToReturn: [HealthExternalWorkout] = []
     var authorizationRequestToReturn: HealthAuthorizationRequest = .alreadyRequested
     var sharingAuthorizationToReturn: HealthShareAuthorization = .authorized
+    /// When set, the matching write/read throws it instead of succeeding, so a test can prove
+    /// the service swallows the failure without touching the store.
+    var errorToThrow: HealthStoreFailure?
+    /// Runs inside `saveWorkout`, after the input is recorded and before the id is returned —
+    /// the window in which the lifter can delete the workout mid round-trip.
+    private var duringSaveWorkout: (@Sendable () async -> Void)?
     private var nextWorkoutID = 0
     /// The `HKObserverQuery` handler `observeWorkoutChanges` was registered with, so a test can
     /// fire the observer the way HealthKit would. Nil until registration.
@@ -68,6 +79,14 @@ actor FakeHealthStore: HealthStoring {
         sleepToReturn = sleep
     }
 
+    func setErrorToThrow(_ error: HealthStoreFailure?) {
+        errorToThrow = error
+    }
+
+    func setDuringSaveWorkout(_ action: (@Sendable () async -> Void)?) {
+        duringSaveWorkout = action
+    }
+
     func setAuthorizationRequestToReturn(_ value: HealthAuthorizationRequest) {
         authorizationRequestToReturn = value
     }
@@ -89,6 +108,7 @@ actor FakeHealthStore: HealthStoring {
 
     func requestAuthorization() async throws {
         authorizationRequested = true
+        if let errorToThrow { throw errorToThrow }
     }
 
     func authorizationRequestStatus() async -> HealthAuthorizationRequest {
@@ -100,16 +120,20 @@ actor FakeHealthStore: HealthStoring {
     }
 
     func saveWorkout(_ input: HealthWorkoutInput) async throws -> String {
+        if let errorToThrow { throw errorToThrow }
         savedWorkouts.append(input)
+        await duringSaveWorkout?()
         nextWorkoutID += 1
         return "fake-hk-\(nextWorkoutID)"
     }
 
     func deleteOwnWorkout(healthKitID: String) async throws {
+        if let errorToThrow { throw errorToThrow }
         deletedWorkoutIDs.append(healthKitID)
     }
 
     func saveBodyMass(kg: Double, date: Date) async throws {
+        if let errorToThrow { throw errorToThrow }
         savedBodyMasses.append(HealthBodyMass(kg: kg, date: date))
     }
 
@@ -142,10 +166,12 @@ actor FakeHealthStore: HealthStoring {
     func sleep(from: Date, to: Date) async throws -> [HealthSleepInterval] { sleepToReturn }
 
     func externalStrengthWorkouts(since: Date) async throws -> [HealthExternalWorkout] {
-        externalWorkoutsToReturn
+        if let errorToThrow { throw errorToThrow }
+        return externalWorkoutsToReturn
     }
 
     func observeWorkoutChanges(onChange: @escaping @Sendable () async -> Void) async throws {
+        if let errorToThrow { throw errorToThrow }
         workoutObserverRegistered = true
         workoutOnChange = onChange
     }

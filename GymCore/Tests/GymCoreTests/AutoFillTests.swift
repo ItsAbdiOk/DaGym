@@ -1,4 +1,5 @@
 // swiftlint:disable large_tuple
+import Foundation
 import Testing
 @testable import GymCore
 
@@ -79,6 +80,103 @@ struct AutoFillTests {
         let result = AutoFill.prescriptions(planned: planned, previous: previous, incrementKg: 2.5)
         #expect(result[0].previous == "0:45")
         #expect(result[0].durationSeconds == 45)
+    }
+
+    @Test("a plan target edited after the last session overrides that session")
+    func updatedPlanWinsOverOlderSession() {
+        let planned: [(kind: SetKind, targetReps: Int?, targetWeightKg: Double?, targetSeconds: Int?)] = [
+            (.working, 5, 100, nil)
+        ]
+        let previous = [PreviousSet(kind: .working, weightKg: 80, reps: 8, durationSeconds: nil)]
+        let sessionDate = Date(timeIntervalSince1970: 1_000)
+        let result = AutoFill.prescriptions(
+            planned: planned, previous: previous,
+            planUpdatedAt: sessionDate.addingTimeInterval(60), previousDate: sessionDate
+        )
+        #expect(result[0].weightKg == 100)
+        #expect(result[0].reps == 5)
+        #expect(result[0].previous == nil)
+        #expect(result[0].reason == "From your updated plan")
+    }
+
+    @Test("a plan edited before the last session does not override it")
+    func staleplanLosesToSession() {
+        let planned: [(kind: SetKind, targetReps: Int?, targetWeightKg: Double?, targetSeconds: Int?)] = [
+            (.working, 5, 100, nil)
+        ]
+        let previous = [PreviousSet(kind: .working, weightKg: 80, reps: 8, durationSeconds: nil)]
+        let sessionDate = Date(timeIntervalSince1970: 1_000)
+        let result = AutoFill.prescriptions(
+            planned: planned, previous: previous,
+            planUpdatedAt: sessionDate.addingTimeInterval(-60), previousDate: sessionDate
+        )
+        #expect(result[0].weightKg == 80)
+        #expect(result[0].reason == "Same as last time")
+    }
+
+    @Test("a newer plan with only a rep target still defers to last session's load")
+    func newerPlanWithoutLoadTargetKeepsPrevious() {
+        let planned: [(kind: SetKind, targetReps: Int?, targetWeightKg: Double?, targetSeconds: Int?)] = [
+            (.working, 5, nil, nil)
+        ]
+        let previous = [PreviousSet(kind: .working, weightKg: 80, reps: 8, durationSeconds: nil)]
+        let sessionDate = Date(timeIntervalSince1970: 1_000)
+        let result = AutoFill.prescriptions(
+            planned: planned, previous: previous,
+            planUpdatedAt: sessionDate.addingTimeInterval(60), previousDate: sessionDate
+        )
+        // A rep-only edit has no load to prescribe; the previous session still fills the weight.
+        #expect(result[0].weightKg == 80)
+        #expect(result[0].reason == "Same as last time")
+    }
+
+    @Test("a newer timed plan prescribes the plan's seconds")
+    func newerTimedPlan() {
+        let planned: [(kind: SetKind, targetReps: Int?, targetWeightKg: Double?, targetSeconds: Int?)] = [
+            (.working, nil, nil, 90)
+        ]
+        let previous = [PreviousSet(kind: .working, weightKg: 0, reps: 1, durationSeconds: 45)]
+        let sessionDate = Date(timeIntervalSince1970: 1_000)
+        let result = AutoFill.prescriptions(
+            planned: planned, previous: previous,
+            planUpdatedAt: sessionDate.addingTimeInterval(1), previousDate: sessionDate
+        )
+        #expect(result[0].durationSeconds == 90)
+        #expect(result[0].reason == "From your updated plan")
+    }
+
+    @Test("a planned set beyond last session's count repeats the last matched set, no ghost")
+    func extraPlannedSetRepeatsLast() {
+        let planned: [(kind: SetKind, targetReps: Int?, targetWeightKg: Double?, targetSeconds: Int?)] = [
+            (.working, 8, 60, nil),
+            (.working, 8, 60, nil),
+            (.working, 8, 60, nil)
+        ]
+        let previous = [
+            PreviousSet(kind: .working, weightKg: 80, reps: 8, durationSeconds: nil),
+            PreviousSet(kind: .working, weightKg: 82.5, reps: 6, durationSeconds: nil)
+        ]
+        let result = AutoFill.prescriptions(planned: planned, previous: previous)
+        #expect(result[2].weightKg == 82.5)
+        #expect(result[2].reps == 6)
+        #expect(result[2].previous == nil)
+        #expect(result[2].reason == "Like your last set")
+        #expect(result[1].reason == "Same as last time")
+    }
+
+    @Test("an extra warm-up repeats the last warm-up, not the last working set")
+    func extraSetRepeatsWithinKind() {
+        let planned: [(kind: SetKind, targetReps: Int?, targetWeightKg: Double?, targetSeconds: Int?)] = [
+            (.warmup, 10, nil, nil),
+            (.warmup, 10, nil, nil)
+        ]
+        let previous = [
+            PreviousSet(kind: .warmup, weightKg: 20, reps: 10, durationSeconds: nil),
+            PreviousSet(kind: .working, weightKg: 80, reps: 8, durationSeconds: nil)
+        ]
+        let result = AutoFill.prescriptions(planned: planned, previous: previous)
+        #expect(result[1].weightKg == 20)
+        #expect(result[1].reason == "Like your last set")
     }
 }
 // swiftlint:enable large_tuple
