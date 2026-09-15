@@ -17,7 +17,7 @@ extension CoachRules {
 
         let candidates = Substitutions.candidates(
             for: exercise, reason: .strugglingWithExercise, library: input.substitutionLibrary,
-            available: input.availableEquipment, recoveryMap: input.recoveryMap
+            availability: input.equipmentAvailability, recoveryMap: input.recoveryMap
         )
         guard let best = candidates.first else { return [] }
 

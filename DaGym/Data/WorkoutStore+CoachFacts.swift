@@ -92,13 +92,13 @@ extension WorkoutStore {
             input.muscleSetsInWindow[$0, default: 0] < TrainingConstants.coachMinSetsPerMuscleInWindow
         }
         let programmed = Set(lifts.map(\.id))
-        let available = input.availableEquipment
+        let available = input.equipmentAvailability
         let pool = gaps.flatMap { muscle in
             input.substitutionLibrary
                 .filter { candidate in
                     candidate.primary.contains(muscle)
                         && !programmed.contains(candidate.id)
-                        && available.contains(candidate.equipment)
+                        && available.allows(candidate)
                 }
                 .sorted { $0.name < $1.name }
                 .prefix(Self.reviewPoolPerMuscle)

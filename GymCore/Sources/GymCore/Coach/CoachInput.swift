@@ -192,7 +192,13 @@ public struct CoachInput: Sendable {
 
     // Struggling exercise → substitution.
     public var substitutionLibrary: [SubstitutionCandidate]
-    public var availableEquipment: Set<String>
+    /// The active equipment profile: kinds, and the stations when it narrows to them.
+    public var equipmentAvailability: EquipmentAvailability
+    /// The ticked equipment kinds alone — `equipmentAvailability.types`.
+    public var availableEquipment: Set<String> {
+        get { equipmentAvailability.types }
+        set { equipmentAvailability.types = newValue }
+    }
 
     // Recovery debt: `Recovery.map`'s 0 (fresh) … 1 (spent) output.
     public var recoveryMap: [Muscle: Double]
@@ -221,6 +227,7 @@ public struct CoachInput: Sendable {
         hardWeeksInARow: Int = 0,
         substitutionLibrary: [SubstitutionCandidate] = [],
         availableEquipment: Set<String> = [],
+        equipmentAvailability: EquipmentAvailability? = nil,
         recoveryMap: [Muscle: Double] = [:],
         recentPRs: [CoachPersonalRecordHighlight] = [],
         recentAchievements: [CoachAchievementHighlight] = [],
@@ -237,7 +244,7 @@ public struct CoachInput: Sendable {
         self.lifts = lifts
         self.hardWeeksInARow = hardWeeksInARow
         self.substitutionLibrary = substitutionLibrary
-        self.availableEquipment = availableEquipment
+        self.equipmentAvailability = equipmentAvailability ?? EquipmentAvailability(types: availableEquipment)
         self.recoveryMap = recoveryMap
         self.recentPRs = recentPRs
         self.recentAchievements = recentAchievements

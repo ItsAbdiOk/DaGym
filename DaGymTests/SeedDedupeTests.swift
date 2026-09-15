@@ -146,7 +146,7 @@ struct SeedDedupeTests {
     @Test("the seed version lives in the store: a stale store is refreshed even after another store seeded")
     func seedVersionIsPerStore() throws {
         let (_, freshContext) = try seededStore()
-        #expect(SeedState.row(in: freshContext).exerciseSeedVersion == 4)
+        #expect(SeedState.row(in: freshContext).exerciseSeedVersion == 5)
 
         let staleContainer = try ModelContainer.dagym(inMemory: true)
         let staleContext = ModelContext(staleContainer)
@@ -162,7 +162,7 @@ struct SeedDedupeTests {
 
         ExerciseSeeder.seedIfNeeded(context: staleContext)
         #expect(bench.instructions != "stale placeholder instructions")
-        #expect(SeedState.row(in: staleContext).exerciseSeedVersion == 4)
+        #expect(SeedState.row(in: staleContext).exerciseSeedVersion == 5)
         #expect(try staleContext.fetch(FetchDescriptor<ExerciseModel>()).count == 1466)
     }
 

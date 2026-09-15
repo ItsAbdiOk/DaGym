@@ -17,6 +17,7 @@ struct NewExerciseSheet: View {
     @State private var loggingStyle: ExerciseInfo.LoggingStyle = .weightReps
     @State private var isPerSide = false
     @State private var barType: BarChoice = .olympic
+    @State private var machine: String?
 
     var body: some View {
         ZStack {
@@ -81,16 +82,27 @@ struct NewExerciseSheet: View {
                 Divider().overlay(DGColor.hairline)
                 BarTypeRow(equipment: equipment, barType: $barType)
             }
+            if showsMachineRow {
+                Divider().overlay(DGColor.hairline)
+                MachineFormRow(equipmentType: equipment.rawValue, machine: $machine)
+            }
         }
         .dgCard(padding: 0)
+        // A station belongs to one kind; switching kinds drops a pick that no longer fits.
+        .onChange(of: equipment) { _, kind in
+            if Machine(rawValue: machine ?? "")?.equipmentType != kind.rawValue { machine = nil }
+        }
     }
+
+    private var showsMachineRow: Bool { MachineFormRow.applies(to: equipment.rawValue) }
 
     private func save() {
         guard let muscle, canSave else { return }
         let created = store.createCustomExercise(
             name: name.trimmingCharacters(in: .whitespacesAndNewlines), primary: [muscle],
             equipment: equipment.rawValue, style: loggingStyle, isPerSide: isPerSide,
-            barType: showsBarRow ? barType.storeValue(for: equipment) : nil
+            barType: showsBarRow ? barType.storeValue(for: equipment) : nil,
+            machine: showsMachineRow ? machine : nil
         )
         onSave(created)
         dismiss()

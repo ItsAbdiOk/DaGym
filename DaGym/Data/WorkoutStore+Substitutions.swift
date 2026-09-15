@@ -26,10 +26,10 @@ extension WorkoutStore {
     func scoredSubstitutes(for exerciseID: UUID, reason: SwapReason) -> [ScoredSubstitute] {
         guard let subjectModel = fetchExerciseModel(id: exerciseID) else { return [] }
         let libraryModels = fetch(Self.liveExercises()).filter(Self.isLive)
-        let equipment = Set(activeProfile()?.availableEquipment ?? [])
+        let availability = activeEquipmentAvailability() ?? EquipmentAvailability(types: [])
         return Substitutions.candidates(
             for: substitutionCandidate(for: subjectModel), reason: reason,
-            library: libraryModels.map(substitutionCandidate(for:)), available: equipment,
+            library: libraryModels.map(substitutionCandidate(for:)), availability: availability,
             recoveryMap: recoverySnapshot().map
         )
     }
@@ -57,7 +57,7 @@ extension WorkoutStore {
         SubstitutionCandidate(
             id: model.id, name: model.name, primary: model.primary, secondary: model.secondary,
             equipment: model.equipment, mechanic: model.mechanic ?? "compound",
-            loggingStyle: model.loggingStyle
+            loggingStyle: model.loggingStyle, machine: model.machine
         )
     }
 }

@@ -17,6 +17,7 @@ struct LibraryView: View {
     @State private var showingNewExercise = false
     @State private var profile: EquipmentProfileInfo?
     @State private var showAllEquipment = false
+    @State private var hidden = HiddenCounts()
 
     var body: some View {
         NavigationStack {
@@ -25,7 +26,9 @@ struct LibraryView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: DGSpace.s5) {
                         if let profile, profile.restrictsLibrary {
-                            EquipmentFilterBanner(profileName: profile.name, showingAll: $showAllEquipment)
+                            EquipmentFilterBanner(
+                                profileName: profile.name, hidden: hidden, showingAll: $showAllEquipment
+                            )
                         }
                         muscleChipRow
                         equipmentChipRow
@@ -137,15 +140,17 @@ struct LibraryView: View {
             matching: searchText, muscle: selectedMuscle, equipment: selectedEquipment?.rawValue,
             favoritesOnly: favoritesOnly, customOnly: customOnly
         )
+        hidden = availability?.hiddenCounts(of: all.map { ($0.equipment, $0.machine) }) ?? HiddenCounts()
         exercises = all.filter { exercise in
-            showAllEquipment || activeEquipment?.contains(exercise.equipment) ?? true
+            showAllEquipment
+                || availability?.allows(equipment: exercise.equipment, machine: exercise.machine) ?? true
         }
     }
 
-    /// Nil (no filter) unless the active profile leaves some equipment out.
-    private var activeEquipment: Set<String>? {
+    /// Nil (no filter) unless the active profile leaves some equipment or station out.
+    private var availability: EquipmentAvailability? {
         guard let profile, profile.restrictsLibrary else { return nil }
-        return Set(profile.availableEquipment)
+        return profile.availability
     }
 
     private func toggleFavorite(_ id: UUID) {
@@ -154,11 +159,23 @@ struct LibraryView: View {
     }
 }
 
-/// "Showing what's in Home · Show all" — the equipment-profile filter's one-line banner,
-/// shared by the library and the exercise picker. Tapping the trailing word flips the filter.
+/// "Showing what's in Home · 212 hidden by equipment, 14 by machine · Show all" — the
+/// equipment-profile filter's banner, shared by the library and the exercise picker. Tapping the
+/// trailing word flips the filter.
 struct EquipmentFilterBanner: View {
     var profileName: String
+    var hidden = HiddenCounts()
     @Binding var showingAll: Bool
+
+    /// "Showing what's in Home" plus how many rows the profile hides, split by the reason.
+    static func title(profileName: String, hidden: HiddenCounts, showingAll: Bool) -> String {
+        if showingAll { return "Showing all equipment" }
+        var parts: [String] = []
+        if hidden.byType > 0 { parts.append("\(hidden.byType) by equipment") }
+        if hidden.byMachine > 0 { parts.append("\(hidden.byMachine) by machine") }
+        guard !parts.isEmpty else { return "Showing what's in \(profileName)" }
+        return "Showing what's in \(profileName) · hiding \(parts.joined(separator: ", "))"
+    }
 
     var body: some View {
         HStack(spacing: DGSpace.s2) {
@@ -166,10 +183,11 @@ struct EquipmentFilterBanner: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(DGColor.ink3)
                 .accessibilityHidden(true)
-            Text(showingAll ? "Showing all equipment" : "Showing what's in \(profileName)")
+            Text(Self.title(profileName: profileName, hidden: hidden, showingAll: showingAll))
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink2)
-                .lineLimit(1)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
             Text("·").font(DGFont.footnote).foregroundStyle(DGColor.ink4).accessibilityHidden(true)
             Button(showingAll ? "Only \(profileName)" : "Show all") { showingAll.toggle() }
                 .buttonStyle(.dgControl)

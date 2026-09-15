@@ -10,6 +10,8 @@ struct CustomExerciseFields {
     var style: ExerciseInfo.LoggingStyle
     var isPerSide = false
     var barType: String?
+    /// `Machine` raw value, for a machine/cable exercise that needs one station.
+    var machine: String?
 }
 
 extension WorkoutStore {
@@ -159,14 +161,14 @@ extension WorkoutStore {
     @discardableResult
     func createCustomExercise(
         name: String, primary: [Muscle], equipment: String, style: ExerciseInfo.LoggingStyle,
-        isPerSide: Bool = false, barType: String? = nil
+        isPerSide: Bool = false, barType: String? = nil, machine: String? = nil
     ) -> ExerciseInfo {
         // `restSeconds: 0` means "use Settings → Default rest"; the lifter can override it per
         // exercise from Exercise Detail.
         let model = ExerciseModel(
             name: name, primaryMuscles: primary.map(\.rawValue), equipment: equipment,
             loggingStyle: style.rawKey, isPerSide: isPerSide, isCustom: true, barType: barType,
-            restSeconds: 0
+            restSeconds: 0, machine: machine
         )
         context.insert(model)
         save()
@@ -183,6 +185,7 @@ extension WorkoutStore {
         model.loggingStyle = fields.style.rawKey
         model.isPerSide = fields.isPerSide
         model.barType = fields.barType
+        model.machine = fields.machine
         save()
     }
 

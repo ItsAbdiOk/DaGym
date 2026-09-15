@@ -47,10 +47,10 @@ struct ExerciseSeederTests {
         SeedState.row(in: context).exerciseSeedVersion = 0
         try context.save()
 
-        // Now seed again as if the bundled seed bumped to version 4 (its real value) — this must
+        // Now seed again as if the bundled seed bumped to version 5 (its real value) — this must
         // refresh the stale row in place, not skip it because `insertMissing` already saw the ID.
         ExerciseSeeder.seedIfNeeded(context: context)
-        #expect(SeedState.row(in: context).exerciseSeedVersion == 4)
+        #expect(SeedState.row(in: context).exerciseSeedVersion == 5)
 
         let benchPress = try #require(
             try context.fetch(FetchDescriptor<ExerciseModel>()).first {
@@ -102,7 +102,7 @@ struct ExerciseSeederTests {
 
         #expect(bench.restSeconds == 0)
         #expect(squat.restSeconds == 240)
-        #expect(SeedState.row(in: context).exerciseSeedVersion == 4)
+        #expect(SeedState.row(in: context).exerciseSeedVersion == 5)
     }
 
     @Test("every seeded exercise has non-empty instructions within a sane length")

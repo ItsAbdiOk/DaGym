@@ -69,17 +69,19 @@ enum BackupService {
             var legacyRestSeconds: Int
             var incrementKg: Double
             var barType: String?
+            var machine: String?
         }
 
         private let bySeedID: [String: Values]
-        private let fallback = Values(legacyRestSeconds: 0, incrementKg: 2.5, barType: nil)
+        private let fallback = Values(legacyRestSeconds: 0, incrementKg: 2.5, barType: nil, machine: nil)
 
         init(bundle: Bundle = .main) {
             let seed = try? ExerciseSeeder.loadSeed(bundle: bundle)
             bySeedID = Dictionary(
                 (seed?.exercises ?? []).map { item in
                     let values = Values(
-                        legacyRestSeconds: item.restSeconds, incrementKg: item.incrementKg, barType: item.bar
+                        legacyRestSeconds: item.restSeconds, incrementKg: item.incrementKg, barType: item.bar,
+                        machine: item.machine
                     )
                     return (item.id, values)
                 },
@@ -104,6 +106,7 @@ enum BackupService {
             let seeded = values(for: model.seedID)
             return model.isFavorite || !model.notes.isEmpty || model.restSeconds != 0
                 || model.incrementKg != seeded.incrementKg || model.barType != seeded.barType
+                || model.machine != seeded.machine
         }
     }
 

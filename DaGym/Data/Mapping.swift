@@ -34,7 +34,7 @@ extension ExerciseInfo {
             bar: model.bar, isFavorite: model.isFavorite, isCustom: model.isCustom,
             isPerSide: model.isPerSide, instructions: model.instructions, loggingStyle: model.style,
             dataSource: model.dataSource, sourceURL: model.sourceURL, licence: model.licence,
-            authors: model.authors, seedID: model.seedID
+            authors: model.authors, seedID: model.seedID, machine: model.machine
         )
     }
 }

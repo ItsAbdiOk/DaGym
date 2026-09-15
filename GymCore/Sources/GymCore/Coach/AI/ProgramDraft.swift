@@ -54,7 +54,7 @@ public enum ProgramExercisePool {
     ) -> [SubstitutionCandidate] {
         let tracked = template.trackedMuscles
         let allowed = library.filter { candidate in
-            request.usableEquipment.contains(candidate.equipment)
+            request.allows(candidate)
                 && candidate.loggingStyle != "cardio"
                 && !Set(candidate.primary).isDisjoint(with: tracked)
                 && Set(candidate.primary).isDisjoint(with: request.excludedMuscles)
@@ -113,7 +113,7 @@ public enum ProgramDraftValidator {
         guard exercise.primary.contains(slot.muscle) else {
             throw ProgramDraftError.wrongMuscle(slotID: slot.id)
         }
-        guard request.usableEquipment.contains(exercise.equipment) else {
+        guard request.allows(exercise) else {
             throw ProgramDraftError.excludedEquipment(exercise.id)
         }
         guard Set(exercise.primary).isDisjoint(with: request.excludedMuscles) else {

@@ -14,10 +14,13 @@ public struct SubstitutionCandidate: Identifiable, Hashable, Sendable {
     /// "compound" or "isolation".
     public var mechanic: String
     public var loggingStyle: String
+    /// The `Machine` raw value this exercise needs, or nil when any station of its kind (or no
+    /// station at all) will do.
+    public var machine: String?
 
     public init(
         id: UUID, name: String, primary: [Muscle], secondary: [Muscle] = [],
-        equipment: String, mechanic: String, loggingStyle: String = "weightReps"
+        equipment: String, mechanic: String, loggingStyle: String = "weightReps", machine: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -26,6 +29,7 @@ public struct SubstitutionCandidate: Identifiable, Hashable, Sendable {
         self.equipment = equipment
         self.mechanic = mechanic
         self.loggingStyle = loggingStyle
+        self.machine = machine
     }
 }
 
@@ -99,7 +103,8 @@ public enum Substitutions {
 
     /// Up to 3 candidates for `exercise`, best first. Empty when nothing in `library` shares a
     /// primary muscle and available equipment with `exercise`, once `reason`'s equipment
-    /// exclusion (if any) is applied.
+    /// exclusion (if any) is applied. Equipment kinds only; see the `availability` overload
+    /// for a profile that also narrows down to specific stations.
     public static func candidates(
         for exercise: SubstitutionCandidate,
         reason: SwapReason,
@@ -107,12 +112,30 @@ public enum Substitutions {
         available equipment: Set<String>,
         recoveryMap: [Muscle: Double]
     ) -> [ScoredSubstitute] {
+        candidates(
+            for: exercise, reason: reason, library: library,
+            availability: EquipmentAvailability(types: equipment), recoveryMap: recoveryMap
+        )
+    }
+
+    /// The same search against a full `EquipmentAvailability`: a candidate that needs a station
+    /// the profile lacks is never offered, so a "machine taken" swap stays inside the gym. The
+    /// station being swapped *out* is also excluded — it's the one that's taken.
+    public static func candidates(
+        for exercise: SubstitutionCandidate,
+        reason: SwapReason,
+        library: [SubstitutionCandidate],
+        availability: EquipmentAvailability,
+        recoveryMap: [Muscle: Double]
+    ) -> [ScoredSubstitute] {
         let primaryMuscles = Set(exercise.primary)
+        let takenMachine = reason == .machineTaken ? exercise.machine : nil
         let eligible = library.filter { candidate in
             candidate.id != exercise.id
                 && !Set(candidate.primary).isDisjoint(with: primaryMuscles)
-                && equipment.contains(candidate.equipment)
+                && availability.allows(candidate)
                 && candidate.equipment != reason.excludedEquipment
+                && (takenMachine == nil || candidate.machine != takenMachine)
         }
 
         let scored = eligible.map { candidate in

@@ -16,10 +16,15 @@ extension WorkoutStore {
     /// The lifter's equipment as the questionnaire's default — the active profile, or every
     /// kind the library uses when no profile is set up.
     func equipmentKindsForProgram() -> Set<String> {
+        equipmentAvailabilityForProgram().types
+    }
+
+    /// The same, with the profile's stations: a generated program only uses what is there.
+    func equipmentAvailabilityForProgram() -> EquipmentAvailability {
         if let profile = activeProfile(), !profile.availableEquipment.isEmpty {
-            return Set(profile.availableEquipment)
+            return profile.availability
         }
-        return Set(substitutionCandidates().map(\.equipment))
+        return EquipmentAvailability(types: Set(substitutionCandidates().map(\.equipment)))
     }
 
     func programPool(for template: ProgramTemplate, request: ProgramRequest) -> [SubstitutionCandidate] {

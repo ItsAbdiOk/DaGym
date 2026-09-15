@@ -169,6 +169,7 @@ struct EditExerciseSheet: View {
     @State private var loggingStyle: ExerciseInfo.LoggingStyle
     @State private var isPerSide: Bool
     @State private var barType: BarChoice
+    @State private var machine: String?
 
     init(exercise: ExerciseInfo, onSaved: @escaping () -> Void) {
         self.exercise = exercise
@@ -179,9 +180,11 @@ struct EditExerciseSheet: View {
         _loggingStyle = State(initialValue: exercise.loggingStyle)
         _isPerSide = State(initialValue: exercise.isPerSide)
         _barType = State(initialValue: exercise.bar?.name == Bar.womens.name ? .womens : .olympic)
+        _machine = State(initialValue: exercise.machine)
     }
 
     private var showsBarRow: Bool { equipment == .barbell || equipment == .ezBar }
+    private var showsMachineRow: Bool { MachineFormRow.applies(to: equipment.rawValue) }
     private var canSave: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
@@ -264,14 +267,22 @@ struct EditExerciseSheet: View {
                     }
                 }
             }
+            if showsMachineRow {
+                Divider().overlay(DGColor.hairline)
+                MachineFormRow(equipmentType: equipment.rawValue, machine: $machine)
+            }
         }
         .dgCard(padding: 0)
+        .onChange(of: equipment) { _, kind in
+            if Machine(rawValue: machine ?? "")?.equipmentType != kind.rawValue { machine = nil }
+        }
     }
 
     private func save() {
         let fields = CustomExerciseFields(
             name: name, primary: [muscle], equipment: equipment.rawValue, style: loggingStyle,
-            isPerSide: isPerSide, barType: showsBarRow ? barType.storeValue(for: equipment) : nil
+            isPerSide: isPerSide, barType: showsBarRow ? barType.storeValue(for: equipment) : nil,
+            machine: showsMachineRow ? machine : nil
         )
         store.updateCustomExercise(id: exercise.id, fields: fields)
         onSaved()

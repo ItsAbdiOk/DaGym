@@ -21,6 +21,10 @@ final class ExerciseModel {
     var isFavorite: Bool = false
     /// "olympic", "ezBar", "womens", … or nil when the exercise has no bar.
     var barType: String?
+    /// The `GymCore.Machine` raw value this exercise needs ("legPress", "cableStation", …), or
+    /// nil when any station of its kind — or no station — will do. Seeded from
+    /// `exercises.json`; a custom exercise gets it from the machine picker.
+    var machine: String?
     var incrementKg: Double = 2.5
     var restSeconds: Int = 150
     var instructions: String = ""
@@ -58,7 +62,7 @@ final class ExerciseModel {
         isCustom: Bool = false, isFavorite: Bool = false, barType: String? = nil,
         incrementKg: Double = 2.5, restSeconds: Int = 150, instructions: String = "",
         notes: String = "", createdAt: Date = Date(), dataSource: String = "",
-        sourceURL: String = "", licence: String = "", authors: [String] = []
+        sourceURL: String = "", licence: String = "", authors: [String] = [], machine: String? = nil
     ) {
         self.id = id
         self.seedID = seedID
@@ -81,6 +85,7 @@ final class ExerciseModel {
         self.sourceURL = sourceURL
         self.licence = licence
         self.authors = authors
+        self.machine = machine
     }
 
     /// True for a row that lost a seed fold. Every read path filters these out.

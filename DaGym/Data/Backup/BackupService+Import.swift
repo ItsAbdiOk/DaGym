@@ -126,7 +126,8 @@ extension BackupService {
                 mechanic: item.mechanic, loggingStyle: item.loggingStyle, isPerSide: item.isPerSide,
                 isCustom: true, isFavorite: item.isFavorite, barType: item.barType,
                 incrementKg: item.incrementKg, restSeconds: item.restSeconds,
-                instructions: item.instructions, notes: item.notes, createdAt: item.createdAt
+                instructions: item.instructions, notes: item.notes, createdAt: item.createdAt,
+                machine: item.machine
             )
             context.insert(model)
             index.register(model)
@@ -147,6 +148,7 @@ extension BackupService {
         }
         if item.incrementKg != seeded.incrementKg { model.incrementKg = item.incrementKg }
         if item.barType != seeded.barType { model.barType = item.barType }
+        if item.machine != seeded.machine { model.machine = item.machine }
         if model.notes.isEmpty { model.notes = item.notes }
     }
 
@@ -351,7 +353,8 @@ extension BackupService {
                 id: item.id, name: item.name, isActive: shouldActivate, barKg: item.barKg,
                 availableEquipment: item.availableEquipment, plateStockKg: item.plateStockKg,
                 plateCounts: item.plateCounts, collarsKg: item.collarsKg, createdAt: item.createdAt,
-                seedKey: item.seedKey
+                seedKey: item.seedKey, restrictsMachines: item.restrictsMachines ?? false,
+                availableMachines: item.availableMachines ?? []
             )
             context.insert(model)
             report.equipmentProfilesImported += 1

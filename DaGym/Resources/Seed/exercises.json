@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "source": "free-exercise-db (yuhonas/free-exercise-db, Unlicense) — names, muscles, equipment; wger.de (wger-project, CC-BY-SA 3.0/4.0 per exercise) — instructions, additional exercises. See docs/exercise-data-sources.md for attribution details.",
   "exercises": [
     {
@@ -46,7 +46,8 @@
       "restSeconds": 90,
       "instructions": "1. Sit in the machine with your chest against the pad and hands on the handles. 2. Pull the handles down by contracting your abs, bringing your ribs toward your hips. 3. Release slowly back to start. Avoid jerking—use a smooth, controlled movement.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "abCrunchMachine"
     },
     {
       "id": "Ab_Roller",
@@ -115,7 +116,8 @@
       "restSeconds": 150,
       "instructions": "1. Lie on your back, knees bent 90 degrees, hands behind your head. 2. Bring your opposite elbow to knee, extending the other leg, then alternate in a pedaling motion. 3. Keep your core tight and move fluidly without jerking. Your neck stays neutral throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "stationaryBike"
     },
     {
       "id": "Alternate_Hammer_Curl",
@@ -207,7 +209,8 @@
       "restSeconds": 150,
       "instructions": "1. Stand facing away from the cable machine with handles at shoulder height. 2. Press one handle forward and up, fully extending your arm. 3. Return and repeat on the other side. Maintain an upright posture and avoid arching your lower back.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Alternating_Deltoid_Raise",
@@ -613,7 +616,8 @@
       "restSeconds": 150,
       "instructions": "1. Grip the pull-up bar with hands shoulder-width apart and place your knees or feet in a resistance band for assistance. 2. Pull yourself up by driving your elbows back and down. 3. Lower with control. The band assists you—still engage your lats fully.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "pullUpBar"
     },
     {
       "id": "Band_Good_Morning",
@@ -1621,7 +1625,8 @@
       "restSeconds": 90,
       "instructions": "1. Bend forward to 45 degrees, holding a cable handle at knee level with one arm. 2. Raise the cable out to your side to shoulder height, leading with your elbow. 3. Lower and repeat. This side lateral targets your middle delt from a unique angle—avoid rounding your back.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Bent_Over_One-Arm_Long_Bar_Row",
@@ -1866,7 +1871,8 @@
       "restSeconds": 60,
       "instructions": "1. Adjust the seat height so your leg reaches near-full extension at the bottom of the pedal stroke on a stationary bike. 2. Begin pedaling at a moderate pace and resistance that allows steady breathing without stopping. 3. Maintain an upright posture with hands on the bars, knees tracking over your toes throughout the motion. 4. Build endurance in your quads by sustaining the effort for your target duration.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "stationaryBike"
     },
     {
       "id": "Board_Press",
@@ -2054,7 +2060,8 @@
       "restSeconds": 90,
       "instructions": "1. Sit on a stability dome facing a cable machine, holding a rope attachment behind your head. 2. Crunch forward, flexing your abs and bringing your elbows toward your hips. 3. Return to upright, then bend your torso to one side to work your obliques. 4. Alternate sides each rep, keeping your balance steady.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Bottoms_Up",
@@ -2290,7 +2297,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "Everkinetic"
         }
-      ]
+      ],
+      "machine": "pecDeck"
     },
     {
       "id": "Cable_Chest_Press",
@@ -2314,7 +2322,8 @@
       "restSeconds": 150,
       "instructions": "1. Stand facing away from a cable machine with handles at chest height, feet staggered for stability. 2. Press the handles forward and slightly upward, extending your arms fully while engaging your chest. 3. Bring the handles back toward your chest in a controlled manner, resisting the cable tension. Keep your core tight and avoid arching your lower back.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Crossover",
@@ -2337,7 +2346,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand in the center of a cable machine with both arms extended out to your sides, holding handles from high pulleys. 2. Bring both handles forward and across your body in a wide arc, squeezing your chest at the center point. 3. Return to the starting position with control. Maintain a slight forward lean and keep your arms mostly straight.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Crunch",
@@ -2360,7 +2370,8 @@
       "restSeconds": 90,
       "instructions": "1. Kneel facing a cable stack with a rope attachment at head height, holding the rope behind your head with elbows bent. 2. Crunch downward by flexing your abs and driving your elbows toward your hips, rounding your upper back. 3. Return to the starting position under control without letting your lower back take over. Feel the squeeze in your abs at the bottom.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Deadlifts",
@@ -2386,7 +2397,8 @@
       "restSeconds": 180,
       "instructions": "1. Stand facing a cable machine with the handle at ground level, feet hip-width apart. 2. Grip the handle and hinge at the hips, lowering your torso while keeping your legs relatively straight. 3. Drive through your heels and extend your hips to stand upright, pulling the handle toward you. Keep your back neutral and core engaged.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Hammer_Curls_-_Rope_Attachment",
@@ -2409,7 +2421,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand facing a cable stack with a rope attachment at waist height, holding each end of the rope with a neutral grip (palms facing each other). 2. Curl the rope upward by bending your elbows, keeping them stationary at your sides. 3. Squeeze your biceps at the top, then lower the rope with control. Avoid swinging or using momentum.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Hip_Adduction",
@@ -2432,7 +2445,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand sideways to a cable machine with the ankle strap attached to the inner ankle of your far leg. 2. Pull your leg across your body toward the center line, engaging your inner thigh muscles. 3. Control the return to the starting position against cable tension. Keep your torso upright throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Incline_Pushdown",
@@ -2453,7 +2467,8 @@
       "restSeconds": 90,
       "instructions": "1. Attach a straight bar to a high cable pulley and set an incline bench in front of it. 2. Sit on the incline with the bar at arm's length overhead, elbows slightly bent. 3. Press the bar downward by extending your arms, engaging your lats and upper back. Lower under control back to the starting position.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Incline_Triceps_Extension",
@@ -2474,7 +2489,8 @@
       "restSeconds": 90,
       "instructions": "1. Set an incline bench in front of a cable stack and sit back against it, holding a rope attachment at head height. 2. Lower the rope toward your forehead by bending your elbows, feeling the stretch in your triceps. 3. Extend your arms upward and backward, bringing the rope overhead and behind your head. Squeeze your triceps at full extension.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Internal_Rotation",
@@ -2495,7 +2511,8 @@
       "restSeconds": 150,
       "instructions": "1. Stand sideways to a cable machine with elbow bent 90 degrees, upper arm parallel to the floor, holding a handle at waist height. 2. Rotate your arm inward, bringing your forearm across your body while keeping your elbow stationary. 3. Return to the starting position under control. Perform all reps on one side, then switch, working your shoulder rotators.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Iron_Cross",
@@ -2518,7 +2535,8 @@
       "restSeconds": 90,
       "instructions": "1. Set both cable pulleys to shoulder height and stand centered between them, holding a handle in each hand with arms out to your sides. 2. With a slight elbow bend, sweep both handles forward and cross them in front of your chest. 3. Open back out to the sides with control, feeling the stretch across your chest.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Judo_Flip",
@@ -2541,7 +2559,8 @@
       "restSeconds": 150,
       "instructions": "1. Stand in front of a cable machine with a handle positioned at waist height, holding it with both hands. 2. Explosively rotate your torso and flip the cable across your body in a dynamic twisting motion, engaging your core and abs. 3. Control the return and reverse direction, alternating sides with each repetition. Maintain an athletic stance throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Lying_Triceps_Extension",
@@ -2562,7 +2581,8 @@
       "restSeconds": 90,
       "instructions": "1. Lie on a flat bench with a cable handle held above your chest, elbows bent to about 90 degrees. 2. Lower the cable by bending your elbows, bringing the handle toward your forehead or behind the top of your head. 3. Extend your arms upward to return to the starting position, squeezing your triceps. Keep your elbows stationary and core engaged.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_One_Arm_Tricep_Extension",
@@ -2583,7 +2603,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand facing away from a cable machine, holding a handle at shoulder height with one hand, elbow bent. 2. Extend your arm upward and backward, pressing the handle overhead in a controlled manner. 3. Lower the handle back to shoulder height by bending your elbow. Complete all reps on one side before switching.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Preacher_Curl",
@@ -2606,7 +2627,8 @@
       "restSeconds": 90,
       "instructions": "1. Sit at a preacher curl bench and position a cable handle attachment so the pulley is at the height of the bend in the pad. 2. Rest your upper arms on the pad with elbows bent slightly, holding the handle. 3. Curl the cable upward by bending your elbows, bringing it toward your shoulders. 4. Lower with control, maintaining contact with the pad throughout to isolate your biceps.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Rear_Delt_Fly",
@@ -2645,7 +2667,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "cshep442"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Reverse_Crunch",
@@ -2668,7 +2691,8 @@
       "restSeconds": 90,
       "instructions": "1. Attach an ankle strap to a high cable pulley and lie on your back underneath, holding the attachment with both feet. 2. Bend your knees and bring them toward your chest in a crunching motion, engaging your lower abs. 3. Lower your legs back to the starting position under control. Keep your hands behind your head for support.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Rope_Overhead_Triceps_Extension",
@@ -2689,7 +2713,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand facing away from a cable machine with a rope attachment positioned overhead, elbows bent and hands near your head. 2. Extend your arms upward and slightly forward, straightening your elbows fully while keeping them close together. 3. Lower the rope back behind your head in a controlled motion, maintaining tension on your triceps. Feel the stretch at the bottom.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Rope_Rear-Delt_Rows",
@@ -2712,7 +2737,8 @@
       "restSeconds": 150,
       "instructions": "1. Stand facing a cable machine with a rope attachment at face height, holding each end with elbows bent. 2. Pull the rope toward your face by driving your elbows back and out to the sides, engaging your rear delts. 3. Squeeze your shoulder blades together at the peak, then return the rope with control. Avoid using your back to generate momentum.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Russian_Twists",
@@ -2735,7 +2761,8 @@
       "restSeconds": 150,
       "instructions": "1. Sit on the floor in front of a cable machine, knees bent and torso leaning back at 45 degrees, holding a handle at chest height. 2. Rotate your torso to one side, extending the cable handle away from your body, feeling your obliques work. 3. Rotate back through center and continue to the other side in a smooth, controlled motion. Keep your chest up throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Seated_Crunch",
@@ -2758,7 +2785,8 @@
       "restSeconds": 90,
       "instructions": "1. Sit upright on a bench in front of a cable machine with a rope attachment at head height, holding the rope behind your head. 2. Crunch forward by flexing your abs and bringing your elbows down toward your thighs. 3. Return to the starting position with control, resisting the cable throughout. Focus on shortening the distance from ribs to hips.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Seated_Lateral_Raise",
@@ -2779,7 +2807,8 @@
       "restSeconds": 90,
       "instructions": "1. Sit upright at a cable machine with handles held at your sides, cables attached to low pulleys. 2. Raise the handles out to your sides and slightly upward, keeping a slight bend in your elbows until they reach shoulder height. 3. Lower the handles back to your sides under control. Maintain an upright posture and avoid shrugging your shoulders.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Shoulder_Press",
@@ -2802,7 +2831,8 @@
       "restSeconds": 150,
       "instructions": "1. Stand facing away from a cable machine with handles at shoulder height, feet staggered for stability. 2. Press the handles upward and slightly forward, extending your arms nearly fully while engaging your shoulders. 3. Lower the handles back to shoulder height under control, maintaining tension on your delts. Avoid arching your lower back.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Shrugs",
@@ -2825,7 +2855,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand facing a cable machine with handles at your sides, arms straight, feet hip-width apart. 2. Shrug your shoulders upward toward your ears by raising them as high as possible, squeezing your traps at the top. 3. Lower your shoulders back down under control. Avoid rolling your shoulders backward; use a straight vertical motion.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Wrist_Curl",
@@ -2850,7 +2881,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "eufvksruh"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Calf_Press",
@@ -2871,7 +2903,8 @@
       "restSeconds": 90,
       "instructions": "1. Sit in the calf raise machine with your knees bent 90 degrees and the balls of your feet on the foot platform. 2. Press the platform down by extending your ankles, raising your heels as high as possible to work your calves. 3. Lower your heels back under control. Move only at the ankle, not the knee.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "legPress"
     },
     {
       "id": "Calf_Press_On_The_Leg_Press_Machine",
@@ -2895,7 +2928,8 @@
       "restSeconds": 90,
       "instructions": "1. Set up in a leg press machine and position only the balls of your feet on the bottom of the platform, letting your heels hang off. 2. Point your toes downward and press the platform away, rising onto the balls of your feet to engage your calves. 3. Return by lowering your heels back down toward the floor. Use a controlled tempo and focus on the calf contraction.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "legPress"
     },
     {
       "id": "Calf_Raise_On_A_Dumbbell",
@@ -2960,7 +2994,8 @@
       "restSeconds": 90,
       "instructions": "1. Sit in a calf-shrug machine with your shoulders under the pads, feet flat on the ground or platform. 2. Shrug your shoulders upward as high as possible, squeezing your traps at the top of the movement. 3. Lower your shoulders back to the starting position under control. Perform slow, controlled reps to maximize the contraction.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "calfRaiseMachine"
     },
     {
       "id": "Car_Deadlift",
@@ -3118,7 +3153,8 @@
           "licence": "CC0",
           "author": "Everkinetic"
         }
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "Circus_Bell",
@@ -3502,7 +3538,8 @@
       "restSeconds": 150,
       "instructions": "1. Sit at a cable pulldown station with a close-grip handle, knees tucked under the pad. 2. Pull the handle down toward your sternum, leading with your elbows. 3. Squeeze your lats at the bottom, then return with control to the start. 4. Keep your chest proud and avoid leaning back too much. Focus on lat engagement.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "latPulldown"
     },
     {
       "id": "Close-Grip_Push-Up_off_of_a_Dumbbell",
@@ -4165,7 +4202,8 @@
       "restSeconds": 150,
       "instructions": "1. Set a guided barbell machine's bar to a decline bench and lie back with hands slightly wider than shoulder-width. 2. Lower the bar to your lower chest with control. 3. Press the bar back up to lockout, working your lower chest and triceps. Keep your shoulder blades pulled back throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "smithMachine"
     },
     {
       "id": "Deficit_Deadlift",
@@ -4219,7 +4257,8 @@
       "restSeconds": 150,
       "instructions": "1. Sit at a dip machine with your back against the pad and hands gripping the handles at shoulder height. 2. Press downward, extending your arms and moving the weight stack. 3. Return to the start with control. 4. The machine provides stability. Keep your chest engaged and elbows tracking properly.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "seatedDipMachine"
     },
     {
       "id": "Dips_-_Chest_Version",
@@ -4243,7 +4282,8 @@
       "restSeconds": 150,
       "instructions": "1. Grip parallel bars with hands shoulder-width apart, leaning your torso forward about 30 degrees. 2. Lower your body by bending your elbows until your upper arms are nearly parallel to the ground. 3. Press back up to the top, engaging your chest and shoulders. 4. Forward lean emphasizes chest. Control the descent and drive through your hands.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "dipStation"
     },
     {
       "id": "Dips_-_Triceps_Version",
@@ -4264,7 +4304,8 @@
       "restSeconds": 150,
       "instructions": "1. Grip parallel bars with hands shoulder-width apart, keeping your torso upright and legs straight. 2. Lower your body by bending your elbows, with upper arms staying close to your torso. 3. Press back up to lockout, squeezing your triceps at the top. 4. Upright posture targets triceps. Add weight with a belt if needed. Drive up explosively.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "dipStation"
     },
     {
       "id": "Donkey_Calf_Raises",
@@ -5235,7 +5276,8 @@
       "restSeconds": 150,
       "instructions": "1. Set cable at mid-chest height and stand slightly elevated on a box. 2. Row the cable toward your torso, pulling elbows back and squeezing your lats. 3. Extend your arms forward with control. 4. Keep your chest high and avoid excessive torso rotation.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Elliptical_Trainer",
@@ -5260,7 +5302,8 @@
       "restSeconds": 60,
       "instructions": "1. Step onto the elliptical and position your feet on the pedals. 2. Maintain a steady, moderate to high pace that elevates your heart rate for the target duration. 3. Use your arms to drive the motion naturally with the pedals. 4. Maintain upright posture and keep a consistent rhythm throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "elliptical"
     },
     {
       "id": "Exercise_Ball_Crunch",
@@ -5391,7 +5434,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand sideways to a cable machine with handle at elbow height, elbow bent 90 degrees. 2. Rotate your forearm outward away from your body against cable tension. 3. Return to the starting position with control. 4. Maintain a bent elbow throughout and avoid moving your arm away from your side.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "EZ-Bar_Curl",
@@ -5458,7 +5502,8 @@
       "restSeconds": 150,
       "instructions": "1. Set a cable machine with the rope attachment at head height. 2. Pull the rope toward your face with elbows high and wide, splitting the rope at the finish. 3. Extend your arms forward with control. 4. Keep your core tight and avoid leaning backward.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Farmers_Walk",
@@ -5526,7 +5571,8 @@
       "restSeconds": 90,
       "instructions": "1. Lie on a flat bench between two cable stations set to mid-chest height. 2. Pull the cables together in an arc motion, bringing your hands to meet at your chest. 3. Open your arms back out to the sides with control. 4. Maintain a slight bend in your elbows and avoid clamping the cables together.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Flat_Bench_Leg_Pull-In",
@@ -5862,7 +5908,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "barry"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Front_Dumbbell_Raise",
@@ -6041,7 +6088,8 @@
       "restSeconds": 150,
       "instructions": "1. Sit at a lat pulldown machine and grip the bar wider than shoulder-width. 2. Pull the bar down to your chest by drawing your elbows down and back, feeling a stretch at the top. 3. Return with control to nearly full arm extension. 4. Maintain an upright torso and avoid leaning back.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "latPulldown"
     },
     {
       "id": "Gironda_Sternum_Chins",
@@ -6065,7 +6113,8 @@
       "restSeconds": 150,
       "instructions": "1. Hang from a pull-up bar with hands slightly narrower than shoulder-width. 2. Pull your body upward, driving your elbows down and back, attempting to bring your sternum toward the bar. 3. Lower with control to full arm extension. 4. Keep your core tight and avoid excessive hip drive.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "pullUpBar"
     },
     {
       "id": "Glute_Ham_Raise",
@@ -6092,7 +6141,8 @@
       "licence": "CC0",
       "authors": [
         "personal use"
-      ]
+      ],
+      "machine": "gluteHamDeveloper"
     },
     {
       "id": "Glute_Kickback",
@@ -6226,7 +6276,8 @@
       "restSeconds": 150,
       "instructions": "1. Hang from a pull-up bar with hands close together. 2. Crunch your knees up toward your chest while performing a small pull-up motion. 3. Lower your legs and release the pull-up. 4. Control the movement and maintain tension in your core.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "pullUpBar"
     },
     {
       "id": "Hack_Squat",
@@ -6250,7 +6301,8 @@
       "restSeconds": 180,
       "instructions": "1. Load the hack squat machine and position your shoulders under the pads, back against the angled sled. 2. Lower your body by bending your knees until your thighs are parallel to the floor. 3. Push through your heels to drive the weight back up. 4. Keep your chest up and knees tracking over your toes.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "hackSquat"
     },
     {
       "id": "Hammer_Curls",
@@ -6487,7 +6539,8 @@
       "restSeconds": 90,
       "instructions": "1. Hang from a pull-up bar with hands shoulder-width apart, legs straight. 2. Raise your straight legs up toward the ceiling until they reach 90 degrees. 3. Hold this position for the target duration, maintaining tension in your abs. 4. Avoid excessive swinging and keep the movement controlled.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "pullUpBar"
     },
     {
       "id": "Hanging_Pike",
@@ -6510,7 +6563,8 @@
       "restSeconds": 150,
       "instructions": "1. Hang from a pull-up bar in a straight-body plank position with your body aligned. 2. Pike your hips upward toward the ceiling in one smooth motion, bringing your legs up. 3. Maintain this pike position for the target duration. 4. Keep your core tight and control the hold without excessive swinging.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "pullUpBar"
     },
     {
       "id": "Heaving_Snatch_Balance",
@@ -6559,7 +6613,8 @@
       "restSeconds": 150,
       "instructions": "1. Stand facing the machine with your arms at shoulder height, gripping the cable handles with elbows bent. 2. Curl your forearms downward, engaging your biceps against the cable tension. 3. Lower back up with control, keeping tension throughout. Focus on the mind-muscle connection with your biceps.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Hip_Extension_with_Bands",
@@ -6650,7 +6705,8 @@
       "restSeconds": 90,
       "instructions": "1. Set up on a hyperextension bench with your hips on the pad and legs secure. 2. Hinge forward at the hips until your torso is nearly parallel to the floor. 3. Use your lower back and glutes to extend your hips and return to neutral. Keep your spine neutral—no excessive arching.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "backExtension"
     },
     {
       "id": "Hyperextensions_With_No_Hyperextension_Bench",
@@ -6747,7 +6803,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Shiladree"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Incline_Cable_Flye",
@@ -6770,7 +6827,8 @@
       "restSeconds": 90,
       "instructions": "1. Set the pulleys high and stand in the middle with the bench set to incline. 2. Hold the cable handles with arms extended and chest facing the machine. 3. Bring the handles together in front of your chest in a hugging motion, squeezing your chest. 4. Return to the starting position with control. Keep your elbows slightly bent throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Incline_Dumbbell_Bench_With_Palms_Facing_In",
@@ -7387,7 +7445,8 @@
       "restSeconds": 60,
       "instructions": "1. Set the treadmill to a comfortable pace and step on with upright posture. 2. Maintain a steady jogging rhythm, landing mid-foot and driving through your legs. 3. Hold for the prescribed duration or distance, keeping a consistent pace. Focus on steady breathing and knee drive.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "treadmill"
     },
     {
       "id": "Keg_Load",
@@ -7882,7 +7941,8 @@
       "restSeconds": 150,
       "instructions": "1. Hang from a pull-up bar with a slight bend in your arms. 2. Use a kipping motion by swinging your legs to generate momentum, then explosively pull and press yourself above the bar. 3. Lower yourself back to the hang position with control. Time your kipping swing with the pull and dip portion.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "pullUpBar"
     },
     {
       "id": "Knee_Hip_Raise_On_Parallel_Bars",
@@ -7905,7 +7965,8 @@
       "restSeconds": 90,
       "instructions": "1. Support yourself on parallel bars with arms straight and body hanging. 2. Lift your knees toward your chest or hips toward your hands, contracting your abs. 3. Lower back down to the starting position with control. Avoid swinging and maintain upright torso.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "dipStation"
     },
     {
       "id": "Kneeling_Cable_Crunch_With_Alternating_Oblique_Twists",
@@ -7928,7 +7989,8 @@
       "restSeconds": 90,
       "instructions": "1. Kneel facing the cable machine with the rope attachment at neck height, holding it in front. 2. Crunch downward while rotating your torso to bring your elbow to the opposite knee. 3. Return to the starting position and repeat on the other side. Keep your hips stationary and focus on core engagement.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Kneeling_Cable_Triceps_Extension",
@@ -7949,7 +8011,8 @@
       "restSeconds": 90,
       "instructions": "1. Kneel facing the cable machine with the rope attachment at head height. 2. Extend your elbows downward against the cable resistance, engaging your triceps. 3. Bend your elbows to return to the starting position. Keep your torso upright and core engaged.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Kneeling_High_Pulley_Row",
@@ -7973,7 +8036,8 @@
       "restSeconds": 150,
       "instructions": "1. Kneel facing the cable machine, gripping the high pulley handle with both hands. 2. Pull the handle down and toward your chest, retracting your shoulder blades. 3. Return to the starting position with control. Maintain an upright torso and focus on lat engagement.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Kneeling_Jump_Squat",
@@ -8021,7 +8085,8 @@
       "restSeconds": 150,
       "instructions": "1. Kneel facing the cable machine with one arm extended toward the high pulley handle. 2. Pull the handle down to your chest while rotating your torso slightly toward the working side. 3. Control the return to the starting position. Focus on unilateral lat engagement and anti-rotation.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Kneeling_Squat",
@@ -8150,7 +8215,8 @@
           "licence": "CC0",
           "author": "BFad07"
         }
-      ]
+      ],
+      "machine": "legExtension"
     },
     {
       "id": "Leg_Lift",
@@ -8208,7 +8274,8 @@
           "licence": "CC0",
           "author": "BFad07"
         }
-      ]
+      ],
+      "machine": "legPress"
     },
     {
       "id": "Leg_Pull-In",
@@ -8279,7 +8346,8 @@
       "restSeconds": 150,
       "instructions": "1. Sit with your back firmly against the machine pad. 2. Grip handles at chest height. 3. Press forward explosively, fully extending your arms. 4. Bring handles back to chest with control.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "chestPressMachine"
     },
     {
       "id": "Leverage_Deadlift",
@@ -8329,7 +8397,8 @@
       "restSeconds": 150,
       "instructions": "1. Recline on the decline pad with chest aligned to handles. 2. Press forward and up, extending your arms fully. 3. Bring handles back to chest with control. 4. Keep your shoulder blades retracted throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "chestPressMachine"
     },
     {
       "id": "Leverage_High_Row",
@@ -8354,7 +8423,8 @@
       "restSeconds": 150,
       "instructions": "1. Sit upright gripping handles at shoulder height. 2. Pull toward your body, driving elbows high and back. 3. Squeeze your traps and upper back at the peak. 4. Return to start with controlled movement.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "rowMachine"
     },
     {
       "id": "Leverage_Incline_Chest_Press",
@@ -8378,7 +8448,8 @@
       "restSeconds": 150,
       "instructions": "1. Sit with your back against the inclined pad, hands on handles. 2. Press forward and up, extending fully. 3. Bring handles back to chest with control. 4. Keep your core stable against the pad.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "chestPressMachine"
     },
     {
       "id": "Leverage_Iso_Row",
@@ -8403,7 +8474,8 @@
       "restSeconds": 150,
       "instructions": "1. Sit upright facing the machine with feet firm on the platform. 2. Grasp handles and row them toward your torso. 3. Drive elbows back, squeezing your lats and middle back. 4. Return smoothly to start position.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "rowMachine"
     },
     {
       "id": "Leverage_Shoulder_Press",
@@ -8426,7 +8498,8 @@
       "restSeconds": 150,
       "instructions": "1. Sit upright with handles at shoulder height. 2. Press upward and slightly forward until arms fully extend. 3. Lower back to shoulder level with control. 4. Keep your core braced for stability.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "shoulderPressMachine"
     },
     {
       "id": "Leverage_Shrug",
@@ -8519,7 +8592,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand in the middle of the cable machine with feet shoulder-width apart. 2. Grab each handle with a slight elbow bend. 3. Bring your hands together in front of you in a crossing motion. 4. Return to start with control, maintaining the arc.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Low_Cable_Triceps_Extension",
@@ -8540,7 +8614,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand facing away from the cable stack with rope or bar attachment. 2. Position upper arms at your sides with elbows bent 90 degrees. 3. Extend your forearms downward, pressing through your triceps. 4. Return to start with control.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Low_Pulley_Row_To_Neck",
@@ -8565,7 +8640,8 @@
       "restSeconds": 150,
       "instructions": "1. Set cable to low position and grip the handle. 2. Row the cable upward toward your neck, driving elbows high. 3. Squeeze your rear delts and upper back at the top. 4. Return to start with control.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "seatedRowMachine"
     },
     {
       "id": "Lunge_Pass_Through",
@@ -8636,7 +8712,8 @@
       "restSeconds": 90,
       "instructions": "1. Lie on an incline bench with cable positioned behind you. 2. Grab the cable handle with arms extended. 3. Curl the weight toward you, squeezing your biceps at the top. 4. Lower under control, maintaining tension.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Lying_Cambered_Barbell_Row",
@@ -8684,7 +8761,8 @@
       "restSeconds": 90,
       "instructions": "1. Lie under a high cable pulley with bar at arm's length above you. 2. Use a close grip to curl the bar down toward your chest. 3. Squeeze your biceps at the bottom. 4. Return to start position with control.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Lying_Close-Grip_Barbell_Triceps_Extension_Behind_The_Head",
@@ -8846,7 +8924,8 @@
           "licence": "CC0",
           "author": "Franpol"
         }
-      ]
+      ],
+      "machine": "legCurl"
     },
     {
       "id": "Lying_Machine_Squat",
@@ -8870,7 +8949,8 @@
       "restSeconds": 180,
       "instructions": "1. Lie back in the machine with feet on platform, knees at 90 degrees. 2. Press through your feet to extend your legs fully. 3. Lower back down under control without locking your knees. 4. Keep your lower back neutral against the pad.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "legPress"
     },
     {
       "id": "Lying_One-Arm_Lateral_Raise",
@@ -8961,7 +9041,8 @@
       "restSeconds": 150,
       "instructions": "1. Position yourself prone on the T-bar machine with your chest on the pad. 2. Grip the handles with a neutral or wide grip. 3. Row the handles toward you, squeezing your middle back. 4. Return to start under control.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "rowMachine"
     },
     {
       "id": "Lying_Triceps_Press",
@@ -9006,7 +9087,8 @@
       "restSeconds": 150,
       "instructions": "1. Sit upright on the machine with your back firmly against the pad. 2. Grip handles at chest height. 3. Press forward explosively, extending your arms fully. 4. Return to start with controlled movement.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "chestPressMachine"
     },
     {
       "id": "Machine_Bicep_Curl",
@@ -9029,7 +9111,8 @@
       "restSeconds": 90,
       "instructions": "1. Sit with your back against the pad and forearms on the machine's arm pad. 2. Grip the handles and curl upward toward your shoulders. 3. Squeeze your biceps at the top. 4. Lower back down under control.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "preacherCurlMachine"
     },
     {
       "id": "Machine_Preacher_Curls",
@@ -9052,7 +9135,8 @@
       "restSeconds": 90,
       "instructions": "1. Sit at the preacher bench, positioning your triceps on the pad. 2. Grip the bar with a shoulder-width grip. 3. Curl the bar upward toward your shoulders. 4. Lower back down with control, maintaining contact with the pad.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "preacherCurlMachine"
     },
     {
       "id": "Machine_Shoulder_Military_Press",
@@ -9075,7 +9159,8 @@
       "restSeconds": 150,
       "instructions": "1. Sit upright with your back and head against the support pad. 2. Position handles at shoulder height on each side. 3. Press upward and slightly forward until your arms fully extend. 4. Lower back to shoulder height.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "shoulderPressMachine"
     },
     {
       "id": "Machine_Triceps_Extension",
@@ -9096,7 +9181,8 @@
       "restSeconds": 90,
       "instructions": "1. Sit upright at the machine with your back against the pad. 2. Position your upper arms on the armrests with elbows bent. 3. Extend your forearms downward, straightening your arms. 4. Return to start with control.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "tricepsExtensionMachine"
     },
     {
       "id": "Middle_Back_Shrug",
@@ -9143,7 +9229,8 @@
       "restSeconds": 150,
       "instructions": "1. Hang from a bar with one hand in overhand grip, one underhand. 2. Pull your body upward using your lats and upper back. 3. Lift until your chest nears the bar. 4. Lower yourself back down under control.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "pullUpBar"
     },
     {
       "id": "Monster_Walk",
@@ -9219,7 +9306,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "arson"
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "Narrow_Stance_Hack_Squats",
@@ -9243,7 +9331,8 @@
       "restSeconds": 180,
       "instructions": "1. Position yourself in the hack squat machine with feet close together. 2. Keep your back and head against the pad. 3. Lower your body down by bending your knees. 4. Drive through your heels to extend back to standing, keeping knees aligned.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "hackSquat"
     },
     {
       "id": "Narrow_Stance_Leg_Press",
@@ -9267,7 +9356,8 @@
       "restSeconds": 180,
       "instructions": "1. Sit in the leg press machine with feet close together on the platform. 2. Keep your back and head against the pad. 3. Lower the weight by bending your knees to about 90 degrees. 4. Drive through your heels to press back up without locking your knees.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "legPress"
     },
     {
       "id": "Narrow_Stance_Squats",
@@ -9432,7 +9522,8 @@
       "restSeconds": 150,
       "instructions": "1. Hang from a bar using one hand grip. 2. Pull your body upward, creating a pulling motion with one arm to engage your lats. 3. Raise your body toward the bar. 4. Lower yourself back down under control. Use assistance if needed.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "pullUpBar"
     },
     {
       "id": "One_Arm_Dumbbell_Bench_Press",
@@ -9527,7 +9618,8 @@
       "restSeconds": 150,
       "instructions": "1. Sit at a lat pulldown machine, gripping one handle with one arm. 2. Pull the handle downward and toward your torso, driving your elbow down. 3. Squeeze your lat at the bottom. 4. Return to start with controlled movement.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "latPulldown"
     },
     {
       "id": "One_Arm_Pronated_Dumbbell_Triceps_Extension",
@@ -9663,7 +9755,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand beside a cable machine with the high pulley set, holding the handle at shoulder height. 2. Side bend away from the machine, feeling your obliques contract. 3. Return to upright position, keeping your torso stable. Don't rotate or twist your shoulders.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "One-Arm_Incline_Lateral_Raise",
@@ -10149,7 +10242,8 @@
       "restSeconds": 90,
       "instructions": "1. Face a cable machine, one foot on a platform for stability, with the cable strap around one ankle. 2. Kick your free leg backward, squeezing your glute at full extension. 3. Return your leg to the starting position with control. Keep your hips square throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Open_Palm_Kettlebell_Clean",
@@ -10222,7 +10316,8 @@
       "restSeconds": 90,
       "instructions": "1. Position yourself under a cable machine with the pulley set high; grab the bar with elbows at shoulder height. 2. Curl the cable toward your forehead, keeping your elbows stationary. 3. Lower it back with control. Squeeze your biceps at the top of each rep.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Overhead_Squat",
@@ -10294,7 +10389,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "prevail90"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Pallof_Press_With_Rotation",
@@ -10317,7 +10413,8 @@
       "restSeconds": 150,
       "instructions": "1. Stand perpendicular to a cable machine with the handle at chest height; pull it in front of your chest. 2. Press the cable forward while resisting rotation, then rotate your torso to face the machine. 3. Return to center and bring the cable back to your chest. Brace your core throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Palms-Down_Dumbbell_Wrist_Curl_Over_A_Bench",
@@ -10425,7 +10522,8 @@
       "restSeconds": 150,
       "instructions": "1. Grasp parallel bars with your arms straight and body suspended. 2. Lower yourself by bending your elbows until your upper arms are roughly parallel to the ground. 3. Push back up to the starting position. Keep your torso upright and engage your triceps.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "dipStation"
     },
     {
       "id": "Physioball_Hip_Bridge",
@@ -10978,7 +11076,8 @@
       "restSeconds": 180,
       "instructions": "1. Face away from a cable machine with the rope attachment at hip height between your legs. 2. Hinge at the hips and pull the rope toward you by driving your hips forward. 3. Return to the hinge position under control. Emphasize glute activation.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Pullups",
@@ -11013,7 +11112,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "Imobard"
         }
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "Push_Press",
@@ -11345,7 +11445,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "pera_perkan"
-      ]
+      ],
+      "machine": "stationaryBike"
     },
     {
       "id": "Reverse_Band_Bench_Press",
@@ -11538,7 +11639,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand facing a cable machine with the handle at waist height, using an overhand grip. 2. Curl the cable toward your shoulders, keeping your elbows stationary and at your sides. 3. Return to starting position with controlled resistance. 4. The overhand grip emphasizes forearm development; maintain constant tension on the cable.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Reverse_Crunch",
@@ -11657,7 +11759,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand facing a cable machine with the handle at chest height, using an underhand grip. 2. Push the handle downward, extending your elbows fully at the bottom. 3. Return to the starting position with controlled resistance. 4. Keep your upper arms stationary and elbows at your sides; the underhand grip targets the inner triceps.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Reverse_Hyperextension",
@@ -11708,7 +11811,8 @@
       "restSeconds": 90,
       "instructions": "1. Sit at the reverse fly machine with your chest against the pad, hands on the handles. 2. Pull the handles outward in an arc, focusing on contracting your rear deltoids. 3. Return to the starting position slowly under control. 4. Let your shoulder blades drive the movement; avoid using chest muscles.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "pecDeck"
     },
     {
       "id": "Reverse_Plate_Curls",
@@ -11875,7 +11979,8 @@
       "restSeconds": 150,
       "instructions": "1. Grip an overhead bar with hands shoulder-width apart, feet off the ground. 2. Pull your body upward explosively in quick, rhythmic motions. 3. Lower with control and repeat in rapid succession. 4. Speed and explosivity develop lats and back power; maintain strict form despite the tempo.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "pullUpBar"
     },
     {
       "id": "Romanian_Deadlift",
@@ -11981,7 +12086,8 @@
       "restSeconds": 90,
       "instructions": "1. Face a high cable pulley with the rope attachment, kneel on the floor. 2. Pull the rope downward, flexing your abs and bringing your chest toward your hips. 3. Return to the starting position with control. 4. Keep your hips stationary and focus on abdominal contraction; avoid using arm strength.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Rope_Jumping",
@@ -12027,7 +12133,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand facing a cable machine with the rope overhead, arms extended. 2. Pull the rope downward in an arc, keeping your arms straight and pulling with your lats. 3. Return to the starting position with control. 4. This isolates the lats without arm involvement; maintain a slight bend in your elbows.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Rowing_Stationary",
@@ -12052,7 +12159,8 @@
       "restSeconds": 60,
       "instructions": "1. Sit on the rowing machine, feet secured on the footplate, hands holding the handle. 2. Drive with your legs first, then hinge back and pull the handle to your chest. 3. Return by extending your arms, hinging forward, and bending your knees. 4. Maintain a steady, powerful rhythm; breathe consistently throughout the duration.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "rower"
     },
     {
       "id": "Running_Treadmill",
@@ -12077,7 +12185,8 @@
       "restSeconds": 60,
       "instructions": "1. Step onto the treadmill with a steady pace, maintaining good posture and arm swing. 2. Run at your target pace for the prescribed distance or time, breathing rhythmically. 3. Gradually slow down to cool down before stepping off. 4. Keep your core engaged and land midfoot; avoid slapping your feet on the belt.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "treadmill"
     },
     {
       "id": "Russian_Twist",
@@ -12159,7 +12268,8 @@
       "restSeconds": 90,
       "instructions": "1. Hang from a bar with arms fully extended, feet off the ground. 2. Pull your body up slightly by retracting your shoulder blades, keeping elbows straight. 3. Lower back to full extension. 4. This targets the scapulae and traps; it's a small, controlled movement, not a full pull-up.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "pullUpBar"
     },
     {
       "id": "Seated_Band_Hamstring_Curl",
@@ -12317,7 +12427,8 @@
       "restSeconds": 150,
       "instructions": "1. Sit at the cable machine with feet planted, torso upright, holding the handle at chest height. 2. Pull the handle toward your torso, driving your elbows back and squeezing your back. 3. Return to the starting position with controlled resistance. 4. Keep your chest up and avoid leaning back; focus on trap and upper back contraction.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "seatedRowMachine"
     },
     {
       "id": "Seated_Cable_Shoulder_Press",
@@ -12340,7 +12451,8 @@
       "restSeconds": 150,
       "instructions": "1. Sit upright at a cable machine with the handle at shoulder height. 2. Press the handle overhead in a straight line, extending your arms fully. 3. Return to shoulder height with control. 4. Cable tension at the top makes the lockout hardest; keep your core tight throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Seated_Calf_Raise",
@@ -12361,7 +12473,8 @@
       "restSeconds": 90,
       "instructions": "1. Sit on the calf raise machine with your toes on the platform, weight on your knees. 2. Push through your toes to raise your heels as high as possible. 3. Lower your heels below the platform level for a full stretch. 4. Use the full range of motion; this targets the soleus muscle under the main calf.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "seatedCalf"
     },
     {
       "id": "Seated_Close-Grip_Concentration_Barbell_Curl",
@@ -12586,7 +12699,8 @@
       "restSeconds": 90,
       "instructions": "1. Sit at the leg curl machine with your thighs on the pad, feet hooked under the lever. 2. Curl the lever downward by bending your knees, bringing your heels toward your glutes. 3. Extend your legs back to the starting position with control. 4. Keep your upper body still and hips pressed into the pad; focus on hamstring contraction.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "legCurl"
     },
     {
       "id": "Seated_Leg_Tucks",
@@ -12634,7 +12748,8 @@
       "restSeconds": 150,
       "instructions": "1. Sit at the cable machine with one arm extended, gripping the single-arm handle. 2. Pull the handle toward your torso, driving your elbow back and rotating slightly. 3. Return to the starting position with control. 4. One arm at a time allows you to focus on unilateral trap and back development.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "seatedRowMachine"
     },
     {
       "id": "Seated_One-Arm_Dumbbell_Palms-Down_Wrist_Curl",
@@ -12785,7 +12900,8 @@
       "restSeconds": 90,
       "instructions": "1. Sit facing the cable machine with your forearms on the bench, hands holding the bar with palms up. 2. Curl the bar upward by flexing your wrists against the cable resistance. 3. Lower back to the starting position with control. 4. Constant cable tension throughout the range isolates the forearm flexors.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "See-Saw_Press_Alternating_Side_Press",
@@ -12838,7 +12954,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "cal.zabel"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Shoulder_Press_-_With_Bands",
@@ -12977,7 +13094,8 @@
       "restSeconds": 150,
       "instructions": "1. Grip the pullup bar with hands shoulder-width apart and pull your body up until your chest nears the bar. 2. At the top, shift your chest toward one side, keeping control. 3. Return to center and repeat on the other side, alternating. 4. Lower with controlled descent, engaging your lats throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "pullUpBar"
     },
     {
       "id": "Single_Dumbbell_Raise",
@@ -13051,7 +13169,8 @@
       "restSeconds": 90,
       "instructions": "1. Set the cable at chest height and grasp the handle with one hand. 2. Stand slightly forward of center and pull the handle across your torso toward your opposite hip, squeezing your chest. 3. Control the resistance back to the start. Maintain an upright posture throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Single-Arm_Linear_Jammer",
@@ -13144,7 +13263,8 @@
       "restSeconds": 90,
       "instructions": "1. Sit on the leg extension machine and set the pad against one leg just above your ankle. 2. Extend your leg straight out, squeezing your quadriceps at the top of the movement. 3. Lower slowly with control back to the start. Do not lock your knee at the top.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "legExtension"
     },
     {
       "id": "Sit-Up",
@@ -13350,7 +13470,7 @@
       "secondary": [
         "chest"
       ],
-      "equipment": "barbell",
+      "equipment": "machine",
       "mechanic": "isolation",
       "force": "push",
       "level": "beginner",
@@ -13362,7 +13482,8 @@
       "restSeconds": 90,
       "instructions": "1. Set a guided barbell machine's bench to an incline and sit with your back against the pad. 2. Hold the bar with a neutral grip and raise it to shoulder height in a controlled arc, isolating the shoulder. 3. Lower back to the start. Avoid arching your lower back; keep the work in your shoulders.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "smithMachine"
     },
     {
       "id": "Smith_Machine_Behind_the_Back_Shrug",
@@ -13385,7 +13506,8 @@
       "restSeconds": 90,
       "instructions": "1. Position yourself under the bar with it resting behind your back on your trapezius. 2. Shrug your shoulders upward, raising the bar slightly without bending your arms. 3. Lower back to the start with control. Keep your chest up and avoid excessive forward lean.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "smithMachine"
     },
     {
       "id": "Smith_Machine_Bench_Press",
@@ -13409,7 +13531,8 @@
       "restSeconds": 150,
       "instructions": "1. Lie flat on the bench with your feet on the floor and eyes positioned under the bar. 2. Press the bar upward until your arms are extended but not locked at the elbows. 3. Lower under control to chest level. Keep your shoulder blades retracted throughout the movement.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "smithMachine"
     },
     {
       "id": "Smith_Machine_Bent_Over_Row",
@@ -13434,7 +13557,8 @@
       "restSeconds": 150,
       "instructions": "1. Bend at the hips until your torso is parallel to the ground, arms extended below you. 2. Pull the bar toward your lower chest, leading with your elbows and retracting your scapula. 3. Lower with control. Keep your back flat and core braced throughout the movement.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "smithMachine"
     },
     {
       "id": "Smith_Machine_Calf_Raise",
@@ -13455,7 +13579,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand under the bar with it resting on your traps, positioning the balls of your feet on the platform. 2. Drive through your toes and rise up as high as possible on your calves, feeling the contraction. 3. Lower back to the start with control. Maintain an upright posture throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "smithMachine"
     },
     {
       "id": "Smith_Machine_Close-Grip_Bench_Press",
@@ -13483,7 +13608,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "tuckerm"
-      ]
+      ],
+      "machine": "smithMachine"
     },
     {
       "id": "Smith_Machine_Decline_Press",
@@ -13507,7 +13633,8 @@
       "restSeconds": 150,
       "instructions": "1. Set the bench to a decline angle and lie with your head lower than your feet. 2. Press the bar upward from chest level until your arms are extended but not locked. 3. Lower back to your chest with control. Keep your shoulder blades pinned back throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "smithMachine"
     },
     {
       "id": "Smith_Machine_Hang_Power_Clean",
@@ -13533,7 +13660,8 @@
       "restSeconds": 180,
       "instructions": "1. Hold the bar at shoulder height with elbows high, feet hip-width apart. 2. Dip your knees slightly, then explosively drive through your legs to pull the bar upward. 3. Drop under the bar and catch it across your shoulders in a quarter squat, then stand up. Move explosively and land with control.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "smithMachine"
     },
     {
       "id": "Smith_Machine_Hip_Raise",
@@ -13556,7 +13684,8 @@
       "restSeconds": 90,
       "instructions": "1. Position yourself with your back on the bench, feet on the floor, and bar across your hips. 2. Drive through your heels and raise your hips until your body forms a straight line from knees to shoulders. 3. Lower back down with control. Squeeze your glutes at the top of each rep.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "smithMachine"
     },
     {
       "id": "Smith_Machine_Incline_Bench_Press",
@@ -13580,7 +13709,8 @@
       "restSeconds": 150,
       "instructions": "1. Set the bench to an incline, lie with your chest forward and eyes positioned under the bar. 2. Press the bar upward until your arms extend, emphasizing your upper chest throughout the movement. 3. Lower back to the start with control. Keep your shoulder blades retracted throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "smithMachine"
     },
     {
       "id": "Smith_Machine_Leg_Press",
@@ -13604,7 +13734,8 @@
       "restSeconds": 180,
       "instructions": "1. Sit in the machine with your feet on the platform at shoulder-width apart, back against the pad. 2. Press your feet away by extending your legs, stopping before your knees lock out completely. 3. Lower the platform back toward your chest with control. Maintain tension in your quads throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "smithMachine"
     },
     {
       "id": "Smith_Machine_One-Arm_Upright_Row",
@@ -13628,7 +13759,8 @@
       "restSeconds": 150,
       "instructions": "1. Stand facing the machine with the bar at thigh level, grasping it with one hand only. 2. Pull the bar upward toward your shoulder, leading with your elbow and keeping it high. 3. Lower with control to the start position. Maintain an upright posture and keep the bar close to your body.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "smithMachine"
     },
     {
       "id": "Smith_Machine_Overhead_Shoulder_Press",
@@ -13651,7 +13783,8 @@
       "restSeconds": 150,
       "instructions": "1. Stand facing forward with the bar at shoulder height, feet shoulder-width apart. 2. Press the bar directly overhead until your arms are extended but elbows not locked. 3. Lower back to shoulder height with control. Keep your core braced and avoid excessive lower back arch.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "smithMachine"
     },
     {
       "id": "Smith_Machine_Pistol_Squat",
@@ -13675,7 +13808,8 @@
       "restSeconds": 180,
       "instructions": "1. Stand facing forward on one leg, holding the bar at shoulder height for support and balance. 2. Lower yourself into a single-leg squat, descending as deep as you can while maintaining balance and control. 3. Drive through your working leg to return to standing. Control the descent carefully throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "smithMachine"
     },
     {
       "id": "Smith_Machine_Reverse_Calf_Raises",
@@ -13696,7 +13830,8 @@
       "restSeconds": 90,
       "instructions": "1. Position the balls of your feet on an elevated surface, heels off the edge, with the bar across your shoulders. 2. Raise your heels as high as possible by contracting your tibialis anterior, feeling the burn in your shins. 3. Lower your heels back down with control. Maintain balance and an upright posture.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "smithMachine"
     },
     {
       "id": "Smith_Machine_Squat",
@@ -13731,7 +13866,8 @@
           "licence": "Sentadilla multipower",
           "author": "Tierrasverdes"
         }
-      ]
+      ],
+      "machine": "smithMachine"
     },
     {
       "id": "Smith_Machine_Stiff-Legged_Deadlift",
@@ -13757,7 +13893,8 @@
       "restSeconds": 180,
       "instructions": "1. Stand with slight knee bend, holding the bar in front of your thighs with a shoulder-width grip. 2. Hinge at your hips and lower the bar along your shins as far as you can while maintaining a neutral spine. 3. Drive through your heels to return to standing. Keep your back straight throughout the movement.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "smithMachine"
     },
     {
       "id": "Smith_Machine_Upright_Row",
@@ -13781,7 +13918,8 @@
       "restSeconds": 150,
       "instructions": "1. Stand facing forward with the bar at thigh level in front of you. 2. Pull the bar upward toward your neck, driving your elbows high and out to the sides. 3. Lower with control to the start position. Keep your chest up and shoulders back throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "smithMachine"
     },
     {
       "id": "Smith_Single-Leg_Split_Squat",
@@ -13805,7 +13943,8 @@
       "restSeconds": 180,
       "instructions": "1. Stand in a split stance with the bar across your shoulders, one leg forward and one back. 2. Lower your back knee toward the ground until your front thigh is nearly parallel to the floor. 3. Press through your front heel to return to standing. Keep your torso upright and front knee tracking over your toes.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "smithMachine"
     },
     {
       "id": "Snatch",
@@ -14350,7 +14489,8 @@
       "restSeconds": 60,
       "instructions": "1. Enter the machine and set your preferred intensity level, resistance, and target duration. 2. Maintain a steady climbing pace, stepping deliberately and avoiding excessive forward lean on the handles. 3. Keep your core engaged and find a sustainable rhythm you can sustain for your cardio duration. Avoid leaning.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "stairClimber"
     },
     {
       "id": "Standing_Alternating_Dumbbell_Press",
@@ -14482,7 +14622,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand facing the cable machine with the handle at waist height, feet shoulder-width apart. 2. Curl the handle toward your chest, bending your elbows and squeezing your biceps at the top. 3. Lower back to the start with control. Keep your upper arms stationary throughout the movement.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Standing_Bradford_Press",
@@ -14529,7 +14670,8 @@
       "restSeconds": 150,
       "instructions": "1. Face away from a cable machine set at chest height, holding both handles at your sides. 2. Press the handles forward and across your body, extending your arms and engaging your chest fully. 3. Return to the start position with control. Maintain an upright posture and stable stance throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Standing_Cable_Lift",
@@ -14553,7 +14695,8 @@
       "restSeconds": 150,
       "instructions": "1. Stand facing a cable machine with the handle set high, grasping it with both hands at shoulder height. 2. Rotate your torso and pull the handle diagonally downward across your body toward your opposite hip. 3. Return to the start with control. Engage your core and rotate from your torso, not your arms.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Standing_Cable_Wood_Chop",
@@ -14576,7 +14719,8 @@
       "restSeconds": 150,
       "instructions": "1. Stand perpendicular to the cable machine with feet shoulder-width apart, holding the handle at chest height. 2. Rotate your torso diagonally downward, pulling the cable from high to low across your body. 3. Return to center with control, resisting the cable's pull. Keep your core braced and spine neutral throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Standing_Calf_Raises",
@@ -14618,7 +14762,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "clafal"
         }
-      ]
+      ],
+      "machine": "calfRaiseMachine"
     },
     {
       "id": "Standing_Concentration_Curl",
@@ -14841,7 +14986,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand at the leg curl machine, place your foot under the curl pad with your body upright. 2. Curl your leg upward, bringing your heel toward your glutes, squeeze, then lower. 3. Keep your hips stable and avoid arching your lower back during the curl.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "legCurl"
     },
     {
       "id": "Standing_Low-Pulley_Deltoid_Raise",
@@ -14864,7 +15010,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand sideways to the cable machine, grasp the handle at waist level in the hand farther from the machine. 2. Raise your arm out to the side in an arc, lifting the weight to shoulder height. 3. Lower it back down smoothly. Keep a slight bend in your elbow throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Standing_Low-Pulley_One-Arm_Triceps_Extension",
@@ -14885,7 +15032,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand facing away from the cable machine, hold the handle overhead with your elbow bent, upper arm stationary. 2. Extend your elbow to straighten your arm fully. 3. Lower the handle back down under control. Keep tension on your triceps—don't rest at the bottom.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Standing_Military_Press",
@@ -14956,7 +15104,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand sideways to the cable machine, grasp the handle with the arm closest to the machine, let it hang at your side. 2. Curl the handle toward your shoulder against the cable resistance. 3. Lower it back down under control. This single-arm variation allows greater range and isolation.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Standing_One-Arm_Dumbbell_Curl_Over_Incline_Bench",
@@ -15111,7 +15260,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand facing the cable machine holding the rope attachment at chest level, knees slightly bent. 2. Crunch downward by contracting your abs and driving your elbows toward your hips. 3. Return to standing with control. Keep your neck neutral—pull with your abs, not your neck.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Standing_Towel_Triceps_Extension",
@@ -15156,7 +15306,8 @@
       "restSeconds": 60,
       "instructions": "1. Step onto the step mill machine, set your desired pace and resistance level. 2. Maintain a steady rhythm, stepping continuously as the machine moves the pedals. 3. Breathe steadily throughout—maintain a pace you can sustain for your target duration.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "stairClimber"
     },
     {
       "id": "Step-up_with_Knee_Raise",
@@ -15351,7 +15502,8 @@
       "restSeconds": 90,
       "instructions": "1. Stand facing a cable machine with feet hip-width apart, grasp the bar at shoulder height with straight arms. 2. Pull the bar downward in an arc toward your thighs, keep your arms extended throughout. 3. Return to shoulder height. Focus on using your lats and avoid bending your elbows.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Sumo_Deadlift",
@@ -15649,7 +15801,8 @@
       "restSeconds": 90,
       "instructions": "1. Sit in the abductor machine with your knees on the pads positioned on the inside, thighs together. 2. Push the pads apart by abducting your hips, squeeze your glutes and outer thighs at the furthest point. 3. Return to the starting position slowly. Maintain an upright posture throughout the movement.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "hipAbductorAdductor"
     },
     {
       "id": "Thigh_Adductor",
@@ -15672,7 +15825,8 @@
       "restSeconds": 90,
       "instructions": "1. Sit in the adductor machine with your knees positioned on the outside pads, hips and back against the seat. 2. Squeeze the pads together by adducting your hips, bringing your thighs together and activating your inner quads. 3. Return to the starting position under control. Move smoothly without jerking.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "hipAbductorAdductor"
     },
     {
       "id": "Tire_Flip",
@@ -15794,7 +15948,8 @@
       "restSeconds": 90,
       "instructions": "1. Attach a rope to a high cable pulley, stand facing away from the machine, hold the rope overhead with elbows bent. 2. Extend your elbows to straighten your arms and pull the rope down and outward. 3. Return to the bent position under control. The rope allows for hand separation at full extension.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Triceps_Pushdown",
@@ -15826,7 +15981,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "anto.kreegyr"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Triceps_Pushdown_-_Rope_Attachment",
@@ -15847,7 +16003,8 @@
       "restSeconds": 90,
       "instructions": "1. Attach a rope to a high cable pulley, stand upright facing the machine, grasp the rope with elbows at your sides. 2. Push the rope downward by extending your elbows, separate the rope ends at the bottom. 3. Return to bent position. The rope provides a full range and hand separation at the end point.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Triceps_Pushdown_-_V-Bar_Attachment",
@@ -15868,7 +16025,8 @@
       "restSeconds": 90,
       "instructions": "1. Attach a V-bar to a high cable pulley, stand upright facing the machine, grasp the bar with elbows at your sides. 2. Press the bar downward by extending your elbows fully, feel your triceps engage at the bottom. 3. Return to bent position with control. The V-bar provides a natural grip position for pressing.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Tuck_Crunch",
@@ -16036,7 +16194,8 @@
       "restSeconds": 150,
       "instructions": "1. Sit at a cable machine with an underhand grip on the bar, hands shoulder-width apart. 2. Pull the bar down toward your chest by squeezing your lats and driving your elbows downward. 3. Return the bar to the starting position under control. The underhand grip emphasizes your lower lats and biceps.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "latPulldown"
     },
     {
       "id": "Upright_Barbell_Row",
@@ -16086,7 +16245,8 @@
       "restSeconds": 150,
       "instructions": "1. Stand facing a cable machine at mid-height, grasp the rope or bar with hands close together. 2. Pull upward vertically, drive your elbows back and up, bring your hands toward your chin. 3. Lower back to the starting position with control. The cable provides constant tension throughout the movement.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "cableStation"
     },
     {
       "id": "Upright_Row_-_With_Bands",
@@ -16138,7 +16298,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "apeschel"
-      ]
+      ],
+      "machine": "latPulldown"
     },
     {
       "id": "V-Bar_Pullup",
@@ -16162,7 +16323,8 @@
       "restSeconds": 150,
       "instructions": "1. Hang from the V-bar attachment with arms fully extended. 2. Pull yourself upward by driving your elbows down and back, bringing your chest toward the bar and squeezing your lats. 3. Lower with control to full arm extension. Keep your core tight throughout.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "pullUpBar"
     },
     {
       "id": "Walking_Treadmill",
@@ -16187,7 +16349,8 @@
       "restSeconds": 60,
       "instructions": "1. Step on and set an easy warm-up pace for a minute. 2. Increase to a steady, moderate walking pace for your target duration, working your legs and core. 3. Cool down with an easy pace at the end. Keep an upright posture and avoid gripping the handrails unless needed for balance.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "treadmill"
     },
     {
       "id": "Weighted_Ball_Hyperextension",
@@ -16544,7 +16707,8 @@
       "restSeconds": 150,
       "instructions": "1. Sit at a lat pulldown machine with feet flat, grip the wide bar attachment above you. 2. Pull the bar down toward your chest, elbows driving downward and slightly back. 3. Return to start with control. Lean back slightly for optimal lat engagement.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "latPulldown"
     },
     {
       "id": "Wide-Grip_Pulldown_Behind_The_Neck",
@@ -16568,7 +16732,8 @@
       "restSeconds": 150,
       "instructions": "1. Sit at a cable machine, grip the wide bar with arms extended overhead. 2. Pull the bar down behind your neck, driving elbows toward your ribs. 3. Return to start. Keep your chest upright and avoid pulling too aggressively behind your neck to protect your shoulders.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "latPulldown"
     },
     {
       "id": "Wide-Grip_Rear_Pull-Up",
@@ -16592,7 +16757,8 @@
       "restSeconds": 150,
       "instructions": "1. Hang from a pull-up bar using a wide grip, arms fully extended. 2. Pull yourself upward, leading with your chest and driving elbows down and back. 3. Lower to full arm extension. Keep your core braced and focus on squeezing your lats.",
       "source": "dagym",
-      "licence": "MIT"
+      "licence": "MIT",
+      "machine": "pullUpBar"
     },
     {
       "id": "Wide-Grip_Standing_Barbell_Curl",
@@ -16838,7 +17004,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "flori"
         }
-      ]
+      ],
+      "machine": "hipAbductorAdductor"
     },
     {
       "id": "Arnold_Shoulder_Press",
@@ -17451,7 +17618,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "Everkinetic"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Body_Ups",
@@ -17538,7 +17706,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "wger.de"
         }
-      ]
+      ],
+      "machine": "chestPressMachine"
     },
     {
       "id": "Burpees",
@@ -17586,7 +17755,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "wger.de"
-      ]
+      ],
+      "machine": "pecDeck"
     },
     {
       "id": "Cable_External_Rotation",
@@ -17608,7 +17778,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "lauroernesto"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Woodchoppers",
@@ -17632,7 +17803,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "robhoyt"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Calf_Press_Using_Leg_Press_Machine",
@@ -17664,7 +17836,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "nate303303"
         }
-      ]
+      ],
+      "machine": "legPress"
     },
     {
       "id": "Calf_Raises_on_Hackenschmitt_Machine",
@@ -17686,7 +17859,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "wger.de"
-      ]
+      ],
+      "machine": "hackSquat"
     },
     {
       "id": "Close_grip_Lat_Pull_Down",
@@ -17723,7 +17897,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "tuckerm"
         }
-      ]
+      ],
+      "machine": "latPulldown"
     },
     {
       "id": "Cross_Bench_Dumbbell_Pullovers",
@@ -17815,7 +17990,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "wger.de"
-      ]
+      ],
+      "machine": "abCrunchMachine"
     },
     {
       "id": "Crunches_With_Cable",
@@ -17839,7 +18015,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "wger.de"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Crunches_With_Legs_Up",
@@ -17995,7 +18172,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "oboema"
-      ]
+      ],
+      "machine": "chestPressMachine"
     },
     {
       "id": "Dips",
@@ -18027,7 +18205,8 @@
           "licence": "CC0",
           "author": "cshep442"
         }
-      ]
+      ],
+      "machine": "dipStation"
     },
     {
       "id": "Dips_Between_Two_Benches",
@@ -18253,7 +18432,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "abeworld"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Fly_With_Cable",
@@ -18287,7 +18467,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "Everkinetic"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Fly_With_Dumbbells",
@@ -18576,7 +18757,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "Everkinetic"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Hand_Grip",
@@ -18660,7 +18842,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "robhoyt"
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "Hercules_Pillars",
@@ -18684,7 +18867,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "GrosseHund"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "High_Knee_Jumps",
@@ -18863,7 +19047,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "Everkinetic"
         }
-      ]
+      ],
+      "machine": "backExtension"
     },
     {
       "id": "Incline_Dumbbell_Fly",
@@ -19009,7 +19194,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "Everkinetic"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Kettlebell_Swings",
@@ -19117,7 +19303,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "philip"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Lateral_to_Front_Raises",
@@ -19164,7 +19351,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "drthurlow"
-      ]
+      ],
+      "machine": "latPulldown"
     },
     {
       "id": "Lat_Pull_Down_Straight_Back",
@@ -19189,7 +19377,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "drthurlow"
-      ]
+      ],
+      "machine": "latPulldown"
     },
     {
       "id": "Leg_Curls_laying",
@@ -19225,7 +19414,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "Everkinetic"
         }
-      ]
+      ],
+      "machine": "legCurl"
     },
     {
       "id": "Leg_Presses_narrow",
@@ -19257,7 +19447,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "Franpol"
         }
-      ]
+      ],
+      "machine": "legPress"
     },
     {
       "id": "Leg_Presses_wide",
@@ -19282,7 +19473,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "wger.de"
-      ]
+      ],
+      "machine": "legPress"
     },
     {
       "id": "Leg_Raise",
@@ -19391,7 +19583,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "tuckerm"
-      ]
+      ],
+      "machine": "chestPressMachine"
     },
     {
       "id": "Leverage_Machine_Iso_Row",
@@ -19417,7 +19610,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "tuckerm"
-      ]
+      ],
+      "machine": "rowMachine"
     },
     {
       "id": "L_Hold",
@@ -19509,7 +19703,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "Everkinetic"
         }
-      ]
+      ],
+      "machine": "seatedRowMachine"
     },
     {
       "id": "Long_Pulley_Narrow",
@@ -19533,7 +19728,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "wger.de"
-      ]
+      ],
+      "machine": "seatedRowMachine"
     },
     {
       "id": "Low_Box_Squat_Wide_Stance",
@@ -19671,7 +19867,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "ThisGirl0819"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Pause_Bench",
@@ -20082,7 +20279,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "MaddieBeasley"
-      ]
+      ],
+      "machine": "backExtension"
     },
     {
       "id": "Row",
@@ -20141,7 +20339,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "wger.de"
         }
-      ]
+      ],
+      "machine": "seatedRowMachine"
     },
     {
       "id": "Rowing_T_bar",
@@ -20179,7 +20378,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "Everkinetic"
         }
-      ]
+      ],
+      "machine": "rowMachine"
     },
     {
       "id": "Run",
@@ -20257,7 +20457,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "foguinho.peruca"
-      ]
+      ],
+      "machine": "treadmill"
     },
     {
       "id": "Incline_Bench_Press_Dumbbell",
@@ -20430,7 +20631,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "wger.de"
-      ]
+      ],
+      "machine": "smithMachine"
     },
     {
       "id": "Shoulder_Shrug",
@@ -20693,7 +20895,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "wger.de"
-      ]
+      ],
+      "machine": "seatedCalf"
     },
     {
       "id": "Sit_ups",
@@ -20914,7 +21117,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "intelman"
-      ]
+      ],
+      "machine": "stationaryBike"
     },
     {
       "id": "Stiff_legged_Deadlifts",
@@ -20965,7 +21169,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "tuckerm"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Straight_arm_Pull_Down_rope_Attachment",
@@ -20989,7 +21194,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "tuckerm"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Sumo_Squats",
@@ -21093,7 +21299,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "Franpol"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Triceps_Extensions_on_Cable_With_Bar",
@@ -21115,7 +21322,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "wger.de"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Triceps_on_Machine",
@@ -21137,7 +21345,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "wger.de"
-      ]
+      ],
+      "machine": "tricepsExtensionMachine"
     },
     {
       "id": "Trunk_Rotation_With_Cable",
@@ -21163,7 +21372,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Robertcoop"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Rowing_with_TRX_band",
@@ -21239,7 +21449,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "tuckerm"
-      ]
+      ],
+      "machine": "latPulldown"
     },
     {
       "id": "Upper_External_Oblique",
@@ -21305,7 +21516,8 @@
           "licence": "CC-BY-SA 3.0",
           "author": "anto.kreegyr"
         }
-      ]
+      ],
+      "machine": "smithMachine"
     },
     {
       "id": "Upright_Row_SZ_bar",
@@ -21522,7 +21734,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "tuckerm"
-      ]
+      ],
+      "machine": "latPulldown"
     },
     {
       "id": "Dumbbell_Push_Up",
@@ -21605,7 +21818,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "cshep442"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Fingerboard_20_mm_edge",
@@ -21821,7 +22035,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "novadani"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Reverse_Preacher_Curl_Close_Grip",
@@ -21869,7 +22084,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "novadani"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Bus_Drivers",
@@ -21927,7 +22143,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "novadani"
         }
-      ]
+      ],
+      "machine": "smithMachine"
     },
     {
       "id": "Straight_Bar_Cable_Front_Raise",
@@ -21949,7 +22166,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "novadani"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Seated_Dumbbell_Side_Lateral",
@@ -22021,7 +22239,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "novadani"
-      ]
+      ],
+      "machine": "seatedRowMachine"
     },
     {
       "id": "Lying_Dumbbell_Row_SS_Seated_Shrug",
@@ -22074,7 +22293,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "novadani"
         }
-      ]
+      ],
+      "machine": "smithMachine"
     },
     {
       "id": "Machine_chest_fly",
@@ -22105,7 +22325,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "novadani"
         }
-      ]
+      ],
+      "machine": "pecDeck"
     },
     {
       "id": "Suspended_crossess",
@@ -22321,7 +22542,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "clafal"
-      ]
+      ],
+      "machine": "elliptical"
     },
     {
       "id": "Curl_with_kettlebell_two_hands",
@@ -22468,7 +22690,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "clafal"
         }
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "commando_pull_ups",
@@ -22493,7 +22716,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "clafal"
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "Step_ups",
@@ -23895,7 +24119,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Boertie"
-      ]
+      ],
+      "machine": "rower"
     },
     {
       "id": "Seated_Bench_Press",
@@ -23920,7 +24145,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "colundrum"
-      ]
+      ],
+      "machine": "chestPressMachine"
     },
     {
       "id": "Abduction_while_standing",
@@ -24191,7 +24417,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "Franpol"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Push_Ups_Incline",
@@ -24381,7 +24608,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "Franpol"
         }
-      ]
+      ],
+      "machine": "seatedRowMachine"
     },
     {
       "id": "Remo_maquina_agarre_estrecho",
@@ -24470,7 +24698,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Franpol"
-      ]
+      ],
+      "machine": "latPulldown"
     },
     {
       "id": "Close_grip_supinated_lat_pulldown",
@@ -24502,7 +24731,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "Franpol"
         }
-      ]
+      ],
+      "machine": "latPulldown"
     },
     {
       "id": "Cable_glute_extension",
@@ -24531,7 +24761,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "Franpol"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Machine_glute_extension",
@@ -24553,7 +24784,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Franpol"
-      ]
+      ],
+      "machine": "gluteHamDeveloper"
     },
     {
       "id": "Neutral_grip_chest_pulldown",
@@ -24585,7 +24817,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "Franpol"
         }
-      ]
+      ],
+      "machine": "latPulldown"
     },
     {
       "id": "High_pulley_pullover",
@@ -24617,7 +24850,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "Franpol"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Incline_bench_pulldown",
@@ -24649,7 +24883,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "Franpol"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Arabesque",
@@ -24744,7 +24979,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "anto.kreegyr"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Side_bend",
@@ -25144,7 +25380,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "clafal"
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "Reverse_Snow_Angel",
@@ -25780,7 +26017,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "clafal"
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "TRX_roll_out",
@@ -25853,7 +26091,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "clafal"
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "TRX_Obliques",
@@ -26045,7 +26284,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "FEFFO"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Pullover",
@@ -26151,7 +26391,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "daniel.escada"
-      ]
+      ],
+      "machine": "latPulldown"
     },
     {
       "id": "Isometria_trazioni_impugnatura_inversa",
@@ -26419,7 +26660,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "clafal"
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "One_armed_push_ups",
@@ -26499,7 +26741,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "JackSparrow"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "High_Cable_Cross_Tricep_Extention_NB",
@@ -26528,7 +26771,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "JackSparrow"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Helms_Row",
@@ -27073,7 +27317,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "matpn"
-      ]
+      ],
+      "machine": "assistedDipPullUp"
     },
     {
       "id": "box_jumps",
@@ -27122,7 +27367,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "6LXBO"
-      ]
+      ],
+      "machine": "torsoRotation"
     },
     {
       "id": "Torso_Twist",
@@ -27182,7 +27428,8 @@
           "licence": "Girl doing one arm shoulder raise",
           "author": "carlos3c"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Band_pull_aparts",
@@ -27256,7 +27503,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Paul@Chemistry"
-      ]
+      ],
+      "machine": "pulloverMachine"
     },
     {
       "id": "Hamstring_Kicks",
@@ -27740,7 +27988,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "hpmbala@gmail.com"
-      ]
+      ],
+      "machine": "hackSquat"
     },
     {
       "id": "Dumbbell_Crunches",
@@ -27788,7 +28037,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "hpmbala@gmail.com"
-      ]
+      ],
+      "machine": "preacherCurlMachine"
     },
     {
       "id": "Toe_Taps",
@@ -28256,7 +28506,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "hpmbala@gmail.com"
-      ]
+      ],
+      "machine": "stairClimber"
     },
     {
       "id": "Cobra_Stretch",
@@ -28386,7 +28637,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Expenses7000"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Cross_Body_Cable_Y_Raise",
@@ -28410,7 +28662,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Expenses7000"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "No_Leg_Drive_Dumbbell_Chest_Press",
@@ -28512,7 +28765,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Expenses7000"
-      ]
+      ],
+      "machine": "hackSquat"
     },
     {
       "id": "Calf_Raise_using_Hack_Squat_Machine",
@@ -28537,7 +28791,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Expenses7000"
-      ]
+      ],
+      "machine": "hackSquat"
     },
     {
       "id": "Incline_Close_Grip_Barbell_Bench_Press",
@@ -28608,7 +28863,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Expenses7000"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "1_Arm_Half_Kneeling_Lat_Pulldown",
@@ -28633,7 +28889,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Expenses7000"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Kroc_Row",
@@ -28683,7 +28940,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Expenses7000"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Reverse_Cable_Flye",
@@ -28707,7 +28965,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Expenses7000"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "W_Raise",
@@ -28902,7 +29161,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Moffi"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Dumbbell_Cheat_Curl",
@@ -28972,7 +29232,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Moffi"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Rocking_Triceps_Pushdown",
@@ -28994,7 +29255,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Moffi"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Alternating_High_Cable_Row",
@@ -29020,7 +29282,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Moffi"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Hyper_Y_W_Combo",
@@ -29117,7 +29380,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "aahuja"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Bayesian_Curl",
@@ -29141,7 +29405,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "aahuja"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "DB_Upper_Chest_Variation",
@@ -29334,7 +29599,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Expenses7000"
-      ]
+      ],
+      "machine": "smithMachine"
     },
     {
       "id": "Cable_Tricep_Kickback",
@@ -29356,7 +29622,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Expenses7000"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Neutral_Grip_Lat_Pulldown",
@@ -29381,7 +29648,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Expenses7000"
-      ]
+      ],
+      "machine": "latPulldown"
     },
     {
       "id": "Kong_Curl",
@@ -29451,7 +29719,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Expenses7000"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Lateral_Walk",
@@ -29498,7 +29767,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Expenses7000"
-      ]
+      ],
+      "machine": "legPress"
     },
     {
       "id": "Handstand",
@@ -29583,7 +29853,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "polloperro"
         }
-      ]
+      ],
+      "machine": "pendulumSquat"
     },
     {
       "id": "Battle_Ropes",
@@ -29659,7 +29930,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "flanny"
-      ]
+      ],
+      "machine": "skiErg"
     },
     {
       "id": "Pendulum_Squat",
@@ -29684,7 +29956,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "schweezer"
-      ]
+      ],
+      "machine": "pendulumSquat"
     },
     {
       "id": "Glute_Drive",
@@ -29733,7 +30006,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "florian.bussmann"
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "Lying_Dumbbell_Curls",
@@ -29781,7 +30055,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Brigade7938"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Delt_Stretch",
@@ -29828,7 +30103,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "DiscoCop"
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "Archer_Pull_Up",
@@ -29903,7 +30179,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "MisterPinnacle"
-      ]
+      ],
+      "machine": "stairClimber"
     },
     {
       "id": "Push_Up",
@@ -30486,7 +30763,7 @@
         "glutes",
         "hams"
       ],
-      "equipment": "barbell",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "weightReps",
       "isPerSide": false,
@@ -30506,7 +30783,8 @@
           "licence": "Smith Machine Split Squat",
           "author": "workout@rooven.anonaddy.me"
         }
-      ]
+      ],
+      "machine": "smithMachine"
     },
     {
       "id": "Leg_curl_with_elastic",
@@ -30635,7 +30913,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "tenebrizz"
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "Bodyweight_Biceps_Curl",
@@ -30762,7 +31041,8 @@
           "licence": "Treadmill",
           "author": "Tierrasverdes"
         }
-      ]
+      ],
+      "machine": "treadmill"
     },
     {
       "id": "Dumbbell_donkey_kick",
@@ -30826,7 +31106,8 @@
           "licence": "Bicicleta estatica",
           "author": "Tierrasverdes"
         }
-      ]
+      ],
+      "machine": "stationaryBike"
     },
     {
       "id": "Seated_Dumbbell_Calf_Raise",
@@ -30893,7 +31174,8 @@
           "licence": "Unilateral cable row",
           "author": "Rottekongen"
         }
-      ]
+      ],
+      "machine": "seatedRowMachine"
     },
     {
       "id": "Blaze",
@@ -30950,7 +31232,8 @@
           "licence": "cable pullover/row",
           "author": "Rottekongen"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Modified_pulldown",
@@ -30982,7 +31265,8 @@
           "licence": "modified pulldown",
           "author": "Rottekongen"
         }
-      ]
+      ],
+      "machine": "latPulldown"
     },
     {
       "id": "Single_arm_row",
@@ -31015,7 +31299,8 @@
           "licence": "single arm row",
           "author": "Rottekongen"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Barbell_Clean_and_press",
@@ -31267,7 +31552,8 @@
           "licence": "Lateral wise",
           "author": "roneydya"
         }
-      ]
+      ],
+      "machine": "lateralRaiseMachine"
     },
     {
       "id": "Cable_Chest_Press_Decline",
@@ -31292,7 +31578,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Shiladree"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Preacher_Curl_Internally_Rotated",
@@ -31365,7 +31652,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Shiladree"
-      ]
+      ],
+      "machine": "latPulldown"
     },
     {
       "id": "Cable_Triceps_Press",
@@ -31387,7 +31675,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Shiladree"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Tri_Extension_Internal_Rotation",
@@ -31409,7 +31698,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Shiladree"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Curl_With_Shoulder_Elevated",
@@ -31455,7 +31745,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "AlucardEvil40"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Leg_Swings_Front_Back",
@@ -31501,7 +31792,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Iko"
-      ]
+      ],
+      "machine": "hipAbductorAdductor"
     },
     {
       "id": "Wall_Angels",
@@ -31670,7 +31962,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "daiben"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Fly_Upper_Chest",
@@ -31694,7 +31987,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "daiben"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Cable_Fly_Lower_Chest",
@@ -31718,7 +32012,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "daiben"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Incline_Static_Hold",
@@ -31762,7 +32057,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "daiben"
-      ]
+      ],
+      "machine": "chestPressMachine"
     },
     {
       "id": "Pull_Ups_Wide_Grip",
@@ -31787,7 +32083,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "daiben"
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "Pull_Ups_Neutral_Grip",
@@ -31812,7 +32109,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "daiben"
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "Barbell_Row_Overhand",
@@ -31940,7 +32238,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Mariano_O"
-      ]
+      ],
+      "machine": "latPulldown"
     },
     {
       "id": "Patadas_traseras",
@@ -32040,7 +32339,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "polloperro"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Reverse_Fly_Standing",
@@ -32064,7 +32364,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Croak6728"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Butchers_Block_Stretch",
@@ -32248,7 +32549,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "polloperro"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Remo_alto_polea_alta",
@@ -32273,7 +32575,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "polloperro"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Jalon_caballero_unialteral",
@@ -32321,7 +32624,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "barry"
-      ]
+      ],
+      "machine": "gluteKickback"
     },
     {
       "id": "Standing_Adduction_Cable",
@@ -32345,7 +32649,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "barry"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Seated_Row_Machine",
@@ -32378,7 +32683,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "barry"
         }
-      ]
+      ],
+      "machine": "rowMachine"
     },
     {
       "id": "Straight_Arm_Pulldown_Cable",
@@ -32409,7 +32715,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "barry"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Side_Straight_Arm_Pulldown_Cable",
@@ -32433,7 +32740,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "barry"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Shoulder_Internal_Rotation_Cable",
@@ -32455,7 +32763,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "barry"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Shoulder_External_Rotation_Cable",
@@ -32477,7 +32786,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "barry"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Side_Lateral_Raise_Cable",
@@ -32499,7 +32809,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "barry"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Face_pulls_with_yellow_green_band",
@@ -32625,7 +32936,8 @@
           "licence": "Press de gluteo a una pierna",
           "author": "Tierrasverdes"
         }
-      ]
+      ],
+      "machine": "legPress"
     },
     {
       "id": "Single_Leg_Deadlift_with_Dumbbell",
@@ -32680,7 +32992,8 @@
       "source": "wger",
       "sourceURL": "https://wger.de/en/exercise/e4bbd8d8-20e1-4174-b785-2590d2a1a7ad/view/",
       "licence": "CC-BY-SA 4.0",
-      "authors": []
+      "authors": [],
+      "machine": "assistedDipPullUp"
     },
     {
       "id": "Neutral_grip_pull_ups_or_TRX_rows",
@@ -32712,7 +33025,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "54str"
         }
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "Shrimp_Squad",
@@ -32762,7 +33076,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Happy"
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "Back_Lever",
@@ -32787,7 +33102,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Happy"
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "Windshield_Wipers",
@@ -32840,7 +33156,8 @@
           "licence": "Elevacion lateral en maquina",
           "author": "Tierrasverdes"
         }
-      ]
+      ],
+      "machine": "lateralRaiseMachine"
     },
     {
       "id": "Cable_Front_Raise_with_a_small_bar",
@@ -32869,7 +33186,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "Tierrasverdes"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Machine_Hip_Abduction",
@@ -32898,7 +33216,8 @@
           "licence": "Abduccion en maquina",
           "author": "Tierrasverdes"
         }
-      ]
+      ],
+      "machine": "hipAbductorAdductor"
     },
     {
       "id": "Cable_pull_through",
@@ -32923,7 +33242,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "manuher89"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Side_lateral_raise_Front_Cable",
@@ -32943,7 +33263,8 @@
       "source": "wger",
       "sourceURL": "https://wger.de/en/exercise/7f9c13ab-1718-4f8a-8636-232f05f5f640/view/",
       "licence": "CC-BY-SA 4.0",
-      "authors": []
+      "authors": [],
+      "machine": "cableStation"
     },
     {
       "id": "Side_lateral_raise_Back_Cable",
@@ -32963,7 +33284,8 @@
       "source": "wger",
       "sourceURL": "https://wger.de/en/exercise/065ff3ca-a9e8-4339-997e-d65556d9ebf3/view/",
       "licence": "CC-BY-SA 4.0",
-      "authors": []
+      "authors": [],
+      "machine": "cableStation"
     },
     {
       "id": "45_lateral_raises",
@@ -33005,7 +33327,8 @@
       "source": "wger",
       "sourceURL": "https://wger.de/en/exercise/7e039ac7-37ab-49f9-9ae8-c7efeef070cd/view/",
       "licence": "CC-BY-SA 4.0",
-      "authors": []
+      "authors": [],
+      "machine": "cableStation"
     },
     {
       "id": "Plank_Reach",
@@ -33050,7 +33373,8 @@
       "source": "wger",
       "sourceURL": "https://wger.de/en/exercise/e4804b7c-50af-4947-821f-3750718ffe65/view/",
       "licence": "CC-BY-SA 4.0",
-      "authors": []
+      "authors": [],
+      "machine": "chestPressMachine"
     },
     {
       "id": "Chair_dips",
@@ -33099,7 +33423,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "eufvksruh"
-      ]
+      ],
+      "machine": "pecDeck"
     },
     {
       "id": "Suitcase_Carry",
@@ -33220,7 +33545,8 @@
       "source": "wger",
       "sourceURL": "https://wger.de/en/exercise/d788811b-be46-485a-b8a0-0d9ba7f4cf85/view/",
       "licence": "CC-BY-SA 4.0",
-      "authors": []
+      "authors": [],
+      "machine": "cableStation"
     },
     {
       "id": "Trap_Bar_Squat",
@@ -33296,7 +33622,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "LEBRERO"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Parallel_Bar_Hold",
@@ -33321,7 +33648,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Croak6728"
-      ]
+      ],
+      "machine": "dipStation"
     },
     {
       "id": "Sphinx",
@@ -33588,7 +33916,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "hans"
         }
-      ]
+      ],
+      "machine": "chestPressMachine"
     },
     {
       "id": "Ring_Support_Hold",
@@ -34673,7 +35002,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Deflation"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Shinbox_IR_Stretch",
@@ -34830,7 +35160,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "nishant0712"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Weighted_push_ups",
@@ -34884,7 +35215,8 @@
       "source": "wger",
       "sourceURL": "https://wger.de/en/exercise/71b9da1a-ac07-49c8-8b2d-7179032181fd/view/",
       "licence": "CC-BY-SA 4.0",
-      "authors": []
+      "authors": [],
+      "machine": "pecDeck"
     },
     {
       "id": "Pullback",
@@ -34908,7 +35240,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "cybro"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Hip_Bridge",
@@ -35204,7 +35537,8 @@
       "source": "wger",
       "sourceURL": "https://wger.de/en/exercise/2e96e572-ddb4-4251-a812-ccf03ea677a6/view/",
       "licence": "CC-BY-SA 4.0",
-      "authors": []
+      "authors": [],
+      "machine": "chestPressMachine"
     },
     {
       "id": "Extreme_Pec_Stretch",
@@ -35301,7 +35635,8 @@
           "licence": "CC-BY-SA 4.0",
           "author": "shushu"
         }
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "3008_Abdominal_Crunch",
@@ -35323,7 +35658,8 @@
       "source": "wger",
       "sourceURL": "https://wger.de/en/exercise/7870ad8d-a0c1-4e3a-a4fe-a237908eba9b/view/",
       "licence": "CC-BY-SA 4.0",
-      "authors": []
+      "authors": [],
+      "machine": "abCrunchMachine"
     },
     {
       "id": "Barbell_Silverback_Shrug",
@@ -35370,7 +35706,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "amaesc"
-      ]
+      ],
+      "machine": "latPulldown"
     },
     {
       "id": "Seated_V_Grip_Row",
@@ -35396,7 +35733,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "amaesc"
-      ]
+      ],
+      "machine": "seatedRowMachine"
     },
     {
       "id": "Assisted_Pull_Up",
@@ -35492,7 +35830,8 @@
       "source": "wger",
       "sourceURL": "https://wger.de/en/exercise/e9f3446f-ca98-4bf2-817c-0dacd123cecd/view/",
       "licence": "CC-BY-SA 4.0",
-      "authors": []
+      "authors": [],
+      "machine": "beltSquat"
     },
     {
       "id": "Cable_Rear_Delt_Fly_single_arm",
@@ -35516,7 +35855,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "Dulive"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Cat_Cow",
@@ -36011,7 +36351,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "evtimovgeorg"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Mentzer_Pulldown",
@@ -36043,7 +36384,8 @@
           "licence": "Mentzer pull down",
           "author": "Athlean-X"
         }
-      ]
+      ],
+      "machine": "latPulldown"
     },
     {
       "id": "Single_Arm_Lat_Pulldown",
@@ -36068,7 +36410,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "evtimovgeorg"
-      ]
+      ],
+      "machine": "latPulldown"
     },
     {
       "id": "Hip_Airplane",
@@ -36681,7 +37024,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "wintercyan"
-      ]
+      ],
+      "machine": "pullUpBar"
     },
     {
       "id": "Leg_Extension_Isometric",
@@ -36703,7 +37047,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "HexoctusEngineering"
-      ]
+      ],
+      "machine": "legExtension"
     },
     {
       "id": "Bench_Press_Isometric",
@@ -36823,7 +37168,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "HexoctusEngineering"
-      ]
+      ],
+      "machine": "latPulldown"
     },
     {
       "id": "Triceps_Pushdown_Isometric",
@@ -36845,7 +37191,8 @@
       "licence": "CC-BY-SA 4.0",
       "authors": [
         "HexoctusEngineering"
-      ]
+      ],
+      "machine": "cableStation"
     },
     {
       "id": "Boxing",
@@ -36916,7 +37263,8 @@
       "licence": "CC-BY-SA 3.0",
       "authors": [
         "Personal routine"
-      ]
+      ],
+      "machine": "treadmill"
     },
     {
       "id": "Kegel_Exercise",
@@ -37174,7 +37522,8 @@
           "licence": "reverse_v-squat",
           "author": "aboksz"
         }
-      ]
+      ],
+      "machine": "hackSquat"
     },
     {
       "id": "Box_Handstand_Push_up",

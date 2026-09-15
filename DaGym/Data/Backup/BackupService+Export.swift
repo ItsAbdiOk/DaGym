@@ -90,7 +90,7 @@ extension BackupService {
                 isPerSide: model.isPerSide, isCustom: model.isCustom, isFavorite: model.isFavorite,
                 barType: model.barType, incrementKg: model.incrementKg, restSeconds: model.restSeconds,
                 instructions: model.isCustom ? model.instructions : "", notes: model.notes,
-                createdAt: model.createdAt
+                createdAt: model.createdAt, machine: model.machine
             )
         }
     }
@@ -199,7 +199,8 @@ extension BackupService {
                 id: $0.id, name: $0.name, isActive: $0.isActive, barKg: $0.barKg,
                 availableEquipment: $0.availableEquipment, plateStockKg: $0.plateStockKg,
                 plateCounts: $0.plateCounts, collarsKg: $0.collarsKg, createdAt: $0.createdAt,
-                seedKey: $0.seedKey
+                seedKey: $0.seedKey, restrictsMachines: $0.restrictsMachines,
+                availableMachines: $0.availableMachines
             )
         }
     }

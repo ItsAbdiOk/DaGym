@@ -15,6 +15,7 @@ struct ExercisePickerSheet: View {
     @State private var selectedMuscle: Muscle?
     @State private var profile: EquipmentProfileInfo?
     @State private var showAllEquipment = false
+    @State private var hidden = HiddenCounts()
 
     var body: some View {
         NavigationStack {
@@ -22,7 +23,9 @@ struct ExercisePickerSheet: View {
                 AmbientWash()
                 VStack(alignment: .leading, spacing: DGSpace.s4) {
                     if let profile, profile.restrictsLibrary {
-                        EquipmentFilterBanner(profileName: profile.name, showingAll: $showAllEquipment)
+                        EquipmentFilterBanner(
+                            profileName: profile.name, hidden: hidden, showingAll: $showAllEquipment
+                        )
                     }
                     chipRow
                     rows
@@ -85,12 +88,26 @@ struct ExercisePickerSheet: View {
 
     private func refresh() {
         let all = store.exercises(matching: searchText, muscle: selectedMuscle)
-        guard let profile, profile.restrictsLibrary, !showAllEquipment else {
+        guard let profile, profile.restrictsLibrary else {
             exercises = all
             return
         }
-        let available = Set(profile.availableEquipment)
-        exercises = all.filter { available.contains($0.equipment) }
+        exercises = ExercisePickerFilter.visible(
+            all, availability: profile.availability, showingAll: showAllEquipment, hidden: &hidden
+        )
+    }
+}
+
+/// The picker's profile filter as a pure function: what stays, and how many rows the profile
+/// hides (counted even while "Show all" is on, so the banner keeps its numbers).
+enum ExercisePickerFilter {
+    static func visible(
+        _ exercises: [ExerciseInfo], availability: EquipmentAvailability, showingAll: Bool,
+        hidden: inout HiddenCounts
+    ) -> [ExerciseInfo] {
+        hidden = availability.hiddenCounts(of: exercises.map { ($0.equipment, $0.machine) })
+        guard !showingAll else { return exercises }
+        return exercises.filter { availability.allows(equipment: $0.equipment, machine: $0.machine) }
     }
 }
 

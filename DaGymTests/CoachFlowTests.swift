@@ -182,6 +182,12 @@ struct CoachFlowTests {
 
     @Test("a proposed progression rule steps by the lift's own increment, not a hard-coded 2.5 kg")
     func reviewRuleUsesTheLiftsIncrement() throws {
+        // The digest reads the unit from the host app's `UserDefaults.standard`; a simulator
+        // whose app was last left in lb would otherwise turn the 1 kg step into 5 lb.
+        let defaults = UserDefaults.standard
+        let savedUnit = defaults.string(forKey: Preferences.Key.weightUnit)
+        defaults.set(WeightUnit.kg.rawValue, forKey: Preferences.Key.weightUnit)
+        defer { defaults.set(savedUnit, forKey: Preferences.Key.weightUnit) }
         let store = try makeStore()
         let (bench, _) = benchRoutine(store)
         store.updateExerciseSettings(id: bench.id, restSeconds: 0, barType: nil, incrementKg: 1)

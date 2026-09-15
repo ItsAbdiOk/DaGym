@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import GymCore
 import SwiftData
 
 /// Debug-only rows that force every synced record type and field into the CloudKit
@@ -28,7 +29,8 @@ enum CloudKitSchemaProbe {
         let exercise = ExerciseModel(
             seedID: marker, name: marker, primaryMuscles: ["chest"], secondaryMuscles: ["triceps"],
             equipment: "barbell", mechanic: "compound", barType: "standard", instructions: marker,
-            notes: marker, dataSource: marker, sourceURL: marker, licence: marker, authors: [marker]
+            notes: marker, dataSource: marker, sourceURL: marker, licence: marker, authors: [marker],
+            machine: Machine.legPress.rawValue
         )
         // Tombstoned so it never appears in the library — and so the merge fields export.
         exercise.mergedIntoID = id
@@ -68,7 +70,7 @@ enum CloudKitSchemaProbe {
         context.insert(PersonalRecordEventModel(exerciseID: id, workoutID: id))
         context.insert(EquipmentProfileModel(
             name: marker, availableEquipment: ["barbell"], plateStockKg: [20], plateCounts: [2],
-            seedKey: marker
+            seedKey: marker, restrictsMachines: true, availableMachines: [Machine.legPress.rawValue]
         ))
         // The store reads the newest schedule row, so a probe row would shadow a real one:
         // only add one when the device has none (which is exactly when the type is missing).

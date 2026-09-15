@@ -44,6 +44,11 @@ enum SeededEquipmentProfile: String, CaseIterable {
 
     var collarsKg: Double { 0 }
 
+    /// "Gym" offers every station of its kinds; "Home" — dumbbells, bodyweight, bands — has
+    /// none: no pull-up bar or dip station until the lifter ticks one.
+    var restrictsMachines: Bool { self == .home }
+    var availableMachines: [String] { [] }
+
     static func named(_ name: String) -> SeededEquipmentProfile? {
         allCases.first { $0.name == name }
     }
@@ -66,6 +71,10 @@ enum SeededEquipmentProfile: String, CaseIterable {
             && model.plateStockKg == stock.map(\.weightKg)
             && model.plateCounts == stock.map(\.count)
             && model.collarsKg == collarsKg
+            && model.availableMachines == availableMachines
+            // A row seeded before stations existed holds the default (false) rather than the
+            // seeded value; it is just as untouched.
+            && (model.restrictsMachines == restrictsMachines || !model.restrictsMachines)
     }
 }
 
@@ -133,7 +142,8 @@ extension WorkoutStore {
             let key = [
                 model.name, "\(model.barKg)", model.availableEquipment.joined(separator: ","),
                 model.plateStockKg.map { "\($0)" }.joined(separator: ","),
-                model.plateCounts.map { "\($0)" }.joined(separator: ","), "\(model.collarsKg)"
+                model.plateCounts.map { "\($0)" }.joined(separator: ","), "\(model.collarsKg)",
+                "\(model.restrictsMachines)", model.availableMachines.joined(separator: ",")
             ].joined(separator: "|")
             groups[key, default: []].append(model)
         }

@@ -29,6 +29,54 @@ struct SubstitutionsTests {
         [bench, inclineDB, cableFly, machineChest, legPress]
     }
 
+    @Test("a station the profile lacks is never offered, and a taken machine is not offered back")
+    func stationFiltering() {
+        let pecDeck = SubstitutionCandidate(
+            id: UUID(), name: "Pec Deck", primary: [.chest], secondary: [], equipment: "machine",
+            mechanic: "isolation", machine: "pecDeck"
+        )
+        let chestPress = SubstitutionCandidate(
+            id: UUID(), name: "Chest Press Machine", primary: [.chest], secondary: [.triceps],
+            equipment: "machine", mechanic: "compound", machine: "chestPressMachine"
+        )
+        let crossover = SubstitutionCandidate(
+            id: UUID(), name: "Cable Crossover", primary: [.chest], secondary: [], equipment: "cable",
+            mechanic: "isolation", machine: "cableStation"
+        )
+        let gym = EquipmentAvailability(
+            types: ["machine", "cable", "dumbbell"], restrictsMachines: true,
+            machines: [.chestPressMachine, .latPulldown]
+        )
+        let names = Substitutions.candidates(
+            for: bench, reason: .shortOnTime, library: [pecDeck, chestPress, crossover, inclineDB],
+            availability: gym, recoveryMap: [:]
+        ).map(\.candidate.name)
+        #expect(names.contains("Chest Press Machine"))
+        #expect(names.contains("Incline Dumbbell Press"))
+        #expect(!names.contains("Pec Deck"))
+        #expect(!names.contains("Cable Crossover"))
+
+        // Swapping out a taken lat pulldown must not suggest another lat pulldown seat.
+        let wide = SubstitutionCandidate(
+            id: UUID(), name: "Wide-Grip Lat Pulldown", primary: [.lats], secondary: [],
+            equipment: "cable", mechanic: "compound", machine: "latPulldown"
+        )
+        let close = SubstitutionCandidate(
+            id: UUID(), name: "Close-Grip Lat Pulldown", primary: [.lats], secondary: [],
+            equipment: "cable", mechanic: "compound", machine: "latPulldown"
+        )
+        let straightArm = SubstitutionCandidate(
+            id: UUID(), name: "Straight-Arm Pulldown", primary: [.lats], secondary: [],
+            equipment: "cable", mechanic: "isolation", machine: "cableStation"
+        )
+        let cables = EquipmentAvailability(types: ["cable"])
+        let swaps = Substitutions.candidates(
+            for: wide, reason: .machineTaken, library: [close, straightArm], availability: cables,
+            recoveryMap: [:]
+        ).map(\.candidate.name)
+        #expect(swaps == ["Straight-Arm Pulldown"])
+    }
+
     @Test("only equipment the user actually has comes back")
     func equipmentFiltering() {
         let results = Substitutions.candidates(

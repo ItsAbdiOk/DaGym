@@ -55,7 +55,7 @@ extension WorkoutStore {
                 weeklyGoal: weeklyGoal, calendar: calendar, now: now, finishedWorkouts: finishedWorkouts
             ),
             substitutionLibrary: substitutionCandidates(),
-            availableEquipment: Set(activeProfile()?.availableEquipment ?? []),
+            equipmentAvailability: activeEquipmentAvailability() ?? EquipmentAvailability(types: []),
             recoveryMap: recoverySnapshot(now: now, calendar: calendar).map,
             recentPRs: recentPRHighlights(now: now),
             recentAchievements: recentAchievementHighlights(now: now),

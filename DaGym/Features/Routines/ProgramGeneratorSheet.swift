@@ -215,7 +215,7 @@ struct ProgramGeneratorSheet: View {
         let request = ProgramRequest(
             goal: goal, daysPerWeek: daysPerWeek, sessionMinutes: sessionMinutes, experience: experience,
             availableEquipment: store.equipmentKindsForProgram(), excludedEquipment: excludedEquipment,
-            excludedMuscles: excludedMuscles
+            excludedMuscles: excludedMuscles, equipmentAvailability: store.equipmentAvailabilityForProgram()
         )
         let template = ProgramTemplateEngine.template(for: request)
         let pool = store.programPool(for: template, request: request)

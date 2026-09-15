@@ -16,6 +16,17 @@ struct EquipmentProfileInfo: Identifiable, Hashable {
     /// `EquipmentSeeder`'s stable identity for this profile ("gym"/"home"), `nil` for a
     /// user-created one. See `EquipmentProfileModel.seedKey`.
     var seedKey: String?
+    /// See `EquipmentProfileModel.restrictsMachines` / `availableMachines`.
+    var restrictsMachines = false
+    var availableMachines: [String] = []
+
+    /// The one filter every equipment-aware surface applies (`GymCore.EquipmentAvailability`).
+    var availability: EquipmentAvailability {
+        EquipmentAvailability(
+            types: Set(availableEquipment), restrictsMachines: restrictsMachines,
+            machines: Set(availableMachines.compactMap(Machine.init(rawValue:)))
+        )
+    }
 }
 
 /// Editable fields for `WorkoutStore.updateProfile(id:draft:)`, bundled so
@@ -26,6 +37,8 @@ struct EquipmentProfileDraft {
     var availableEquipment: [String] = []
     var plateStock: [PlateStock] = []
     var collarsKg: Double = 0
+    var restrictsMachines = false
+    var availableMachines: [String] = []
 }
 
 extension WorkoutStore {
@@ -56,13 +69,14 @@ extension WorkoutStore {
     func createProfile(
         name: String, isActive: Bool = false, barKg: Double = 20,
         availableEquipment: [String] = [], plateStock: [PlateStock] = [], collarsKg: Double = 0,
-        seedKey: String? = nil
+        seedKey: String? = nil, restrictsMachines: Bool = false, availableMachines: [String] = []
     ) -> EquipmentProfileInfo {
         if isActive { deactivateAll() }
         let model = EquipmentProfileModel(
             name: name, isActive: isActive, barKg: barKg, availableEquipment: availableEquipment,
             plateStockKg: plateStock.map(\.weightKg), plateCounts: plateStock.map(\.count),
-            collarsKg: collarsKg, seedKey: seedKey
+            collarsKg: collarsKg, seedKey: seedKey, restrictsMachines: restrictsMachines,
+            availableMachines: availableMachines
         )
         context.insert(model)
         save()
@@ -78,6 +92,8 @@ extension WorkoutStore {
         model.plateStockKg = draft.plateStock.map(\.weightKg)
         model.plateCounts = draft.plateStock.map(\.count)
         model.collarsKg = draft.collarsKg
+        model.restrictsMachines = draft.restrictsMachines
+        model.availableMachines = draft.availableMachines
         save()
         return equipmentProfileInfo(for: model)
     }
@@ -130,6 +146,12 @@ extension WorkoutStore {
         activeProfile().map { Set($0.availableEquipment) }
     }
 
+    /// The active profile as the filter every equipment-aware surface applies — kinds and, when
+    /// the profile narrows down to stations, which stations. Nil when no profile exists yet.
+    func activeEquipmentAvailability() -> EquipmentAvailability? {
+        activeProfile()?.availability
+    }
+
     func fetchEquipmentProfileModel(id: UUID) -> EquipmentProfileModel? {
         var descriptor = FetchDescriptor<EquipmentProfileModel>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
@@ -146,16 +168,18 @@ extension WorkoutStore {
         return EquipmentProfileInfo(
             id: model.id, name: model.name, isActive: model.isActive, barKg: model.barKg,
             availableEquipment: model.availableEquipment, plateStock: stock, collarsKg: model.collarsKg,
-            seedKey: model.seedKey
+            seedKey: model.seedKey, restrictsMachines: model.restrictsMachines,
+            availableMachines: model.availableMachines
         )
     }
 }
 
 extension EquipmentProfileInfo {
-    /// False for a profile that lists every equipment kind (the seeded "Gym"): filtering by it
-    /// would change nothing, so the library skips the "Showing what's in …" banner for it.
+    /// False for a profile that lists every equipment kind and every station (the seeded
+    /// "Gym"): filtering by it would change nothing, so the library skips the "Showing what's
+    /// in …" banner for it.
     var restrictsLibrary: Bool {
-        !EquipmentOption.allCases.allSatisfy { availableEquipment.contains($0.rawValue) }
+        availability.restricts(allTypes: EquipmentOption.allCases.map(\.rawValue))
     }
 }
 
@@ -163,10 +187,21 @@ extension RoutineInfo {
     /// Equipment kinds this routine's exercises need that `available` doesn't list, in
     /// first-use order and without repeats. Empty means the routine can be done as-is.
     func equipmentOutside(_ available: Set<String>) -> [String] {
-        var seen: Set<String> = []
-        return exercises.map(\.equipment).filter { kind in
-            !available.contains(kind) && seen.insert(kind).inserted
-        }
+        needs(outside: EquipmentAvailability(types: available)).types
+    }
+
+    /// Kinds *and* stations this routine needs that `availability` lacks, first-use order,
+    /// once each — "Needs: barbell, leg press". Empty means the routine can be done as-is.
+    func needs(outside availability: EquipmentAvailability) -> EquipmentNeeds {
+        availability.missing(from: exercises.map { ($0.equipment, $0.machine) })
+    }
+}
+
+extension EquipmentNeeds {
+    /// The kinds (`EquipmentOption` titles) then stations, lowercased, for the routine badge.
+    var displayNames: [String] {
+        types.map { EquipmentOption(rawValue: $0)?.title.lowercased() ?? $0 }
+            + machines.map { $0.displayName.lowercased() }
     }
 }
 
@@ -192,7 +227,8 @@ enum EquipmentSeeder {
                 store.createProfile(
                     name: seed.name, isActive: seed.isActiveWhenSeeded, barKg: seed.barKg(for: unit),
                     availableEquipment: seed.availableEquipment, plateStock: seed.plateStock(for: unit),
-                    collarsKg: seed.collarsKg, seedKey: seed.key
+                    collarsKg: seed.collarsKg, seedKey: seed.key,
+                    restrictsMachines: seed.restrictsMachines, availableMachines: seed.availableMachines
                 )
             }
         }

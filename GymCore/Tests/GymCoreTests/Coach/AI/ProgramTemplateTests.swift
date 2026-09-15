@@ -109,6 +109,40 @@ struct ProgramTemplateTests {
         #expect(pool.allSatisfy { !$0.primary.contains(.abs) })
     }
 
+    @Test("the pool and the validator only use stations the profile has")
+    func poolHonoursStations() throws {
+        let request = ProgramRequest(
+            goal: .hypertrophy, daysPerWeek: 4, sessionMinutes: 60, experience: .intermediate,
+            availableEquipment: equipment,
+            equipmentAvailability: EquipmentAvailability(
+                types: equipment, restrictsMachines: true, machines: [.chestPressMachine]
+            )
+        )
+        let template = ProgramTemplateEngine.template(for: request)
+        var stationed = library()
+        // Every machine row needs a station; only the chest press is there.
+        stationed = stationed.map { candidate in
+            var copy = candidate
+            if copy.equipment == "machine" {
+                copy.machine = copy.primary == [.chest] ? "chestPressMachine" : "legPress"
+            }
+            return copy
+        }
+        let pool = ProgramExercisePool.candidates(for: template, library: stationed, request: request)
+        #expect(!pool.isEmpty)
+        #expect(pool.allSatisfy { $0.machine == nil || $0.machine == "chestPressMachine" })
+        #expect(pool.contains { $0.machine == "chestPressMachine" })
+
+        let legPress = try #require(stationed.first { $0.machine == "legPress" })
+        let slot = try #require(template.slots.first { legPress.primary.contains($0.muscle) })
+        let draft = ProgramDraft(name: "Legs", picks: [ProgramPick(slotID: slot.id, exerciseID: legPress.id)])
+        #expect(throws: ProgramDraftError.excludedEquipment(legPress.id)) {
+            try ProgramDraftValidator.validate(
+                draft, template: template, pool: pool + [legPress], request: request
+            )
+        }
+    }
+
     @Test("a foreign id, a wrong muscle, an excluded equipment and a missing slot are each refused")
     func validatorRefusals() throws {
         let request = request()

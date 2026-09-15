@@ -7,12 +7,14 @@ licence rationale (per-exercise CC-BY-SA, attribution required, share-alike
 applies to this data file, not the app's Swift source).
 
 Usage:
-    python3 scripts/import-exercises.py
+    python3 scripts/import-exercises.py                 # merge wger data (network)
+    python3 scripts/import-exercises.py --tag-machines  # offline: (re)apply MACHINE_RULES only
 """
 from __future__ import annotations
 
 import json
 import re
+import sys
 import urllib.request
 import urllib.parse
 from html.parser import HTMLParser
@@ -96,6 +98,144 @@ ALIASES: dict[str, str] = {
     "Plank": "Plank",
     "Side Plank": "Side Bridge",
 }
+
+
+# --- Station tagging (`machine` field, GymCore `Machine` raw values) ---------------------------
+#
+# Each rule is (equipment kinds it applies to, case-insensitive name regex, Machine raw value or
+# None for "explicitly no station"). First match wins, so specific rules come before generic
+# ones. Rows of a kind with no matching rule are left untagged; `--tag-machines` prints a table
+# of counts per station and the untagged remainder for hand-checking.
+#
+# Kinds: "machine"/"cable" rows are the target. "other" and "bodyweight" are the seed's two
+# catch-all kinds (every wger import without equipment landed in "bodyweight"), so a station tag
+# there is a refinement — "Leverage Machine Chest Press" is filed as bodyweight but needs the
+# chest press. Barbell/dumbbell/… rows are never tagged; a Smith move filed under barbell is an
+# equipment error, fixed by EQUIPMENT_FIXES before the rules run.
+TAGGABLE_KINDS = {"machine", "cable", "other", "bodyweight"}
+CATCH_ALL_KINDS = {"other", "bodyweight"}
+MACHINE_RULES: list[tuple[set[str], str, str | None]] = [
+    # Cardio stations first: their names are unambiguous. "Rowing" alone is not the erg — wger's
+    # "Rowing seated", "Rowing, T-bar" and "Rowing with TRX band" are strength rows.
+    (TAGGABLE_KINDS, r"treadmill", "treadmill"),
+    (TAGGABLE_KINDS, r"rowing machine|rowing, stationary|\brower\b", "rower"),
+    (TAGGABLE_KINDS, r"elliptical", "elliptical"),
+    (TAGGABLE_KINDS, r"stairmaster|stair master|step mill|stair climber|climbmill", "stairClimber"),
+    (TAGGABLE_KINDS, r"bicycling, stationary|recumbent bike|stationary bike|air bike", "stationaryBike"),
+    (TAGGABLE_KINDS, r"ski machine|skierg|ski erg", "skiErg"),
+    # Smith before anything else: "Smith Machine Leg Press" is a Smith move. wger calls the Smith
+    # a "Multi Press".
+    (TAGGABLE_KINDS, r"\bsmith\b|multi press", "smithMachine"),
+    # Machine kind. "Lying Machine Squat" is lie-back-feet-on-platform-press: a leg press.
+    (TAGGABLE_KINDS, r"leg press|calf press|toe press|side glute press|lying machine squat", "legPress"),
+    (TAGGABLE_KINDS, r"pendular|pendulum", "pendulumSquat"),
+    (TAGGABLE_KINDS, r"belt squat", "beltSquat"),
+    (TAGGABLE_KINDS, r"hack squat|hackenschmitt|v-squat", "hackSquat"),
+    (TAGGABLE_KINDS, r"leg extension", "legExtension"),
+    (TAGGABLE_KINDS, r"ball leg curl", None),
+    (TAGGABLE_KINDS, r"leg curl", "legCurl"),
+    (TAGGABLE_KINDS, r"thigh abductor|thigh adductor|machine hip abduction|seated hip (ab|ad)duction",
+     "hipAbductorAdductor"),
+    (TAGGABLE_KINDS, r"seated calf|sitting calf raise", "seatedCalf"),
+    ({"machine"}, r"calf", "calfRaiseMachine"),
+    (TAGGABLE_KINDS, r"ab crunch machine|crunches on machine|3008 abdominal", "abCrunchMachine"),
+    # Floor / partner / ball / bench variants of the hyper and GHR need no station; the reverse
+    # hyper row is written for a flat bench.
+    (TAGGABLE_KINDS, r"natural glute ham|floor glute-ham|hyper y w|reverse hyperextension|no hyperextension bench",
+     None),
+    (TAGGABLE_KINDS, r"glute ham raise|machine glute extension", "gluteHamDeveloper"),
+    (TAGGABLE_KINDS, r"hyperextensions|roman chair crunch", "backExtension"),
+    (TAGGABLE_KINDS, r"^butterfly( narrow grip)?$|pec deck|reverse machine flyes|machine chest fly", "pecDeck"),
+    (TAGGABLE_KINDS, r"leverage.*chest press|machine bench press|machine press|leverage machine chest|"
+     r"hammerstrength.*chest press|legend (incline bench|chest) press|seated bench press|^chest press$|"
+     r"diagonal shoulder press", "chestPressMachine"),
+    (TAGGABLE_KINDS, r"machine shoulder|leverage shoulder press", "shoulderPressMachine"),
+    (TAGGABLE_KINDS, r"machine (side )?lateral raise", "lateralRaiseMachine"),
+    (TAGGABLE_KINDS, r"pullover machine", "pulloverMachine"),
+    (TAGGABLE_KINDS, r"machine preacher|machine bicep curl|biceps curl machine", "preacherCurlMachine"),
+    (TAGGABLE_KINDS, r"dip machine", "seatedDipMachine"),
+    (TAGGABLE_KINDS, r"machine triceps extension|triceps on machine", "tricepsExtensionMachine"),
+    (TAGGABLE_KINDS, r"leverage high row|leverage iso row|leverage machine iso row|t-bar row|rowing, t-bar|"
+     r"seated row \(machine\)", "rowMachine"),
+    (TAGGABLE_KINDS, r"rotary torso", "torsoRotation"),
+    (TAGGABLE_KINDS, r"glute kickback \(machine\)", "gluteKickback"),
+    (TAGGABLE_KINDS, r"band assisted", "pullUpBar"),
+    (TAGGABLE_KINDS, r"assisted", "assistedDipPullUp"),
+    # Cable kind: the seated-row seat and the lat-pulldown seat are their own stations. A
+    # single-arm pulldown *sat at the lat pulldown machine* (its instructions say so) stays on
+    # that seat; a half-kneeling / cross-body / standing one is done on the dual adjustable pulley.
+    (TAGGABLE_KINDS, r"seated cable rows?|long-pulley|seated v-grip row|seated one-arm cable pulley rows|"
+     r"low pulley row to neck|seated cable mid trap shrug|rowing seated|unilateral cable row",
+     "seatedRowMachine"),
+    ({"cable"}, r"^one arm lat pulldown$|^single-arm lat pulldown$|cross body single arm|modified pulldown|"
+     r"mentzer", "latPulldown"),
+    ({"cable"}, r"single-arm|one arm|1-arm|cross body|cross-body|half-kneeling|unilateral|incline bench pulldown",
+     "cableStation"),
+    ({"cable"}, r"straight-arm|straight arm|pullover", "cableStation"),
+    ({"cable"}, r"pulldown|pull down|jalón", "latPulldown"),
+    ({"cable"}, r".", "cableStation"),
+    # Catch-all kinds: only what plainly names a station.
+    (CATCH_ALL_KINDS, r"cable|polea|pulley", "cableStation"),
+    # Hangboards, floor/low-bar and stretch rows share words with bar work; rule them out first.
+    (CATCH_ALL_KINDS, r"fingerboard|sloper|australian|chin tuck", None),
+    (CATCH_ALL_KINDS, r"parallel bar|dips - chest|dips - triceps|^dips$", "dipStation"),
+    (CATCH_ALL_KINDS, r"pull-?ups?|chin-?up|\bchins\b|chin/crunch|mixed grip chin|muscle up|"
+     r"hanging (leg|knee|pike)|toes to bar|pull up bar|arch hang|front lever|back lever", "pullUpBar"),
+    (CATCH_ALL_KINDS, r"pulldown|pull down", "latPulldown"),
+]
+# Rows whose `equipment` the source got wrong in a way a station tag must not paper over: a
+# Smith move is a machine move. Applied before MACHINE_RULES so the Smith rule then tags them.
+EQUIPMENT_FIXES: dict[str, str] = {
+    "Smith_Machine_Split_Squat": "machine",
+    "Smith_Incline_Shoulder_Raise": "machine",
+}
+# Machine-kind rows that genuinely have no station in the taxonomy (or aren't machines at all)
+# — listed so DaGymTests/SeedMachineDataTests can insist every other machine row is tagged.
+UNTAGGED_MACHINE_ROWS: dict[str, str] = {
+    "Chair_Squat": "a bodyweight squat to a chair; 'machine' is a source error",
+    "Lunge_Sprint": "a sprinting drill; 'machine' is a source error",
+    "Leverage_Deadlift": "plate-loaded deadlift/shrug machine — too rare for a station",
+    "Leverage_Shrug": "plate-loaded shrug machine — too rare for a station",
+    "Reverse_Hyperextension": "written for a flat bench; the dedicated reverse-hyper machine is too rare",
+}
+
+
+def machine_for(item: dict[str, Any]) -> str | None:
+    """The station `item` needs by the first matching MACHINE_RULES row, or None."""
+    kind = item["equipment"]
+    if kind not in TAGGABLE_KINDS:
+        return None
+    for kinds, pattern, machine in MACHINE_RULES:
+        if kind in kinds and re.search(pattern, item["name"], re.IGNORECASE):
+            return machine
+    return None
+
+
+def tag_machines(seed: dict[str, Any]) -> None:
+    """Sets `machine` on every row the rules match and prints the per-station table. Touches
+    nothing else — the field is added or replaced, never any other key — except the
+    EQUIPMENT_FIXES rows, whose `equipment` is corrected first."""
+    counts: dict[str, int] = {}
+    untagged: dict[str, list[str]] = {}
+    for item in seed["exercises"]:
+        if item["id"] in EQUIPMENT_FIXES:
+            item["equipment"] = EQUIPMENT_FIXES[item["id"]]
+        machine = machine_for(item)
+        if machine is None:
+            item.pop("machine", None)
+            if item["equipment"] in ("machine", "cable"):
+                untagged.setdefault(item["equipment"], []).append(item["name"])
+            continue
+        item["machine"] = machine
+        counts[machine] = counts.get(machine, 0) + 1
+    print(f"{'station':24} {'rows':>4}")
+    for machine, count in sorted(counts.items(), key=lambda pair: (-pair[1], pair[0])):
+        print(f"{machine:24} {count:>4}")
+    print(f"{'total tagged':24} {sum(counts.values()):>4}")
+    for kind, names in untagged.items():
+        print(f"\nuntagged {kind} rows ({len(names)}):")
+        for name in names:
+            print(f"  {name}")
 
 
 class _TextExtractor(HTMLParser):
@@ -295,6 +435,11 @@ def main() -> None:
     seed = json.loads(SEED_PATH.read_text())
     original_total = len(seed["exercises"])
 
+    if "--tag-machines" in sys.argv[1:]:
+        tag_machines(seed)
+        SEED_PATH.write_text(json.dumps(seed, indent=2, ensure_ascii=False) + "\n")
+        return
+
     wger_entries = fetch_all_exercises()
     records = [r for r in (build_wger_record(e) for e in wger_entries) if r is not None]
 
@@ -307,7 +452,8 @@ def main() -> None:
         "See docs/exercise-data-sources.md for attribution details."
     )
 
-    SEED_PATH.write_text(json.dumps(seed, indent=2) + "\n")
+    tag_machines(seed)
+    SEED_PATH.write_text(json.dumps(seed, indent=2, ensure_ascii=False) + "\n")
 
     still_missing = sum(
         1 for item in seed["exercises"][:original_total] if not item.get("instructions")

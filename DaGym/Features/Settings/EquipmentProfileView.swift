@@ -18,6 +18,7 @@ struct EquipmentProfileView: View {
     @State private var barKg: Double
     @State private var collarsKg: Double
     @State private var availableEquipment: Set<String>
+    @State private var machineSelection: MachineSelection
     @State private var plateRows: [PlateRowDraft] = []
 
     /// The plate sizes already saved on this profile, with their counts. Kept as a list rather
@@ -35,6 +36,7 @@ struct EquipmentProfileView: View {
         _barKg = State(initialValue: profile.barKg)
         _collarsKg = State(initialValue: profile.collarsKg)
         _availableEquipment = State(initialValue: Set(profile.availableEquipment))
+        _machineSelection = State(initialValue: MachineSelection(profile: profile))
         existingPlates = profile.plateStock
     }
 
@@ -48,6 +50,7 @@ struct EquipmentProfileView: View {
                     barCard
                     plateCard
                     equipmentCard
+                    MachinesCard(types: availableEquipment, selection: $machineSelection)
                     if !isNew, let onDelete {
                         deleteButton(onDelete)
                     }
@@ -239,12 +242,16 @@ struct EquipmentProfileView: View {
         if isNew {
             store.createProfile(
                 name: trimmed, isActive: false, barKg: barKg, availableEquipment: Array(availableEquipment),
-                plateStock: stock, collarsKg: collarsKg
+                plateStock: stock, collarsKg: collarsKg,
+                restrictsMachines: machineSelection.restrictsMachinesForSave,
+                availableMachines: machineSelection.availableMachinesForSave
             )
         } else {
             let draft = EquipmentProfileDraft(
                 name: trimmed, barKg: barKg, availableEquipment: Array(availableEquipment),
-                plateStock: stock, collarsKg: collarsKg
+                plateStock: stock, collarsKg: collarsKg,
+                restrictsMachines: machineSelection.restrictsMachinesForSave,
+                availableMachines: machineSelection.availableMachinesForSave
             )
             store.updateProfile(id: profile.id, draft: draft)
         }

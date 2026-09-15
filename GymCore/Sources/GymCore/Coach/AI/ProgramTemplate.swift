@@ -25,8 +25,14 @@ public struct ProgramRequest: Hashable, Sendable {
     public var daysPerWeek: Int
     public var sessionMinutes: Int
     public var experience: ExperienceLevel
-    /// Equipment kinds the lifter has ("barbell", "dumbbell", "machine", "cable", "bodyweight"…).
-    public var availableEquipment: Set<String>
+    /// Equipment kinds the lifter has ("barbell", "dumbbell", "machine", "cable", "bodyweight"…)
+    /// and, when their profile narrows a kind to stations, which stations.
+    public var equipmentAvailability: EquipmentAvailability
+    /// The ticked kinds alone — `equipmentAvailability.types`.
+    public var availableEquipment: Set<String> {
+        get { equipmentAvailability.types }
+        set { equipmentAvailability.types = newValue }
+    }
     /// Equipment the lifter wants left out even though they have it.
     public var excludedEquipment: Set<String>
     /// Muscles to leave untrained (an injury, a preference) — no slot is created for them and no
@@ -39,7 +45,7 @@ public struct ProgramRequest: Hashable, Sendable {
     public init(
         goal: TrainingGoal, daysPerWeek: Int, sessionMinutes: Int, experience: ExperienceLevel,
         availableEquipment: Set<String>, excludedEquipment: Set<String> = [],
-        excludedMuscles: Set<Muscle> = []
+        excludedMuscles: Set<Muscle> = [], equipmentAvailability: EquipmentAvailability? = nil
     ) {
         self.goal = goal
         self.daysPerWeek = min(max(daysPerWeek, Self.daysRange.lowerBound), Self.daysRange.upperBound)
@@ -47,13 +53,19 @@ public struct ProgramRequest: Hashable, Sendable {
             max(sessionMinutes, Self.sessionMinutesRange.lowerBound), Self.sessionMinutesRange.upperBound
         )
         self.experience = experience
-        self.availableEquipment = availableEquipment
+        self.equipmentAvailability = equipmentAvailability ?? EquipmentAvailability(types: availableEquipment)
         self.excludedEquipment = excludedEquipment
         self.excludedMuscles = excludedMuscles
     }
 
     /// Equipment a pick may use: what the lifter has, minus what they've excluded.
     public var usableEquipment: Set<String> { availableEquipment.subtracting(excludedEquipment) }
+
+    /// Whether a pick may use `candidate`: its kind is usable and, if it needs a station, the
+    /// profile has that station.
+    public func allows(_ candidate: SubstitutionCandidate) -> Bool {
+        equipmentAvailability.subtracting(types: excludedEquipment).allows(candidate)
+    }
 }
 
 /// One exercise slot in a template day: which muscle it must train, whether a compound or an

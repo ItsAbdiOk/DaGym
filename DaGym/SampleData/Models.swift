@@ -33,6 +33,8 @@ struct ExerciseInfo: Identifiable, Hashable {
     /// The seeded JSON id (`ExerciseModel.seedID`), used to look up illustrated art in
     /// `ExerciseArtCatalog`. Nil for custom exercises and any fixture built without one.
     var seedID: String?
+    /// The `Machine` raw value this exercise needs, or nil for any station of its kind.
+    var machine: String?
 
     enum LoggingStyle: String, CaseIterable {
         case weightReps = "Weight × reps"
@@ -49,7 +51,7 @@ struct ExerciseInfo: Identifiable, Hashable {
         isFavorite: Bool = false, isCustom: Bool = false, isPerSide: Bool = false, bestE1RM: Double? = nil,
         bestSet: String? = nil, sessions: Int = 0, instructions: String = "",
         loggingStyle: LoggingStyle = .weightReps, dataSource: String = "", sourceURL: String = "",
-        licence: String = "", authors: [String] = [], seedID: String? = nil
+        licence: String = "", authors: [String] = [], seedID: String? = nil, machine: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -72,6 +74,7 @@ struct ExerciseInfo: Identifiable, Hashable {
         self.licence = licence
         self.authors = authors
         self.seedID = seedID
+        self.machine = machine
     }
 
     /// The rest this exercise actually gets: its own override, or `fallback` (the lifter's

@@ -35,6 +35,8 @@ enum ExerciseSeeder {
         var sourceURL: String?
         var licence: String?
         var authors: [String]?
+        /// The `Machine` raw value the row needs (seed v5); absent for free-weight rows.
+        var machine: String?
     }
 
     enum SeederError: Error {
@@ -248,7 +250,7 @@ enum ExerciseSeeder {
                 incrementKg: item.incrementKg, restSeconds: 0,
                 instructions: item.instructions ?? "", dataSource: item.source ?? "",
                 sourceURL: item.sourceURL ?? "", licence: item.licence ?? "",
-                authors: item.authors ?? []
+                authors: item.authors ?? [], machine: item.machine
             )
             context.insert(model)
             existingIDs.insert(item.id)
@@ -294,10 +296,14 @@ enum ExerciseSeeder {
     /// The seed version that moved unedited rest from the seed's number to 0.
     static let restMigrationVersion = 4
 
+    /// Seed version 5 added `machine`. A row that has none yet takes the seed's; a row the
+    /// lifter already tagged from Exercise Settings keeps theirs — there is no way to tell a
+    /// deliberate "no station" apart from "never set", so nil is treated as never set.
     private static func refresh(_ model: ExerciseModel, from item: SeedExercise, migrateRest: Bool) {
         if let instructions = item.instructions, !instructions.isEmpty {
             model.instructions = instructions
         }
+        if model.machine == nil, let machine = item.machine { model.machine = machine }
         if let source = item.source { model.dataSource = source }
         if let sourceURL = item.sourceURL { model.sourceURL = sourceURL }
         if let licence = item.licence { model.licence = licence }

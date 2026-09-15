@@ -137,11 +137,12 @@ struct RoutinesTabView: View {
         activeProfile = store.activeProfile()
     }
 
-    /// Equipment the routine needs that the active profile lacks; empty when there's no profile
-    /// or it lists everything, so a fresh install never shows a badge.
+    /// Equipment kinds and stations the routine needs that the active profile lacks, as the
+    /// names the badge prints; empty when there's no profile or it lists everything, so a fresh
+    /// install never shows a badge.
     private func missingEquipment(for routine: RoutineInfo) -> [String] {
         guard let activeProfile, activeProfile.restrictsLibrary else { return [] }
-        return routine.equipmentOutside(Set(activeProfile.availableEquipment))
+        return routine.needs(outside: activeProfile.availability).displayNames
     }
 
     private func duplicate(_ routine: RoutineInfo) {
@@ -235,11 +236,8 @@ extension RoutineCard {
         .accessibilityLabel("Needs \(missingNames), not in the \(profileName) profile")
     }
 
-    private var missingNames: String {
-        missingEquipment
-            .map { EquipmentOption(rawValue: $0)?.title.lowercased() ?? $0 }
-            .joined(separator: ", ")
-    }
+    /// `missingEquipment` is already display names (`EquipmentNeeds.displayNames`).
+    private var missingNames: String { missingEquipment.joined(separator: ", ") }
 
     private var exerciseNames: String { routine.exercises.map(\.name).joined(separator: " · ") }
     private var topMuscles: [Muscle] {

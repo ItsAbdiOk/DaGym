@@ -42,7 +42,7 @@ struct BackupCoverageTests {
             secondaryMuscles: ["glutes"], equipment: "barbell", mechanic: "compound",
             loggingStyle: "weightReps", isPerSide: true, isCustom: true, isFavorite: true,
             barType: "olympic", incrementKg: 5, restSeconds: 210, instructions: "Brace hard.",
-            notes: "Elbows hurt.", createdAt: Self.date
+            notes: "Elbows hurt.", createdAt: Self.date, machine: "smithMachine"
         )
     }
 
@@ -105,7 +105,8 @@ struct BackupCoverageTests {
         BackupEquipmentProfile(
             id: UUID(), name: "Home", isActive: true, barKg: 20,
             availableEquipment: ["barbell"], plateStockKg: [20, 10], plateCounts: [4, 4],
-            collarsKg: 2.5, createdAt: Self.date, seedKey: "home"
+            collarsKg: 2.5, createdAt: Self.date, seedKey: "home", restrictsMachines: true,
+            availableMachines: ["pullUpBar"]
         )
     }
 

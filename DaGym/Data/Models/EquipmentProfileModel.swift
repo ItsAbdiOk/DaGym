@@ -29,11 +29,19 @@ final class EquipmentProfileModel {
     /// holding the seeded values verbatim is ever folded away: once the user edits one, it is
     /// theirs and survives (see `SeededEquipmentProfile.isUntouchedSeededRow`).
     var seedKey: String?
+    /// Whether `availableMachines` narrows the ticked kinds down to specific stations. False
+    /// (the default every pre-existing row decodes to) means "every station of the ticked
+    /// kinds" — what the app did before stations existed. True with an empty list is "none".
+    var restrictsMachines: Bool = false
+    /// `GymCore.Machine` raw values of the stations this gym has. Only read when
+    /// `restrictsMachines` is true.
+    var availableMachines: [String] = []
 
     init(
         id: UUID = UUID(), name: String = "Gym", isActive: Bool = false, barKg: Double = 20,
         availableEquipment: [String] = [], plateStockKg: [Double] = [], plateCounts: [Int] = [],
-        collarsKg: Double = 0, createdAt: Date = Date(), seedKey: String? = nil
+        collarsKg: Double = 0, createdAt: Date = Date(), seedKey: String? = nil,
+        restrictsMachines: Bool = false, availableMachines: [String] = []
     ) {
         self.id = id
         self.name = name
@@ -45,5 +53,7 @@ final class EquipmentProfileModel {
         self.collarsKg = collarsKg
         self.createdAt = createdAt
         self.seedKey = seedKey
+        self.restrictsMachines = restrictsMachines
+        self.availableMachines = availableMachines
     }
 }

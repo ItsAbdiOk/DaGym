@@ -93,6 +93,9 @@ public struct BackupExercise: Codable, Sendable, Identifiable {
     public var instructions: String
     public var notes: String
     public var createdAt: Date
+    /// `ExerciseModel.machine` — the `Machine` raw value a custom exercise (or a seeded row the
+    /// lifter re-tagged) needs. Absent from backups written before stations existed.
+    public var machine: String?
 
     public init(
         id: UUID, seedID: String? = nil, name: String, primaryMuscles: [String] = [],
@@ -100,7 +103,7 @@ public struct BackupExercise: Codable, Sendable, Identifiable {
         loggingStyle: String = "weightReps", isPerSide: Bool = false, isCustom: Bool = false,
         isFavorite: Bool = false, barType: String? = nil, incrementKg: Double = 2.5,
         restSeconds: Int = 150, instructions: String = "", notes: String = "",
-        createdAt: Date = Date()
+        createdAt: Date = Date(), machine: String? = nil
     ) {
         self.id = id
         self.seedID = seedID
@@ -119,6 +122,7 @@ public struct BackupExercise: Codable, Sendable, Identifiable {
         self.instructions = instructions
         self.notes = notes
         self.createdAt = createdAt
+        self.machine = machine
     }
 }
 
@@ -371,40 +375,6 @@ public struct BackupBodyMeasurement: Codable, Sendable, Identifiable {
         self.date = date
         self.bodyweightKg = bodyweightKg
         self.source = source
-    }
-}
-
-public struct BackupEquipmentProfile: Codable, Sendable, Identifiable {
-    public var id: UUID
-    public var name: String
-    public var isActive: Bool
-    public var barKg: Double
-    public var availableEquipment: [String]
-    public var plateStockKg: [Double]
-    public var plateCounts: [Int]
-    public var collarsKg: Double
-    public var createdAt: Date
-    /// `EquipmentProfileModel.seedKey` — "gym"/"home" for a seeded profile, `nil` for one the
-    /// user made. Carried through a backup so a restored profile keeps its seed identity
-    /// instead of arriving unkeyed and being re-derived by a guess on the restoring device.
-    /// Absent from backups written before this field existed, which decode as `nil`.
-    public var seedKey: String?
-
-    public init(
-        id: UUID, name: String, isActive: Bool = false, barKg: Double = 20,
-        availableEquipment: [String] = [], plateStockKg: [Double] = [], plateCounts: [Int] = [],
-        collarsKg: Double = 0, createdAt: Date = Date(), seedKey: String? = nil
-    ) {
-        self.id = id
-        self.name = name
-        self.isActive = isActive
-        self.barKg = barKg
-        self.availableEquipment = availableEquipment
-        self.plateStockKg = plateStockKg
-        self.plateCounts = plateCounts
-        self.collarsKg = collarsKg
-        self.createdAt = createdAt
-        self.seedKey = seedKey
     }
 }
 
