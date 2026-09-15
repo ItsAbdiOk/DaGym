@@ -26,6 +26,17 @@ for f in plan.md design-brief.md CLAUDE.md; do
 done
 echo "  clean."
 
+# Apple Wallet pass signing identity: gitignored, bundled as an optional resource. Written from
+# the DAGYM_WALLET_P12_BASE64 environment secret when set; without it the app builds and the
+# "Add to Apple Wallet" button hides itself. Never echo the value.
+if [ -n "${DAGYM_WALLET_P12_BASE64:-}" ]; then
+    echo "Writing Configs/wallet/pass.p12 from DAGYM_WALLET_P12_BASE64..."
+    mkdir -p Configs/wallet
+    printf '%s' "$DAGYM_WALLET_P12_BASE64" | base64 -d > Configs/wallet/pass.p12
+else
+    echo "DAGYM_WALLET_P12_BASE64 not set; building without the Wallet pass identity."
+fi
+
 # Installing the linter is infrastructure; finding a violation is a real gate.
 # An install hiccup warns, a lint violation fails the build. Pinned via .tool-versions
 # (ci_post_clone.sh already installed them; this is a no-op when the versions match).

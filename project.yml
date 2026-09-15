@@ -52,6 +52,12 @@ targets:
         type: folder
     resources:
       - path: DaGym/PrivacyInfo.xcprivacy
+      # Apple Wallet pass signing identity (Pass Type ID cert + key + WWDR intermediate; see
+      # DaGym/Services/Wallet/WalletPassSigner.swift). Gitignored; Xcode Cloud writes it from the
+      # DAGYM_WALLET_P12_BASE64 secret in ci_scripts/ci_pre_xcodebuild.sh. `optional`: a clone
+      # without it still builds, and "Add to Apple Wallet" hides itself.
+      - path: Configs/wallet/pass.p12
+        optional: true
     dependencies:
       - package: GymCore
         product: GymCore

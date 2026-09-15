@@ -30,6 +30,10 @@ weights, effort ratings, bodyweight, and progress photos. It also stores your ap
   day. DaGym only writes to its own calendar — it does not read your other events.
 - **Notifications.** If you turn on notifications, the reminders and their content (such as
   your weekly progress) are generated and scheduled entirely on your device.
+- **Gym card.** If you save your gym's membership barcode, only its number and code type are
+  stored, alongside your other training data. Choosing "Add to Apple Wallet" builds and signs
+  the pass on your phone and hands it straight to Apple Wallet — nothing about the card is sent
+  to us or to any server.
 
 ## What leaves your phone, and when
 

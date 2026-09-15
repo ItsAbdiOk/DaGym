@@ -29,19 +29,25 @@ enum DGAccent: String, CaseIterable, Codable, Hashable {
     /// stop in light mode (same reasoning as `surface`/`ink`'s `dynamic` pairs above): a hue
     /// bright enough to read on near-black in dark mode washes out against the light backgrounds.
     func base(dark: Bool) -> Color {
+        Color(hex: baseHex(dark: dark))
+    }
+
+    /// The raw hex behind `base(dark:)` — for anything that needs the RGB outside SwiftUI (the
+    /// Apple Wallet pass's `backgroundColor`).
+    func baseHex(dark: Bool) -> UInt32 {
         switch self {
         case .coral:
             // Shipped brand colour — exact hex the app has always used, unchanged either way.
-            Color(hex: 0xF4705C)
+            0xF4705C
         case .ember:
-            Color(hex: dark ? 0xF2883C : 0xD9701F)
+            dark ? 0xF2883C : 0xD9701F
         case .lime:
-            Color(hex: dark ? 0x9BD75E : 0x7CBA3E)
+            dark ? 0x9BD75E : 0x7CBA3E
         case .ice:
-            Color(hex: dark ? 0x58C4E8 : 0x2F9CC4)
+            dark ? 0x58C4E8 : 0x2F9CC4
         case .violet:
             // Dark stop reuses the existing `aiViolet` hue so the AI-badge and accent never clash.
-            Color(hex: dark ? 0x7B8CFF : 0x5A67D9)
+            dark ? 0x7B8CFF : 0x5A67D9
         }
     }
 

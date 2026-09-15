@@ -20,6 +20,7 @@ struct GymCardSheet: View {
     @State private var photoFailed = false
     @State private var scannerFailure: String?
     @State private var brightness = ScreenBrightness()
+    @State private var wallet = WalletPassService()
 
     var body: some View {
         ZStack {
@@ -96,14 +97,17 @@ struct GymCardSheet: View {
     private var rail: some View {
         TabView(selection: $selectedID) {
             ForEach(cards) { card in
-                GymCardFace(card: card, onRename: { rename(card, to: $0) }, onDelete: { delete(card) })
-                    .tag(Optional(card.id))
-                    .padding(.horizontal, DGSpace.s2)
+                GymCardFace(
+                    card: card, wallet: wallet, onRename: { rename(card, to: $0) }, onDelete: { delete(card) }
+                )
+                .tag(Optional(card.id))
+                .padding(.horizontal, DGSpace.s2)
             }
         }
         .tabViewStyle(.page(indexDisplayMode: cards.count > 1 ? .always : .never))
         .indexViewStyle(.page(backgroundDisplayMode: .always))
-        .frame(height: 400)
+        // The Wallet row (button + optional note) needs the extra ~90 pt when it can show.
+        .frame(height: wallet.isAvailable ? 490 : 400)
     }
 
     private var addOptions: some View {
@@ -195,9 +199,11 @@ private struct PendingScan: Identifiable {
     var symbology: GymCardSymbology
 }
 
-/// One card in the rail: name, the regenerated code on a white field, the raw value underneath.
+/// One card in the rail: name, the regenerated code on a white field, the raw value underneath,
+/// and the Wallet controls when a pass can be minted.
 private struct GymCardFace: View {
     var card: GymCardInfo
+    var wallet: WalletPassService
     var onRename: (String) -> Void
     var onDelete: () -> Void
 
@@ -238,6 +244,9 @@ private struct GymCardFace: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             Text(card.symbology.title).dgLabel()
+            if wallet.isAvailable {
+                GymCardWalletRow(card: card, service: wallet)
+            }
         }
         .dgCard()
         .task(id: [card.value, card.symbology.rawValue]) {
