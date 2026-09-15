@@ -46,3 +46,6 @@ notes/
 
 # App Store Connect API identifiers — local only
 Configs/asc.env
+
+# Apple Wallet pass signing material — never commit (key, CSR, cert, p12)
+Configs/wallet/
