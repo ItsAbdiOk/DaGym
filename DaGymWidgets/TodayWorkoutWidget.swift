@@ -26,7 +26,7 @@ private struct TodayWorkoutWidgetView: View {
     private var palette: WidgetPalette {
         WidgetPalette(
             accent: entry.snapshot.accent, appearance: entry.snapshot.appearance,
-            systemIsDark: colorScheme == .dark
+            systemIsDark: colorScheme == .dark, colorBlindHeatmaps: entry.snapshot.colorBlindHeatmaps
         )
     }
 

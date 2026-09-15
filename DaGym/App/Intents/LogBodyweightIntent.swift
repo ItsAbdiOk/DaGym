@@ -11,8 +11,9 @@ struct LogBodyweightIntent: AppIntent {
     static let openAppWhenRun = false
 
     /// Always in the user's preferred unit (`Preferences.weightUnit`) — converted to canonical kg
-    /// before it's stored, same as every other weight entry point in the app.
-    @Parameter(title: "Weight")
+    /// before it's stored, same as every other weight entry point in the app. The prompt can't
+    /// name the unit (it's a static resource), so the confirmation dialog does.
+    @Parameter(title: "Weight", requestValueDialog: "What's your bodyweight?")
     var weight: Double
 
     static var parameterSummary: some ParameterSummary {
@@ -21,10 +22,13 @@ struct LogBodyweightIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        // Siri happily transcribes "minus five" or a mis-heard "zero"; ask again instead of
+        // storing a weigh-in the chart would have to draw at the floor.
+        guard weight > 0 else { throw $weight.needsValueError("What's your bodyweight?") }
         guard let store = IntentStoreAccess.makeStore() else {
             return .result(dialog: IntentDialog(stringLiteral: "DaGym isn't available right now."))
         }
-        let preferences = Preferences()
+        let preferences = IntentStoreAccess.preferences()
         let unit = preferences.weightUnit
         let kg = unit.toKg(weight)
         // The pushed Health sample carries the logged row's own date, so the two sides describe

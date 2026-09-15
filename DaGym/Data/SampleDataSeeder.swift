@@ -14,8 +14,11 @@ enum SampleDataSeeder {
 
     private static let routineNames = ["Push A", "Pull B", "Legs"]
     /// Weekday offsets (from the start of a 7-day block, 0 = oldest day in the block) the three
-    /// routines land on — spread across the week rather than back to back.
-    private static let dayOffsets = [0, 2, 4]
+    /// routines land on — spread across the week rather than back to back, with the newest
+    /// session yesterday so the recovery map, "this week" and the streak all have something
+    /// recent to show (offsets 0/2/4 left the newest session two days out and every muscle
+    /// fresh).
+    private static let dayOffsets = [1, 3, 5]
     private static let weeks = 8
 
     /// No-ops if the starter routines aren't present (a store that never seeded them, or had
@@ -60,6 +63,7 @@ enum SampleDataSeeder {
             isBackfilled: true, routineID: routine.id, routineName: routine.name, sourceDevice: sourceTag
         )
         store.context.insert(workout)
+        let drafts = store.routineDrafts(id: routine.id)?.drafts ?? []
 
         // Children are linked through the `workout:`/`workoutExercise:` inverses only. Assigning
         // the parent's array as well makes SwiftData rebuild a relationship it is already mid-way
@@ -68,27 +72,74 @@ enum SampleDataSeeder {
             guard let exerciseModel = store.fetchExerciseModel(id: exercise.id) else { continue }
             let entry = WorkoutExerciseModel(order: order, exercise: exerciseModel, workout: workout)
             store.context.insert(entry)
-            for set in plausibleSets(for: exercise, sessionIndex: sessionIndex, at: date, entry: entry) {
+            let planned = drafts.first { $0.exerciseID == exercise.id }?.sets.filter { $0.kind == .working }
+            let sets = plausibleSets(
+                for: exercise, planned: planned ?? [], sessionIndex: sessionIndex, at: date, entry: entry
+            )
+            for set in sets {
                 store.context.insert(set)
             }
         }
     }
 
-    /// A gentle, plausible progression: three working sets, reps stepping down across the set
-    /// (the usual "same weight, effort climbs" shape), weight nudged up by the exercise's own
-    /// increment roughly every third session so the charts have a visible trend.
+    /// A gentle, plausible progression on the routine's own plan: every working set it
+    /// prescribes, at (or, on the last set, one under) its rep target, weight nudged up by the
+    /// exercise's increment roughly every third session so the charts have a visible trend.
+    /// Loads start from `startingWeightKg` — an intermediate lifter's numbers, not the bare
+    /// increment, so the history reads as real training rather than an empty bar. Holds log
+    /// seconds, and an RPE that drifts session to session rides on every set so the effort
+    /// surfaces have data that isn't a flat line.
     private static func plausibleSets(
-        for exercise: ExerciseInfo, sessionIndex: Int, at date: Date, entry: WorkoutExerciseModel
+        for exercise: ExerciseInfo, planned: [PlannedSetDraft], sessionIndex: Int, at date: Date,
+        entry: WorkoutExerciseModel
     ) -> [SetLogModel] {
         let bumps = Double(sessionIndex / 3)
-        let baseWeight = max(exercise.incrementKg * 4, exercise.incrementKg > 0 ? 20 : 0)
-        let weight = exercise.incrementKg > 0 ? baseWeight + bumps * exercise.incrementKg : 0
-        let setCount = 3
+        let base = startingWeightKg(for: exercise)
+        let bumpKg = exercise.loggingStyle == .weightedBodyweight ? 1.25 : max(exercise.incrementKg, 2.5)
+        let weight = base > 0 ? base + bumps * bumpKg : 0
+        let setCount = planned.isEmpty ? 3 : planned.count
+        let effortDrift = [0.0, 0.5, -0.5, 0.0][sessionIndex % 4]
+        let isHold = exercise.loggingStyle == .timedHold
         return (0..<setCount).map { index in
-            SetLogModel(
-                order: index, kind: SetKind.working.rawValue, weightKg: weight,
-                reps: max(6, 9 - index), isCompleted: true, completedAt: date, workoutExercise: entry
+            let plan = planned.indices.contains(index) ? planned[index] : PlannedSetDraft()
+            let target = plan.targetRepsHigh ?? plan.targetReps ?? 8
+            // Reps: the target, dipping one short on the final set every other session — the
+            // "almost there" shape that keeps double progression honest without stalling it.
+            let short = index == setCount - 1 && sessionIndex.isMultiple(of: 2) ? 1 : 0
+            let hold = (plan.targetSeconds ?? 45) + 5 * Int(bumps) - 5 * index
+            return SetLogModel(
+                order: index, kind: SetKind.working.rawValue, weightKg: isHold ? 0 : weight,
+                reps: isHold ? 0 : max(1, target - short),
+                durationSeconds: isHold ? max(20, hold) : nil,
+                rpe: min(10, max(6, Double(7 + min(index, 2)) + effortDrift)), isCompleted: true,
+                completedAt: date, workoutExercise: entry
             )
         }
+    }
+
+    /// Where the first session's working weight sits, by what the exercise loads. Bodyweight
+    /// work starts at zero (reps carry the progression), holds carry no weight at all.
+    static func startingWeightKg(for exercise: ExerciseInfo) -> Double {
+        switch exercise.loggingStyle {
+        case .bodyweightReps, .timedHold, .cardio, .assisted: return 0
+        case .weightedBodyweight: return 5
+        case .weightReps: return loadedStartingWeightKg(for: exercise)
+        }
+    }
+
+    private static let barbellStartKg: [Muscle: Double] = [
+        .quads: 80, .glutes: 80, .hams: 100, .lowerBack: 100, .chest: 80, .lats: 60, .traps: 60
+    ]
+
+    private static func loadedStartingWeightKg(for exercise: ExerciseInfo) -> Double {
+        let muscle = exercise.primary.first ?? .chest
+        let equipment = exercise.equipment.lowercased()
+        if equipment.contains("barbell") { return barbellStartKg[muscle] ?? 40 }
+        if equipment.contains("dumbbell") { return [.biceps, .triceps, .delts].contains(muscle) ? 12 : 24 }
+        if equipment.contains("cable") { return 25 }
+        if equipment.contains("machine") || equipment.contains("smith") {
+            return [.quads, .hams, .calves].contains(muscle) ? 60 : 40
+        }
+        return max(exercise.incrementKg * 4, 20)
     }
 }

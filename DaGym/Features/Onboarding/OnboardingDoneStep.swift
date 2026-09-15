@@ -18,6 +18,7 @@ struct OnboardingDoneStep: View {
                     .font(DGFont.title1)
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
+                    .accessibilityIdentifier(A11yID.onboardingStep("done"))
                 Text("Suggestions, not medical advice.")
                     .font(DGFont.footnote)
                     .foregroundStyle(DGColor.ink4)

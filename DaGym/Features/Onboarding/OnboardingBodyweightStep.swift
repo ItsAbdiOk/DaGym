@@ -17,6 +17,7 @@ struct OnboardingBodyweightStep: View {
                 .font(DGFont.title1)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
+                .accessibilityIdentifier(A11yID.onboardingStep("bodyweight"))
             Text("Optional — powers your bodyweight chart. Log it any time from Settings instead.")
                 .font(DGFont.subhead)
                 .foregroundStyle(DGColor.ink3)

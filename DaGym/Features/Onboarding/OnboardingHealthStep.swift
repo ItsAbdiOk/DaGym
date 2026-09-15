@@ -17,6 +17,7 @@ struct OnboardingHealthStep: View {
                 .font(DGFont.title1)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
+                .accessibilityIdentifier(A11yID.onboardingStep("health"))
             Label("Bodyweight in, workouts out", systemImage: "heart.fill")
                 .font(DGFont.subhead)
                 .foregroundStyle(DGColor.ink2)

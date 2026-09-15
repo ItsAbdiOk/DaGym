@@ -64,15 +64,23 @@ enum PendingIntentAction {
     }
 }
 
-/// Control Center "Rest timer" button (`RestTimerControl`, iOS 18+ `ControlWidget`). Opens the
-/// app and starts a default-length rest — see `RootView.startPendingRestTimerIfNeeded()`.
+/// Control Center "Rest timer" button (`RestTimerControl`, iOS 18+ `ControlWidget`) and the
+/// "Start a rest timer" Siri phrase. Opens the app and starts a default-length rest — see
+/// `RootView.startPendingRestTimerIfNeeded()`.
+///
+/// Foreground on purpose. The rest timer is `RestActivityController` state inside a live
+/// session: its end-of-rest notification, the Live Activity and the `+30S`/`SKIP`/`SET DONE`
+/// closures in `RestIntents.swift` all hang off that session. Requesting a bare Live Activity
+/// from a background intent would put a banner up with no session behind it — exactly the
+/// orphan case `RestIntentTarget.run` tears down. Also compiled into the widget extension, so
+/// it must not touch `IntentStoreAccess` or anything else app-only.
 struct StartRestTimerIntent: AppIntent {
     static let title: LocalizedStringResource = "Start Rest Timer"
     static let openAppWhenRun = true
 
     @MainActor
-    func perform() async throws -> some IntentResult {
+    func perform() async throws -> some IntentResult & ProvidesDialog {
         PendingIntentAction.requestStartRestTimer()
-        return .result()
+        return .result(dialog: IntentDialog(stringLiteral: "Starting a rest timer."))
     }
 }

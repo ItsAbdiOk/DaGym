@@ -14,6 +14,7 @@ struct OnboardingEquipmentStep: View {
                 .font(DGFont.title1)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
+                .accessibilityIdentifier(A11yID.onboardingStep("equipment"))
             Text("This decides what the plate calculator and swap suggestions assume you have access to.")
                 .font(DGFont.subhead)
                 .foregroundStyle(DGColor.ink3)

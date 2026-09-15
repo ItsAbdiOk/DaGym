@@ -13,6 +13,7 @@ struct OnboardingNotificationsStep: View {
                 .font(DGFont.title1)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
+                .accessibilityIdentifier(A11yID.onboardingStep("notifications"))
             Label("Rest timer only, never nagging", systemImage: "bell.fill")
                 .font(DGFont.subhead)
                 .foregroundStyle(DGColor.ink2)

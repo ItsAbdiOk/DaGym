@@ -30,6 +30,7 @@ struct OnboardingWelcomeStep: View {
                     .font(DGFont.title1)
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
+                    .accessibilityIdentifier(A11yID.onboardingStep("welcome"))
                 Text("The whole app. No account, no ads, no subscription, nothing held back.")
                     .font(DGFont.body)
                     .foregroundStyle(DGColor.ink3)

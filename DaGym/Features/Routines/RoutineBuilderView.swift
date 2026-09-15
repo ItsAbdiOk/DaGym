@@ -109,8 +109,10 @@ struct RoutineBuilderView: View {
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             if let routineID {
-                ShareRoutineButton(title: name) {
-                    PlanShareService.exportRoutine(id: routineID, context: store.context)
+                ShareRoutineButton(title: name) { includeWeights in
+                    PlanShareService.exportRoutine(
+                        id: routineID, context: store.context, includeWeights: includeWeights
+                    )
                 }
             }
             Button("Save", action: save)

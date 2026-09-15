@@ -54,4 +54,19 @@ enum IntentFormatting {
     static func bodyweightLoggedDialog(kg: Double, unit: WeightUnit) -> String {
         "Logged \(unit.format(kg: kg)) \(unit.symbol)."
     }
+
+    /// "You're on a 3-week streak, with 2 of 4 workouts this week." for `GetStreakIntent`. A
+    /// zero streak is phrased as what's still needed, since "0-week streak" reads as a jibe.
+    static func streakDialog(current: Int, thisWeekCount: Int, weeklyGoal: Int) -> String {
+        let week = "\(thisWeekCount) of \(weeklyGoal) workout\(weeklyGoal == 1 ? "" : "s") this week"
+        guard current > 0 else { return "No streak yet — \(week). Hit your goal to start one." }
+        return "You're on a \(current)-week streak, with \(week)."
+    }
+
+    /// "Starting Push Day A." / "Starting a freestyle workout." for `StartWorkoutIntent`, spoken
+    /// as the app opens. `nil` means no routine is scheduled today.
+    static func startWorkoutDialog(routineName: String?) -> String {
+        guard let routineName else { return "Starting a freestyle workout." }
+        return "Starting \(routineName)."
+    }
 }

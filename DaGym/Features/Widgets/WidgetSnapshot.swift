@@ -60,12 +60,28 @@ struct WidgetSnapshot: Codable, Equatable {
     /// stop hard-coding coral-on-black while the app is themed something else.
     var accent: String
     var appearance: String
+    /// Counted sets per calendar day for `ConsistencyWidget`, oldest first, one entry per day
+    /// from `dailySetsStart` up to and including the day the snapshot was written. A flat
+    /// `[Int]` plus one anchor date rather than `[date: sets]` pairs: this is JSON in the App
+    /// Group, and 26 weeks of pairs is ten times the bytes for the same information. Capped at
+    /// `maxConsistencyDays` by the writer.
+    var dailySetsStart: Date?
+    var dailySets: [Int]
+    /// This week's loaded volume as of `updatedAt`, in kg. Only meaningful for entries in the
+    /// same calendar week as the write — see `consistency(weeks:on:)`.
+    var weekVolumeKg: Double
+    /// `WeightUnit` raw value, so the widget can print that volume the way the app does.
+    var weightUnit: String
+    /// `Preferences.colorBlindHeatmaps`: which ramp `WidgetPalette` should hand the heatmap.
+    var colorBlindHeatmaps: Bool
 
     init(
         routineName: String?, exerciseCount: Int, streakWeeks: Int, trainedDays: [Bool],
         updatedAt: Date, routineSymbolName: String? = nil, routineTint: String? = nil,
         days: [WidgetDayPlan] = [], workoutDays: [Date] = [], weeklyGoal: Int = 4,
-        weekStartsMonday: Bool = true, accent: String = "coral", appearance: String = "system"
+        weekStartsMonday: Bool = true, accent: String = "coral", appearance: String = "system",
+        dailySetsStart: Date? = nil, dailySets: [Int] = [], weekVolumeKg: Double = 0,
+        weightUnit: String = "kg", colorBlindHeatmaps: Bool = false
     ) {
         self.routineName = routineName
         self.exerciseCount = exerciseCount
@@ -80,6 +96,11 @@ struct WidgetSnapshot: Codable, Equatable {
         self.weekStartsMonday = weekStartsMonday
         self.accent = accent
         self.appearance = appearance
+        self.dailySetsStart = dailySetsStart
+        self.dailySets = dailySets
+        self.weekVolumeKg = weekVolumeKg
+        self.weightUnit = weightUnit
+        self.colorBlindHeatmaps = colorBlindHeatmaps
     }
 
     /// Hand-written so a snapshot missing any of the later keys still decodes: Swift's synthesized
@@ -100,6 +121,11 @@ struct WidgetSnapshot: Codable, Equatable {
         weekStartsMonday = try values.decodeIfPresent(Bool.self, forKey: .weekStartsMonday) ?? true
         accent = try values.decodeIfPresent(String.self, forKey: .accent) ?? "coral"
         appearance = try values.decodeIfPresent(String.self, forKey: .appearance) ?? "system"
+        dailySetsStart = try values.decodeIfPresent(Date.self, forKey: .dailySetsStart)
+        dailySets = try values.decodeIfPresent([Int].self, forKey: .dailySets) ?? []
+        weekVolumeKg = try values.decodeIfPresent(Double.self, forKey: .weekVolumeKg) ?? 0
+        weightUnit = try values.decodeIfPresent(String.self, forKey: .weightUnit) ?? "kg"
+        colorBlindHeatmaps = try values.decodeIfPresent(Bool.self, forKey: .colorBlindHeatmaps) ?? false
     }
 
     static let empty = WidgetSnapshot(

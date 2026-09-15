@@ -17,6 +17,7 @@ struct DaGymShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: StartRestTimerIntent(),
             phrases: [
+                "Start a rest timer in \(.applicationName)",
                 "Start rest in \(.applicationName)",
                 "Rest timer in \(.applicationName)"
             ],
@@ -29,6 +30,14 @@ struct DaGymShortcuts: AppShortcutsProvider {
                 "Log my weight in \(.applicationName)"
             ],
             shortTitle: "Log Bodyweight", systemImageName: "scalemass"
+        )
+        AppShortcut(
+            intent: GetStreakIntent(),
+            phrases: [
+                "What's my streak in \(.applicationName)",
+                "Get my streak in \(.applicationName)"
+            ],
+            shortTitle: "Streak", systemImageName: "flame"
         )
         AppShortcut(
             intent: LastSessionIntent(),

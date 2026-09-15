@@ -13,6 +13,7 @@ struct OnboardingUnitsStep: View {
                 .font(DGFont.title1)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
+                .accessibilityIdentifier(A11yID.onboardingStep("units"))
             VStack(alignment: .leading, spacing: DGSpace.s2) {
                 Text("Units").dgLabel()
                 HStack(spacing: DGSpace.s2) {

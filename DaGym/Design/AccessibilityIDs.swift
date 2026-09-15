@@ -42,4 +42,7 @@ enum A11yID {
     /// The Welcome step's "Skip and start lifting" — distinct from `onboardingSkip` (which
     /// skips one optional step) because this one skips the whole flow straight to `RootView`.
     static let onboardingSkipAll = "onboarding.skipAll"
+    /// Each onboarding step's title, so a UI test can assert which step is showing.
+    /// `name` is the `OnboardingStep` case name: "welcome", "units", ... "done".
+    static func onboardingStep(_ name: String) -> String { "onboarding.step.\(name)" }
 }

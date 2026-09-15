@@ -21,6 +21,10 @@ struct WidgetPalette {
     /// place so a future one doesn't have to re-derive it — see `DGColor.recoveryRamp` for why
     /// these particular hexes.
     var recoveryRamp: [Color]
+    /// None→4+ sets ramp for `ConsistencyWidget`: the Consistency screen's accent-opacity steps
+    /// (`HeatmapCard.defaultRamp`, with the user's accent in place of coral), or
+    /// `DGColor.consistencyAccessible` (= the recovery viridis) when colour-blind heatmaps are on.
+    var consistencyRamp: [Color]
 
     var inkMuted: Color { ink.opacity(0.66) }
 
@@ -31,11 +35,10 @@ struct WidgetPalette {
     ///   - accent: a `DGAccent` raw value.
     ///   - appearance: a `Preferences.Appearance` raw value; "system" defers to `systemIsDark`.
     ///   - systemIsDark: the viewer's current `colorScheme`.
-    ///   - colorBlindHeatmaps: `Preferences.colorBlindHeatmaps`, read by the caller from the App
-    ///     Group's shared defaults (the widget process can't reach `@Environment(Preferences.self)`
-    ///     or `\.accessibilityDifferentiateWithoutColor` the way the app target does). Defaults to
-    ///     `false` so existing call sites (`TodayWorkoutWidget`, `RestLiveActivity`) keep compiling
-    ///     until they're wired up to pass the real value.
+    ///   - colorBlindHeatmaps: `Preferences.colorBlindHeatmaps`, carried in `WidgetSnapshot` (the
+    ///     widget process can't reach `@Environment(Preferences.self)` or
+    ///     `\.accessibilityDifferentiateWithoutColor` the way the app target does). Defaults to
+    ///     `false` for `RestLiveActivity`, whose attributes don't carry it and which draws no ramp.
     init(accent: String, appearance: String, systemIsDark: Bool, colorBlindHeatmaps: Bool = false) {
         let isDark: Bool
         switch appearance {
@@ -55,18 +58,10 @@ struct WidgetPalette {
             : Color(red: 0x2E / 255, green: 0xA2 / 255, blue: 0x6E / 255)
         inkOnAccent = Color(red: 0x2B / 255, green: 0x0C / 255, blue: 0x07 / 255)
         recoveryRamp = Self.recoveryRamp(colorBlind: colorBlindHeatmaps)
-    }
-
-    private init(
-        background: Color, ink: Color, accent: Color, green: Color, inkOnAccent: Color,
-        recoveryRamp: [Color]
-    ) {
-        self.background = background
-        self.ink = ink
-        self.accent = accent
-        self.green = green
-        self.inkOnAccent = inkOnAccent
-        self.recoveryRamp = recoveryRamp
+        let tint = self.accent
+        consistencyRamp = colorBlindHeatmaps
+            ? Self.recoveryRamp(colorBlind: true)
+            : [ink.opacity(0.1), tint.opacity(0.22), tint.opacity(0.46), tint.opacity(0.72), tint]
     }
 
     /// `DGColor.recovery`/`recoveryAccessible`, transcribed (this target can't import `DGColor`

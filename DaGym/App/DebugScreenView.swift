@@ -46,7 +46,7 @@ struct DebugScreenView: View {
         case .builder:
             RoutineBuilderView(routineID: nil, onDone: {})
         case .summary:
-            WorkoutSummaryView(summary: debugSummary, title: session.title, onShare: {}, onDone: {})
+            WorkoutSummaryView(summary: debugSummary, title: session.title, onDone: {})
         case .history:
             tabbed(.progress) { HistoryTabView() }
         case .backfill:

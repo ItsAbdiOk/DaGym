@@ -6,8 +6,8 @@ import GymCore
 /// screenshotted without driving the UI. See `WatchLaunchFlags` for the names.
 @MainActor
 enum WatchDebugScreens {
-    static func apply(_ name: String?, store: WatchStore) {
-        guard let name, WatchLaunchFlags.isSample else { return }
+    static func apply(_ name: String?, store: WatchStore, isSample: Bool = WatchLaunchFlags.isSample) {
+        guard let name, isSample else { return }
         switch name {
         case "home":
             break
@@ -34,8 +34,13 @@ enum WatchDebugScreens {
     private static func applyWorkoutState(_ name: String, store: WatchStore) {
         switch name {
         case "summary":
+            // A finished session, not a token one: every bench row (the store ramps five
+            // warm-ups in front of the four working sets), started 38 minutes ago so the clock
+            // and the set count on screen 6 are the real thing.
             startBench(store: store)
-            logBenchSets(store: store, count: 6)
+            backdateStart(store: store, minutes: 38)
+            logWarmups(store: store)
+            logBenchSets(store: store, count: 4)
             store.finish()
         case "working":
             startBench(store: store)
@@ -92,6 +97,17 @@ enum WatchDebugScreens {
         guard store.session == nil, let routine = store.home.todaysRoutine else { return }
         store.start(routineID: routine.id)
         store.session?.defaultRestSeconds = 150
+    }
+
+    /// Moves the session's start (and its persisted workout's) into the past so the summary's
+    /// duration is what a real session would show.
+    private static func backdateStart(store: WatchStore, minutes: Int) {
+        guard let session = store.session else { return }
+        let startedAt = Date().addingTimeInterval(-Double(minutes) * 60)
+        session.startedAt = startedAt
+        if let workoutID = session.workoutID, let model = store.store.workout(id: workoutID) {
+            model.startedAt = startedAt
+        }
     }
 
     /// Logs every warm-up row of the bench so the working set (2A) is on deck.

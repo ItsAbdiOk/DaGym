@@ -4,6 +4,10 @@
 # Xcode
 build/
 DerivedData/
+*.xcresult
+# Throwaway build/test output from agents and one-off scripts
+scratch/
+scratch-*/
 *.xcuserstate
 xcuserdata/
 *.moved-aside

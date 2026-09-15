@@ -108,10 +108,13 @@ struct ExerciseChartView: View {
         }
         .chartYAxis(.hidden)
         .chartXAxis {
-            AxisMarks { _ in
-                AxisValueLabel(format: .dateTime.month(.abbreviated))
-                    .font(DGFont.label)
-                    .foregroundStyle(DGColor.ink3)
+            AxisMarks(values: axisPlan.ticks) { value in
+                AxisTick()
+                if let date = value.as(Date.self), let index = axisPlan.ticks.firstIndex(of: date) {
+                    AxisValueLabel {
+                        Text(axisPlan.labels[index]).font(DGFont.label).foregroundStyle(DGColor.ink3)
+                    }
+                }
             }
         }
         .frame(height: 160)
@@ -230,6 +233,15 @@ struct ExerciseChartView: View {
         case .reps:
             return repsPoints()
         }
+    }
+
+    /// Ticks and labels for the plotted span — see `ChartAxisPlan` for why the automatic axis
+    /// is not used.
+    private var axisPlan: ChartAxisPlan {
+        guard let first = points.first?.date, let last = points.last?.date else {
+            return ChartAxisPlan(granularity: .weeks, ticks: [], labels: [])
+        }
+        return ChartAxisPlan.plan(from: min(first, last), to: max(first, last))
     }
 
     private static func dateLabel(_ date: Date) -> String {

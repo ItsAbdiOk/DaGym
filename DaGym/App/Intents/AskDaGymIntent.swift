@@ -24,7 +24,7 @@ struct AskDaGymIntent: AppIntent {
         guard let store = IntentStoreAccess.makeStore() else {
             return .result(dialog: IntentDialog(stringLiteral: "DaGym isn't available right now."))
         }
-        let preferences = Preferences()
+        let preferences = IntentStoreAccess.preferences()
         let services = CoachServices.make(preferences: preferences)
         let source = CoachFactsSource(
             store: store, unit: preferences.weightUnit, calendar: preferences.trainingCalendar

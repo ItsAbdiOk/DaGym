@@ -14,6 +14,7 @@ struct OnboardingGoalStep: View {
                 .font(DGFont.title1)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
+                .accessibilityIdentifier(A11yID.onboardingStep("goal"))
             VStack(spacing: DGSpace.s3) {
                 ForEach(Preferences.TrainingGoal.allCases, id: \.self) { goal in
                     GoalRow(goal: goal, isSelected: preferences.trainingGoal == goal) {

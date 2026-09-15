@@ -13,7 +13,9 @@ struct DaGymApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if let route = DebugRoute.fromLaunchArguments {
+            if LaunchFlags.isScreenshotting {
+                ScreenshotRootView(screen: ScreenshotScreen.fromLaunchArguments)
+            } else if let route = DebugRoute.fromLaunchArguments {
                 DebugRootView(route: route)
             } else {
                 AppRootContainer(preferences: appDelegate.preferences)

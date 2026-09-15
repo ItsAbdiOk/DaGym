@@ -60,13 +60,36 @@ struct WidgetSnapshotProvider: TimelineProvider {
         return WidgetSnapshotStore.read(from: suite)
     }
 
-    private static let placeholderSnapshot = WidgetSnapshot(
-        routineName: "Push Day A", exerciseCount: 5, streakWeeks: 3,
-        trainedDays: [true, true, false, true, true, false, false], updatedAt: .now,
-        routineSymbolName: "dumbbell", routineTint: "coral",
-        days: [WidgetDayPlan(
-            date: Calendar.current.startOfDay(for: .now), routineName: "Push Day A",
-            exerciseCount: 5, routineSymbolName: "dumbbell", routineTint: "coral"
-        )]
-    )
+    private static let placeholderSnapshot = WidgetSnapshot.consistencySample
+}
+
+extension WidgetSnapshot {
+    /// The gallery placeholder and `#Preview` data: one routine today plus 26 weeks of
+    /// plausible-looking history for `ConsistencyWidget` (a Mon/Wed/Fri/Sat pattern with a
+    /// few missed days), deterministic so previews don't shimmer between renders.
+    static let consistencySample = consistencySample(colorBlind: false)
+
+    static func consistencySample(colorBlind: Bool) -> WidgetSnapshot {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        let days = maxConsistencyDays
+        let start = calendar.date(byAdding: .day, value: -(days - 1), to: today) ?? today
+        let dailySets = (0..<days).map { offset -> Int in
+            let day = calendar.date(byAdding: .day, value: offset, to: start) ?? start
+            let weekday = calendar.component(.weekday, from: day)
+            guard [2, 4, 6, 7].contains(weekday), offset % 11 != 3 else { return 0 }
+            return 12 + (offset * 7) % 9
+        }
+        return WidgetSnapshot(
+            routineName: "Push Day A", exerciseCount: 5, streakWeeks: 3,
+            trainedDays: [true, true, false, true, true, false, false], updatedAt: .now,
+            routineSymbolName: "dumbbell", routineTint: "coral",
+            days: [WidgetDayPlan(
+                date: today, routineName: "Push Day A", exerciseCount: 5,
+                routineSymbolName: "dumbbell", routineTint: "coral"
+            )],
+            dailySetsStart: start, dailySets: dailySets, weekVolumeKg: 12_400,
+            colorBlindHeatmaps: colorBlind
+        )
+    }
 }

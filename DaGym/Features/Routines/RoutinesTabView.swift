@@ -117,8 +117,10 @@ struct RoutinesTabView: View {
                     Button("Delete", systemImage: "trash", role: .destructive) { delete(routine) }
                 }
                 .overlay(alignment: .topTrailing) {
-                    ShareRoutineButton(title: routine.name) {
-                        PlanShareService.exportRoutine(id: routine.id, context: store.context)
+                    ShareRoutineButton(title: routine.name) { includeWeights in
+                        PlanShareService.exportRoutine(
+                            id: routine.id, context: store.context, includeWeights: includeWeights
+                        )
                     }
                     .padding(DGSpace.s3)
                 }

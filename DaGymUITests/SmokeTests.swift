@@ -32,6 +32,8 @@ enum A11yID {
     static let onboardingNext = "onboarding.next"
     static let onboardingSkip = "onboarding.skip"
     static let onboardingSkipAll = "onboarding.skipAll"
+
+    static func onboardingStep(_ name: String) -> String { "onboarding.step.\(name)" }
 }
 
 /// End-to-end smoke coverage for the app's core loop, run against a fresh

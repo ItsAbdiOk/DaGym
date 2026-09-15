@@ -77,8 +77,10 @@ struct ProgramsView: View {
                         program: program, onStart: { start(program) }, onStop: { stop(program) },
                         onComplete: { complete(program) }
                     )
-                    ShareRoutineButton(title: program.name) {
-                        PlanShareService.exportProgram(id: program.id, context: store.context)
+                    ShareRoutineButton(title: program.name) { includeWeights in
+                        PlanShareService.exportProgram(
+                            id: program.id, context: store.context, includeWeights: includeWeights
+                        )
                     }
                     .padding(DGSpace.s3)
                 }

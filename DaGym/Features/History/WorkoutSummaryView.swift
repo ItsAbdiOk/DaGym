@@ -7,10 +7,10 @@ import SwiftUI
 struct WorkoutSummaryView: View {
     var summary: WorkoutSummary
     var title: String
-    var onShare: () -> Void
     var onDone: () -> Void
 
     @Environment(Preferences.self) private var preferences
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         ZStack {
@@ -70,15 +70,60 @@ struct WorkoutSummaryView: View {
         HStack(spacing: DGSpace.s3) {
             DGPrimaryButton(title: "Done", symbol: "checkmark", action: onDone)
                 .accessibilityIdentifier(A11yID.summaryDone)
-            Button(action: onShare) {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(DGColor.ink1)
-                    .frame(width: 52, height: 52)
-                    .dgGlass(.regular, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
+            shareMenu
+        }
+    }
+
+    /// Story and square share cards (plan.md §6.4). `Menu` builds its content when it opens, so
+    /// the two `ImageRenderer` passes run once per tap, never on every appearance.
+    private var shareMenu: some View {
+        Menu {
+            ShareCardMenuItems(
+                model: ShareCardModel(
+                    summary: summary, title: title, unit: preferences.weightUnit,
+                    distanceUnit: preferences.distanceUnit, calendar: preferences.trainingCalendar
+                ),
+                preferences: preferences, reduceTransparency: reduceTransparency
+            )
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(DGColor.ink1)
+                .frame(width: 52, height: 52)
+                .dgGlass(.regular, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
+        }
+        .buttonStyle(.dgControl)
+        .accessibilityLabel("Share workout")
+    }
+}
+
+/// One `ShareLink` per card format, both rendered in `init` — i.e. when the menu opens.
+private struct ShareCardMenuItems: View {
+    private let model: ShareCardModel
+    private let images: [(format: WorkoutShareCardFormat, image: WorkoutShareImage)]
+
+    init(model: ShareCardModel, preferences: Preferences, reduceTransparency: Bool) {
+        self.model = model
+        let stem = model.title
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: " ", with: "-")
+        images = WorkoutShareCardFormat.allCases.compactMap { format in
+            WorkoutShareCardRenderer.render(
+                model, format: format, preferences: preferences, reduceTransparency: reduceTransparency
+            ).map {
+                (format, WorkoutShareImage(image: $0, filename: "DaGym-\(stem)-\(format.filenameSuffix)"))
             }
-            .buttonStyle(.dgControl)
-            .accessibilityLabel("Share workout")
+        }
+    }
+
+    var body: some View {
+        ForEach(images, id: \.format) { item in
+            ShareLink(
+                item: item.image, subject: Text(model.shareSubject), message: Text(model.shareMessage),
+                preview: SharePreview(model.shareSubject, image: Image(uiImage: item.image.image))
+            ) {
+                Label(item.format.menuTitle, systemImage: item.format.symbol)
+            }
         }
     }
 }
@@ -233,7 +278,7 @@ private struct MusclesHitCard: View {
                 )
             ]
         ),
-        title: "Push A Done", onShare: {}, onDone: {}
+        title: "Push A Done", onDone: {}
     )
     .environment(Preferences())
     .environment(CoachServices.make(preferences: Preferences()))

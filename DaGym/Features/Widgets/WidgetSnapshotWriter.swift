@@ -58,6 +58,8 @@ struct WidgetSnapshotWriter {
         )
         let days = plannedDays(store: store, calendar: calendar, now: now)
         let today = days.first
+        let dailySets = self.dailySets(store: store, calendar: calendar, now: now)
+        let recap = store.weeklyRecap(for: now, weeklyGoal: preferences.weeklyGoal, calendar: calendar)
         return WidgetSnapshot(
             routineName: today?.routineName, exerciseCount: today?.exerciseCount ?? 0,
             streakWeeks: streak.current,
@@ -65,7 +67,21 @@ struct WidgetSnapshotWriter {
             updatedAt: now, routineSymbolName: today?.routineSymbolName,
             routineTint: today?.routineTint, days: days, workoutDays: workoutDays,
             weeklyGoal: preferences.weeklyGoal, weekStartsMonday: preferences.weekStartsMonday,
-            accent: preferences.accent.rawValue, appearance: preferences.appearance.rawValue
+            accent: preferences.accent.rawValue, appearance: preferences.appearance.rawValue,
+            dailySetsStart: dailySets.first?.date, dailySets: dailySets.map(\.sets),
+            weekVolumeKg: recap.volumeKg, weightUnit: preferences.weightUnit.rawValue,
+            colorBlindHeatmaps: preferences.colorBlindHeatmaps
+        )
+    }
+
+    /// The last `WidgetSnapshot.maxConsistencyDays` days of the Consistency screen's own cells
+    /// (`WorkoutStore.consistencyCells`, the same counted-sets rule as the heatmap in the app),
+    /// trimmed to the widget's window. Seven months back always covers 26 weeks; the suffix
+    /// drops the surplus.
+    private static func dailySets(store: WorkoutStore, calendar: Calendar, now: Date) -> [DayCell] {
+        Array(
+            store.consistencyCells(months: 7, now: now, calendar: calendar)
+                .suffix(WidgetSnapshot.maxConsistencyDays)
         )
     }
 
@@ -112,5 +128,8 @@ extension WidgetSnapshot {
             && days == other.days && workoutDays == other.workoutDays
             && weeklyGoal == other.weeklyGoal && weekStartsMonday == other.weekStartsMonday
             && accent == other.accent && appearance == other.appearance
+            && dailySetsStart == other.dailySetsStart && dailySets == other.dailySets
+            && weekVolumeKg == other.weekVolumeKg && weightUnit == other.weightUnit
+            && colorBlindHeatmaps == other.colorBlindHeatmaps
     }
 }

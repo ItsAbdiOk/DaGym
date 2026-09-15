@@ -23,7 +23,7 @@ struct LastSessionIntent: AppIntent {
             return .result(dialog: IntentDialog(stringLiteral: "DaGym isn't available right now."))
         }
         let last = Self.lastSession(exerciseID: exercise.id, store: store)
-        let unit = Preferences().weightUnit
+        let unit = IntentStoreAccess.preferences().weightUnit
         let line = last.map { Self.line(weightKg: $0.weightKg, reps: $0.reps, unit: unit) }
         let dialog = IntentFormatting.lastSessionDialog(line: line, date: last?.date)
         return .result(dialog: IntentDialog(stringLiteral: dialog))

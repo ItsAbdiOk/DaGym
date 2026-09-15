@@ -53,29 +53,12 @@ struct ConsistencyView: View {
         let calendar = preferences.trainingCalendar
         let cells = store.consistencyCells(months: 12, calendar: calendar)
         grid = ConsistencyCalendar.monthGrid(cells: cells, calendar: calendar)
-        monthLabels = Self.monthLabels(for: grid, calendar: calendar)
+        monthLabels = ConsistencyMonthLabels.labels(for: grid, calendar: calendar)
         streak = Streaks.weekly(
             workoutDates: store.workoutDates(), weeklyGoal: preferences.weeklyGoal, calendar: calendar,
             now: Date()
         )
         recap = store.weeklyRecap(for: Date(), weeklyGoal: preferences.weeklyGoal, calendar: calendar)
-    }
-
-    /// One label per week-column whose first real day starts a new month.
-    private static func monthLabels(for grid: [[DayCell?]], calendar: Calendar) -> [Int: String] {
-        var labels: [Int: String] = [:]
-        var lastMonth: Int?
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM"
-        for (index, week) in grid.enumerated() {
-            guard let cell = week.compactMap({ $0 }).first else { continue }
-            let month = calendar.component(.month, from: cell.date)
-            if month != lastMonth {
-                labels[index] = formatter.string(from: cell.date).uppercased()
-                lastMonth = month
-            }
-        }
-        return labels
     }
 }
 
@@ -120,6 +103,9 @@ private struct HeatmapCard: View {
 
     private static let squareSize: CGFloat = 10
     private static let spacing: CGFloat = 3
+    /// As wide as a month name, so a name cut by the scroll edge fades out entirely.
+    private static let edgeFade: CGFloat = 34
+    private static let labelOverflow: CGFloat = 24
     private static let defaultRamp: [Color] = [
         DGColor.surface3, DGColor.coral.opacity(0.22), DGColor.coral.opacity(0.46),
         DGColor.coral.opacity(0.72), DGColor.coral
@@ -146,8 +132,23 @@ private struct HeatmapCard: View {
                     monthHeader
                     heatmapGrid
                 }
+                // The leading inset sits under `edgeFade` when scrolled fully left, so the first
+                // column is never dimmed; the trailing one gives the last month's label (which
+                // overflows its 10 pt column) room inside the scrollable content.
+                .padding(.leading, Self.edgeFade)
+                .padding(.trailing, Self.labelOverflow)
             }
             .defaultScrollAnchor(.trailing) // today is the last column
+            // A year is wider than the card, so the view opens scrolled to today with the
+            // leading months cut mid-label ("AR" for MAR). Fading that edge reads as "more to
+            // the left" rather than a truncated word.
+            .mask {
+                HStack(spacing: 0) {
+                    LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: Self.edgeFade)
+                    Color.black
+                }
+            }
             legend
             if let selectedCell {
                 Text(Self.footnote(for: selectedCell))

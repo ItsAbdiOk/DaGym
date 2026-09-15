@@ -97,7 +97,7 @@ struct RootView: View {
         }
         .fullScreenCover(item: $summaryItem) { item in
             WorkoutSummaryView(
-                summary: item.summary, title: item.title, onShare: {}, onDone: { summaryItem = nil }
+                summary: item.summary, title: item.title, onDone: { summaryItem = nil }
             )
         }
     }

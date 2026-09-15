@@ -238,6 +238,7 @@ targets:
       - path: DaGym/App/Intents/RestIntents.swift
       - path: DaGym/App/Intents/StartRestTimerIntent.swift
       - path: DaGym/Features/Widgets/WidgetSnapshot.swift
+      - path: DaGym/Features/Widgets/WidgetConsistency.swift
     dependencies:
       - package: GymCore
         product: GymCore

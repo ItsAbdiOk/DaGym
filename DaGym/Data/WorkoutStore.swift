@@ -95,7 +95,11 @@ final class WorkoutStore {
     /// `fetchCount(_:)` so this is the real query count, not one hand-picked helper's.
     /// `WorkoutStoreStartPerformanceTests` asserts a 2-exercise and a 12-exercise routine issue
     /// the *same* number of queries, which is what makes an N+1 impossible to reintroduce.
-    var queryCount = 0
+    /// `@ObservationIgnored` is load-bearing: `fetch` bumps this counter, and a view that reads
+    /// the store from `body` (`PlateChip` → `activeInventory()`) would otherwise register a
+    /// dependency on it *and* write it in the same pass — an invalidation loop that pinned the
+    /// Active Workout screen at 100% CPU and never drew a frame.
+    @ObservationIgnored var queryCount = 0
 
     /// The one place the main context is read. Every `WorkoutStore+*` extension calls these
     /// rather than `context.fetch` directly, so `queryCount` can't drift out of date.

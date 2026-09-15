@@ -63,7 +63,7 @@ struct HistoryTabView: View {
         }
         .fullScreenCover(item: $finishedWorkout) { finished in
             WorkoutSummaryView(
-                summary: finished.summary, title: finished.title, onShare: {},
+                summary: finished.summary, title: finished.title,
                 onDone: { finishedWorkout = nil; refresh() }
             )
         }

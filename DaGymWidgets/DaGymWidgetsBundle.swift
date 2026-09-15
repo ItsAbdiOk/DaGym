@@ -7,6 +7,7 @@ struct DaGymWidgetsBundle: WidgetBundle {
         RestLiveActivity()
         TodayWorkoutWidget()
         StreakWidget()
+        ConsistencyWidget()
         RestTimerControl()
     }
 }

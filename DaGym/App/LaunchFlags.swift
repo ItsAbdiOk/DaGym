@@ -37,8 +37,22 @@ enum LaunchFlags {
         return NSClassFromString("XCTestCase") != nil
     }
 
-    /// Either kind of test process.
-    static var isTesting: Bool { isUITesting || isUnitTestHost }
+    /// Whether this process was launched with `-dgScreenshots`: the App Store screenshot
+    /// build. Like `-dgUITest` it runs on a throwaway in-memory store with animations off, but
+    /// the store is filled by `ScreenshotMode` (eight weeks of history, a workout mid-set, a
+    /// bodyweight series, milestones, a schedule) so every marketing shot has real-looking
+    /// data. `-dgScreenshotScreen <name>` opens one screen directly — see `ScreenshotScreen`.
+    static var isScreenshotting: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-dgScreenshots")
+        #else
+        false
+        #endif
+    }
+
+    /// Either kind of test process, or the screenshot build — every side-effecting service
+    /// (notifications, calendar sync, widgets, HealthKit, CloudKit) stays inert for all three.
+    static var isTesting: Bool { isUITesting || isUnitTestHost || isScreenshotting }
 
     /// Whether this process was launched with `-dgOnboarding`. Paired with `-dgUITest`, this
     /// resets `Preferences.hasCompletedOnboarding` to `false` so `testOnboardingCompletes` always

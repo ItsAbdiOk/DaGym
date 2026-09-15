@@ -12,6 +12,7 @@ struct OnboardingScheduleStep: View {
                 .font(DGFont.title1)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
+                .accessibilityIdentifier(A11yID.onboardingStep("schedule"))
             weeklyGoalCard
             weekStartCard
             Spacer()

@@ -11,10 +11,14 @@ enum PlanShareService {
     // MARK: - Export
 
     /// A single routine as a `.gymplan` file, with any custom exercises it uses.
-    static func exportRoutine(id: UUID, context: ModelContext) -> PlanDocument? {
+    /// `includeWeights` keeps the lifter's own `targetWeightKg` — only for their own printout
+    /// (the PDF branch of `ShareRoutineButton`), never for a file that goes to someone else.
+    static func exportRoutine(
+        id: UUID, context: ModelContext, includeWeights: Bool = false
+    ) -> PlanDocument? {
         guard let model = fetchRoutine(id: id, context: context) else { return nil }
         var customExercises: [UUID: PlanExercise] = [:]
-        let routine = planRoutine(model, customExercises: &customExercises)
+        let routine = planRoutine(model, customExercises: &customExercises, includeWeights: includeWeights)
         return PlanDocument(
             exportedAt: Date(), appVersion: BackupService.currentAppVersion(),
             exercises: Array(customExercises.values), routines: [routine]
@@ -22,13 +26,17 @@ enum PlanShareService {
     }
 
     /// A program plus every routine in its day cycle, deduplicated, with their custom exercises.
-    static func exportProgram(id: UUID, context: ModelContext) -> PlanDocument? {
+    static func exportProgram(
+        id: UUID, context: ModelContext, includeWeights: Bool = false
+    ) -> PlanDocument? {
         guard let program = fetchProgram(id: id, context: context) else { return nil }
         var customExercises: [UUID: PlanExercise] = [:]
         var planRoutines: [UUID: PlanRoutine] = [:]
         for routineID in Set(program.routineIDs) {
             guard let routineModel = fetchRoutine(id: routineID, context: context) else { continue }
-            planRoutines[routineID] = planRoutine(routineModel, customExercises: &customExercises)
+            planRoutines[routineID] = planRoutine(
+                routineModel, customExercises: &customExercises, includeWeights: includeWeights
+            )
         }
         let orderedRoutines = program.routineIDs.compactMap { planRoutines[$0] }
         // `routines` here is deduplicated by id (a day cycle can repeat a routine); `routineIDs`
@@ -56,7 +64,8 @@ enum PlanShareService {
     //   diary ("left shoulder still sore", "grip fails first"), not part of the plan;
     // * the sender's working weights — `targetWeightKg` is what *they* lift, and it is both
     //   personal and useless (often unsafe) to the recipient, who should start from their own
-    //   numbers. Rep, RPE and time targets are the prescription, so those do travel;
+    //   numbers. Rep, RPE and time targets are the prescription, so those do travel. The one
+    //   exception is `includeWeights: true`, which the lifter's *own* PDF printout asks for;
     // * the sender's database identifiers — `RoutineModel.id`, `ProgramModel.id` and
     //   `ExerciseModel.id` are stable, device-linked UUIDs that correlate one shared file with
     //   another. `sharedID` replaces each with a salted hash: stable across re-exports of the
@@ -64,13 +73,15 @@ enum PlanShareService {
     //   nothing back to the sender's store.
 
     private static func planRoutine(
-        _ model: RoutineModel, customExercises: inout [UUID: PlanExercise]
+        _ model: RoutineModel, customExercises: inout [UUID: PlanExercise], includeWeights: Bool
     ) -> PlanRoutine {
         let routineExercises = (model.exercises ?? []).sorted { $0.order < $1.order }
         let exercises = routineExercises.compactMap { slot -> PlanRoutineExercise? in
             guard let exercise = slot.exercise else { return nil }
             if exercise.isCustom { customExercises[exercise.id] = planExercise(exercise) }
-            let sets = (slot.plannedSets ?? []).sorted { $0.order < $1.order }.map(planSet)
+            let sets = (slot.plannedSets ?? []).sorted { $0.order < $1.order }.map {
+                planSet($0, includeWeights: includeWeights)
+            }
             return PlanRoutineExercise(
                 order: slot.order, exerciseSeedID: exercise.seedID, exerciseName: exercise.name,
                 supersetGroup: slot.supersetGroup, restOverrideSeconds: slot.restOverrideSeconds,
@@ -96,10 +107,11 @@ enum PlanShareService {
         )
     }
 
-    private static func planSet(_ model: PlannedSetModel) -> PlanSet {
+    private static func planSet(_ model: PlannedSetModel, includeWeights: Bool) -> PlanSet {
         PlanSet(
             order: model.order, kind: model.kind, targetReps: model.targetReps,
-            targetRepsHigh: model.targetRepsHigh, targetWeightKg: nil,
+            targetRepsHigh: model.targetRepsHigh,
+            targetWeightKg: includeWeights ? model.targetWeightKg : nil,
             targetRPE: model.targetRPE, targetSeconds: model.targetSeconds,
             targetDistanceMeters: model.targetDistanceMeters
         )
