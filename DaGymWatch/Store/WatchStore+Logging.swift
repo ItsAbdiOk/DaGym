@@ -69,6 +69,7 @@ extension WatchStore {
               let si = currentSetIndex(in: entry) else { return }
         let set = entry.sets[si]
         session.startTimedHold(exerciseID: exerciseID, setID: set.id, targetSeconds: set.cardioSeconds)
+        ensureTicking()
     }
 
     /// Stop & log: the real time held (or run) goes on the row; a stop inside the 3-2-1 lead-in

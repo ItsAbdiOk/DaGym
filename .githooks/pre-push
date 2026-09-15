@@ -29,38 +29,81 @@ if git grep -nE '(sk-ant-|sk-|AIza)[A-Za-z0-9_\-]{16,}' -- . ':(exclude)*Tests*'
 fi
 ok "code only, no credentials"
 
-# 2. Lint.
+# 2. Tool versions. Both CIs install exactly what .tool-versions pins (scripts/install-tools.sh);
+# a different local version lints or generates differently from what CI will see.
 command -v swiftlint >/dev/null 2>&1 || fail "swiftlint is not installed. Run: brew install swiftlint"
+command -v xcodegen >/dev/null 2>&1 || fail "xcodegen is not installed. Run: brew install xcodegen"
+WANT_SWIFTLINT=$(awk '$1 == "swiftlint" { print $2 }' .tool-versions)
+WANT_XCODEGEN=$(awk '$1 == "xcodegen" { print $2 }' .tool-versions)
+HAVE_SWIFTLINT=$(swiftlint version)
+HAVE_XCODEGEN=$(xcodegen --version | sed 's/^Version: //')
+[ "$HAVE_SWIFTLINT" = "$WANT_SWIFTLINT" ] \
+    || fail "swiftlint $HAVE_SWIFTLINT installed, .tool-versions pins $WANT_SWIFTLINT (brew upgrade/downgrade, or update the pin in the same push)"
+[ "$HAVE_XCODEGEN" = "$WANT_XCODEGEN" ] \
+    || fail "xcodegen $HAVE_XCODEGEN installed, .tool-versions pins $WANT_XCODEGEN (brew upgrade/downgrade, or update the pin in the same push)"
+ok "tool versions match .tool-versions"
+
+# 3. Lint (once per push: verify.sh is called with --skip-lint below).
 swiftlint lint --strict --quiet || fail "lint failed"
 ok "lint clean"
 
-# 3. project.yml is the source of truth; the committed .xcodeproj AND the generated Info.plists
+# 4. project.yml is the source of truth; the committed .xcodeproj AND the generated Info.plists
 # / entitlements it also writes must match (T10 — App Review reads the plists/entitlements, not
 # the .xcodeproj; Xcode Cloud regenerates on every build, so a stale commit here is invisible
 # until a reviewer diffs the repo).
-command -v xcodegen >/dev/null 2>&1 || fail "xcodegen is not installed. Run: brew install xcodegen"
-xcodegen generate --quiet 2>/dev/null || xcodegen generate >/dev/null 2>&1
+#
+# The project is generated into a temp dir and diffed, not regenerated in place: an in-place
+# regen rewrote project.pbxproj on every push while Xcode had it open ("reload?" prompts) and
+# left uncommitted churn behind. XcodeGen writes the plists/entitlements next to the spec
+# regardless of --project, but only when their parsed content differs from what is on disk —
+# i.e. exactly when the push is about to fail anyway, and the rewritten file is the one to commit.
+TMP_PROJECT=$(mktemp -d "${TMPDIR:-/tmp}/dagym-xcodegen.XXXXXX")
+trap 'rm -rf "$TMP_PROJECT"' EXIT
+xcodegen generate --quiet --project "$TMP_PROJECT" 2>/dev/null || xcodegen generate --project "$TMP_PROJECT" >/dev/null 2>&1 \
+    || fail "xcodegen generate failed — run it by hand to see why"
+# Generating elsewhere makes the few SOURCE_ROOT-relative paths (top-level dirs like GymCore)
+# relative to the temp dir; fold them back before diffing. pbxproj quotes any path outside
+# [A-Za-z0-9_./], which is why the replacement re-decides the quotes.
+python3 - "$TMP_PROJECT/DaGym.xcodeproj/project.pbxproj" "$ROOT" "$TMP_PROJECT" <<'PY'
+import os, re, sys
+path, root, tmp = sys.argv[1:4]
+rel = os.path.relpath(root, tmp)
+text = open(path).read()
+def fold(m):
+    inner = m.group(1)
+    return inner if re.fullmatch(r"[A-Za-z0-9_./]+", inner) else '"%s"' % inner
+text = re.sub(r'"' + re.escape(rel) + r'/([^"]*)"', fold, text)
+# In-place generation omits a group's `name` when it equals its `path`; folding makes them
+# equal again (file references keep both either way).
+text = re.sub(r"name = ([^;]+);\n(\t+)path = \1;", r"path = \1;", text)
+open(path, "w").write(text)
+PY
 # project.pbxproj, not the whole .xcodeproj: Xcode rewrites shared schemes in its own format
 # (attribute order, version 1.7) every time it opens the project, so a scheme diff while Xcode
 # is running is noise, and schemes are not something App Review or Xcode Cloud reads.
-GENERATED_PATHS="DaGym.xcodeproj/project.pbxproj DaGym/Info.plist DaGym/DaGym.entitlements \
-    DaGymWidgets/Info.plist DaGymWidgets/DaGymWidgets.entitlements DaGymWatch/Info.plist"
+diff -q "$TMP_PROJECT/DaGym.xcodeproj/project.pbxproj" DaGym.xcodeproj/project.pbxproj >/dev/null \
+    || fail "DaGym.xcodeproj/project.pbxproj is out of sync with project.yml. Run xcodegen generate and commit it."
+GENERATED_PATHS="DaGym/Info.plist DaGym/DaGym.entitlements \
+    DaGymWidgets/Info.plist DaGymWidgets/DaGymWidgets.entitlements \
+    DaGymWatch/Info.plist DaGymWatch/DaGymWatch.entitlements \
+    DaGymWatch/Widgets/Info.plist DaGymWatch/Widgets/DaGymWatchWidgets.entitlements"
 if ! git diff --quiet -- $GENERATED_PATHS; then
-    fail "a file xcodegen generates from project.yml is out of sync. Commit the regenerated files."
+    fail "a plist/entitlements file xcodegen generates from project.yml is out of sync. Commit the regenerated files."
 fi
 ok "project in sync"
 
-# 4. App tests + UI smoke test on the simulator (this also runs the GymCore suite — see
-# verify.sh:12 — so it isn't repeated here; that used to double the ~300-test GymCore run on
-# every push for no benefit). The slow step.
-echo "  running scripts/verify.sh (this is the slow bit)..."
-if ! ./scripts/verify.sh >/tmp/dagym-prepush.log 2>&1; then
+# 5. GymCore tests, app tests, UI smoke test and watch tests on the simulators — the slow step.
+# verify.sh owns the failure grep and prints the matching lines itself; this just relays them.
+# No suffix after the Xs: macOS mktemp only substitutes trailing Xs, so a ".log" suffix made a
+# literal file name and the second push on the machine failed with "File exists".
+LOG=$(mktemp "${TMPDIR:-/tmp}/dagym-prepush.XXXXXX")
+echo "  running scripts/verify.sh (this is the slow bit; log: $LOG)..."
+if ! ./scripts/verify.sh --skip-lint >"$LOG" 2>&1; then
     printf "%spre-push: tests failed%s\n" "$RED" "$OFF" >&2
-    grep -E "✘|error:|Expectation failed|Test run with" /tmp/dagym-prepush.log \
-        | sed 's/^/  /' | head -25 >&2
-    echo "  full log: /tmp/dagym-prepush.log" >&2
+    tail -40 "$LOG" | sed 's/^/  /' >&2
+    echo "  full log: $LOG" >&2
     exit 1
 fi
-ok "app tests passed"
+ok "tests passed"
 
 echo "pre-push checks passed."

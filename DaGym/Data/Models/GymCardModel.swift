@@ -5,13 +5,13 @@ import SwiftData
 /// image is regenerated from these on every show (features.md adopt 6). CloudKit-legal.
 @Model
 final class GymCardModel {
-    var id: UUID = UUID()
+    var id = UUID()
     var name: String = ""
     var value: String = ""
     /// `GymCardSymbology` raw value.
     var symbology: String = "qr"
     var sortOrder: Int = 0
-    var createdAt: Date = Date()
+    var createdAt = Date()
     var lastUsedAt: Date?
 
     init(

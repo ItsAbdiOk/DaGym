@@ -1,6 +1,7 @@
 // Vendored from MuscleMap (https://github.com/melihcolpan/MuscleMap) by Melih Colpan,
 // MIT-licensed (full text at DaGym/Vendor/MuscleMap/LICENSE). This file is not authored
 // here — do not hand-edit; DaGym/Vendor is excluded from SwiftLint (see .swiftlint.yml).
+// Local patch (DaGym): `arcTo` now emits cubic Béziers via SVGArcConverter instead of a chord.
 
 //
 //  PathBuilder.swift
@@ -127,12 +128,21 @@ struct PathBuilder {
                 currentPoint = end
                 lastControlPoint = control
 
-            case .arcTo(_, _, _, _, _, let x, let y, let relative):
+            case .arcTo(let rx, let ry, let angle, let largeArc, let sweep, let x, let y, let relative):
                 let end = relative
                     ? CGPoint(x: currentPoint.x + x, y: currentPoint.y + y)
                     : CGPoint(x: x, y: y)
-                let scaledEnd = CGPoint(x: end.x * scale + offsetX, y: end.y * scale + offsetY)
-                path.addLine(to: scaledEnd)
+                // DaGym patch: upstream flattened arcs to a chord. The bundled body paths do use
+                // `a` commands (small corner arcs), so convert to cubic Béziers per the SVG spec.
+                for segment in SVGArcConverter.cubics(
+                    from: currentPoint, to: end, rx: rx, ry: ry, xAxisRotation: angle,
+                    largeArc: largeArc, sweep: sweep
+                ) {
+                    let c1 = CGPoint(x: segment.control1.x * scale + offsetX, y: segment.control1.y * scale + offsetY)
+                    let c2 = CGPoint(x: segment.control2.x * scale + offsetX, y: segment.control2.y * scale + offsetY)
+                    let e = CGPoint(x: segment.end.x * scale + offsetX, y: segment.end.y * scale + offsetY)
+                    path.addCurve(to: e, control1: c1, control2: c2)
+                }
                 currentPoint = end
                 lastControlPoint = nil
 

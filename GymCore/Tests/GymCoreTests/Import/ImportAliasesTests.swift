@@ -32,9 +32,9 @@ struct ImportAliasesTests {
     @Test(
         "a known qualifier with no entry falls through instead of picking the wrong exercise",
         arguments: [
-            "Squat (Bodyweight)", "Deadlift (Dumbbell)", "Shoulder Press (Machine)",
+            "Squat (Bodyweight)", "Deadlift (Dumbbell)", "Shoulder Press (Kettlebell)",
             "Bicep Curl (Cable)", "Bench Press (Machine)", "Hip Thrust (Machine)",
-            "Lateral Raise (Cable)"
+            "Lateral Raise (Band)"
         ]
     )
     func knownButAbsentQualifierFallsThrough(name: String) {
@@ -65,5 +65,28 @@ struct ImportAliasesTests {
         // "(Paused)" isn't equipment, so the whole string is looked up and simply isn't in the
         // table — it must not be stripped and then resolved as a bare "Bench Press".
         #expect(ImportAliases.seedID(for: "Bench Press (Paused)") == nil)
+    }
+
+    @Test("Strong's machine and cable catalogue names resolve to the matching seed")
+    func strongCatalogueNames() {
+        let expected: [String: String] = [
+            "Cable Crossover": "Cable_Crossover",
+            "Chest Press (Machine)": "Leverage_Chest_Press",
+            "Incline Chest Press (Machine)": "Leverage_Incline_Chest_Press",
+            "Incline Bench Press (Smith Machine)": "Smith_Machine_Incline_Bench_Press",
+            "Iso-Lateral Row (Machine)": "Leverage_Iso_Row",
+            "Lateral Raise (Cable)": "Side_Lateral_Raise_Cable",
+            "Pec Deck (Machine)": "Pec_Deck",
+            "Preacher Curl (Machine)": "Machine_Preacher_Curls",
+            "Pull Up (Assisted)": "Assisted_Pull_Up",
+            "Reverse Fly (Machine)": "Reverse_Machine_Flyes",
+            "Seated Dips (machine)": "Dip_Machine",
+            "Seated Wide-Grip Row (Cable)": "Seated_Cable_Row",
+            "Shoulder Press (Machine)": "Machine_Shoulder_Military_Press",
+            "Triceps Pushdown (Cable - Straight Bar)": "Triceps_Pushdown"
+        ]
+        for (name, seedID) in expected {
+            #expect(ImportAliases.seedID(for: name) == seedID, "\(name)")
+        }
     }
 }

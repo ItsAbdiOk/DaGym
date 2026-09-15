@@ -13,7 +13,14 @@ struct ExerciseChartView: View {
 
     @State private var metric = Metric.e1rm
     @State private var range = ChartRange.threeMonths
+    /// Every metric's series for the current exercise/range — a metric switch derives from this
+    /// instead of fetching the whole bundle again.
+    @State private var bundle: WorkoutStore.ExerciseSeriesBundle?
     @State private var points: [ChartPoint] = []
+    /// Ticks and labels for `points` — see `ChartAxisPlan` for why the automatic axis is not
+    /// used. Held in state because `body` reads it three times per pass, including on every
+    /// scrub event, and each evaluation walks the calendar.
+    @State private var axisPlan = ChartAxisPlan(granularity: .weeks, ticks: [], labels: [])
     @State private var weightOptions: [Double] = []
     @State private var repsWeight: Double = 0
     @State private var scrubbedIndex: Int?
@@ -60,7 +67,7 @@ struct ExerciseChartView: View {
         }
         .task { refresh() }
         .onChange(of: exerciseID) { _, _ in refresh() }
-        .onChange(of: metric) { _, _ in refresh() }
+        .onChange(of: metric) { _, _ in rederive() }
         .onChange(of: range) { _, _ in refresh() }
         .onChange(of: repsWeight) { _, _ in refreshRepsOnly() }
     }
@@ -135,7 +142,7 @@ struct ExerciseChartView: View {
     private var chartSummary: String {
         ChartAccessibility.trendSummary(
             title: metric.title, dates: points.map(\.date), values: points.map(\.value),
-            format: { value in headlineValue(ChartPoint(date: .now, value: value)) }
+            format: { value in headlineValue(ChartPoint(id: 0, date: .now, value: value)) }
         )
     }
 
@@ -165,8 +172,7 @@ struct ExerciseChartView: View {
     }
 
     private func isDisplayed(_ point: ChartPoint) -> Bool {
-        guard let displayedPoint else { return false }
-        return displayedPoint.date == point.date
+        displayedPoint?.id == point.id
     }
 
     private func scrubOverlay(proxy: ChartProxy) -> some View {
@@ -192,72 +198,95 @@ struct ExerciseChartView: View {
         scrubbedIndex = nearest
     }
 
+    /// Exercise or range changed: one store round trip for the bundle, then derive.
     private func refresh() {
-        scrubbedIndex = nil
         let bundle = store.exerciseSeries(exerciseID: exerciseID, months: range.months)
+        self.bundle = bundle
         weightOptions = bundle.distinctWeights
         neverLoaded = bundle.neverLoaded
         if repsWeight == 0 || !weightOptions.contains(repsWeight) {
             repsWeight = bundle.mostCommonWeight ?? weightOptions.first ?? 0
         }
-        points = points(for: metric, bundle: bundle)
+        rederive()
+    }
+
+    /// Metric changed: the bundle already carries every metric, so no fetch (the reps metric is
+    /// the exception — its series depends on `repsWeight` and is read on demand).
+    private func rederive() {
+        guard let bundle else { return }
+        setPoints(points(for: metric, bundle: bundle))
     }
 
     private func refreshRepsOnly() {
         guard metric == .reps else { return }
+        setPoints(repsPoints())
+    }
+
+    private func setPoints(_ newPoints: [ChartPoint]) {
         scrubbedIndex = nil
-        points = repsPoints()
+        points = newPoints
+        axisPlan = Self.axisPlan(for: newPoints)
     }
 
     private func repsPoints() -> [ChartPoint] {
         let series = store.repsAtWeightSeries(
             exerciseID: exerciseID, months: range.months, weight: repsWeight
         )
-        return series.map { ChartPoint(date: $0.date, value: Double($0.value)) }
+        return ChartPoint.series(series.map { (date: $0.date, value: Double($0.value)) })
     }
 
     private func points(for metric: Metric, bundle: WorkoutStore.ExerciseSeriesBundle) -> [ChartPoint] {
         switch metric {
         case .e1rm where bundle.neverLoaded, .topSet where bundle.neverLoaded:
-            return bundle.bestReps.map { ChartPoint(date: $0.date, value: Double($0.value)) }
+            return ChartPoint.series(bundle.bestReps.map { (date: $0.date, value: Double($0.value)) })
         case .volume where bundle.neverLoaded:
-            return bundle.totalReps.map { ChartPoint(date: $0.date, value: Double($0.value)) }
+            return ChartPoint.series(bundle.totalReps.map { (date: $0.date, value: Double($0.value)) })
         case .e1rm:
-            return bundle.e1rm.map { ChartPoint(date: $0.date, value: $0.value) }
+            return ChartPoint.series(bundle.e1rm)
         case .topSet:
-            return bundle.topSet.map {
-                ChartPoint(date: $0.date, value: $0.value, rpe: bundle.topSetRPE[$0.date])
-            }
+            return ChartPoint.series(bundle.topSet, rpe: bundle.topSetRPE)
         case .volume:
-            return bundle.volume.map { ChartPoint(date: $0.date, value: $0.value) }
+            return ChartPoint.series(bundle.volume)
         case .reps:
             return repsPoints()
         }
     }
 
-    /// Ticks and labels for the plotted span — see `ChartAxisPlan` for why the automatic axis
-    /// is not used.
-    private var axisPlan: ChartAxisPlan {
+    private static func axisPlan(for points: [ChartPoint]) -> ChartAxisPlan {
         guard let first = points.first?.date, let last = points.last?.date else {
             return ChartAxisPlan(granularity: .weeks, ticks: [], labels: [])
         }
         return ChartAxisPlan.plan(from: min(first, last), to: max(first, last))
     }
 
-    private static func dateLabel(_ date: Date) -> String {
+    private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "d MMM"
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private static func dateLabel(_ date: Date) -> String {
+        dateFormatter.string(from: date)
     }
 }
 
-/// One plotted value, identified by its session date.
-private struct ChartPoint: Identifiable {
+/// One plotted value. Identified by its position in the series, not its date: two sessions of
+/// the same exercise on one day (a backfill beside a live session) are two points, and a
+/// date id would make `Chart` see duplicates and highlight both.
+struct ChartPoint: Identifiable, Hashable {
+    var id: Int
     var date: Date
     var value: Double
     /// The top set's rating, on the top-set metric only.
     var rpe: Double?
-    var id: Date { date }
+
+    /// Numbers a series in order, so ids are unique per point and stable between renders.
+    /// `rpe` is the top-set metric's rating by session date.
+    static func series(_ values: [(date: Date, value: Double)], rpe: [Date: Double] = [:]) -> [ChartPoint] {
+        values.enumerated().map { offset, point in
+            ChartPoint(id: offset, date: point.date, value: point.value, rpe: rpe[point.date])
+        }
+    }
 }
 
 /// 3M / 6M / 1Y / ALL window for a chart.

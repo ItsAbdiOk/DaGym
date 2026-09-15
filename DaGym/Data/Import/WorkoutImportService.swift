@@ -142,7 +142,11 @@ enum WorkoutImportService {
             report.workoutsImported += 1
         }
         store.save()
-        if report.workoutsImported > 0 { store.rebuildPersonalRecords() }
+        if report.workoutsImported > 0 {
+            // After the save, once the inverses have linked the rows — see `BackupService`.
+            store.restampWorkoutTotalsAfterRemoteChange()
+            store.rebuildPersonalRecords()
+        }
         return report
     }
 

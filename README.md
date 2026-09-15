@@ -13,18 +13,26 @@ never sees it, and there is no server.
 
 - Workout logging: strength sets, cardio (time/distance/pace/incline), supersets and timed
   holds, PR detection and progression suggestions
+- Machine-level equipment profiles (37 gym-floor stations) so the library, picker, and
+  substitutions only offer what your gym actually has
 - Routines and programs, with a schedule that can sync to a dedicated "DaGym" calendar
 - Rest timer with a Lock Screen / Dynamic Island Live Activity
-- Home, History and Progress screens, with a body/muscle map
+- Home, History and Progress screens, with a body/muscle map and a consistency heatmap widget
+- Optional on-device AI coach (Apple Foundation Models): post-workout debriefs, exercise
+  substitutions, program generation, and a periodic training review, all computed on-device
+  with a rule-based fallback when it's off or unavailable — nothing about your training leaves
+  the phone
 - Voice logging (on-device speech recognition — nothing leaves the phone)
 - Progress photos (local by default, optionally lockable behind Face ID)
 - Apple Health integration: reads bodyweight, body composition, HRV/RHR/sleep and imported
   workouts to personalise suggestions; writes strength workouts and bodyweight back
-- Standalone Apple Watch app that can log a full workout on its own, plus watch
-  complications/Smart Stack widgets
-- iPhone widgets: today's workout, streak, and the rest-timer Live Activity
+- Standalone Apple Watch app, embedded in the iOS build, that logs a full workout on its own,
+  plus watch complications/Smart Stack widgets
+- iPhone widgets: today's workout, streak, consistency heatmap, and the rest-timer Live
+  Activity
 - Import workouts from Hevy
-- Shareable `.gymplan` routine/program files
+- Shareable `.gymplan` routine/program files, a shareable workout summary card, and a program
+  PDF export
 - Colour-blind-friendly heatmaps, Dynamic Type and accessibility pass throughout
 
 ## Building

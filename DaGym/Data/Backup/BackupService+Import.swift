@@ -1,6 +1,9 @@
 import Foundation
 import GymCore
 import SwiftData
+import os
+
+private let backupSignposter = OSSignposter(subsystem: "dev.abdirahmanmohamed.dagym", category: "perf")
 
 extension BackupService {
     // MARK: - Import
@@ -10,12 +13,22 @@ extension BackupService {
     /// the same id are always skipped, so re-importing the same file twice
     /// never duplicates anything. The PR cache is rebuilt from history at the
     /// end, so Records and Milestones reflect the imported workouts.
+    ///
+    /// `store` is the live `WorkoutStore` over `context` when the app is the caller: the PR
+    /// rebuild then runs on it and every save goes through it, so `changeToken` bumps and the
+    /// History/Home screens keyed on it redraw. A throwaway store used to do the rebuild, and
+    /// nothing keyed on the token noticed the import until some unrelated save.
+    /// `thumbnails` are progress-photo thumbnails already generated off the main actor
+    /// (`thumbnails(for:)`); nil means "generate inline", which tests and the reset path use.
     @discardableResult
     static func `import`(
         document: BackupDocument, context: ModelContext, mode: ImportMode = .merge,
         baseline: SeedBaseline = SeedBaseline(), photoContext: ModelContext? = nil,
-        healthContext: ModelContext? = nil, preferences: Preferences? = nil
+        healthContext: ModelContext? = nil, preferences: Preferences? = nil,
+        store: WorkoutStore? = nil, thumbnails: [UUID: Data]? = nil
     ) -> ImportReport {
+        let interval = backupSignposter.beginInterval("backupImport")
+        defer { backupSignposter.endInterval("backupImport", interval) }
         var report = ImportReport()
         // "Reset everything" deletes every `ExerciseModel`, and re-seeding otherwise only happens
         // at launch. Without this, a restore in the same session resolves every seeded exercise
@@ -37,7 +50,7 @@ extension BackupService {
         importSchedule(document.schedule, context: context)
         importExtras(
             document, index: exerciseIndex, context: context, photoContext: photoContext,
-            healthContext: healthContext, report: &report
+            healthContext: healthContext, thumbnails: thumbnails, report: &report
         )
         do {
             try context.save()
@@ -48,9 +61,29 @@ extension BackupService {
         applyPreferences(document.preferences, to: preferences ?? Preferences())
         report.preferencesRestored = true
         if importedWorkouts > 0 {
-            WorkoutStore(context: context, photoContext: nil).rebuildPersonalRecords()
+            let live = store ?? WorkoutStore(context: context, photoContext: nil)
+            // Stamped after the save: the imported rows are linked through their inverses only,
+            // which SwiftData populates on save — stamping earlier reads them as empty.
+            live.restampWorkoutTotalsAfterRemoteChange()
+            live.rebuildPersonalRecords()
         }
+        store?.noteExternalSave()
         return report
+    }
+
+    /// The Settings entry point: progress-photo decode/resize off the main actor first, then
+    /// the import itself on the live store. The store work stays on the main actor — it is the
+    /// context every open screen is reading — but the photo work was the part that beachballed
+    /// Settings, and it needs nothing from the store.
+    static func `import`(
+        document: BackupDocument, store: WorkoutStore, preferences: Preferences
+    ) async -> ImportReport {
+        let photos = document.progressPhotos ?? []
+        let thumbnails = await Task.detached(priority: .userInitiated) { thumbnails(for: photos) }.value
+        return `import`(
+            document: document, context: store.context, mode: .merge, photoContext: store.photoContext,
+            healthContext: store.healthContext, preferences: preferences, store: store, thumbnails: thumbnails
+        )
     }
 
     /// Seeds the bundled exercise library when the store has none.
@@ -168,7 +201,8 @@ extension BackupService {
             let routine = RoutineModel(
                 id: item.id, name: item.name, notes: item.notes, progressionRule: item.progressionRule,
                 repRangeLow: item.repRangeLow, repRangeHigh: item.repRangeHigh,
-                progressionRuleJSON: item.progressionRuleJSON ?? "", createdAt: item.createdAt ?? Date(),
+                progressionRuleJSON: item.resolvedRule.map(ProgressionRuleCoding.encode) ?? "",
+                createdAt: item.createdAt ?? Date(),
                 updatedAt: item.updatedAt ?? Date(), sortOrder: item.sortOrder,
                 isArchived: item.isArchived ?? false,
                 importedFromID: item.importedFromID,
@@ -201,7 +235,8 @@ extension BackupService {
         let model = RoutineExerciseModel(
             order: draft.order, supersetGroup: draft.supersetGroup,
             restOverrideSeconds: draft.restOverrideSeconds, note: draft.note,
-            progressionRuleJSON: draft.progressionRuleJSON, stallJSON: draft.stallJSON ?? "{}",
+            progressionRuleJSON: draft.resolvedRule.map(ProgressionRuleCoding.encode),
+            stallJSON: Self.stallJSON(draft.resolvedStall),
             trainingMaxKg: draft.trainingMaxKg, excludeFromProgression: draft.excludeFromProgression ?? false,
             exercise: exercise, routine: routine
         )
@@ -322,6 +357,13 @@ extension BackupService {
         return model
     }
 
+    /// The stall memory as the model stores it — the nested format-2 value or the format-1
+    /// string, whichever `resolvedStall` found — re-encoded through the app's DTO.
+    private static func stallJSON(_ state: StallState) -> String {
+        guard let data = try? JSONEncoder().encode(StallStateDTO(state)) else { return "{}" }
+        return String(data: data, encoding: .utf8) ?? "{}"
+    }
+
     private static func importBodyMeasurements(
         _ items: [BackupBodyMeasurement], context: ModelContext, report: inout ImportReport
     ) {
@@ -351,8 +393,10 @@ extension BackupService {
             if shouldActivate { hasActive = true }
             let model = EquipmentProfileModel(
                 id: item.id, name: item.name, isActive: shouldActivate, barKg: item.barKg,
-                availableEquipment: item.availableEquipment, plateStockKg: item.plateStockKg,
-                plateCounts: item.plateCounts, collarsKg: item.collarsKg, createdAt: item.createdAt,
+                availableEquipment: item.availableEquipment,
+                plateStockKg: item.resolvedPlateStock.map(\.weightKg),
+                plateCounts: item.resolvedPlateStock.map(\.count),
+                collarsKg: item.collarsKg, createdAt: item.createdAt,
                 seedKey: item.seedKey, restrictsMachines: item.restrictsMachines ?? false,
                 availableMachines: item.availableMachines ?? []
             )
@@ -406,13 +450,18 @@ extension BackupService {
     /// restoring used to leave a blank row behind that silently swallowed the backup's schedule.
     private static func importSchedule(_ item: BackupSchedule?, context: ModelContext) {
         guard let item else { return }
+        // Format 2 nests the schedule; format 1 carried the app's own JSON string. Either way
+        // the row stores the string the app writes, so a nested value is re-encoded here.
+        let json = item.scheduleJSON ?? item.resolvedSchedule.flatMap { schedule in
+            (try? JSONEncoder().encode(schedule)).flatMap { String(data: $0, encoding: .utf8) }
+        } ?? ""
         let existing = (try? context.fetch(FetchDescriptor<ScheduleModel>())) ?? []
         guard let row = existing.first else {
-            context.insert(ScheduleModel(scheduleJSON: item.scheduleJSON, updatedAt: item.updatedAt))
+            context.insert(ScheduleModel(scheduleJSON: json, updatedAt: item.updatedAt))
             return
         }
         guard existing.allSatisfy(isBlank) else { return }
-        row.scheduleJSON = item.scheduleJSON
+        row.scheduleJSON = json
         row.updatedAt = item.updatedAt
     }
 

@@ -26,12 +26,12 @@ enum ExerciseNoteScope: String, CaseIterable, Identifiable {
 /// constraints, every stored property defaults, no relationships (ids only, like the PR cache).
 @Model
 final class ExerciseNoteModel {
-    var id: UUID = UUID()
+    var id = UUID()
     var exerciseID: UUID?
     var text: String = ""
     /// `ExerciseNoteScope` raw value.
     var scope: String = "next"
-    var createdAt: Date = Date()
+    var createdAt = Date()
     /// The workout the note was written in, when it was written mid-session.
     var workoutID: UUID?
 

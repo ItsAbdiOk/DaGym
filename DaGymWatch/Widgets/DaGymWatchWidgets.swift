@@ -38,7 +38,10 @@ struct ComplicationEntryView: View {
 }
 
 /// One entry now; when resting, another at the rest's end so the timer hands back to the idle
-/// card on its own.
+/// card on its own; when idle, one at midnight so "Push A today" doesn't outlive the day. The
+/// app reloads the timeline whenever it writes a new snapshot, so idle content never asks for
+/// a reload of its own — the 30-minute polling this replaced spent the wrist's budget on
+/// content that only changes when the app runs.
 struct WatchSnapshotProvider: TimelineProvider {
     func placeholder(in context: Context) -> WatchSnapshotEntry {
         WatchSnapshotEntry(
@@ -47,21 +50,15 @@ struct WatchSnapshotProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (WatchSnapshotEntry) -> Void) {
-        completion(WatchSnapshotEntry(date: .now, snapshot: current()))
+        completion(WatchSnapshotEntry(date: .now, snapshot: current(at: .now)))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<WatchSnapshotEntry>) -> Void) {
-        let snapshot = current()
-        var entries = [WatchSnapshotEntry(date: .now, snapshot: snapshot)]
-        if let rest = snapshot.rest, rest.endDate > .now {
-            var idle = snapshot
-            idle.rest = nil
-            entries.append(WatchSnapshotEntry(date: rest.endDate, snapshot: idle))
-        }
-        completion(Timeline(entries: entries, policy: .after(.now.addingTimeInterval(30 * 60))))
+        completion(WatchSnapshotEntry.timeline(for: current(at: .now), now: .now))
     }
 
-    private func current() -> WatchSnapshot {
-        WatchSnapshotStore.appGroupSuite.map(WatchSnapshotStore.read(from:)) ?? .empty
+    /// The App Group snapshot with anything already past dropped — see `WatchSnapshot.expiring`.
+    private func current(at now: Date) -> WatchSnapshot {
+        (WatchSnapshotStore.appGroupSuite.map(WatchSnapshotStore.read(from:)) ?? .empty).expiring(at: now)
     }
 }

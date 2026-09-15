@@ -26,10 +26,11 @@ struct BackupCoverageTests {
         BackupDocument(
             formatVersion: BackupDocument.currentFormatVersion, exportedAt: Self.date,
             appVersion: "2.1 (44)", exercises: [exercise()], routines: [routine()],
-            workouts: [workout()], bodyMeasurements: [measurement()],
+            workouts: [workout()], bodyMeasurements: [BackupBodyMeasurement.sample],
             equipmentProfiles: [equipment()], preferences: preferences(), programs: [program()],
             achievements: [achievement()], schedule: BackupSchedule(
-                scheduleJSON: #"{"mon":["push"]}"#, updatedAt: Self.date
+                schedule: WeeklySchedule(days: [.monday: UUID()]), scheduleJSON: #"{"mon":["push"]}"#,
+                updatedAt: Self.date
             ),
             exerciseNotes: [note()], progressPhotos: [photo()], gymCards: [gymCard()],
             coachInteractions: [coachInteraction()], healthImports: healthImports()
@@ -49,10 +50,10 @@ struct BackupCoverageTests {
     private func routine() -> BackupRoutine {
         BackupRoutine(
             id: UUID(), name: "Legs", notes: "Heavy day", progressionRule: "linear",
-            repRangeLow: 4, repRangeHigh: 6, progressionRuleJSON: #"{"linear":{"incrementKg":5}}"#,
-            createdAt: Self.date, updatedAt: Self.date, sortOrder: 3, isArchived: true,
-            importedFromID: UUID(), symbolName: "figure.strengthtraining.traditional",
-            tint: "teal", exercises: [routineExercise()]
+            repRangeLow: 4, repRangeHigh: 6, rule: .linear(incrementKg: 5),
+            progressionRuleJSON: #"{"linear":{"incrementKg":5}}"#, createdAt: Self.date,
+            updatedAt: Self.date, sortOrder: 3, isArchived: true, importedFromID: UUID(),
+            symbolName: "figure.strengthtraining.traditional", tint: "teal", exercises: [routineExercise()]
         )
     }
 
@@ -60,6 +61,7 @@ struct BackupCoverageTests {
         BackupRoutineExercise(
             order: 1, exerciseSeedID: "Barbell_Squat", exerciseName: "Zercher Squat",
             supersetGroup: 2, restOverrideSeconds: 180, note: "Pause at the bottom",
+            rule: .linear(incrementKg: 2.5), stall: .fullyPopulated,
             progressionRuleJSON: #"{"linear":{"incrementKg":2.5}}"#, stallJSON: #"{"misses":2}"#,
             trainingMaxKg: 140, excludeFromProgression: true, plannedSets: [plannedSet()]
         )
@@ -97,14 +99,11 @@ struct BackupCoverageTests {
         )
     }
 
-    private func measurement() -> BackupBodyMeasurement {
-        BackupBodyMeasurement(id: UUID(), date: Self.date, bodyweightKg: 82.5, source: "health")
-    }
-
     private func equipment() -> BackupEquipmentProfile {
         BackupEquipmentProfile(
             id: UUID(), name: "Home", isActive: true, barKg: 20,
-            availableEquipment: ["barbell"], plateStockKg: [20, 10], plateCounts: [4, 4],
+            availableEquipment: ["barbell"], plateStock: [BackupPlateStock(weightKg: 20, count: 4)],
+            plateStockKg: [20, 10], plateCounts: [4, 4],
             collarsKg: 2.5, createdAt: Self.date, seedKey: "home", restrictsMachines: true,
             availableMachines: ["pullUpBar"]
         )
@@ -301,4 +300,19 @@ struct BackupCoverageTests {
     private static func isLeaf(_ value: Any) -> Bool {
         value is Date || value is UUID || value is String || value is Data
     }
+}
+
+private extension StallState {
+    /// Every field set, since the coverage walk descends into the nested value.
+    static let fullyPopulated = StallState(
+        consecutiveMisses: 2, lastWeightKg: 100, lastWeakestReps: 5, bestWeakestReps: 6,
+        lastTargetSeconds: 40, lastPlanTargetSeconds: 30, lastTargetReps: 8, lastPlanTargetReps: 8,
+        lastTargetSets: 3, lastPlanTargetSets: 3, lastPlanTargetWeightKg: 100, trainingMaxCycle: 1
+    )
+}
+
+private extension BackupBodyMeasurement {
+    static let sample = BackupBodyMeasurement(
+        id: UUID(), date: Date(timeIntervalSince1970: 1_700_000_000), bodyweightKg: 82.5, source: "health"
+    )
 }

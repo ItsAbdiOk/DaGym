@@ -69,8 +69,14 @@ public enum NumberWords {
         return nil
     }
 
+    /// The largest literal the recogniser may hand us. Nothing spoken in a gym is a million of
+    /// anything; beyond it a mis-heard digit string ("99999999999999999999") used to flow into
+    /// `Int(Double)` downstream, which traps above 9.2e18.
+    static let maxLiteral = 1_000_000.0
+
     private static func literalDigits(_ word: String) -> Double? {
         guard let value = Double(word), word.rangeOfCharacter(from: .letters) == nil else { return nil }
+        guard value.isFinite, value.magnitude <= maxLiteral else { return nil }
         return value
     }
 

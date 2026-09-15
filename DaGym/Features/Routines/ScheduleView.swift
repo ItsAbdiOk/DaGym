@@ -35,7 +35,10 @@ struct ScheduleView: View {
         }
         .task { refresh() }
         .sheet(item: $moveRequest) { request in
-            MoveSessionSheet(request: request, calendar: .current, onMove: { performMove(request, to: $0) })
+            MoveSessionSheet(
+                request: request, calendar: preferences.trainingCalendar,
+                onMove: { performMove(request, to: $0) }
+            )
         }
     }
 
@@ -112,14 +115,18 @@ struct ScheduleView: View {
 
     private var orderedWeekdays: [Weekday] { Weekday.ordered(mondayFirst: preferences.weekStartsMonday) }
 
+    /// `preferences.trainingCalendar`, like every other schedule read (`UnitEnvironment`'s
+    /// single-calendar rule): only day arithmetic today, but a "this week" check added here
+    /// against `Calendar.current` would put Sunday in the wrong week for a Monday-start lifter.
     private var weekDates: [Date] {
-        let calendar = Calendar.current
+        let calendar = preferences.trainingCalendar
         let today = calendar.startOfDay(for: Date())
         return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
     }
 
     private func routines(on date: Date) -> [RoutineInfo] {
-        schedule.routineIDs(on: date, calendar: .current).compactMap { id in routines.first { $0.id == id } }
+        schedule.routineIDs(on: date, calendar: preferences.trainingCalendar)
+            .compactMap { id in routines.first { $0.id == id } }
     }
 
     private func refresh() {
@@ -259,10 +266,14 @@ private struct ThisWeekRow: View {
         .frame(minHeight: DGTap.rowHeight)
     }
 
-    private static func dayLabel(_ date: Date) -> String {
+    private static let dayLabelFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE d MMM"
-        return formatter.string(from: date).uppercased()
+        return formatter
+    }()
+
+    private static func dayLabel(_ date: Date) -> String {
+        dayLabelFormatter.string(from: date).uppercased()
     }
 }
 

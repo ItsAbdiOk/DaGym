@@ -64,12 +64,13 @@ struct PlanCodecTests {
         #expect(decoded.appVersion == document.appVersion)
     }
 
-    @Test("formatVersion mismatch throws a typed error")
+    @Test("a file needing a newer reader than this build throws a typed error")
     func formatVersionMismatch() throws {
         let document = sampleDocument()
         let data = try PlanCodec.encode(document)
         var json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         json?["formatVersion"] = PlanDocument.currentFormatVersion + 1
+        json?["minimumReaderVersion"] = PlanDocument.currentFormatVersion + 1
         let mutated = try JSONSerialization.data(withJSONObject: json as Any)
 
         #expect(throws: PlanCodec.CodecError.unsupportedFormatVersion(
@@ -77,6 +78,22 @@ struct PlanCodecTests {
         )) {
             try PlanCodec.decode(mutated)
         }
+    }
+
+    @Test("a newer file without a minimumReaderVersion stamp is rejected; with a readable one it decodes")
+    func minimumReaderVersion() throws {
+        let data = try PlanCodec.encode(sampleDocument())
+        var json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        json?["formatVersion"] = PlanDocument.currentFormatVersion + 1
+        json?.removeValue(forKey: "minimumReaderVersion")
+        let unstamped = try JSONSerialization.data(withJSONObject: json as Any)
+        #expect(throws: PlanCodec.CodecError.self) { try PlanCodec.decode(unstamped) }
+
+        json?["minimumReaderVersion"] = PlanDocument.currentFormatVersion
+        let readable = try JSONSerialization.data(withJSONObject: json as Any)
+        let decoded = try PlanCodec.decode(readable)
+        #expect(decoded.formatVersion == PlanDocument.currentFormatVersion + 1)
+        #expect(decoded.routines.count == sampleDocument().routines.count)
     }
 
     @Test("corrupted JSON throws a decoding error")

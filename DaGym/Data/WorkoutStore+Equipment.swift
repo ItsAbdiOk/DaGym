@@ -130,13 +130,6 @@ extension WorkoutStore {
         )
     }
 
-    /// `Preferences.weightUnit`, read straight from storage. The store has no `Preferences`
-    /// (it outlives and underlies the view tree), and this is only ever the fallback path.
-    var preferredWeightUnit: WeightUnit {
-        let raw = UserDefaults.standard.string(forKey: Preferences.Key.weightUnit) ?? ""
-        return WeightUnit(rawValue: raw) ?? .kg
-    }
-
     /// The plate inventory for a profile, ready for `PlateCalculator`.
     func plateStock(for profile: EquipmentProfileInfo) -> [PlateStock] { profile.plateStock }
 

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Legal screen: renders `Resources/PrivacyPolicy.md` as Markdown.
 struct PrivacyPolicyView: View {
-    @State private var rendered: AttributedString = AttributedString(loadingText)
+    @State private var rendered = AttributedString(loadingText)
 
     private static let loadingText = "Loading privacy policy…"
     private static let fallbackText =

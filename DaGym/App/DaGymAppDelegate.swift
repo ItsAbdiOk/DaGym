@@ -31,8 +31,10 @@ final class DaGymAppDelegate: NSObject, UIApplicationDelegate {
     /// changed nothing about the background observer until the next relaunch.
     let preferences = Preferences()
     /// Kept alive for the life of the process: the observer's `onChange` holds this weakly, so a
-    /// service that goes out of scope would silently stop importing.
-    private var healthSync: HealthSyncService?
+    /// service that goes out of scope would silently stop importing. `AppRootContainer` binds
+    /// this same instance to the store's finish hooks and puts it in the environment, so the
+    /// background observer and Settings read one `lastSyncDate`/authorization state.
+    private(set) var healthSync: HealthSyncService?
 
     func application(
         _ application: UIApplication,

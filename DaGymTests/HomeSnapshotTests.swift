@@ -86,4 +86,62 @@ struct HomeSnapshotTests {
         preferences.weekStartsMonday = false
         #expect(HomeSnapshot.make(store: store, preferences: preferences, now: wednesday).thisWeekCount == 1)
     }
+
+    @Test("the snapshot's routine and next session agree with the store's own answers")
+    func matchesStoreScheduleReads() throws {
+        let store = try makeStore()
+        let preferences = Preferences(suite: makeSuite(#function))
+        let legs = makeRoutine(store, name: "Legs")
+        let push = makeRoutine(store, name: "Push A")
+        let wednesday = Self.wednesday()
+        let calendar = preferences.trainingCalendar
+
+        // No plan yet: the first routine is offered, and nothing is "next".
+        let unplanned = HomeSnapshot.make(store: store, preferences: preferences, now: wednesday)
+        #expect(unplanned.routine?.id == store.todaysRoutine(calendar: calendar, now: wednesday)?.id)
+        #expect(unplanned.routine?.id == legs.id)
+        #expect(unplanned.hasSchedule == false)
+        #expect(unplanned.nextSessionText == nil)
+
+        var schedule = WeeklySchedule()
+        schedule.days[.wednesday] = legs.id
+        schedule.days[.friday] = push.id
+        store.saveSchedule(schedule)
+
+        let planned = HomeSnapshot.make(store: store, preferences: preferences, now: wednesday)
+        #expect(planned.routine?.id == store.todaysRoutine(calendar: calendar, now: wednesday)?.id)
+        #expect(planned.routine?.id == legs.id)
+        let storeNext = store.nextSession(calendar: calendar, now: wednesday)
+        #expect(planned.nextSessionText == HomeSnapshot.nextSessionText(storeNext))
+        #expect(planned.nextSessionText?.hasPrefix("Next: Push A") == true)
+    }
+
+    @Test("the snapshot reads the schedule and the routines once each")
+    func readsScheduleAndRoutinesOnce() throws {
+        let store = try makeStore()
+        let preferences = Preferences(suite: makeSuite(#function))
+        let legs = makeRoutine(store, name: "Legs")
+        var schedule = WeeklySchedule()
+        schedule.days[.wednesday] = legs.id
+        store.saveSchedule(schedule)
+        let now = Self.wednesday()
+        let calendar = preferences.trainingCalendar
+
+        // What the pass delegates to the store unchanged; the snapshot's own reads on top of
+        // these must be exactly two — `schedule()` and `routines()` — where going through
+        // `todaysRoutine()` and `nextSession()` re-fetched both (4 extra) plus a second
+        // `schedule()` for `hasSchedule` and a `routines()` for `hasAnyRoutines` (2 more).
+        var before = store.queryCount
+        _ = store.workoutDates()
+        _ = store.latestBodyMeasurement() // nil here, so no 30-day comparison read follows
+        _ = store.recoveryMap(now: now, calendar: calendar)
+        _ = store.deloadSuggestion(
+            snoozedUntil: nil, weeklyGoal: preferences.weeklyGoal, now: now, calendar: calendar
+        )
+        let delegated = store.queryCount - before
+
+        before = store.queryCount
+        _ = HomeSnapshot.make(store: store, preferences: preferences, now: now)
+        #expect(store.queryCount - before == delegated + 2)
+    }
 }

@@ -1,4 +1,5 @@
 import GymCore
+import OSLog
 import SwiftUI
 
 /// The Consistency screen (plan.md §6.4): current/longest streak, a GitHub-style 12-month
@@ -9,10 +10,14 @@ struct ConsistencyView: View {
 
     @State private var grid: [[DayCell?]] = []
     @State private var monthLabels: [Int: String] = [:]
+    /// Busiest day's minutes, for the "Time" ramp — found once here rather than by every square.
+    @State private var maxMinutes = 0
     @State private var selectedCell: DayCell?
     @State private var shadeBySets = true
     @State private var streak = (current: 0, longest: 0, thisWeekCount: 0)
     @State private var recap: WeeklyRecap?
+
+    private static let signposter = OSSignposter(subsystem: "dev.abdirahmanmohamed.dagym", category: "perf")
 
     var body: some View {
         ZStack {
@@ -22,8 +27,8 @@ struct ConsistencyView: View {
                     header
                     streakTiles
                     HeatmapCard(
-                        grid: grid, monthLabels: monthLabels, shadeBySets: $shadeBySets,
-                        selectedCell: $selectedCell
+                        grid: grid, monthLabels: monthLabels, maxMinutes: maxMinutes,
+                        shadeBySets: $shadeBySets, selectedCell: $selectedCell
                     )
                     if let recap { WeeklyRecapCard(recap: recap, preferences: preferences) }
                 }
@@ -50,9 +55,12 @@ struct ConsistencyView: View {
     }
 
     private func refresh() {
+        let state = Self.signposter.beginInterval("ConsistencyView.refresh")
+        defer { Self.signposter.endInterval("ConsistencyView.refresh", state) }
         let calendar = preferences.trainingCalendar
         let cells = store.consistencyCells(months: 12, calendar: calendar)
         grid = ConsistencyCalendar.monthGrid(cells: cells, calendar: calendar)
+        maxMinutes = cells.map(\.minutes).max() ?? 0
         monthLabels = ConsistencyMonthLabels.labels(for: grid, calendar: calendar)
         streak = Streaks.weekly(
             workoutDates: store.workoutDates(), weeklyGoal: preferences.weeklyGoal, calendar: calendar,
@@ -92,9 +100,10 @@ private struct StreakTile: View {
 
 /// The heatmap card: sets/time toggle, month labels, 7-row × N-column grid, ramp legend and a
 /// tapped-day footnote.
-private struct HeatmapCard: View {
+struct HeatmapCard: View {
     var grid: [[DayCell?]]
     var monthLabels: [Int: String]
+    var maxMinutes: Int
     @Binding var shadeBySets: Bool
     @Binding var selectedCell: DayCell?
 
@@ -205,12 +214,17 @@ private struct HeatmapCard: View {
         return ramp[min(4, max(0, level))]
     }
 
+    private func timeLevel(for cell: DayCell) -> Int {
+        Self.timeLevel(minutes: cell.minutes, maxMinutes: maxMinutes)
+    }
+
     /// A lightweight local quantile ramp for minutes — mirrors `ConsistencyCalendar`'s sets ramp
     /// but doesn't need its own GymCore entry point since it's purely a display alternative.
-    private func timeLevel(for cell: DayCell) -> Int {
-        let maxMinutes = grid.flatMap { $0.compactMap { $0?.minutes } }.max() ?? 0
-        guard cell.minutes > 0, maxMinutes > 0 else { return 0 }
-        let ratio = Double(cell.minutes) / Double(maxMinutes)
+    /// `maxMinutes` is the grid's busiest day, computed once by the owner: finding it here made
+    /// every one of ~370 squares flatten the whole year on every render.
+    static func timeLevel(minutes: Int, maxMinutes: Int) -> Int {
+        guard minutes > 0, maxMinutes > 0 else { return 0 }
+        let ratio = Double(minutes) / Double(maxMinutes)
         if ratio < 0.25 { return 1 }
         if ratio < 0.5 { return 2 }
         if ratio < 0.75 { return 3 }
@@ -232,11 +246,14 @@ private struct HeatmapCard: View {
         }
     }
 
-    private static func footnote(for cell: DayCell) -> String {
+    private static let footnoteFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE d MMM"
-        let day = formatter.string(from: cell.date)
-        return "\(day) · \(cell.sets) sets · \(cell.minutes) min"
+        return formatter
+    }()
+
+    static func footnote(for cell: DayCell) -> String {
+        "\(footnoteFormatter.string(from: cell.date)) · \(cell.sets) sets · \(cell.minutes) min"
     }
 }
 

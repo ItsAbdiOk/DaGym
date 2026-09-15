@@ -57,10 +57,13 @@ struct SettingsView: View {
     }
 
     /// CloudKit mirroring does not expose its outbound queue, so "queued" counts the workouts
-    /// still open on this watch — the only rows guaranteed not to be on the phone yet.
+    /// still open on this watch — the only rows guaranteed not to be on the phone yet. The
+    /// count comes from `refreshHome` rather than a fetch in the body, which re-ran on every
+    /// toggle flip. "iCloud off" says the store opened local-only (see `WatchRoot`).
     private var syncLine: String {
-        let queued = store.store.unfinishedWorkouts().count
+        let queued = store.home.unfinishedCount
         let when = preferences.lastSavedAt.map { $0.formatted(.relative(presentation: .named)) } ?? "never"
-        return queued == 0 ? "\(when) · nothing queued" : "\(when) · \(queued) in progress"
+        let line = queued == 0 ? "\(when) · nothing queued" : "\(when) · \(queued) in progress"
+        return store.isCloudSyncOn ? line : "iCloud off · \(line)"
     }
 }

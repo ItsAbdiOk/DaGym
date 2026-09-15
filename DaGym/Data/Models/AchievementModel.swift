@@ -4,12 +4,12 @@ import SwiftData
 /// One earned milestone tier (`GymCore.Achievement`), persisted so it's never re-celebrated.
 @Model
 final class AchievementModel {
-    var id: UUID = UUID()
+    var id = UUID()
     /// `GymCore.MilestoneDefinition.id`, e.g. "strength.bench" or "workoutCount".
     var milestoneID: String = ""
     /// "bronze" / "silver" / "gold" (`GymCore.Tier.rawValue`).
     var tier: String = "bronze"
-    var earnedAt: Date = Date()
+    var earnedAt = Date()
     /// The workout that earned it, when there is one (a milestone can also cross a threshold
     /// without a fresh workout, e.g. after a Health bodyweight sync).
     var workoutID: UUID?

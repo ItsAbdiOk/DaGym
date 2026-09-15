@@ -91,6 +91,86 @@ struct CoachSectionStateTests {
         #expect(debrief == expected)
         #expect(debrief != nil)
     }
+
+    /// Collects what `DebriefLoader` hands to `onSnapshot`, on the main actor like the card.
+    @MainActor
+    private final class SnapshotCollector {
+        var snapshots: [SessionDebrief] = []
+    }
+
+    @Test("every streamed snapshot is surfaced as it arrives, and the last one is the result")
+    func intermediateSnapshotsAreSurfaced() async {
+        let facts = SessionSummaryFacts(title: "Legs", durationMinutes: 40, volumeKg: 3_000, setsDone: 12)
+        let partial = SessionDebrief(score: 5, wentWell: [], watch: [], tryNext: [])
+        let full = SessionDebrief(score: 8, wentWell: [], watch: [], tryNext: [])
+        let model = StreamingCoachModel(snapshots: [partial, full], finishes: true)
+        let seen = SnapshotCollector()
+
+        let debrief = await DebriefLoader.load(facts: facts, model: model) { seen.snapshots.append($0) }
+
+        #expect(seen.snapshots == [partial, full])
+        #expect(debrief == full)
+    }
+
+    @Test("a stream that stalls after a partial snapshot keeps that partial on timeout, not the rules")
+    func timeoutKeepsLastPartial() async {
+        let facts = SessionSummaryFacts(title: "Legs", durationMinutes: 40, volumeKg: 3_000, setsDone: 12)
+        let partial = SessionDebrief(score: 5, wentWell: [], watch: [], tryNext: [])
+        let model = StreamingCoachModel(snapshots: [partial], finishes: false)
+        let seen = SnapshotCollector()
+
+        let debrief = await DebriefLoader.load(
+            facts: facts, model: model, timeout: .milliseconds(50)
+        ) { seen.snapshots.append($0) }
+
+        #expect(seen.snapshots == [partial])
+        #expect(debrief == partial)
+        #expect(debrief != DebriefValidator.validate(DebriefRules.debrief(from: facts), facts: facts))
+    }
+}
+
+/// A model whose debrief stream yields a scripted list of snapshots and then either finishes
+/// or hangs — the shape of an on-device model that streams a partial and then stalls.
+private final class StreamingCoachModel: CoachLanguageModel, @unchecked Sendable {
+    private let inner = MockCoachModel()
+    private let snapshots: [SessionDebrief]
+    private let finishes: Bool
+    var availability: CoachModelAvailability { inner.availability }
+
+    init(snapshots: [SessionDebrief], finishes: Bool) {
+        self.snapshots = snapshots
+        self.finishes = finishes
+    }
+
+    func debrief(facts: SessionSummaryFacts) -> AsyncThrowingStream<SessionDebrief, Error> {
+        AsyncThrowingStream { continuation in
+            for snapshot in snapshots { continuation.yield(snapshot) }
+            if finishes { continuation.finish() }
+        }
+    }
+
+    func rankSubstitutes(
+        for exercise: SubstitutionCandidate, reason: String, candidates: [ScoredSubstitute],
+        recoveryMap: [Muscle: Double]
+    ) async throws -> [RankedSubstitute] {
+        try await inner.rankSubstitutes(
+            for: exercise, reason: reason, candidates: candidates, recoveryMap: recoveryMap
+        )
+    }
+
+    func draftProgram(
+        template: ProgramTemplate, pool: [SubstitutionCandidate], request: ProgramRequest
+    ) async throws -> ProgramDraft {
+        try await inner.draftProgram(template: template, pool: pool, request: request)
+    }
+
+    func reviewTraining(digest: TrainingDigest) async throws -> [ReviewProposal] {
+        try await inner.reviewTraining(digest: digest)
+    }
+
+    func answer(question: String, tools: any CoachToolAnswering) async throws -> CoachAnswer {
+        try await inner.answer(question: question, tools: tools)
+    }
 }
 
 /// A model whose debrief stream never yields and never finishes — a warming-up or throttled

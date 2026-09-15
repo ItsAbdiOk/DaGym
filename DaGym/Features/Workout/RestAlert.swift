@@ -1,6 +1,9 @@
 import AVFoundation
 import Foundation
 import Synchronization
+import os
+
+private let restLogger = Logger(subsystem: "dev.abdirahmanmohamed.dagym", category: "rest")
 
 /// Synthesized rest-timer bleeps: a short 120 ms tone at 3-2-1 and one longer
 /// 280 ms tone at 0. Runs the audio session as plain `.ambient`, which mixes
@@ -42,7 +45,15 @@ final class RestAlertPlayer {
             engine.connect(node, to: engine.mainMixerNode, format: format)
         }
         engine.prepare()
-        try? engine.start()
+        do {
+            try engine.start()
+        } catch {
+            // Logged, not surfaced: a workout with no bleep is still a workout. But "no rest
+            // sound" is otherwise undiagnosable from a user report.
+            restLogger.error(
+                "Rest bleep engine failed to start: \(error.localizedDescription, privacy: .public)"
+            )
+        }
     }
 
     /// `.ambient` mixes with whatever is playing and stays silent when the ringer switch is
@@ -65,8 +76,16 @@ final class RestAlertPlayer {
         let desired: AVAudioSession.Category = playsOnSilent ? .playback : .ambient
         let session = AVAudioSession.sharedInstance()
         guard session.category != desired else { return }
-        try? session.setCategory(desired)
-        try? session.setActive(true)
+        do {
+            try session.setCategory(desired)
+            try session.setActive(true)
+        } catch {
+            let category = desired.rawValue
+            let reason = error.localizedDescription
+            restLogger.error(
+                "Rest bleep audio session (\(category, privacy: .public)) failed: \(reason, privacy: .public)"
+            )
+        }
     }
 }
 

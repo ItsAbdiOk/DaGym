@@ -95,9 +95,12 @@ extension ProgressionEngine {
                 kind: .plan
             )
         } else if hit {
-            newDuration = max(askedSeconds, durationSeconds) + stepSeconds
+            // One heroic hold (600 s on a 30 s plan) must not prescribe 630 s: the next ask is
+            // capped at the ceiling, where the "add load" branch above takes over.
+            newDuration = min(max(askedSeconds, durationSeconds) + stepSeconds, ceiling)
             reason = PrescriptionReason(
-                title: "+\(stepSeconds)s", body: "You held \(durationSeconds)s last session.", kind: .increase
+                title: "+\(newDuration - askedSeconds)s", body: "You held \(durationSeconds)s last session.",
+                kind: .increase
             )
         } else if misses >= TrainingConstants.linearMissesBeforeDeload, let backedOff {
             newDuration = backedOff

@@ -36,6 +36,22 @@ struct ChangeTokenTests {
         #expect(store.changeToken > before)
     }
 
+    @Test("syncing a set mid-workout bumps the session token, not the change token")
+    func syncBumpsSessionTokenOnly() throws {
+        let store = try makeStore()
+        let routine = makeRoutine(store)
+        let session = store.startWorkout(routineID: routine.id)
+        let change = store.changeToken
+        let sessionToken = store.sessionToken
+
+        session.exercises[0].sets[0].weightKg = 60
+        session.exercises[0].sets[0].isDone = true
+        store.sync(session: session)
+
+        #expect(store.sessionToken > sessionToken, "a logged set must redraw the active workout")
+        #expect(store.changeToken == change, "a logged set must not refresh every other tab")
+    }
+
     @Test("saving the schedule, a routine and a photo each bump the token; a no-op save doesn't")
     func savesBump() throws {
         let store = try makeStore()

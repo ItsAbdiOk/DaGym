@@ -50,19 +50,30 @@ public enum DistanceUnit: String, CaseIterable, Codable, Sendable {
 /// answers nil (never 0 or infinity) when either is missing, so a row with a distance typed in
 /// but no time yet shows "–" rather than "0:00 /km".
 public enum CardioPace {
-    /// Seconds per one `unit` of distance, or nil when either side is zero or negative.
+    /// The shortest distance a pace is computed over. A sub-metre distance — a "0.000001 km"
+    /// cell an import let through — produced a finite but absurd pace ("277777:46 /km") that
+    /// then reached the pace string and the fastest-pace PR comparison.
+    public static let minimumDistanceMeters = 1.0
+
+    /// The most whole seconds a pace or hold is ever rendered as (a week). Keeps `Int(_:)`
+    /// off values that could trap, whatever upstream let through.
+    static let maxClockSeconds = 7 * 24 * 3600
+
+    /// Seconds per one `unit` of distance, or nil when there is no time or the distance is
+    /// under `minimumDistanceMeters`.
     public static func secondsPerUnit(
         distanceMeters: Double, durationSeconds: Int, unit: DistanceUnit
     ) -> Double? {
-        guard distanceMeters > 0, durationSeconds > 0 else { return nil }
+        guard distanceMeters >= minimumDistanceMeters, durationSeconds > 0 else { return nil }
         return Double(durationSeconds) / unit.display(meters: distanceMeters)
     }
 
-    /// Distance units per hour, or nil when either side is zero or negative.
+    /// Distance units per hour, or nil when there is no time or the distance is under
+    /// `minimumDistanceMeters`.
     public static func unitsPerHour(
         distanceMeters: Double, durationSeconds: Int, unit: DistanceUnit
     ) -> Double? {
-        guard distanceMeters > 0, durationSeconds > 0 else { return nil }
+        guard distanceMeters >= minimumDistanceMeters, durationSeconds > 0 else { return nil }
         return unit.display(meters: distanceMeters) / (Double(durationSeconds) / 3600)
     }
 
@@ -71,7 +82,14 @@ public enum CardioPace {
         distanceMeters: Double, durationSeconds: Int, unit: DistanceUnit
     ) -> String? {
         secondsPerUnit(distanceMeters: distanceMeters, durationSeconds: durationSeconds, unit: unit)
-            .map { "\(clock(Int($0.rounded()))) /\(unit.symbol)" }
+            .map { "\(clock(wholeSeconds($0))) /\(unit.symbol)" }
+    }
+
+    /// `seconds` rounded to a whole number and clamped to `0…maxClockSeconds`; a NaN reads as 0
+    /// and an infinity clamps like any other out-of-range value.
+    public static func wholeSeconds(_ seconds: Double) -> Int {
+        guard !seconds.isNaN else { return 0 }
+        return Int(min(max(seconds.rounded(), 0), Double(maxClockSeconds)))
     }
 
     /// "11.8 km/h". Nil when there is no speed.

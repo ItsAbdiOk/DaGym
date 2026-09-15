@@ -4,6 +4,26 @@ import WidgetKit
 struct WatchSnapshotEntry: TimelineEntry {
     var date: Date
     var snapshot: WatchSnapshot
+
+    /// The provider's timeline, here (compiled into the app too) so it can be tested: now,
+    /// then the idle card at the rest's end, or — idle — the snapshot as it should read
+    /// tomorrow morning. See `WatchSnapshotProvider` for the reload policy's reasoning.
+    static func timeline(
+        for snapshot: WatchSnapshot, now: Date, calendar: Calendar = .current
+    ) -> Timeline<WatchSnapshotEntry> {
+        var entries = [WatchSnapshotEntry(date: now, snapshot: snapshot)]
+        if let rest = snapshot.rest {
+            var idle = snapshot
+            idle.rest = nil
+            entries.append(WatchSnapshotEntry(date: rest.endDate, snapshot: idle))
+            return Timeline(entries: entries, policy: .after(rest.endDate))
+        }
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) {
+            let morning = snapshot.expiring(at: tomorrow, calendar: calendar)
+            if morning != snapshot { entries.append(WatchSnapshotEntry(date: tomorrow, snapshot: morning)) }
+        }
+        return Timeline(entries: entries, policy: .never)
+    }
 }
 
 /// The one view behind every family. Resting takes over each of them; otherwise the circular
@@ -19,6 +39,9 @@ struct ComplicationView: View {
     var isSmartStack = false
 
     private var snapshot: WatchSnapshot { entry.snapshot }
+    /// The rest's end, never before now: `Text(timerInterval:)` traps on a range that runs
+    /// backwards, and the provider's guard against a stale rest is one process away.
+    private func restEnd(_ rest: WatchSnapshot.Rest) -> Date { max(rest.endDate, Date.now) }
     /// The spec's coral, for the untinted faces; `widgetAccentable` hands it to a tinted one.
     private let coral = Color(red: 0xFF / 255, green: 0x6B / 255, blue: 0x57 / 255)
 
@@ -35,11 +58,12 @@ struct ComplicationView: View {
 
     @ViewBuilder private var circular: some View {
         if let rest = snapshot.rest {
-            let start = rest.endDate.addingTimeInterval(-Double(rest.totalSeconds))
-            ProgressView(timerInterval: start...rest.endDate, countsDown: true) {
+            let end = restEnd(rest)
+            let start = end.addingTimeInterval(-Double(max(rest.totalSeconds, 0)))
+            ProgressView(timerInterval: start...end, countsDown: true) {
                 EmptyView()
             } currentValueLabel: {
-                Text(timerInterval: Date.now...rest.endDate, countsDown: true)
+                Text(timerInterval: Date.now...end, countsDown: true)
                     .font(.system(size: 13, weight: .semibold).monospacedDigit())
             }
             .progressViewStyle(.circular)
@@ -68,7 +92,7 @@ struct ComplicationView: View {
         if let rest = snapshot.rest {
             // The corner's inner area is ~30 pt on the 40 mm: "1:32" must shrink rather than
             // truncate to "1:…".
-            Text(timerInterval: Date.now...rest.endDate, countsDown: true)
+            Text(timerInterval: Date.now...restEnd(rest), countsDown: true)
                 .font(.system(size: 17, weight: .semibold).monospacedDigit())
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
@@ -101,7 +125,7 @@ struct ComplicationView: View {
                         .foregroundStyle(.secondary)
                 }
                 // 26 pt on the 80 pt card; 22 on a face's ~47–56 pt rectangular slot.
-                Text(timerInterval: Date.now...rest.endDate, countsDown: true)
+                Text(timerInterval: Date.now...restEnd(rest), countsDown: true)
                     .font(.system(size: isSmartStack ? 26 : 22, weight: .bold).monospacedDigit())
                     .foregroundStyle(coral)
                 Text("next \(rest.nextLabel)").font(.system(size: 12)).lineLimit(1)

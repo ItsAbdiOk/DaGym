@@ -9,10 +9,21 @@ import Foundation
 /// user has personalized (favorited, or changed rest/bar/increment),
 /// referenced by `seedID` so a re-import matches the built-in library
 /// instead of duplicating it.
-public struct BackupDocument: Codable, Sendable {
-    public static let currentFormatVersion = 1
+///
+/// Format history: 1 was the launch shape; every section since (programs, achievements,
+/// schedule, notes, photos, gym cards, coach interactions, health imports, `machine`,
+/// `inclinePercent`, `restrictsMachines`…) was added as an optional field without a bump.
+/// Format 2 adds `minimumReaderVersion` and `sections`, and replaces the JSON-in-JSON strings
+/// (`progressionRuleJSON`, `stallJSON`, `scheduleJSON`) and the parallel plate arrays with
+/// nested values; the old fields are still read.
+public struct BackupDocument: VersionedDocument, Sendable {
+    public static let currentFormatVersion = 2
+    /// A format-2 reader is needed: format 1 rejected any newer file outright, so nothing older
+    /// could read this anyway. Bump only when a field the app can't restore without is added.
+    public static let minimumReaderVersion = 2
 
     public var formatVersion: Int
+    public var minimumReaderVersion: Int?
     public var exportedAt: Date
     public var appVersion: String
 
@@ -33,9 +44,15 @@ public struct BackupDocument: Codable, Sendable {
     public var gymCards: [BackupGymCard]?
     public var coachInteractions: [BackupCoachInteraction]?
     public var healthImports: BackupHealthImport?
+    /// The names of every section this file carries — the required ones plus whichever optional
+    /// ones are non-nil — so a reader can tell "this file has no photos" from "this file has a
+    /// section I don't know about" (`unreadableSections`). Stamped by `init` from the fields;
+    /// nil in format-1 files.
+    public var sections: [String]?
 
     public init(
         formatVersion: Int = BackupDocument.currentFormatVersion,
+        minimumReaderVersion: Int? = BackupDocument.minimumReaderVersion,
         exportedAt: Date,
         appVersion: String,
         exercises: [BackupExercise] = [],
@@ -54,6 +71,7 @@ public struct BackupDocument: Codable, Sendable {
         healthImports: BackupHealthImport? = nil
     ) {
         self.formatVersion = formatVersion
+        self.minimumReaderVersion = minimumReaderVersion
         self.exportedAt = exportedAt
         self.appVersion = appVersion
         self.exercises = exercises
@@ -70,378 +88,46 @@ public struct BackupDocument: Codable, Sendable {
         self.gymCards = gymCards
         self.coachInteractions = coachInteractions
         self.healthImports = healthImports
+        sections = Self.requiredSections + presentOptionalSections
     }
-}
 
-/// A custom exercise, or an override (favourite/settings) for a seeded one.
-public struct BackupExercise: Codable, Sendable, Identifiable {
-    public var id: UUID
-    /// Non-nil for a seeded exercise override; nil for a fully custom exercise.
-    public var seedID: String?
-    public var name: String
-    public var primaryMuscles: [String]
-    public var secondaryMuscles: [String]
-    public var equipment: String
-    public var mechanic: String?
-    public var loggingStyle: String
-    public var isPerSide: Bool
-    public var isCustom: Bool
-    public var isFavorite: Bool
-    public var barType: String?
-    public var incrementKg: Double
-    public var restSeconds: Int
-    public var instructions: String
-    public var notes: String
-    public var createdAt: Date
-    /// `ExerciseModel.machine` — the `Machine` raw value a custom exercise (or a seeded row the
-    /// lifter re-tagged) needs. Absent from backups written before stations existed.
-    public var machine: String?
+    // MARK: - Sections
 
-    public init(
-        id: UUID, seedID: String? = nil, name: String, primaryMuscles: [String] = [],
-        secondaryMuscles: [String] = [], equipment: String = "other", mechanic: String? = nil,
-        loggingStyle: String = "weightReps", isPerSide: Bool = false, isCustom: Bool = false,
-        isFavorite: Bool = false, barType: String? = nil, incrementKg: Double = 2.5,
-        restSeconds: Int = 150, instructions: String = "", notes: String = "",
-        createdAt: Date = Date(), machine: String? = nil
-    ) {
-        self.id = id
-        self.seedID = seedID
-        self.name = name
-        self.primaryMuscles = primaryMuscles
-        self.secondaryMuscles = secondaryMuscles
-        self.equipment = equipment
-        self.mechanic = mechanic
-        self.loggingStyle = loggingStyle
-        self.isPerSide = isPerSide
-        self.isCustom = isCustom
-        self.isFavorite = isFavorite
-        self.barType = barType
-        self.incrementKg = incrementKg
-        self.restSeconds = restSeconds
-        self.instructions = instructions
-        self.notes = notes
-        self.createdAt = createdAt
-        self.machine = machine
+    /// Sections every file carries.
+    public static let requiredSections = [
+        "exercises", "routines", "workouts", "bodyMeasurements", "equipmentProfiles", "preferences"
+    ]
+
+    /// Sections this build knows how to read but a file may leave out.
+    public static let optionalSections = [
+        "programs", "achievements", "schedule", "exerciseNotes", "progressPhotos", "gymCards",
+        "coachInteractions", "healthImports"
+    ]
+
+    /// The optional sections this document actually carries.
+    public var presentOptionalSections: [String] {
+        let present: [(String, Bool)] = [
+            ("programs", programs != nil), ("achievements", achievements != nil),
+            ("schedule", schedule != nil), ("exerciseNotes", exerciseNotes != nil),
+            ("progressPhotos", progressPhotos != nil), ("gymCards", gymCards != nil),
+            ("coachInteractions", coachInteractions != nil), ("healthImports", healthImports != nil)
+        ]
+        return present.filter(\.1).map(\.0)
     }
-}
 
-public struct BackupPlannedSet: Codable, Sendable {
-    public var order: Int
-    public var kind: String
-    public var targetReps: Int?
-    public var targetRepsHigh: Int?
-    public var targetWeightKg: Double?
-    public var targetRPE: Double?
-    public var targetSeconds: Int?
-    /// Cardio target, canonical metres. Absent in files written before it existed.
-    public var targetDistanceMeters: Double?
-
-    public init(
-        order: Int, kind: String, targetReps: Int? = nil, targetRepsHigh: Int? = nil,
-        targetWeightKg: Double? = nil, targetRPE: Double? = nil, targetSeconds: Int? = nil,
-        targetDistanceMeters: Double? = nil
-    ) {
-        self.order = order
-        self.kind = kind
-        self.targetReps = targetReps
-        self.targetRepsHigh = targetRepsHigh
-        self.targetWeightKg = targetWeightKg
-        self.targetRPE = targetRPE
-        self.targetSeconds = targetSeconds
-        self.targetDistanceMeters = targetDistanceMeters
+    /// Optional sections this build reads that the file doesn't carry — an older export, or one
+    /// that deliberately left photos out. Nothing was lost by *this* reader; the preview can say
+    /// what won't be restored.
+    public var absentSections: [String] {
+        let present = Set(presentOptionalSections)
+        return Self.optionalSections.filter { !present.contains($0) }
     }
-}
 
-/// One exercise slot inside a `BackupRoutine`. Resolved back to an exercise
-/// on import by `exerciseSeedID` first, then by `exerciseName`
-/// (plan §6.8: "importing merges, never overwrites").
-public struct BackupRoutineExercise: Codable, Sendable {
-    public var order: Int
-    public var exerciseSeedID: String?
-    public var exerciseName: String
-    public var supersetGroup: Int?
-    public var restOverrideSeconds: Int?
-    public var note: String
-    /// Opaque JSON for a `GymCore.ProgressionRule` override on this exercise; nil defers to the
-    /// routine's rule. Mirrors `DaGym.RoutineExerciseModel.progressionRuleJSON`.
-    public var progressionRuleJSON: String?
-    /// Opaque JSON for the engine's per-exercise memory (`GymCore.StallState`), so a restore
-    /// doesn't reset stall/deload counters; nil (never persisted, or an export from before this
-    /// field existed) means "no memory yet", the same as `DaGym.RoutineExerciseModel.stallJSON`'s
-    /// `"{}"` default. Optional (rather than defaulting to `"{}"` outright) so decoding a backup
-    /// exported before this field existed doesn't fail on a missing key.
-    public var stallJSON: String?
-    /// The rolling training max for `.percentOfTrainingMax`, nil until first set. Mirrors
-    /// `DaGym.RoutineExerciseModel.trainingMaxKg`.
-    public var trainingMaxKg: Double?
-    /// Planned-deload flag on the slot; nil (older export) means false.
-    public var excludeFromProgression: Bool?
-    public var plannedSets: [BackupPlannedSet]
-
-    public init(
-        order: Int, exerciseSeedID: String? = nil, exerciseName: String, supersetGroup: Int? = nil,
-        restOverrideSeconds: Int? = nil, note: String = "", progressionRuleJSON: String? = nil,
-        stallJSON: String? = nil, trainingMaxKg: Double? = nil, excludeFromProgression: Bool? = nil,
-        plannedSets: [BackupPlannedSet] = []
-    ) {
-        self.order = order
-        self.exerciseSeedID = exerciseSeedID
-        self.exerciseName = exerciseName
-        self.supersetGroup = supersetGroup
-        self.restOverrideSeconds = restOverrideSeconds
-        self.note = note
-        self.progressionRuleJSON = progressionRuleJSON
-        self.stallJSON = stallJSON
-        self.trainingMaxKg = trainingMaxKg
-        self.excludeFromProgression = excludeFromProgression
-        self.plannedSets = plannedSets
-    }
-}
-
-public struct BackupRoutine: Codable, Sendable, Identifiable {
-    public var id: UUID
-    public var name: String
-    public var notes: String
-    public var progressionRule: String
-    public var repRangeLow: Int
-    public var repRangeHigh: Int
-    /// Opaque JSON for the routine-level `GymCore.ProgressionRule`; nil means the legacy
-    /// `progressionRule` name is authoritative.
-    public var progressionRuleJSON: String?
-    public var createdAt: Date?
-    public var updatedAt: Date?
-    public var sortOrder: Int
-    public var isArchived: Bool?
-    /// Stable identity for starter/shared routines so a re-import merges instead of duplicating.
-    public var importedFromID: UUID?
-    /// Card glyph: an SF Symbol name and a tint key. Nil in files written before the glyph
-    /// existed; the importer falls back to the app's defaults.
-    public var symbolName: String?
-    public var tint: String?
-    public var exercises: [BackupRoutineExercise]
-
-    public init(
-        id: UUID, name: String, notes: String = "", progressionRule: String = "doubleProgression",
-        repRangeLow: Int = 6, repRangeHigh: Int = 8, progressionRuleJSON: String? = nil,
-        createdAt: Date? = nil, updatedAt: Date? = nil, sortOrder: Int = 0, isArchived: Bool? = nil,
-        importedFromID: UUID? = nil, symbolName: String? = nil, tint: String? = nil,
-        exercises: [BackupRoutineExercise] = []
-    ) {
-        self.id = id
-        self.name = name
-        self.notes = notes
-        self.progressionRule = progressionRule
-        self.repRangeLow = repRangeLow
-        self.repRangeHigh = repRangeHigh
-        self.progressionRuleJSON = progressionRuleJSON
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
-        self.sortOrder = sortOrder
-        self.isArchived = isArchived
-        self.importedFromID = importedFromID
-        self.symbolName = symbolName
-        self.tint = tint
-        self.exercises = exercises
-    }
-}
-
-public struct BackupSetLog: Codable, Sendable, Identifiable {
-    public var id: UUID
-    public var order: Int
-    public var kind: String
-    public var weightKg: Double
-    public var reps: Int
-    public var durationSeconds: Int?
-    public var distanceMeters: Double?
-    public var assistanceKg: Double?
-    public var rpe: Double?
-    public var isCompleted: Bool
-    public var completedAt: Date?
-    public var prescriptionReason: String
-    /// Treadmill/stair incline for a cardio set. Absent in files written before it existed.
-    public var inclinePercent: Double?
-
-    public init(
-        id: UUID, order: Int, kind: String, weightKg: Double = 0, reps: Int = 0,
-        durationSeconds: Int? = nil, distanceMeters: Double? = nil, assistanceKg: Double? = nil,
-        rpe: Double? = nil, isCompleted: Bool = false, completedAt: Date? = nil,
-        prescriptionReason: String = "", inclinePercent: Double? = nil
-    ) {
-        self.id = id
-        self.order = order
-        self.kind = kind
-        self.weightKg = weightKg
-        self.reps = reps
-        self.durationSeconds = durationSeconds
-        self.distanceMeters = distanceMeters
-        self.assistanceKg = assistanceKg
-        self.rpe = rpe
-        self.isCompleted = isCompleted
-        self.completedAt = completedAt
-        self.prescriptionReason = prescriptionReason
-        self.inclinePercent = inclinePercent
-    }
-}
-
-public struct BackupWorkoutExercise: Codable, Sendable, Identifiable {
-    public var id: UUID
-    public var order: Int
-    public var supersetGroup: Int?
-    public var note: String
-    public var wasSubstitution: Bool
-    /// Whether this exercise was a detector-planned deload rather than a normal session — it must
-    /// stay excluded from progression history after a restore. Optional so decoding a backup
-    /// exported before this field existed doesn't fail on a missing key; nil means "not a planned
-    /// deload", same as `DaGym.WorkoutExerciseModel.wasPlannedDeload`'s `false` default.
-    public var wasPlannedDeload: Bool?
-    /// Mirrors `DaGym.WorkoutExerciseModel.excludedFromProgression` — a rehab or accessory session
-    /// that must stay out of progression history after a restore. Optional: nil (an older export)
-    /// means false.
-    public var excludedFromProgression: Bool?
-    /// Mirrors `DaGym.WorkoutExerciseModel.routineID`, so a session built from more than one
-    /// routine still groups by routine in History after a restore. Optional for the same reason.
-    public var routineID: UUID?
-    public var exerciseSeedID: String?
-    public var exerciseName: String
-    public var sets: [BackupSetLog]
-
-    public init(
-        id: UUID, order: Int, supersetGroup: Int? = nil, note: String = "",
-        wasSubstitution: Bool = false, wasPlannedDeload: Bool? = nil,
-        excludedFromProgression: Bool? = nil, routineID: UUID? = nil, exerciseSeedID: String? = nil,
-        exerciseName: String, sets: [BackupSetLog] = []
-    ) {
-        self.id = id
-        self.order = order
-        self.supersetGroup = supersetGroup
-        self.note = note
-        self.wasSubstitution = wasSubstitution
-        self.wasPlannedDeload = wasPlannedDeload
-        self.excludedFromProgression = excludedFromProgression
-        self.routineID = routineID
-        self.exerciseSeedID = exerciseSeedID
-        self.exerciseName = exerciseName
-        self.sets = sets
-    }
-}
-
-/// A performed session. Kept as its own id so re-importing the same file
-/// can skip workouts already present (`BackupService`).
-public struct BackupWorkout: Codable, Sendable, Identifiable {
-    public var id: UUID
-    public var title: String
-    public var startedAt: Date
-    public var endedAt: Date?
-    public var notes: String
-    public var isBackfilled: Bool
-    public var routineID: UUID?
-    public var routineName: String
-    public var bodyweightKg: Double?
-    public var sourceDevice: String
-    /// Apple Health workout identifier, so a restore doesn't write the session to Health twice.
-    public var healthKitID: String?
-    public var exercises: [BackupWorkoutExercise]
-
-    public init(
-        id: UUID, title: String, startedAt: Date, endedAt: Date? = nil, notes: String = "",
-        isBackfilled: Bool = false, routineID: UUID? = nil, routineName: String = "",
-        bodyweightKg: Double? = nil, sourceDevice: String = "iPhone", healthKitID: String? = nil,
-        exercises: [BackupWorkoutExercise] = []
-    ) {
-        self.id = id
-        self.title = title
-        self.startedAt = startedAt
-        self.endedAt = endedAt
-        self.notes = notes
-        self.isBackfilled = isBackfilled
-        self.routineID = routineID
-        self.routineName = routineName
-        self.bodyweightKg = bodyweightKg
-        self.sourceDevice = sourceDevice
-        self.healthKitID = healthKitID
-        self.exercises = exercises
-    }
-}
-
-public struct BackupBodyMeasurement: Codable, Sendable, Identifiable {
-    public var id: UUID
-    public var date: Date
-    public var bodyweightKg: Double?
-    public var source: String
-
-    public init(id: UUID, date: Date, bodyweightKg: Double? = nil, source: String = "manual") {
-        self.id = id
-        self.date = date
-        self.bodyweightKg = bodyweightKg
-        self.source = source
-    }
-}
-
-public struct BackupProgramWeek: Codable, Sendable, Identifiable {
-    public var id: UUID
-    public var index: Int
-    public var kind: String
-
-    public init(id: UUID, index: Int, kind: String) {
-        self.id = id
-        self.index = index
-        self.kind = kind
-    }
-}
-
-/// A multi-week program and which routines it cycles through.
-public struct BackupProgram: Codable, Sendable, Identifiable {
-    public var id: UUID
-    public var name: String
-    public var weeks: Int
-    public var startedAt: Date?
-    public var completedAt: Date?
-    public var isActive: Bool
-    public var routineIDs: [UUID]
-    public var createdAt: Date
-    public var programWeeks: [BackupProgramWeek]
-
-    public init(
-        id: UUID, name: String, weeks: Int, startedAt: Date? = nil, completedAt: Date? = nil,
-        isActive: Bool = false, routineIDs: [UUID] = [], createdAt: Date = Date(),
-        programWeeks: [BackupProgramWeek] = []
-    ) {
-        self.id = id
-        self.name = name
-        self.weeks = weeks
-        self.startedAt = startedAt
-        self.completedAt = completedAt
-        self.isActive = isActive
-        self.routineIDs = routineIDs
-        self.createdAt = createdAt
-        self.programWeeks = programWeeks
-    }
-}
-
-public struct BackupAchievement: Codable, Sendable, Identifiable {
-    public var id: UUID
-    public var milestoneID: String
-    public var tier: String
-    public var earnedAt: Date
-    public var workoutID: UUID?
-
-    public init(id: UUID, milestoneID: String, tier: String, earnedAt: Date, workoutID: UUID? = nil) {
-        self.id = id
-        self.milestoneID = milestoneID
-        self.tier = tier
-        self.earnedAt = earnedAt
-        self.workoutID = workoutID
-    }
-}
-
-/// The weekly schedule as the app stores it (opaque JSON), newest row only.
-public struct BackupSchedule: Codable, Sendable {
-    public var scheduleJSON: String
-    public var updatedAt: Date
-
-    public init(scheduleJSON: String, updatedAt: Date) {
-        self.scheduleJSON = scheduleJSON
-        self.updatedAt = updatedAt
+    /// Sections the file says it carries that this build doesn't know — a newer export restored
+    /// on an older app. Those keys were dropped on decode; this is the list the user should see.
+    /// Empty for a format-1 file, which carries no `sections` stamp.
+    public var unreadableSections: [String] {
+        let known = Set(Self.requiredSections + Self.optionalSections)
+        return (sections ?? []).filter { !known.contains($0) }
     }
 }

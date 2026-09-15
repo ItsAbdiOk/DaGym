@@ -48,8 +48,7 @@ enum SampleDataSeeder {
     /// not sample-only, and stay seeded regardless.
     static func clear(store: WorkoutStore, preferences: Preferences) {
         let predicate = #Predicate<WorkoutModel> { $0.sourceDevice == "sample" }
-        let models = (try? store.context.fetch(FetchDescriptor(predicate: predicate))) ?? []
-        for model in models { store.context.delete(model) }
+        for model in store.fetch(FetchDescriptor(predicate: predicate)) { store.context.delete(model) }
         store.save()
         store.rebuildPersonalRecords()
         preferences.sampleDataMode = false
@@ -80,6 +79,7 @@ enum SampleDataSeeder {
                 store.context.insert(set)
             }
         }
+        workout.stampTotals()
     }
 
     /// A gentle, plausible progression on the routine's own plan: every working set it

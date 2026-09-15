@@ -6,12 +6,23 @@
 #
 #   scripts/screenshots.sh [--skip-build] [--only iphone|watch] [--appearance light|dark]
 #
-# Env: IPHONE_UDID, WATCH_UDID, OUT (output root), DERIVED (derived data path).
+# Env: IPHONE_UDID, WATCH_UDID (default: resolved by name via scripts/lib/sim.sh — the 6.9"
+# iPhone 17 Pro Max and the 44 mm Apple Watch SE, the App Store's required sizes), IPHONE_NAME,
+# WATCH_NAME, OUT (output root), DERIVED (derived data path).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-IPHONE_UDID="${IPHONE_UDID:-4748921C-4155-4CDC-BD8F-EEFCC9719CB1}"   # iPhone 17 Pro Max, iOS 27
-WATCH_UDID="${WATCH_UDID:-297DE1E6-04CE-4BD1-B911-01B7179DDBA5}"     # Apple Watch SE 44 mm
+. "$ROOT/scripts/lib/sim.sh"
+IPHONE_NAME="${IPHONE_NAME:-iPhone 17 Pro Max}"
+WATCH_NAME="${WATCH_NAME:-Apple Watch SE 44mm (2nd gen)}"
+if [[ -z "${IPHONE_UDID:-}" ]]; then
+    info=$(sim_resolve_by_name "$IPHONE_NAME") || { echo "no simulator named \"$IPHONE_NAME\"" >&2; exit 1; }
+    IPHONE_UDID=$(sim_udid "$info")
+fi
+if [[ -z "${WATCH_UDID:-}" ]]; then
+    info=$(sim_resolve_watch "$WATCH_NAME") || { echo "no simulator named \"$WATCH_NAME\"" >&2; exit 1; }
+    WATCH_UDID=$(sim_udid "$info")
+fi
 OUT="${OUT:-$ROOT/build/appstore}"
 DERIVED="${DERIVED:-$ROOT/build/DerivedData-screenshots}"
 BUNDLE="dev.abdirahmanmohamed.dagym"

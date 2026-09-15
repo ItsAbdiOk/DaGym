@@ -22,4 +22,13 @@ struct EffortTests {
         #expect(Effort(rpe: 2).rpe == 5)
         #expect(Effort(rpe: 12).rpe == 10)
     }
+
+    @Test("the scale's floor is one constant, and RPE display never traps")
+    func floorConstant() {
+        #expect(Effort.minimumRPE == 5)
+        #expect(Effort(rpe: 3).rpe == Effort.minimumRPE)
+        #expect(Effort(rpe: .nan).rpe.isFinite)
+        #expect(Effort(rpe: 8).displayValue(scale: .rpe) == "8")
+        #expect(Effort(rpe: 8.5).displayValue(scale: .rpe) == "8.5")
+    }
 }

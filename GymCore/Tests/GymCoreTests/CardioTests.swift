@@ -40,6 +40,18 @@ struct CardioTests {
         #expect(CardioPace.unitsPerHour(distanceMeters: -5, durationSeconds: 10, unit: .km) == nil)
     }
 
+    @Test("a sub-metre distance has no pace, and whole seconds are clamped rather than trapping")
+    func subMetreDistanceHasNoPace() {
+        #expect(CardioPace.secondsPerUnit(distanceMeters: 0.001, durationSeconds: 300, unit: .km) == nil)
+        #expect(CardioPace.unitsPerHour(distanceMeters: 0.5, durationSeconds: 300, unit: .km) == nil)
+        #expect(CardioPace.formatPace(distanceMeters: 0.001, durationSeconds: 300, unit: .km) == nil)
+        #expect(CardioPace.secondsPerUnit(distanceMeters: 1, durationSeconds: 300, unit: .km) == 300_000)
+        #expect(CardioPace.wholeSeconds(.nan) == 0)
+        #expect(CardioPace.wholeSeconds(.infinity) == CardioPace.maxClockSeconds)
+        #expect(CardioPace.wholeSeconds(-5) == 0)
+        #expect(CardioPace.wholeSeconds(305.6) == 306)
+    }
+
     @Test("the clock grows an hours field past 60 minutes")
     func clock() {
         #expect(CardioPace.clock(1530) == "25:30")

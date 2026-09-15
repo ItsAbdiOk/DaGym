@@ -66,6 +66,10 @@ enum GymCardSymbology: String, CaseIterable, Sendable {
 /// stored. Output is crisp at any size: the generator's tiny bitmap is scaled with nearest-
 /// neighbour sampling so modules stay square and scanners keep reading it.
 enum BarcodeRenderer {
+    /// One shared context: creating a `CIContext` sets up a Metal pipeline (tens of ms), and it
+    /// is safe to reuse from any thread.
+    static let context = CIContext(options: [.useSoftwareRenderer: false])
+
     /// A black-on-white code, or nil when Core Image can't encode the payload (an empty string,
     /// bytes Code 128 can't carry).
     static func image(value: String, symbology: GymCardSymbology, scale: CGFloat = 8) -> UIImage? {
@@ -80,7 +84,6 @@ enum BarcodeRenderer {
         }
         guard let output = filter.outputImage else { return nil }
         let scaled = output.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        let context = CIContext(options: [.useSoftwareRenderer: false])
         guard let cgImage = context.createCGImage(scaled, from: scaled.extent) else { return nil }
         return UIImage(cgImage: cgImage)
     }

@@ -157,6 +157,28 @@ struct TimedSetRow: View {
     }
 }
 
+/// Shows `TimedHoldCard` while `session.timedHold` is this entry's, the plain card otherwise.
+/// Same isolation idea as `RestPillSection`: the hold ticks once a second, and only this slot
+/// reads it.
+struct HoldAwareCard<Card: View>: View {
+    var session: WorkoutSession
+    var entry: WorkoutExerciseEntry
+    var onPauseResume: () -> Void
+    var onStop: () -> Void
+    @ViewBuilder var card: () -> Card
+
+    var body: some View {
+        if let hold = session.timedHold, hold.exerciseID == entry.id {
+            TimedHoldCard(
+                exerciseName: entry.exercise.name, hold: hold, isCardio: entry.isCardio,
+                onPauseResume: onPauseResume, onStop: onStop
+            )
+        } else {
+            card()
+        }
+    }
+}
+
 #Preview {
     TimedHoldCard(
         exerciseName: "Plank",

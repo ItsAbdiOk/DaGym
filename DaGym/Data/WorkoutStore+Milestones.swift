@@ -17,12 +17,17 @@ extension WorkoutStore {
     /// `weeklyGoal` comes from `Preferences.weeklyGoal` and `calendar` from
     /// `Preferences.trainingCalendar` — the store itself doesn't read preferences, so every
     /// caller passes both explicitly.
-    func milestoneState(weeklyGoal: Int, calendar: Calendar = .current) -> MilestoneState {
-        let dates = workoutDates()
+    ///
+    /// `finishedWorkouts` (newest first, this workout included) lets `finish` hand over the
+    /// list it already read rather than have the dates and lifetime totals fetched again.
+    func milestoneState(
+        weeklyGoal: Int, calendar: Calendar = .current, finishedWorkouts: [WorkoutModel]? = nil
+    ) -> MilestoneState {
+        let dates = workoutDates(finishedWorkouts: finishedWorkouts)
         let streak = Streaks.weekly(
             workoutDates: dates, weeklyGoal: weeklyGoal, calendar: calendar, now: Date()
         )
-        let stats = lifetimeStats()
+        let stats = lifetimeStats(finishedWorkouts: finishedWorkouts)
         return MilestoneState(
             workoutCount: stats.workouts, streakWeeks: streak.longest, lifetimeTonnageKg: stats.volumeKg,
             consistentWeeks: consistentWeekCount(dates: dates, weeklyGoal: weeklyGoal, calendar: calendar),
@@ -35,9 +40,12 @@ extension WorkoutStore {
     /// only the celebration animation that's gated separately, by `Milestones.isCelebrationWorthy`.
     @discardableResult
     func evaluateMilestones(
-        for workout: WorkoutModel, weeklyGoal: Int, calendar: Calendar = .current, unit: WeightUnit = .kg
+        for workout: WorkoutModel, weeklyGoal: Int, calendar: Calendar = .current, unit: WeightUnit = .kg,
+        finishedWorkouts: [WorkoutModel]? = nil
     ) -> [AchievementInfo] {
-        let state = milestoneState(weeklyGoal: weeklyGoal, calendar: calendar)
+        let state = milestoneState(
+            weeklyGoal: weeklyGoal, calendar: calendar, finishedWorkouts: finishedWorkouts
+        )
         let earned = earnedTiers()
         let newlyEarned = Milestones.evaluate(
             state: state, earned: earned.map { (id: $0.key, tier: $0.value) }, unit: unit
@@ -193,9 +201,15 @@ extension WorkoutStore {
         }
     }
 
-    private static func earnedDateLabel(_ date: Date) -> String {
+    /// One formatter for every achievement row, not one per row. `CoachFactsSource` keeps the
+    /// same `"d MMM"` format; a shared cache is consolidated later.
+    private static let earnedDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "d MMM"
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private static func earnedDateLabel(_ date: Date) -> String {
+        earnedDateFormatter.string(from: date)
     }
 }

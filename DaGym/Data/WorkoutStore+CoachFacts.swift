@@ -11,8 +11,11 @@ extension WorkoutStore {
     // MARK: - Debrief
 
     /// The facts behind `WorkoutSummaryView`'s debrief card, from the session just finished and
-    /// the summary `finish` built for it. `previous` is the summary's own "vs last time" workout.
-    func debriefFacts(session: WorkoutSession, summary: WorkoutSummary) -> SessionSummaryFacts {
+    /// the summary `finish` built for it. `previous` is the summary's own "vs last time" workout
+    /// — `finish` already holds the model, so passing it saves fetching it again by id.
+    func debriefFacts(
+        session: WorkoutSession, summary: WorkoutSummary, previous: WorkoutModel? = nil
+    ) -> SessionSummaryFacts {
         let done = session.exercises.flatMap(\.sets).filter { $0.isDone && $0.kind.countsTowardStats }
         let skipped = session.exercises.flatMap(\.sets).filter { !$0.isDone && $0.kind.countsTowardStats }
         let belowLast = done.filter { set in
@@ -33,7 +36,8 @@ extension WorkoutStore {
             setsBelowLast: belowLast.count,
             personalRecords: Array(Set(summary.prs.map(\.exerciseName))).sorted(),
             averageRPE: rpes.isEmpty ? nil : rpes.reduce(0, +) / Double(rpes.count),
-            previousAverageRPE: summary.previous.flatMap { averageRPE(workoutID: $0.workoutID) },
+            previousAverageRPE: (previous ?? summary.previous.flatMap { fetchWorkoutModel(id: $0.workoutID) })
+                .flatMap(Self.averageRPE),
             e1rmUp: summary.e1rmChanges.filter { ($0.current ?? 0) > ($0.previous ?? 0) + 0.5 }.map(\.name),
             e1rmDown: summary.e1rmChanges
                 .filter { $0.previous != nil && ($0.current ?? 0) < ($0.previous ?? 0) - 0.5 }
@@ -41,8 +45,7 @@ extension WorkoutStore {
         )
     }
 
-    private func averageRPE(workoutID: UUID) -> Double? {
-        guard let workout = fetchWorkoutModel(id: workoutID) else { return nil }
+    private static func averageRPE(in workout: WorkoutModel) -> Double? {
         let rpes = (workout.exercises ?? []).flatMap { $0.sets ?? [] }
             .filter { $0.isCompleted && $0.setKind.countsTowardStats }
             .compactMap(\.rpe)

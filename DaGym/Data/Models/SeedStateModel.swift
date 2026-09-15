@@ -9,20 +9,30 @@ import SwiftData
 /// CloudKit can merge two of these; `WorkoutStore.dedupeSeededRows()` folds them into one.
 @Model
 final class SeedStateModel {
-    var id: UUID = UUID()
+    var id = UUID()
     var exerciseSeedVersion: Int = 0
     var routinesSeeded: Bool = false
     var equipmentSeeded: Bool = false
-    var updatedAt: Date = Date()
+    /// Whether every finished `WorkoutModel` in this store has had `volumeKg`/`setsDone` stamped
+    /// (`WorkoutStore.backfillWorkoutTotalsIfNeeded()`). Workouts finished before those columns
+    /// existed carry zeros until the one-shot pass runs.
+    var workoutTotalsBackfilled: Bool = false
+    /// Whether the one-time `purgeHealthDerivedRowsFromMainStore()` repair has run on this
+    /// store, so launch stops paying its two predicate fetches forever.
+    var healthRowsPurged: Bool = false
+    var updatedAt = Date()
 
     init(
         id: UUID = UUID(), exerciseSeedVersion: Int = 0, routinesSeeded: Bool = false,
-        equipmentSeeded: Bool = false, updatedAt: Date = Date()
+        equipmentSeeded: Bool = false, workoutTotalsBackfilled: Bool = false,
+        healthRowsPurged: Bool = false, updatedAt: Date = Date()
     ) {
         self.id = id
         self.exerciseSeedVersion = exerciseSeedVersion
         self.routinesSeeded = routinesSeeded
         self.equipmentSeeded = equipmentSeeded
+        self.workoutTotalsBackfilled = workoutTotalsBackfilled
+        self.healthRowsPurged = healthRowsPurged
         self.updatedAt = updatedAt
     }
 }
@@ -32,13 +42,21 @@ enum SeedState {
     /// The store's seed-state row, creating it on first use. When CloudKit has merged several,
     /// the strongest values win (highest version, any `true`) and the extras are removed.
     static func row(in context: ModelContext) -> SeedStateModel {
-        let descriptor = FetchDescriptor<SeedStateModel>()
+        row(rows: (try? context.fetch(FetchDescriptor<SeedStateModel>())) ?? [], in: context)
+    }
+
+    /// The same row, read through the store's counted `fetch` so a `queryCount` test sees it.
+    static func row(in store: WorkoutStore) -> SeedStateModel {
+        row(rows: store.fetch(FetchDescriptor<SeedStateModel>()), in: store.context)
+    }
+
+    private static func row(rows unsorted: [SeedStateModel], in context: ModelContext) -> SeedStateModel {
         // Sorted in memory, not by the fetch: `updatedAt` alone is not a total order — two
         // devices that seeded in the same second kept *different* rows and each deleted the
         // other's, which bounced `routinesSeeded` back to false and re-seeded all 13 starters
         // into a store whose owner had deliberately deleted every routine. `id` breaks the tie
         // so every device converges on the same survivor.
-        let rows = ((try? context.fetch(descriptor)) ?? []).sorted { lhs, rhs in
+        let rows = unsorted.sorted { lhs, rhs in
             if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt < rhs.updatedAt }
             return lhs.id.uuidString < rhs.id.uuidString
         }
@@ -51,6 +69,10 @@ enum SeedState {
             survivor.exerciseSeedVersion = max(survivor.exerciseSeedVersion, extra.exerciseSeedVersion)
             survivor.routinesSeeded = survivor.routinesSeeded || extra.routinesSeeded
             survivor.equipmentSeeded = survivor.equipmentSeeded || extra.equipmentSeeded
+            // Deliberately AND, not OR: a device that never ran the pass still has unstamped rows.
+            survivor.workoutTotalsBackfilled = survivor.workoutTotalsBackfilled
+                && extra.workoutTotalsBackfilled
+            survivor.healthRowsPurged = survivor.healthRowsPurged && extra.healthRowsPurged
             context.delete(extra)
         }
         return survivor
@@ -73,7 +95,13 @@ extension WorkoutStore {
         let foldedSchedules = dedupeScheduleRows()
         let folded = foldedExercises + foldedRoutines + foldedProfiles + foldedSchedules
         if foldedExercises > 0 { rebuildPersonalRecords() }
-        if folded > 0 || context.hasChanges { save() }
+        let restamped = restampWorkoutTotalsAfterRemoteChange()
+        if folded > 0 || restamped > 0 || context.hasChanges { save() }
+        // Remote rows that needed no folding still changed what the screens show — a workout
+        // finished on the other phone, a renamed routine — and nothing was saved here to bump
+        // `changeToken`, so token-keyed screens (and the cached catalogue) are told explicitly.
+        invalidateExerciseCatalogue()
+        noteExternalSave()
         return folded
     }
 

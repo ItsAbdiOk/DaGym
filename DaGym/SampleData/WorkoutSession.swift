@@ -11,7 +11,12 @@ final class WorkoutSession {
     var title: String
     var subtitle: String
     var startedAt: Date
-    var exercises: [WorkoutExerciseEntry]
+    /// Every mutation — a ticked set, an edited weight, an added exercise — drops the memoised
+    /// totals (`volumeKg`, `setsDone`, `setsTotal`, `musclesHit`), so the header reads a cached
+    /// number between edits instead of re-reducing every set on every rest-timer tick.
+    var exercises: [WorkoutExerciseEntry] {
+        didSet { cachedTotals = nil }
+    }
     var effortScale: Effort.Scale = .rpe
     /// True for a session logged after the fact via "Log a Past Workout".
     var isBackfilled: Bool
@@ -46,39 +51,11 @@ final class WorkoutSession {
     @MainActor static var defaultWarmupGrid: ((ExerciseInfo) -> LoadGrid)?
 
     // Rest timer
-    /// When the current rest ends; nil when not resting. `restRemaining` is a cache of
-    /// `endDate - now`, refreshed by `tickRest()` so views re-render once a second.
-    var restEndDate: Date?
-    var restRemaining: Int = 0
-    var restTotal: Int = 0
-    /// "Next <exercise name>" / "Last set done" — set whenever the next step isn't a plain
-    /// weight × reps set. When it *is*, `restNextWeightKg`/`restNextReps` carry the raw data
-    /// and the view (which has unit `Preferences`) builds the "Next 82.5 × 8" text.
-    var restNextLabel: String = ""
-    var restNextWeightKg: Double?
-    var restNextReps: Int?
-    var isResting: Bool { restRemaining > 0 }
-    /// Notified on every tick with the new `restRemaining`, so UI-only concerns (rest sound,
-    /// screen flash) can live outside this UI-free model. Set by `ActiveWorkoutView`.
-    var onRestTick: ((Int) -> Void)?
-    /// Notified on every rest-state change (start/adjust/skip/natural end), so the Live
-    /// Activity + lock screen notification (`Features/LiveActivity`) can mirror it without this
-    /// UI-free model knowing about ActivityKit. Set by `ActiveWorkoutView+LiveActivity.swift`.
-    var onRestStateChange: ((RestState) -> Void)?
-    /// Mirrors `Preferences.restHaptics`; set by `ActiveWorkoutView` so the 3-2-1 and end taps
-    /// honour the Settings toggle. Defaults on, like the preference.
-    var restHaptics = true
-    /// Mirrors `Preferences.restPauseSeconds`: the short pause a rest-pause set starts instead
-    /// of the exercise's full rest. Set by `ActiveWorkoutView`.
-    var restPauseSeconds = 20
-    /// Mirrors `Preferences.defaultRestSeconds`: the fallback rest for an exercise that carries
-    /// none of its own, and — at `0` — the master off switch for the rest timer. Set by
-    /// `ActiveWorkoutView`; see `restSeconds(after:set:)`.
-    var defaultRestSeconds = 150
-    private var restExerciseName = ""
-    private var restSetNumber = 0
-    private var restSetCount = 0
-    private var restRoutineGlyph: RoutineGlyphInfo?
+    /// The rest timer's own observable (see `RestTimerState`): its once-a-second tick is
+    /// tracked separately from `exercises`. The `rest*` names below forward to it so every
+    /// existing caller — `ActiveWorkoutView`, the Live Activity, the watch — reads and writes
+    /// exactly what it did before.
+    let rest = RestTimerState()
     /// Every set completed at least once this session, so un-ticking a row to fix its reps and
     /// re-ticking it doesn't restart a rest that's still running.
     private var everCompletedSetIDs: Set<UUID> = []
@@ -118,29 +95,53 @@ final class WorkoutSession {
         var isPaused: Bool { pausedAt != nil }
     }
 
+    /// The header's numbers, reduced from `exercises` once per mutation rather than on every
+    /// read (`ActiveWorkoutView` reads them on every rest tick). Ignored by observation on
+    /// purpose: it is filled from inside a view's `body`, and a tracked write there would
+    /// invalidate the very view that is reading it.
+    @ObservationIgnored private var cachedTotals: SessionTotals?
+
+    private struct SessionTotals {
+        var volumeKg: Double
+        var setsDone: Int
+        var setsTotal: Int
+        var musclesHit: [Muscle: Double]
+    }
+
+    private var totals: SessionTotals {
+        if let cachedTotals { return cachedTotals }
+        let computed = SessionTotals(
+            volumeKg: exercises.reduce(0) { total, entry in
+                total + GymCore.SessionStats.volumeKg(
+                    entry.sets.filter(\.isDone).map { $0.performed(style: entry.exercise.loggingStyle) }
+                )
+            },
+            setsDone: exercises.flatMap(\.sets).filter { $0.isDone && $0.kind.countsTowardStats }.count,
+            setsTotal: exercises.flatMap(\.sets).filter { $0.kind.countsTowardStats }.count,
+            musclesHit: GymCore.SessionStats.musclesHit(sets: exercises.map { entry in
+                (
+                    primary: entry.exercise.primary, secondary: entry.exercise.secondary,
+                    completedCount: entry.sets.filter { $0.isDone && $0.kind.countsTowardStats }.count
+                )
+            })
+        )
+        cachedTotals = computed
+        return computed
+    }
+
     /// Σ (load lifted × reps) over completed working sets. Built per exercise because the logging
     /// style is what says whether a row's weight is load at all: an assisted row logs the
     /// machine's help, which is not lifted, so it adds nothing — the same convention History and
     /// the Finish summary use (`WorkoutModel.loadedVolumeKg`), so the number on screen mid-workout
     /// and the one in History for those same sets agree.
-    var volumeKg: Double {
-        exercises.reduce(0) { total, entry in
-            total + GymCore.SessionStats.volumeKg(
-                entry.sets.filter(\.isDone).map { $0.performed(style: entry.exercise.loggingStyle) }
-            )
-        }
-    }
+    var volumeKg: Double { totals.volumeKg }
 
     /// Working sets only — the same definition the summary card, the History row, the weekly
     /// recap and the Health write use. The header used to count warm-ups here and nowhere else,
     /// so a session read "8 / 12 sets" on screen and "6 sets" on the summary a tap later.
-    var setsDone: Int {
-        exercises.flatMap(\.sets).filter { $0.isDone && $0.kind.countsTowardStats }.count
-    }
+    var setsDone: Int { totals.setsDone }
 
-    var setsTotal: Int {
-        exercises.flatMap(\.sets).filter { $0.kind.countsTowardStats }.count
-    }
+    var setsTotal: Int { totals.setsTotal }
     var prCount: Int { prBanner == nil ? 0 : 1 }
 
     /// Elapsed seconds since the session started, as of `date`.
@@ -154,15 +155,7 @@ final class WorkoutSession {
     /// Muscles hit so far, weighted by completed *working* sets — the same sets `volumeKg` and
     /// the summary's set count are built from. Weighting by every completed row let a
     /// warm-up-heavy lift outweigh one with no warm-ups at identical working volume.
-    var musclesHit: [Muscle: Double] {
-        let entries = exercises.map { entry in
-            (
-                primary: entry.exercise.primary, secondary: entry.exercise.secondary,
-                completedCount: entry.sets.filter { $0.isDone && $0.kind.countsTowardStats }.count
-            )
-        }
-        return GymCore.SessionStats.musclesHit(sets: entries)
-    }
+    var musclesHit: [Muscle: Double] { totals.musclesHit }
 
     func completeSet(exerciseID: UUID, setID: UUID, effort: Effort? = nil) {
         guard let ei = exercises.firstIndex(where: { $0.id == exerciseID }),
@@ -218,10 +211,10 @@ final class WorkoutSession {
         } else {
             restNextLabel = "Last set done"
         }
-        restExerciseName = ex.exercise.name
-        restSetNumber = setIndex + 1
-        restSetCount = ex.sets.count
-        restRoutineGlyph = ex.routineID.flatMap { routineGlyphs[$0] }
+        rest.exerciseName = ex.exercise.name
+        rest.setNumber = setIndex + 1
+        rest.setCount = ex.sets.count
+        rest.routineGlyph = ex.routineID.flatMap { routineGlyphs[$0] }
         onRestStateChange?(restState(isEnded: seconds == 0, isSkipped: seconds == 0))
     }
 
@@ -261,14 +254,7 @@ final class WorkoutSession {
 
     /// Snapshot for the Live Activity / notification hook — see `RestState`.
     private func restState(isEnded: Bool, isSkipped: Bool) -> RestState {
-        RestState(
-            remaining: restRemaining, total: restTotal,
-            endDate: restEndDate ?? now(), workoutTitle: title, exerciseName: restExerciseName,
-            setNumber: restSetNumber, setCount: restSetCount, nextWeightKg: restNextWeightKg,
-            nextReps: restNextReps, fallbackNextLabel: restNextLabel, isEnded: isEnded, isSkipped: isSkipped,
-            routineSymbolName: restRoutineGlyph?.symbolName ?? "dumbbell",
-            routineTint: restRoutineGlyph?.tint ?? "coral"
-        )
+        rest.snapshot(workoutTitle: title, now: now(), isEnded: isEnded, isSkipped: isSkipped)
     }
 
     /// Removes a set, keeping at least one set per exercise (the delete swipe action). Refusing

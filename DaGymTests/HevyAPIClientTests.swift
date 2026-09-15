@@ -127,6 +127,21 @@ struct HevyAPIClientTests {
         #expect(result.problems.first?.message == "Couldn't understand Hevy's response.")
     }
 
+    /// The parser moved from two `ISO8601DateFormatter`s per date to two hoisted `FormatStyle`s;
+    /// the shapes Hevy actually sends — `Z`, a `+00:00` offset, with and without fractional
+    /// seconds — must still parse, and a bare date must still fail.
+    @Test("Hevy's timestamp shapes parse with and without fractional seconds and offsets")
+    func dateShapes() {
+        let expected = Date(timeIntervalSince1970: 1_714_557_600) // 2024-05-01T10:00:00Z
+        #expect(HevyDateFormat.date(from: "2024-05-01T10:00:00Z") == expected)
+        #expect(HevyDateFormat.date(from: "2024-05-01T10:00:00.000Z") == expected)
+        #expect(HevyDateFormat.date(from: "2024-05-01T12:00:00+02:00") == expected)
+        #expect(HevyDateFormat.date(from: "2024-05-01T12:00:00.250+02:00")
+            == expected.addingTimeInterval(0.25))
+        #expect(HevyDateFormat.date(from: "2024-05-01") == nil)
+        #expect(HevyDateFormat.date(from: "yesterday") == nil)
+    }
+
     @Test("a transport failure surfaces the system's own description")
     func transportFailure() async {
         HevyStubProtocol.reset([:])

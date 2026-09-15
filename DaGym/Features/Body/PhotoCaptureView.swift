@@ -1,11 +1,15 @@
+import OSLog
 import PhotosUI
 import SwiftData
 import SwiftUI
 import UIKit
 
+private let photoLogger = Logger(subsystem: "dev.abdirahmanmohamed.dagym", category: "photos")
+
 /// Captures a new progress photo for `pose` — camera (`CameraPicker`, ghost-overlaid with the
 /// previous photo of this pose for consistent framing) or an existing photo via `PhotosPicker`
-/// (plan.md §6.4). Saves through `WorkoutStore.addPhoto` and dismisses.
+/// (plan.md §6.4). The capture is decoded once, off-main, into `capturedImage`; Save downscales
+/// it on a detached task (`PhotoProcessor`) before `WorkoutStore.addPhoto` writes the row.
 struct PhotoCaptureView: View {
     var pose: ProgressPhotoPose
 
@@ -15,8 +19,9 @@ struct PhotoCaptureView: View {
 
     @State private var pickedItem: PhotosPickerItem?
     @State private var isCameraPresented = false
-    @State private var capturedData: Data?
+    @State private var capturedImage: UIImage?
     @State private var bodyweightText = ""
+    @State private var isSaving = false
 
     var body: some View {
         NavigationStack {
@@ -33,14 +38,17 @@ struct PhotoCaptureView: View {
             }
         }
         .fullScreenCover(isPresented: $isCameraPresented) {
-            CameraPicker(ghost: ghostImage) { data in
-                capturedData = data
+            CameraPicker(ghost: ghostImage) { image in
                 isCameraPresented = false
+                Task { capturedImage = await PhotoDecoder.prepareForDisplay(image) }
             }
             .ignoresSafeArea()
         }
         .onChange(of: pickedItem) { _, newItem in
-            Task { capturedData = try? await newItem?.loadTransferable(type: Data.self) }
+            Task {
+                let data = try? await newItem?.loadTransferable(type: Data.self)
+                capturedImage = await PhotoDecoder.decodeForDisplay(data)
+            }
         }
     }
 
@@ -51,8 +59,8 @@ struct PhotoCaptureView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let capturedData, let uiImage = UIImage(data: capturedData) {
-            reviewForm(uiImage: uiImage, data: capturedData)
+        if let capturedImage {
+            reviewForm(uiImage: capturedImage)
         } else {
             captureOptions
         }
@@ -79,7 +87,7 @@ struct PhotoCaptureView: View {
         .padding(.horizontal, DGSpace.s4)
     }
 
-    private func reviewForm(uiImage: UIImage, data: Data) -> some View {
+    private func reviewForm(uiImage: UIImage) -> some View {
         VStack(spacing: DGSpace.s5) {
             Image(uiImage: uiImage)
                 .resizable()
@@ -89,7 +97,7 @@ struct PhotoCaptureView: View {
                 .padding(.top, DGSpace.s4)
             bodyweightField
             Spacer()
-            reviewActions(data: data)
+            reviewActions(uiImage: uiImage)
         }
     }
 
@@ -108,10 +116,10 @@ struct PhotoCaptureView: View {
         .padding(.horizontal, DGSpace.s4)
     }
 
-    private func reviewActions(data: Data) -> some View {
+    private func reviewActions(uiImage: UIImage) -> some View {
         HStack(spacing: DGSpace.s3) {
             Button {
-                capturedData = nil
+                capturedImage = nil
             } label: {
                 Text("Retake")
                     .font(DGFont.condensedLabel(15))
@@ -123,16 +131,31 @@ struct PhotoCaptureView: View {
                     .dgGlass(.regular, radius: DGRadius.lg)
             }
             .buttonStyle(.dgControl)
-            DGPrimaryButton(title: "Save", symbol: "checkmark") { save(data: data) }
+            DGPrimaryButton(title: isSaving ? "Saving…" : "Save", symbol: "checkmark") {
+                Task { await save(uiImage) }
+            }
+            .disabled(isSaving)
         }
         .padding(.horizontal, DGSpace.s4)
         .padding(.bottom, DGSpace.s4)
     }
 
-    private func save(data: Data) {
+    /// Downscales on a detached task so the 12 MP → 1600 px resize never blocks the tap, then
+    /// hands the already-storage-sized JPEG to `addPhoto`. `addPhoto` still runs its own
+    /// (cheap, 1600 px) pass on main — an `addPhoto(processed:)` overload would remove it.
+    private func save(_ uiImage: UIImage) async {
+        isSaving = true
+        defer { isSaving = false }
         let entered = Double(bodyweightText.replacingOccurrences(of: ",", with: "."))
         let bodyweightKg = entered.map { preferences.weightUnit.toKg($0) }
-        store.addPhoto(image: data, pose: pose, bodyweightKg: bodyweightKg)
+        let processed = await Task.detached(priority: .userInitiated) {
+            PhotoProcessor.process(uiImage)
+        }.value
+        guard let processed else {
+            photoLogger.error("PhotoProcessor returned nil for a \(Int(uiImage.size.width))px capture")
+            return
+        }
+        store.addPhoto(processed: processed, pose: pose, bodyweightKg: bodyweightKg)
         Haptics.confirm()
         dismiss()
     }

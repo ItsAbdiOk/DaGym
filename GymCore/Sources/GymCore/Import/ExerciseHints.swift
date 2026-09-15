@@ -45,9 +45,18 @@ public enum ExerciseHints {
     /// as a substring of the name with punctuation collapsed to spaces; single words are matched
     /// against whole name-words, allowing a short suffix (plural "curls", "squats") but not an
     /// unrelated longer word that merely starts the same ("lateral" must not trip "lat").
+    ///
+    /// The specific multi-word rules come first because the generic single words below them
+    /// overlap: "curl" alone would send a leg curl or a wrist curl to biceps, "fly"/"chest"
+    /// would claim a rear-delt fly or a chest-supported row, and "overhead" would file a triceps
+    /// extension under delts.
     private static let nameRules: [(keywords: [String], muscles: [Muscle])] = [
+        (["leg curl", "hamstring"], [.hams]),
+        (["wrist", "forearm"], [.forearms]),
+        (["rear delt", "reverse fly", "face pull"], [.delts]),
+        (["chest supported row"], [.lats]),
+        (["tricep", "pushdown", "skull"], [.triceps]),
         (["curl"], [.biceps]),
-        (["pushdown", "skull"], [.triceps]),
         (["bench", "fly", "chest"], [.chest]),
         (["row", "pulldown", "pull-up", "lat"], [.lats]),
         (["deadlift"], [.lowerBack, .hams]),

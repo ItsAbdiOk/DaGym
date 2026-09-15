@@ -102,7 +102,8 @@ extension BackupService {
             return BackupRoutine(
                 id: model.id, name: model.name, notes: model.notes,
                 progressionRule: model.progressionRule, repRangeLow: model.repRangeLow,
-                repRangeHigh: model.repRangeHigh, progressionRuleJSON: model.progressionRuleJSON,
+                repRangeHigh: model.repRangeHigh, rule: model.progressionRuleValue,
+                progressionRuleJSON: model.progressionRuleJSON,
                 createdAt: model.createdAt, updatedAt: model.updatedAt, sortOrder: model.sortOrder,
                 isArchived: model.isArchived, importedFromID: model.importedFromID,
                 symbolName: model.symbolName, tint: model.tint,
@@ -117,7 +118,8 @@ extension BackupService {
         return BackupRoutineExercise(
             order: model.order, exerciseSeedID: exercise.seedID, exerciseName: exercise.name,
             supersetGroup: model.supersetGroup, restOverrideSeconds: model.restOverrideSeconds,
-            note: model.note, progressionRuleJSON: model.progressionRuleJSON, stallJSON: model.stallJSON,
+            note: model.note, rule: model.overrideRuleValue, stall: model.stallStateValue,
+            progressionRuleJSON: model.progressionRuleJSON, stallJSON: model.stallJSON,
             trainingMaxKg: model.trainingMaxKg, excludeFromProgression: model.excludeFromProgression,
             plannedSets: sets
         )
@@ -197,8 +199,10 @@ extension BackupService {
         return models.map {
             BackupEquipmentProfile(
                 id: $0.id, name: $0.name, isActive: $0.isActive, barKg: $0.barKg,
-                availableEquipment: $0.availableEquipment, plateStockKg: $0.plateStockKg,
-                plateCounts: $0.plateCounts, collarsKg: $0.collarsKg, createdAt: $0.createdAt,
+                availableEquipment: $0.availableEquipment,
+                plateStock: zip($0.plateStockKg, $0.plateCounts)
+                    .map { BackupPlateStock(weightKg: $0, count: $1) },
+                collarsKg: $0.collarsKg, createdAt: $0.createdAt,
                 seedKey: $0.seedKey, restrictsMachines: $0.restrictsMachines,
                 availableMachines: $0.availableMachines
             )
@@ -235,7 +239,11 @@ extension BackupService {
         )
         descriptor.fetchLimit = 1
         guard let model = (try? context.fetch(descriptor))?.first else { return nil }
-        return BackupSchedule(scheduleJSON: model.scheduleJSON, updatedAt: model.updatedAt)
+        // Format 2 nests the schedule; the string is written alongside for one more format so a
+        // file from this build is readable by the nested *and* the string path.
+        let nested = model.scheduleJSON.data(using: .utf8)
+            .flatMap { try? JSONDecoder().decode(WeeklySchedule.self, from: $0) }
+        return BackupSchedule(schedule: nested, scheduleJSON: model.scheduleJSON, updatedAt: model.updatedAt)
     }
 
     /// Notes are keyed by `exerciseID`, which a restore onto a fresh store won't reproduce for a

@@ -6,7 +6,9 @@ import Foundation
 extension Machine {
     /// Names a lifter would use for this station besides `displayName` — the labels on the
     /// machine itself across the common brands plus UK gym-floor slang. Searched
-    /// case-insensitively by `matches(_:)`. No alias may repeat across stations (tested).
+    /// case-insensitively by `matches(_:)`. No alias may repeat across stations, and none is a
+    /// substring of the station's own `displayName` (both tested): such an alias adds nothing
+    /// to search but used to take one of the two hint slots the profile editor shows.
     public var aliases: [String] {
         switch self {
         case .legPress, .hackSquat, .pendulumSquat, .beltSquat, .smithMachine: legAliases
@@ -35,10 +37,10 @@ extension Machine {
             "Linear Hack Squat", "Hack Squat Machine", "V-Squat", "V-Squat Machine", "Hack Press",
             "Squat Machine", "Reverse Hack Squat", "Plate-Loaded Hack Squat"
         ]
-        case .pendulumSquat: ["Pendulum", "Pendular Squat", "Pendulum Squat Machine"]
+        case .pendulumSquat: ["Pendular Squat", "Pendulum Squat Machine"]
         case .beltSquat: ["Belt Squat Machine", "Hip Belt Squat", "Pit Shark"]
         case .smithMachine: [
-            "Smith", "Smith Press", "Smith Rack", "Multi Press", "Guided Barbell", "Guided Bar",
+            "Smith Press", "Smith Rack", "Multi Press", "Guided Barbell", "Guided Bar",
             "Counterbalanced Smith", "3D Smith", "Dual Axis Smith"
         ]
         default: []
@@ -50,7 +52,7 @@ extension Machine {
         case .pecDeck: [
             "Pec Fly", "Butterfly", "Fly / Rear Delt", "Rear Delt Fly", "Reverse Fly", "Chest Fly",
             "Pec Deck Fly", "Fly Machine", "Rear Delt Machine", "Reverse Pec Deck", "Chest Fly Machine",
-            "Rear Delt / Pec Fly", "Pectoral Fly", "Pec Dec"
+            "Rear Delt / Pec Fly", "Pectoral Fly"
         ]
         case .chestPressMachine: [
             "Seated Chest Press", "Converging Chest Press", "Chest Press Machine", "Machine Bench Press",
@@ -59,17 +61,16 @@ extension Machine {
             "Seated Bench Press", "Vertical Press", "Wide Chest Press", "Bench Press Machine"
         ]
         case .shoulderPressMachine: [
-            "Shoulder Press", "Overhead Press Machine", "Converging Shoulder Press",
-            "Iso-Lateral Shoulder Press", "Seated Shoulder Press", "Plate-Loaded Shoulder Press",
-            "Military Press Machine", "Deltoid Press"
+            "Overhead Press Machine", "Converging Shoulder Press", "Iso-Lateral Shoulder Press",
+            "Seated Shoulder Press", "Plate-Loaded Shoulder Press", "Military Press Machine", "Deltoid Press"
         ]
         case .lateralRaiseMachine: [
-            "Lateral Raise", "Side Lateral Raise Machine", "Machine Lateral Raise", "Deltoid Raise",
-            "Delt Raise", "Side Raise Machine", "Lateral Deltoid Machine", "Iso-Lateral Lateral Raise",
+            "Side Lateral Raise Machine", "Machine Lateral Raise", "Deltoid Raise", "Delt Raise",
+            "Side Raise Machine", "Lateral Deltoid Machine", "Iso-Lateral Lateral Raise",
             "Shoulder Lateral Raise", "Lateral Raise Station"
         ]
         case .pulloverMachine: [
-            "Pullover", "Nautilus Pullover", "Lat Pullover Machine", "Seated Pullover", "Machine Pullover",
+            "Nautilus Pullover", "Lat Pullover Machine", "Seated Pullover", "Machine Pullover",
             "Pullover Station"
         ]
         default: []
@@ -88,14 +89,13 @@ extension Machine {
             "Quad Machine"
         ]
         case .hipAbductorAdductor: [
-            "Hip Abductor", "Hip Adductor", "Inner/Outer Thigh", "Abductor", "Adductor", "Thigh Machine",
-            "Hip Abduction", "Hip Adduction", "Abductor / Adductor", "Inner Thigh", "Outer Thigh",
-            "Abduction / Adduction"
+            "Hip Adductor", "Inner/Outer Thigh", "Thigh Machine", "Hip Abduction", "Hip Adduction",
+            "Inner Thigh", "Outer Thigh", "Abduction / Adduction"
         ]
         case .multiHip: ["Multi-Hip", "4-Way Hip", "Hip Machine", "Total Hip", "Multi Hip Machine"]
         case .gluteKickback: [
             "Glute Drive", "Hip Thrust Machine", "Glute Press", "Kickback Machine", "Glute Kickback Machine",
-            "Glute Machine", "Standing Glute", "Glute Builder", "Booty Builder", "Glute Kick"
+            "Glute Machine", "Standing Glute", "Glute Builder", "Booty Builder"
         ]
         default: []
         }
@@ -104,15 +104,13 @@ extension Machine {
     private var trunkAliases: [String] {
         switch self {
         case .calfRaiseMachine: [
-            "Standing Calf", "Calf Raise", "Rotary Calf", "Calf Machine", "Standing Calf Raise Machine",
-            "Calf Raise Machine", "Iso-Lateral Calf", "Calf Extension", "Standing Calf Machine"
+            "Rotary Calf", "Calf Machine", "Standing Calf Raise Machine", "Calf Raise Machine",
+            "Iso-Lateral Calf", "Calf Extension", "Standing Calf Machine"
         ]
-        case .seatedCalf: [
-            "Seated Calf", "Seated Calf Machine", "Seated Calf Raise Machine", "Plate-Loaded Seated Calf"
-        ]
+        case .seatedCalf: ["Seated Calf Machine", "Seated Calf Raise Machine", "Plate-Loaded Seated Calf"]
         case .abCrunchMachine: [
-            "Abdominal Crunch", "Ab Crunch", "Ab Machine", "Abdominal", "Abdominal Machine",
-            "Crunch Machine", "Seated Crunch", "Abdominal Isolator", "Ab Coaster", "Ab Crunch Station"
+            "Abdominal Crunch", "Ab Machine", "Abdominal", "Abdominal Machine", "Seated Crunch",
+            "Abdominal Isolator", "Ab Coaster", "Ab Crunch Station"
         ]
         case .torsoRotation: [
             "Rotary Torso", "Torso Twist", "Oblique Machine", "Torso Rotation Machine",
@@ -134,23 +132,23 @@ extension Machine {
     private var armAliases: [String] {
         switch self {
         case .assistedDipPullUp: [
-            "Assisted Chin/Dip", "Assisted Pull-Up", "Assisted Chin-Up", "Assisted Dip", "Gravitron",
+            "Assisted Chin/Dip", "Assisted Pull-Up", "Assisted Chin-Up", "Gravitron",
             "Assisted Pull-Up Machine", "Assisted Dip Machine", "Chin/Dip Assist", "Weight-Assisted Chin",
             "Counterweight Pull-Up", "Assisted Chin"
         ]
         case .preacherCurlMachine: [
-            "Preacher Curl", "Arm Curl", "Bicep Curl Machine", "Biceps Curl", "Biceps Curl Machine",
-            "Machine Curl", "Iso-Lateral Biceps Curl", "Seated Curl", "Curl Machine", "Bicep Machine",
-            "Machine Bicep Curl", "Preacher Machine"
+            "Arm Curl", "Bicep Curl Machine", "Biceps Curl", "Biceps Curl Machine", "Machine Curl",
+            "Iso-Lateral Biceps Curl", "Seated Curl", "Bicep Machine", "Machine Bicep Curl",
+            "Preacher Machine"
         ]
         case .tricepsExtensionMachine: [
-            "Triceps Extension", "Arm Extension", "Triceps Press", "Tricep Machine", "Machine Triceps",
-            "Seated Triceps Extension", "Iso-Lateral Triceps Extension", "Triceps Pushdown Machine",
-            "Tricep Extension Machine", "Machine Triceps Extension"
+            "Arm Extension", "Triceps Press", "Tricep Machine", "Machine Triceps", "Seated Triceps Extension",
+            "Iso-Lateral Triceps Extension", "Triceps Pushdown Machine", "Tricep Extension Machine",
+            "Machine Triceps Extension"
         ]
         case .seatedDipMachine: [
-            "Dip Machine", "Seated Dip", "Tricep Dip Machine", "Triceps Dip", "Dip Press", "Machine Dip",
-            "Iso-Lateral Dip", "Seated Dip Press", "Triceps Dip Machine"
+            "Tricep Dip Machine", "Triceps Dip", "Dip Press", "Machine Dip", "Iso-Lateral Dip",
+            "Seated Dip Press", "Triceps Dip Machine"
         ]
         case .rowMachine: [
             "Iso-Lateral Row", "Lever Row", "T-Bar Row", "T-Bar", "High Row", "Low Row (plate-loaded)",
@@ -166,12 +164,12 @@ extension Machine {
     private var cableAliases: [String] {
         switch self {
         case .latPulldown: [
-            "Pulldown", "Diverging Lat Pulldown", "Lat Pull Down", "Lat Machine", "Lat Pulldown Machine",
-            "Pull Down", "Pulldown Machine", "Lat Pull", "Wide Grip Pulldown", "High Pulley Pulldown",
-            "Lat Pulldown Station", "Pulldown Seat", "Lat Pulldown / Low Row"
+            "Diverging Lat Pulldown", "Lat Pull Down", "Lat Machine", "Lat Pulldown Machine", "Pull Down",
+            "Pulldown Machine", "Wide Grip Pulldown", "High Pulley Pulldown", "Lat Pulldown Station",
+            "Pulldown Seat", "Lat Pulldown / Low Row"
         ]
         case .seatedRowMachine: [
-            "Seated Row", "Low Row", "Cable Row", "Long Pulley", "Low Pulley Row", "Seated Cable Row Machine",
+            "Seated Row", "Low Row", "Long Pulley", "Low Pulley Row", "Seated Cable Row Machine",
             "Cable Seated Row", "Horizontal Row", "Low Pulley", "Rowing Station", "Seated Row Station",
             "Cable Row Seat"
         ]
@@ -198,7 +196,7 @@ extension Machine {
         case .treadmill: ["Running Machine", "Treadmill Cardio", "Curved Treadmill", "Skillmill", "Woodway"]
         case .stationaryBike: [
             "Exercise Bike", "Upright Bike", "Recumbent Bike", "Spin Bike", "Air Bike", "Assault Bike",
-            "Bike", "Cycle", "Indoor Cycle", "Echo Bike", "Watt Bike", "Wattbike", "Fan Bike", "Peloton"
+            "Cycle", "Indoor Cycle", "Echo Bike", "Watt Bike", "Wattbike", "Fan Bike", "Peloton"
         ]
         case .elliptical: [
             "Cross Trainer", "Elliptical Trainer", "Crosstrainer", "X-Trainer", "Arc Trainer",

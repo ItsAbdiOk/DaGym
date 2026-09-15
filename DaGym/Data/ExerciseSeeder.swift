@@ -3,6 +3,7 @@ import SwiftData
 import os
 
 private let seedLogger = Logger(subsystem: "dev.abdirahmanmohamed.dagym", category: "seeder")
+private let seedSignposter = OSSignposter(subsystem: "dev.abdirahmanmohamed.dagym", category: "perf")
 
 /// Loads `Resources/Seed/exercises.json` into the store on first launch.
 /// Idempotent: re-running only inserts exercises whose `seedID` is missing.
@@ -12,13 +13,13 @@ private let seedLogger = Logger(subsystem: "dev.abdirahmanmohamed.dagym", catego
 @MainActor
 enum ExerciseSeeder {
 
-    struct SeedFile: Decodable {
+    struct SeedFile: Decodable, Sendable {
         var version: Int
         var source: String
         var exercises: [SeedExercise]
     }
 
-    struct SeedExercise: Decodable {
+    struct SeedExercise: Decodable, Sendable {
         var id: String
         var name: String
         var primary: [String]
@@ -55,23 +56,76 @@ enum ExerciseSeeder {
         return (try? context.fetch(descriptor)) ?? []
     }
 
+    /// The `version` of the bundled `exercises.json`, pinned here so a launch can tell "this
+    /// store is current" from the seed-state row and a count query alone — decoding the 1.4 MB
+    /// file just to read its version was the single biggest cost of every cold start.
+    /// `ExerciseSeederTests.bundledVersionMatchesTheFile` keeps the two in step.
+    static let bundledVersion = 5
+
+    /// Whether `seedIfNeeded` has anything to do: the store is behind the bundled seed, or it
+    /// has no exercises at all (a fresh install, or a store the reset just emptied). Two cheap
+    /// reads, no JSON.
+    static func needsSeeding(context: ModelContext) -> Bool {
+        let state = SeedState.row(in: context)
+        // `>=`, not `==`: a seed row synced from a device on a newer build must not make this
+        // build decode the seed file and re-insert on every cold launch.
+        guard state.exerciseSeedVersion >= bundledVersion else { return true }
+        return ((try? context.fetchCount(FetchDescriptor<ExerciseModel>())) ?? 0) == 0
+    }
+
     /// Inserts every seeded exercise not already present, keyed by `seedID`.
     /// Refreshes existing rows' provenance fields when the seed version bumped.
+    ///
+    /// A store already at `bundledVersion` with rows in it returns before the seed file is
+    /// touched. Folding duplicates is *not* done here any more: `WorkoutStore.dedupeSeededRows()`
+    /// runs one pass for every seeder at the end of launch, and this used to be a second full
+    /// exercise fetch on top of it.
     static func seedIfNeeded(context: ModelContext, bundle: Bundle = .main) {
+        guard needsSeeding(context: context) else { return }
         do {
-            let seed = try loadSeed(bundle: bundle)
-            try insertMissing(seed.exercises, into: context)
-            let state = SeedState.row(in: context)
-            if seed.version > state.exerciseSeedVersion {
-                try updateExisting(seed.exercises, from: state.exerciseSeedVersion, in: context)
-                state.exerciseSeedVersion = seed.version
-                state.updatedAt = Date()
-                try context.save()
-            }
-            if dedupe(in: context) > 0 { try context.save() }
+            try apply(try loadSeed(bundle: bundle), to: context)
         } catch {
             seedLogger.error("Exercise seeding failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// `seedIfNeeded` with the JSON decode off the main actor — the launch path. The store
+    /// work itself (inserts, the version-bump refresh) still runs here on the main context.
+    static func seedIfNeededAsync(context: ModelContext, bundle: Bundle = .main) async {
+        guard needsSeeding(context: context) else { return }
+        do {
+            let seed = try await Task.detached(priority: .userInitiated) {
+                try loadSeed(bundle: bundle)
+            }.value
+            try apply(seed, to: context)
+        } catch {
+            seedLogger.error("Exercise seeding failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Writes `seed` into the store. A store that had no exercises at all takes the seed as-is
+    /// and is stamped current straight away: every row was just written from this very file,
+    /// so the version-bump `updateExisting` pass (a second full-catalogue fetch, refresh and
+    /// save) has nothing to change — that pass ran on every first launch, and once per seeded
+    /// test store, before this.
+    private static func apply(_ seed: SeedFile, to context: ModelContext) throws {
+        let interval = seedSignposter.beginInterval("seedExercises")
+        defer { seedSignposter.endInterval("seedExercises", interval) }
+        let state = SeedState.row(in: context)
+        let previousVersion = state.exerciseSeedVersion
+        let wasEmpty = ((try? context.fetchCount(FetchDescriptor<ExerciseModel>())) ?? 0) == 0
+        let stamp = seed.version > previousVersion || wasEmpty
+        // Stamped before the insert so a fresh install lands rows and version in the one save
+        // `insertMissing` already makes; nothing is written if the insert throws.
+        if stamp {
+            state.exerciseSeedVersion = seed.version
+            state.updatedAt = Date()
+        }
+        try insertMissing(seed.exercises, into: context)
+        if stamp, !wasEmpty {
+            try updateExisting(seed.exercises, from: previousVersion, in: context)
+        }
+        if context.hasChanges { try context.save() }
     }
 
     /// The decoded bundled seed, for callers that need to compare a row against its seeded values
@@ -310,7 +364,11 @@ enum ExerciseSeeder {
         if let authors = item.authors { model.authors = authors }
         if migrateRest, model.restSeconds == item.restSeconds { model.restSeconds = 0 }
     }
+}
 
+// MARK: - Loading the bundled file
+
+extension ExerciseSeeder {
     /// The seed JSON lives at `Resources/Seed/exercises.json`. Swift Testing
     /// structs don't have a `Bundle(for:)` peer, so we try the passed-in
     /// bundle, then `Bundle(identifier:)`, then every loaded bundle.

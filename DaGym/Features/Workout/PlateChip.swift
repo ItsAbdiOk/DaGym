@@ -6,14 +6,20 @@ import SwiftUI
 struct PlateChip: View {
     var weightKg: Double
     var bar: Bar
+    /// The lifter's *own* rack — `WorkoutStore.activeInventory()`, fetched once by
+    /// `ActiveWorkoutView` and passed down, never read from the store here: this chip sits on
+    /// the on-deck card, and reading the store from `body` cost a SwiftData fetch per render
+    /// (three, in fact — `result` was reached three times). `nil` falls back to the unit's
+    /// standard plate set, for previews and hosts with no store.
+    var inventory: ProgressionEquipment?
     var action: () -> Void
 
     @Environment(Preferences.self) private var preferences
-    /// Optional so the chip can be rendered in a preview or a snapshot host with no store; the
-    /// fallback is the same one `WorkoutStore.activeInventory()` uses.
-    @Environment(WorkoutStore.self) private var store: WorkoutStore?
 
     var body: some View {
+        // Once per body, not once per read.
+        let result = result
+        let text = Self.text(for: result, format: { preferences.formatWeight(kg: $0) })
         Button(action: action) {
             HStack(spacing: DGSpace.s2) {
                 Image(systemName: "circle.circle")
@@ -23,7 +29,7 @@ struct PlateChip: View {
                     .tracking(0.8)
                     .textCase(.uppercase)
             }
-            .foregroundStyle(isLoadable ? DGColor.ink2 : DGColor.danger)
+            .foregroundStyle(Self.isLoadable(result) ? DGColor.ink2 : DGColor.danger)
             .padding(.horizontal, DGSpace.s3)
             .frame(minHeight: 32)
             .background(DGColor.surface2, in: Capsule())
@@ -33,32 +39,22 @@ struct PlateChip: View {
         .accessibilityLabel("Plates, \(text)")
     }
 
-    /// The lifter's *own* rack: the active equipment profile, not a generic standard set. The
-    /// chip used to assume the standard set, so it called the engine's own prescription
+    /// The chip used to assume the standard set, so it called the engine's own prescription
     /// unloadable and offered "20 + 10 per side" to someone who owns neither plate.
     /// `bar` still wins — it is this exercise's bar (an EZ bar, say).
-    private var inventory: ProgressionEquipment {
-        var equipment = store?.activeInventory() ?? ProgressionEquipment(
+    private var result: PlateCalculator.Result {
+        var equipment = inventory ?? ProgressionEquipment(
             bar: bar, plates: WeightUnit.plateStock(for: preferences.weightUnit), collarsKg: 0
         )
         equipment.bar = bar
-        return equipment
-    }
-
-    private var result: PlateCalculator.Result {
-        PlateCalculator.load(
-            target: weightKg, bar: inventory.bar, plates: inventory.plates,
-            collarsKg: inventory.collarsKg
+        return PlateCalculator.load(
+            target: weightKg, bar: equipment.bar, plates: equipment.plates, collarsKg: equipment.collarsKg
         )
     }
 
-    private var isLoadable: Bool {
+    private static func isLoadable(_ result: PlateCalculator.Result) -> Bool {
         if case .nearest = result { return false }
         return true
-    }
-
-    private var text: String {
-        Self.text(for: result, format: { preferences.formatWeight(kg: $0) })
     }
 
     /// The chip's copy for a plate-calculator result, with `format` rendering kg in the user's

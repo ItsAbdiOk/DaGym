@@ -1,7 +1,10 @@
 import HealthKit
+import os
 import SwiftData
 import SwiftUI
 import WatchKit
+
+private let rootLogger = Logger(subsystem: "dev.abdirahmanmohamed.dagym", category: "watch-root")
 
 @main
 struct DaGymWatchApp: App {
@@ -38,26 +41,52 @@ final class WatchRoot {
     /// a context whose container has been released traps inside SwiftData.
     private var container: ModelContainer?
 
+    /// Home's `onAppear` does the one `refreshHome` a cold launch needs (it also writes the
+    /// complication snapshot from the same fetches); doing it here too ran the whole store
+    /// walk three times before the first frame.
     func open() {
         guard store == nil, !WatchLaunchFlags.isTestHost else { return }
-        let container = Self.makeContainer()
-        guard let container else { return }
+        let opened = Self.makeContainer()
+        guard let container = opened.container else { return }
         self.container = container
         let workoutStore = WorkoutStore(context: container.mainContext, photoContext: nil)
         #if DEBUG
         if WatchLaunchFlags.isSample { WatchSampleSeeder.seed(store: workoutStore) }
         #endif
         let watchStore = WatchStore(store: workoutStore)
-        watchStore.refreshHome()
+        watchStore.isCloudSyncOn = opened.isCloudSyncOn
         store = watchStore
         WatchWorkoutRecovery.shared.attach(to: watchStore)
-        WatchSnapshotWriter.refresh(store: workoutStore, rest: nil)
+        if !WatchLaunchFlags.isSample { watchStore.observeRemoteChanges() }
     }
 
-    private static func makeContainer() -> ModelContainer? {
-        if WatchLaunchFlags.isSample { return try? ModelContainer.dagym(inMemory: true) }
-        if let cloud = try? ModelContainer.dagym(cloudKitEnabled: true) { return cloud }
-        return try? ModelContainer.dagym(cloudKitEnabled: false)
+    /// CloudKit first, local-only as the fallback — each step logged, so a watch that silently
+    /// never syncs (an entitlement or container mismatch) has a cause in Console instead of
+    /// "Routines sync from your iPhone" forever.
+    private static func makeContainer() -> (container: ModelContainer?, isCloudSyncOn: Bool) {
+        if WatchLaunchFlags.isSample {
+            do {
+                let container = try ModelContainer.dagym(inMemory: true)
+                return (container, false)
+            } catch {
+                rootLogger.error("Sample container failed: \(error.localizedDescription, privacy: .public)")
+                return (nil, false)
+            }
+        }
+        do {
+            let container = try ModelContainer.dagym(cloudKitEnabled: true)
+            return (container, true)
+        } catch {
+            let reason = error.localizedDescription
+            rootLogger.error("CloudKit container failed, opening local-only: \(reason, privacy: .public)")
+        }
+        do {
+            let container = try ModelContainer.dagym(cloudKitEnabled: false)
+            return (container, false)
+        } catch {
+            rootLogger.fault("Local container failed: \(error.localizedDescription, privacy: .public)")
+            return (nil, false)
+        }
     }
 }
 

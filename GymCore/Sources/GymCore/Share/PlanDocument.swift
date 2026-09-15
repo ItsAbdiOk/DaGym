@@ -7,10 +7,13 @@ import Foundation
 /// Exercises travel two ways: a seeded exercise is referenced by `seedID` (the recipient already
 /// has it); a custom exercise travels as a full `PlanExercise` row, including its instructions,
 /// so the recipient gets a usable exercise even with no shared library entry to match against.
-public struct PlanDocument: Codable, Sendable {
+public struct PlanDocument: VersionedDocument, Sendable {
     public static let currentFormatVersion = 1
+    /// Every field since format 1 is optional, so a format-1 reader can still use newer files.
+    public static let minimumReaderVersion = 1
 
     public var formatVersion: Int
+    public var minimumReaderVersion: Int?
     public var exportedAt: Date
     public var appVersion: String
 
@@ -22,10 +25,12 @@ public struct PlanDocument: Codable, Sendable {
     public var program: PlanProgram?
 
     public init(
-        formatVersion: Int = PlanDocument.currentFormatVersion, exportedAt: Date, appVersion: String,
+        formatVersion: Int = PlanDocument.currentFormatVersion,
+        minimumReaderVersion: Int? = PlanDocument.minimumReaderVersion, exportedAt: Date, appVersion: String,
         exercises: [PlanExercise] = [], routines: [PlanRoutine] = [], program: PlanProgram? = nil
     ) {
         self.formatVersion = formatVersion
+        self.minimumReaderVersion = minimumReaderVersion
         self.exportedAt = exportedAt
         self.appVersion = appVersion
         self.exercises = exercises

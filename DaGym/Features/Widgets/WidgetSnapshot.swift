@@ -1,5 +1,8 @@
 import Foundation
 import GymCore
+import os
+
+private let widgetLogger = Logger(subsystem: "dev.abdirahmanmohamed.dagym", category: "widgets")
 
 /// One planned day in the snapshot's look-ahead. The widget needs a week of these because its
 /// timeline outlives the write: an entry that renders on Tuesday must show Tuesday's routine,
@@ -144,8 +147,21 @@ struct WidgetSnapshot: Codable, Equatable {
         return calendar
     }
 
+    /// Start-of-day of every `workoutDays` entry, for `resolved(on:workoutDaySet:)`. The
+    /// provider builds this once per timeline and hands it to every entry; building it per
+    /// entry would cost a `startOfDay` per workout day, eight times over, on the widget
+    /// process's tight CPU budget.
+    func workoutDaySet(calendar: Calendar) -> Set<Date> {
+        Set(workoutDays.map { calendar.startOfDay(for: $0) })
+    }
+
     /// Everything one entry renders, computed for `date` rather than for write time.
     func resolved(on date: Date) -> ResolvedWidgetDay {
+        resolved(on: date, workoutDaySet: workoutDaySet(calendar: calendar))
+    }
+
+    /// `resolved(on:)` with the day set precomputed — see `workoutDaySet(calendar:)`.
+    func resolved(on date: Date, workoutDaySet: Set<Date>) -> ResolvedWidgetDay {
         guard hasData else {
             return ResolvedWidgetDay(
                 hasData: false, routineName: nil, exerciseCount: 0, routineSymbolName: nil,
@@ -172,7 +188,7 @@ struct WidgetSnapshot: Codable, Equatable {
             routineSymbolName: useStored ? routineSymbolName : plan?.routineSymbolName,
             routineTint: useStored ? routineTint : plan?.routineTint,
             streakWeeks: streak,
-            trainedDays: Self.trainedDays(workoutDays, endingOn: date, calendar: calendar)
+            trainedDays: Self.trainedDays(in: workoutDaySet, endingOn: date, calendar: calendar)
         )
     }
 
@@ -207,9 +223,17 @@ struct WidgetSnapshot: Codable, Equatable {
 
     /// The 7 days ending on `date`, oldest first, `true` where a finished workout landed.
     static func trainedDays(_ workoutDays: [Date], endingOn date: Date, calendar: Calendar) -> [Bool] {
-        (0..<7).reversed().map { offset -> Bool in
-            guard let day = calendar.date(byAdding: .day, value: -offset, to: date) else { return false }
-            return workoutDays.contains { calendar.isDate($0, inSameDayAs: day) }
+        let days = Set(workoutDays.map { calendar.startOfDay(for: $0) })
+        return trainedDays(in: days, endingOn: date, calendar: calendar)
+    }
+
+    /// `trainedDays(_:endingOn:calendar:)` over a set of start-of-days: seven lookups instead
+    /// of seven passes over the history with `Calendar.isDate(_:inSameDayAs:)`.
+    static func trainedDays(in workoutDaySet: Set<Date>, endingOn date: Date, calendar: Calendar) -> [Bool] {
+        let end = calendar.startOfDay(for: date)
+        return (0..<7).reversed().map { offset -> Bool in
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: end) else { return false }
+            return workoutDaySet.contains(day)
         }
     }
 }
@@ -226,15 +250,23 @@ enum WidgetSnapshotStore {
     }
 
     static func write(_ snapshot: WidgetSnapshot, to suite: UserDefaults) {
-        guard let data = try? JSONEncoder().encode(snapshot) else { return }
-        suite.set(data, forKey: key)
+        do {
+            suite.set(try JSONEncoder().encode(snapshot), forKey: key)
+        } catch {
+            widgetLogger.error("Widget snapshot encode failed: \(error, privacy: .public)")
+        }
     }
 
+    /// `.empty` when nothing has been written yet. A blob that no longer decodes (a Codable
+    /// drift between the app and the extension) also reads as `.empty`, but says so in Console
+    /// rather than silently looking like a fresh install.
     static func read(from suite: UserDefaults) -> WidgetSnapshot {
-        guard let data = suite.data(forKey: key),
-              let snapshot = try? JSONDecoder().decode(WidgetSnapshot.self, from: data) else {
+        guard let data = suite.data(forKey: key) else { return .empty }
+        do {
+            return try JSONDecoder().decode(WidgetSnapshot.self, from: data)
+        } catch {
+            widgetLogger.error("Widget snapshot decode failed: \(error, privacy: .public)")
             return .empty
         }
-        return snapshot
     }
 }

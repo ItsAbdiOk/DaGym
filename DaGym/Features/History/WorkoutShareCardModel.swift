@@ -69,12 +69,18 @@ struct ShareCardModel: Equatable {
     /// `Preferences.formatVolume` (which is main-actor bound, hence the copy here).
     static func volumeText(kg: Double, unit: WeightUnit) -> String {
         let display = unit.display(kg: kg)
+        return volumeFormatter.string(from: NSNumber(value: display)) ?? "\(Int(display))"
+    }
+
+    /// A plain (non-main-actor) value type, built by views and by nonisolated tests alike;
+    /// `NumberFormatter` is `Sendable` on iOS 26+ and nothing mutates it after creation.
+    private static let volumeFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.groupingSeparator = "\u{2009}"
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: display)) ?? "\(Int(display))"
-    }
+        return formatter
+    }()
 
     static func prHeadline(count: Int) -> String? {
         switch count {

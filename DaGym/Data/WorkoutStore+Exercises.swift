@@ -36,11 +36,11 @@ extension WorkoutStore {
     final class ExerciseCatalogue {
         /// The store the rows came from — a snapshot never outlives the store that read it.
         unowned let store: WorkoutStore
-        fileprivate let models: [ExerciseModel]
-        fileprivate let bestByExercise: [UUID: PersonalRecordModel]
-        fileprivate lazy var haystacks: [String] = models.map { WorkoutStore.searchHaystack($0) }
+        let models: [ExerciseModel]
+        let bestByExercise: [UUID: PersonalRecordModel]
+        lazy var haystacks: [String] = models.map { WorkoutStore.searchHaystack($0) }
 
-        fileprivate init(
+        init(
             store: WorkoutStore, models: [ExerciseModel], bestByExercise: [UUID: PersonalRecordModel]
         ) {
             self.store = store
@@ -50,12 +50,38 @@ extension WorkoutStore {
     }
 
     /// Two fetches — the library and the PR cache — however many `exercises(in:matching:)` calls
-    /// follow.
+    /// follow, and none at all until the next `save()`: the catalogue is cached on the store
+    /// keyed on `changeToken`, so the library search re-reading and re-folding ~1 500 rows on
+    /// every keystroke (`LibraryView`, `ExercisePickerSheet`) became a dictionary lookup. A
+    /// context with unsaved changes is never served from the cache — a row inserted but not yet
+    /// saved would otherwise be invisible to the next read.
     func exerciseCatalogue() -> ExerciseCatalogue {
-        ExerciseCatalogue(
+        if let cachedCatalogue, cachedCatalogue.token == changeToken, !context.hasChanges {
+            return cachedCatalogue.catalogue
+        }
+        let state = storeSignposter.beginInterval("exerciseCatalogue")
+        defer { storeSignposter.endInterval("exerciseCatalogue", state) }
+        let catalogue = ExerciseCatalogue(
             store: self, models: fetch(Self.liveExercises()).filter(Self.isLive),
             bestByExercise: bestE1RMRecordsByExercise()
         )
+        cachedCatalogue = (changeToken, catalogue)
+        return catalogue
+    }
+
+    /// Drops the cached catalogue so the next `exerciseCatalogue()` re-reads the library. `save()`
+    /// makes this unnecessary for the store's own writes (the token moves); it is for rows that
+    /// arrive without one — a CloudKit import folded by `dedupeSeededRows()` that changed nothing
+    /// locally, or a seeder saving through the context directly.
+    func invalidateExerciseCatalogue() {
+        cachedCatalogue = nil
+    }
+
+    /// How many live exercises the library holds — the number `LibraryView`'s header shows. Reads
+    /// the cached catalogue, so it costs nothing between saves (a `fetchCount` can't exclude the
+    /// fold tombstones: `mergedIntoID == nil` doesn't translate to a predicate, see `liveExercises`).
+    func exerciseCount() -> Int {
+        exerciseCatalogue().models.count
     }
 
     /// Filtered, sorted (favorites first, then name) exercise list for the library screen. Best

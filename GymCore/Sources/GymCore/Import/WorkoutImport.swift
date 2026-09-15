@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// A third-party app whose CSV export `WorkoutImport` can parse (plan.md §6.8: "Import history
 /// from other apps").
@@ -158,7 +159,22 @@ public enum WorkoutImport {
     /// `assumedWeightUnit` is the unit to read a unit-less weight column in — what the user picked
     /// in the preview after `ImportResult.weightUnitAssumed` flagged the ambiguity. `nil` keeps the
     /// historical behaviour (kg) for the first, un-prompted parse.
+    ///
+    /// A file over `CSVParser.maxBytes` is never parsed: its header line alone is sniffed for the
+    /// format, and a recognised file comes back with no workouts and a single `ImportProblem`
+    /// saying it was too large, so the preview can tell the user instead of the app running out
+    /// of memory copying the whole thing.
     public static func parse(csv: String, assumedWeightUnit: WeightUnit? = nil) -> ImportResult? {
+        let state = GymCorePerf.signposter.beginInterval("WorkoutImport.parse")
+        defer { GymCorePerf.signposter.endInterval("WorkoutImport.parse", state) }
+        if CSVParser.isOversized(csv) {
+            let headerLine = String(csv.prefix { $0 != "\n" && $0 != "\r" })
+            guard let source = ImportDetector.detect(headerLine: headerLine) else { return nil }
+            let megabytes = CSVParser.maxBytes / (1024 * 1024)
+            return ImportResult(source: source, workouts: [], problems: [
+                ImportProblem(line: 1, message: "File is too large to import (over \(megabytes) MB).")
+            ])
+        }
         let rows = CSVParser.parse(csv)
         guard let header = rows.first, !header.isEmpty else { return nil }
         guard let source = ImportDetector.detect(headerLine: header.joined(separator: ",")) else {

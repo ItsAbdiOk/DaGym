@@ -81,6 +81,18 @@ struct ProgressionEngineTimedTests {
         #expect(result.reason.kind == .increase)
     }
 
+    @Test("one heroic hold cannot prescribe past the ceiling")
+    func heroicHoldIsCappedAtCeiling() {
+        let ceiling = TrainingConstants.timedCeilingSeconds
+        let result = ProgressionEngine.prescribe(
+            rule: .timed(stepSeconds: 5), planned: planned, history: [entry(durationSeconds: ceiling * 5)],
+            stall: StallState()
+        )
+        #expect(result.sets.allSatisfy { $0.durationSeconds == ceiling })
+        #expect(result.reason.kind == .increase)
+        #expect(result.reason.title == "+\(ceiling - 30)s")
+    }
+
     @Test("missing the hold repeats the hold that was asked for, not the shorter one held")
     func missRepeatsAskedDuration() {
         let result = ProgressionEngine.prescribe(

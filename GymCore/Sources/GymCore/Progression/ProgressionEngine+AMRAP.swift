@@ -107,11 +107,15 @@ extension ProgressionEngine {
             context, weightKg: newWeight,
             reason: PrescriptionReason(
                 title: "Back off to \(context.formatted(kg: newWeight))",
-                body: "\(misses) sessions in a row missed — dropping 10% to rebuild.", kind: .deload
+                body: "\(misses) sessions in a row missed — dropping \(Self.amrapMissPercent)% to rebuild.",
+                kind: .deload
             ),
             stall: stall.advancing(misses: 0, weightKg: newWeight), baselineDate: baselineDate
         )
     }
+
+    /// "10" for a 0.90 miss fraction — the copy is derived from the constant so the two can't drift.
+    static let amrapMissPercent = Int(((1 - TrainingConstants.amrapMissFraction) * 100).rounded())
 
     private enum AMRAPOutcome: Equatable {
         case double, normal, miss

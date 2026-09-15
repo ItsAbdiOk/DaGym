@@ -14,6 +14,9 @@ struct CoachAskSection: View {
     @State private var isAsking = false
     /// Neither model could answer — shown in the card's place so a tap never ends in nothing.
     @State private var failed = false
+    /// The in-flight generation, cancelled when the section leaves the screen so a slow model
+    /// never writes an answer into a view that is gone.
+    @State private var askTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
@@ -26,9 +29,9 @@ struct CoachAskSection: View {
                     .frame(minHeight: 44)
                     .dgCard(padding: 0)
                     .submitLabel(.send)
-                    .onSubmit { Task { await ask() } }
+                    .onSubmit { askTask = Task { await ask() } }
                     .accessibilityIdentifier(A11yID.coachQuestion)
-                Button { Task { await ask() } } label: {
+                Button { askTask = Task { await ask() } } label: {
                     Image(systemName: isAsking ? "ellipsis" : "arrow.up")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.white)
@@ -50,6 +53,7 @@ struct CoachAskSection: View {
                     .accessibilityIdentifier(A11yID.coachAnswer)
             }
         }
+        .onDisappear { askTask?.cancel() }
     }
 
     @ViewBuilder
@@ -94,10 +98,23 @@ struct CoachAskSection: View {
             store: store, unit: preferences.weightUnit,
             calendar: preferences.trainingCalendar
         )
-        if let fromModel = try? await coach.model.answer(question: text, tools: source) {
+        let fromModel: CoachAnswer?
+        do {
+            fromModel = try await coach.model.answer(question: text, tools: source)
+        } catch {
+            coachLogger.error("Coach answer failed, falling back to rules: \(error, privacy: .public)")
+            fromModel = nil
+        }
+        // A cancelled generation (the tab was left) must not repaint a view that is gone.
+        guard !Task.isCancelled else { return }
+        if let fromModel {
             answer = fromModel
         } else {
-            answer = try? await RuleCoachModel().answer(question: text, tools: source)
+            // The rule model throws for any question it can't parse — that is the expected
+            // "couldn't answer" path, not a failure worth logging.
+            let fromRules = try? await RuleCoachModel().answer(question: text, tools: source)
+            guard !Task.isCancelled else { return }
+            answer = fromRules
         }
         failed = answer == nil
     }

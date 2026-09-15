@@ -1,41 +1,6 @@
 import Foundation
 import XCTest
 
-/// Stable `accessibilityIdentifier` strings, duplicated from
-/// `DaGym/Design/AccessibilityIDs.swift`. `DaGymUITests` runs out-of-process
-/// against the built app and can't `import DaGym` (it doesn't link against
-/// the app module), so the raw values are kept here in lockstep by hand. If
-/// you rename an identifier on the app side, rename it here too.
-enum A11yID {
-    static let homeStart = "home.start"
-    static let homeFreestyle = "home.freestyle"
-
-    static let tabToday = "tab.today"
-    static let tabRoutines = "tab.routines"
-    static let tabProgress = "tab.progress"
-    static let tabLibrary = "tab.library"
-    static let tabCoach = "tab.coach"
-
-    static let workoutFinish = "workout.finish"
-
-    static func setRowDone(_ index: Int) -> String { "setrow.done.\(index)" }
-
-    static let keypadLog = "keypad.log"
-
-    static func keypadKey(_ digit: String) -> String { "keypad.key.\(digit)" }
-
-    static let summaryDone = "summary.done"
-
-    static let historyList = "history.list"
-    static let historyRow0 = "history.row.0"
-
-    static let onboardingNext = "onboarding.next"
-    static let onboardingSkip = "onboarding.skip"
-    static let onboardingSkipAll = "onboarding.skipAll"
-
-    static func onboardingStep(_ name: String) -> String { "onboarding.step.\(name)" }
-}
-
 /// End-to-end smoke coverage for the app's core loop, run against a fresh
 /// in-memory, seeded store (`-dgUITest`, see `LaunchFlags`) so these never
 /// depend on — or pollute — whatever is on a developer's simulator.

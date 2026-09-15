@@ -28,7 +28,6 @@
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "NO"
-      codeCoverageEnabled = "YES"
       onlyGenerateCoverageForSpecifiedTargets = "NO">
       <MacroExpansion>
          <BuildableReference
@@ -60,17 +59,6 @@
                BuildableName = "DaGymUITests.xctest"
                BlueprintName = "DaGymUITests"
                ReferencedContainer = "container:DaGym.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "GymCoreTests"
-               BuildableName = "GymCoreTests"
-               BlueprintName = "GymCoreTests"
-               ReferencedContainer = "container:GymCore">
             </BuildableReference>
          </TestableReference>
       </Testables>

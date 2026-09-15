@@ -3,10 +3,11 @@ import UIKit
 
 /// Thin `UIImagePickerController` wrapper for progress-photo capture, with an optional ghost
 /// overlay (`cameraOverlayView`) so retaking a shot lines up with the previous one (plan.md
-/// §6.4). `PhotoCaptureView` is the only caller.
+/// §6.4). Hands back the picker's `UIImage` as-is — re-encoding a 12 MP shot to JPEG here would
+/// be main-thread work the caller only undoes again. `PhotoCaptureView` is the only caller.
 struct CameraPicker: UIViewControllerRepresentable {
     var ghost: UIImage?
-    var onCapture: (Data) -> Void
+    var onCapture: (UIImage) -> Void
 
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let controller = UIImagePickerController()
@@ -27,9 +28,9 @@ struct CameraPicker: UIViewControllerRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(onCapture: onCapture) }
 
     final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let onCapture: (Data) -> Void
+        let onCapture: (UIImage) -> Void
 
-        init(onCapture: @escaping (Data) -> Void) {
+        init(onCapture: @escaping (UIImage) -> Void) {
             self.onCapture = onCapture
         }
 
@@ -37,9 +38,8 @@ struct CameraPicker: UIViewControllerRepresentable {
             _ picker: UIImagePickerController,
             didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
         ) {
-            let image = (info[.editedImage] as? UIImage) ?? (info[.originalImage] as? UIImage)
-            if let data = image?.jpegData(compressionQuality: 0.95) {
-                onCapture(data)
+            if let image = (info[.editedImage] as? UIImage) ?? (info[.originalImage] as? UIImage) {
+                onCapture(image)
             }
         }
     }

@@ -127,12 +127,17 @@ struct LogCommandValidatorBoundsTests {
         #expect(failure(LogCommandValidator.validate([none], in: Self.context())) == .setsCountOutOfBounds)
     }
 
-    @Test("reps over 100 and weight over 600 kg are refused outright")
+    @Test("reps over 100 and weight over the shared load ceiling are refused outright")
     func repsAndWeightUpperBounds() {
         let reps = logSet(.init(reps: 101, weightKg: 100))
         #expect(failure(LogCommandValidator.validate([reps], in: Self.context())) == .repsOutOfBounds)
-        let weight = logSet(.init(reps: 5, weightKg: 600.5))
+        let weight = logSet(.init(reps: 5, weightKg: TrainingConstants.maxLoadKg + 0.5))
         #expect(failure(LogCommandValidator.validate([weight], in: Self.context())) == .weightOutOfBounds)
+        // Voice, import and plan sanitising all read the same number.
+        #expect(TrainingConstants.maxLoadKg == 600)
+        #expect(ImportLimits.maxWeightKg == TrainingConstants.maxLoadKg)
+        #expect(ImportParsing.weightKg("650", columnUnit: .kg, perRowUnit: nil) == nil)
+        #expect(ImportParsing.weightKg("600", columnUnit: .kg, perRowUnit: nil) == 600)
     }
 
     @Test("reps more than double the last set on the same exercise are suspicious, not refused")

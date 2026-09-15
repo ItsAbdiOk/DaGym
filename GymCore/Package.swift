@@ -1,8 +1,8 @@
 // swift-tools-version: 6.2
 import PackageDescription
 
-// All training math and logic for DaGym. No UI, no SwiftData, no Apple
-// frameworks beyond Foundation, so `swift test` runs without a simulator.
+// All training math and logic for DaGym. No UI, no SwiftData, nothing beyond Foundation and
+// `os` (signposts and logging only), so `swift test` runs without a simulator.
 let package = Package(
     name: "GymCore",
     platforms: [.iOS(.v26), .watchOS(.v26), .macOS(.v26)],

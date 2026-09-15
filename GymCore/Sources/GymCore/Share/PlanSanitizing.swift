@@ -122,6 +122,12 @@ extension PlanSet {
         if let weight = result.targetWeightKg, weight < 0 || !weight.isFinite {
             result.targetWeightKg = nil
         }
+        // The same ceiling voice and import use — and the same verdict: a 10^9 kg target from a
+        // hand-edited file is dropped, not capped, so a nonsense number never becomes a real
+        // 600 kg plan target the progression engine would prescribe from.
+        if let weight = result.targetWeightKg, weight > TrainingConstants.maxLoadKg {
+            result.targetWeightKg = nil
+        }
         if let rpe = result.targetRPE {
             result.targetRPE = rpe.isFinite ? min(max(rpe, 1), 10) : nil
         }

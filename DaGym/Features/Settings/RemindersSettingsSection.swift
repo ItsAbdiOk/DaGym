@@ -49,10 +49,22 @@ struct RemindersSettingsSection: View {
     @Environment(Preferences.self) private var preferences
     @Environment(WorkoutStore.self) private var store
 
-    private let scheduler = TrainingNotificationScheduler()
+    /// `static`: a stored property was rebuilt on every `SettingsView` render.
+    private static let scheduler = TrainingNotificationScheduler()
+    private static let hourFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h a"
+        return formatter
+    }()
+
+    /// The default `permission`. One app-wide instance rather than a fresh `@Observable` per
+    /// `SettingsView` render — `@State` keeps only the first anyway, and the status it holds is
+    /// the device's, not this view's. Not private: a default argument is evaluated at the call
+    /// site, so a `private` static can't be one.
+    static let sharedPermission = ReminderPermissionState()
 
     /// Injectable so `FeatureSettingsTests` can drive the granted/denied/not-determined states.
-    init(permission: ReminderPermissionState = ReminderPermissionState()) {
+    init(permission: ReminderPermissionState = RemindersSettingsSection.sharedPermission) {
         _permission = State(initialValue: permission)
     }
 
@@ -64,12 +76,12 @@ struct RemindersSettingsSection: View {
                     Toggle("Streak reminders", isOn: streakBinding)
                         .tint(DGColor.coral).labelsHidden()
                 }
-                ReminderDivider()
+                SettingsDivider()
                 ReminderRow(label: "Weekly recap") {
                     Toggle("Weekly recap", isOn: recapBinding)
                         .tint(DGColor.coral).labelsHidden()
                 }
-                ReminderDivider()
+                SettingsDivider()
                 ReminderRow(label: "Reminder time") {
                     Stepper(value: hourBinding, in: 0...23) {
                         Text(hourLabel).font(DGFont.subhead).foregroundStyle(DGColor.ink3)
@@ -77,13 +89,13 @@ struct RemindersSettingsSection: View {
                     .accessibilityLabel("Reminder time")
                     .accessibilityValue(hourLabel)
                 }
-                ReminderDivider()
+                SettingsDivider()
                 ReminderRow(label: "Workout day reminder") {
                     Toggle("Workout day reminder", isOn: workoutDayEnabledBinding)
                         .tint(DGColor.coral).labelsHidden()
                 }
                 if preferences.workoutDayReminderEnabled {
-                    ReminderDivider()
+                    SettingsDivider()
                     ReminderRow(label: "Workout day time") {
                         Stepper(value: workoutDayHourBinding, in: 0...23) {
                             Text(workoutDayHourLabel).font(DGFont.subhead).foregroundStyle(DGColor.ink3)
@@ -93,7 +105,7 @@ struct RemindersSettingsSection: View {
                     }
                 }
                 if showsDeniedRow {
-                    ReminderDivider()
+                    SettingsDivider()
                     deniedRow
                 }
             }
@@ -204,7 +216,7 @@ struct RemindersSettingsSection: View {
     }
 
     private func reschedule() {
-        scheduler.rescheduleAll(store: store, preferences: preferences)
+        Self.scheduler.rescheduleAll(store: store, preferences: preferences)
     }
 
     private var hourLabel: String { Self.hourLabel(preferences.reminderHour) }
@@ -215,9 +227,7 @@ struct RemindersSettingsSection: View {
         components.hour = hour
         components.minute = 0
         let date = Calendar.current.date(from: components) ?? Date()
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h a"
-        return formatter.string(from: date)
+        return hourFormatter.string(from: date)
     }
 }
 
@@ -235,12 +245,6 @@ private struct ReminderRow<Trailing: View>: View {
         }
         .padding(.horizontal, DGSpace.s5)
         .frame(minHeight: 52)
-    }
-}
-
-private struct ReminderDivider: View {
-    var body: some View {
-        Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
     }
 }
 

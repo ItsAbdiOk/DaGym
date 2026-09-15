@@ -24,7 +24,10 @@ enum LaunchFlags {
     /// returned nil from every intent — a data-loss switch anyone could flip on a shipped
     /// binary. The XCTest environment/class sniffing below needs no gate: neither can be true
     /// in an App Store process.
-    static var isUnitTestHost: Bool {
+    /// A `let`: `AppRootContainer.body` reads this on every render, and the environment
+    /// dictionary copy plus `NSClassFromString` behind it are the same answer for the whole
+    /// process.
+    static let isUnitTestHost: Bool = {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-dgTestHost") { return true }
         #endif
@@ -35,6 +38,17 @@ enum LaunchFlags {
         }
         // The XCTest framework is only ever loaded into a test host.
         return NSClassFromString("XCTestCase") != nil
+    }()
+
+    /// Whether this process was launched with `-dgLaunchTiming`: `LaunchTiming` writes the
+    /// process-start-to-first-frame time for `scripts/perf-baseline.sh` on the first `RootView`
+    /// appearance. Nothing else changes about the launch.
+    static var isLaunchTiming: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-dgLaunchTiming")
+        #else
+        false
+        #endif
     }
 
     /// Whether this process was launched with `-dgScreenshots`: the App Store screenshot

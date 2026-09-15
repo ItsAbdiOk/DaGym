@@ -20,14 +20,17 @@ public struct Prescription: Hashable, Sendable {
     public var weightKg: Double
     public var reps: Int
     public var durationSeconds: Int?
-    public var previous: String?
+    /// The prior-session set this prescription copies, when there is one — so `weightKg`/`reps`
+    /// are "what you did last time" exactly when this is non-nil. The set itself, not a
+    /// formatted string: the app owns the display unit, and a model must not carry a kg string.
+    public var previous: PreviousSet?
     public var reason: String
     /// For `.assisted`: the assistance to set on the machine/band. `weightKg` carries the
     /// same number there for callers that predate this field — prefer this one.
     public var assistanceKg: Double?
 
     public init(
-        weightKg: Double, reps: Int, durationSeconds: Int? = nil, previous: String?, reason: String,
+        weightKg: Double, reps: Int, durationSeconds: Int? = nil, previous: PreviousSet?, reason: String,
         assistanceKg: Double? = nil
     ) {
         self.weightKg = weightKg
@@ -109,19 +112,13 @@ public enum AutoFill {
                     : "First time — enter a weight"
             )
         }
-        let weightReps = "\(WeightFormat.kg(previous.weightKg)) × \(previous.reps)"
-        let ghost = previous.durationSeconds.map(clock) ?? weightReps
         return Prescription(
             weightKg: previous.weightKg,
             reps: previous.reps,
             durationSeconds: previous.durationSeconds,
-            previous: ghost,
+            previous: previous,
             reason: "Same as last time"
         )
-    }
-
-    private static func clock(_ seconds: Int) -> String {
-        "\(seconds / 60):\(String(format: "%02d", seconds % 60))"
     }
     // swiftlint:enable large_tuple
 }
@@ -132,9 +129,11 @@ private extension Array {
     }
 }
 
-/// Formats a weight in kilograms, dropping a trailing ".0".
-public enum WeightFormat {
-    public static func kg(_ value: Double) -> String {
-        value.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(value)) : String(value)
+/// Formats a unit-less ratio ("1.5× bodyweight"), dropping a trailing ".0". Not for weights —
+/// those go through `WeightUnit.format(kg:)`, which knows the lifter's unit.
+public enum RatioFormat {
+    public static func plain(_ value: Double) -> String {
+        guard value.isFinite else { return "—" }
+        return value.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(value)) : String(value)
     }
 }

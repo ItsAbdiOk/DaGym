@@ -4,7 +4,9 @@ import SwiftUI
 /// to detail, and a floating "log a past workout" entry point. Uses a
 /// plain `List` (rows styled to look like cards) so swipe actions work.
 struct HistoryView: View {
-    var records: [WorkoutRecord]
+    /// Records already bucketed by `HistoryView.weekGroups(records:now:calendar:)` — the
+    /// owner does that once per refresh, not on every render.
+    var groups: [HistoryWeekGroup]
     var workoutsCount: Int
     var volumeKg: Double
     /// Total number of cached record lines, for the "RECORDS" tile's subtitle.
@@ -18,7 +20,7 @@ struct HistoryView: View {
     /// Opens the month calendar sheet (`MonthCalendarSheet`).
     var onCalendar: () -> Void = {}
     /// Body-wide charts rendered above the tiles, scrolling with the list as one page.
-    var charts: AnyView = AnyView(EmptyView())
+    var charts = AnyView(EmptyView())
 
     @Environment(Preferences.self) private var preferences
 
@@ -91,7 +93,6 @@ struct HistoryView: View {
     }
 
     private var list: some View {
-        let groups = weekGroups
         let firstLabel = groups.first?.label
         return List {
             header
@@ -101,7 +102,7 @@ struct HistoryView: View {
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
-            ForEach(groups, id: \.label) { group in
+            ForEach(groups) { group in
                 Section {
                     ForEach(Array(group.records.enumerated()), id: \.element.id) { offset, record in
                         row(for: record, isFirst: group.label == firstLabel && offset == 0)
@@ -157,22 +158,22 @@ struct HistoryView: View {
     /// Records bucketed into "This Week", "Last Week" and, when needed,
     /// month labels for anything older. Week boundaries follow
     /// `Preferences.trainingCalendar` (X1/D11/S2) so "This Week" agrees with Home's streak and
-    /// the Progress charts.
-    private var weekGroups: [(label: String, records: [WorkoutRecord])] {
-        let calendar = preferences.trainingCalendar
-        let now = Date()
+    /// the Progress charts. Pure and called once per refresh by `HistoryTabView`, so a sheet
+    /// dismiss or an undo toast no longer re-sorts and re-labels every record.
+    static func weekGroups(records: [WorkoutRecord], now: Date, calendar: Calendar) -> [HistoryWeekGroup] {
+        let thisWeekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start
         var buckets: [String: [WorkoutRecord]] = [:]
         var order: [String] = []
         for record in records.sorted(by: { $0.date > $1.date }) {
-            let label = Self.weekLabel(for: record.date, now: now, calendar: calendar)
+            let label = weekLabel(for: record.date, thisWeekStart: thisWeekStart, calendar: calendar)
             if buckets[label] == nil { order.append(label) }
             buckets[label, default: []].append(record)
         }
-        return order.map { ($0, buckets[$0] ?? []) }
+        return order.map { HistoryWeekGroup(label: $0, records: buckets[$0] ?? []) }
     }
 
-    private static func weekLabel(for date: Date, now: Date, calendar: Calendar) -> String {
-        guard let thisWeekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start,
+    private static func weekLabel(for date: Date, thisWeekStart: Date?, calendar: Calendar) -> String {
+        guard let thisWeekStart,
               let dateWeekStart = calendar.dateInterval(of: .weekOfYear, for: date)?.start,
               let weeksAgo = calendar.dateComponents(
                 [.weekOfYear], from: dateWeekStart, to: thisWeekStart
@@ -182,17 +183,28 @@ struct HistoryView: View {
         switch weeksAgo {
         case 0: return "This Week"
         case 1: return "Last Week"
-        default:
-            let formatter = DateFormatter()
-            formatter.dateFormat = "MMMM"
-            return formatter.string(from: date).uppercased()
+        default: return monthFormatter.string(from: date).uppercased()
         }
     }
+
+    private static let monthFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM"
+        return formatter
+    }()
 
     /// "1 workout" / "2 workouts".
     static func pluralized(_ count: Int, _ noun: String) -> String {
         "\(count) \(noun)\(count == 1 ? "" : "s")"
     }
+}
+
+/// One History section — "This Week", "Last Week" or an older month — and its records, newest
+/// first. `label` doubles as the identity, as the list's `ForEach` always keyed on it.
+struct HistoryWeekGroup: Identifiable, Hashable {
+    var label: String
+    var records: [WorkoutRecord]
+    var id: String { label }
 }
 
 /// One workout row: name, day + duration, and a volume/sets/PR footnote.
@@ -209,7 +221,10 @@ private struct RecordCard: View {
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Spacer()
-                Text("\(Self.dayLabel(record.date)) · \(record.durationMinutes) min").dgLabel()
+                // `Text(_:format:)` caches its formatter; a `DateFormatter` per row did not.
+                Text(
+                    "\(record.date, format: .dateTime.weekday(.abbreviated)) · \(record.durationMinutes) min"
+                ).dgLabel()
             }
             Text(footnote)
                 .font(DGFont.footnote)
@@ -223,12 +238,6 @@ private struct RecordCard: View {
         let volume = "\(preferences.formatVolume(kg: record.volumeKg)) \(preferences.unitSymbol)"
         let base = "\(volume) · \(HistoryView.pluralized(record.sets, "set"))"
         return record.prCount > 0 ? "\(base) · \(record.prCount) PRs" : base
-    }
-
-    private static func dayLabel(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE"
-        return formatter.string(from: date).uppercased()
     }
 }
 
@@ -279,7 +288,8 @@ private struct ProgressTile<Destination: View>: View {
 #Preview {
     NavigationStack {
         HistoryView(
-            records: SampleData.history, workoutsCount: SampleData.history.count,
+            groups: HistoryView.weekGroups(records: SampleData.history, now: Date(), calendar: .current),
+            workoutsCount: SampleData.history.count,
             volumeKg: 412_000, recordsCount: 12, recoveryHeadline: "Chest still spent",
             currentStreakWeeks: 3, onBackfill: {}, onDelete: { _ in }
         )

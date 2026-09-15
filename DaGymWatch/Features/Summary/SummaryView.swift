@@ -33,7 +33,9 @@ struct SummaryView: View {
         .accessibilityElement(children: .contain)
     }
 
-    private var title: String { "\(store.home.todaysRoutine?.name ?? "Workout") done" }
+    /// Names the routine that was done — `summaryTitle` is captured from the session at finish,
+    /// so a rest-day pick or a resumed phone workout of another routine reads right.
+    private var title: String { "\(store.summaryTitle ?? "Workout") done" }
 
     private func statCard(_ label: String, _ value: String) -> some View {
         VStack(spacing: 2) {

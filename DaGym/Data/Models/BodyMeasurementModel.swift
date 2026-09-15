@@ -4,8 +4,8 @@ import SwiftData
 /// A single bodyweight (or other body metric) reading.
 @Model
 final class BodyMeasurementModel {
-    var id: UUID = UUID()
-    var date: Date = Date()
+    var id = UUID()
+    var date = Date()
     var bodyweightKg: Double?
     var source: String = "manual"
 

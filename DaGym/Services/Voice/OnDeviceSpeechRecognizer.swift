@@ -1,6 +1,9 @@
 import AVFAudio
 import Foundation
 import Speech
+import os
+
+private let signposter = OSSignposter(subsystem: "dev.abdirahmanmohamed.dagym", category: "perf")
 
 /// The real `SpeechRecognizing`: `SFSpeechRecognizer` in on-device-only mode over an
 /// `AVAudioEngine` tap. Never sends audio to a server — see `requiresOnDeviceRecognition` below —
@@ -23,7 +26,11 @@ final class OnDeviceSpeechRecognizer: SpeechRecognizing {
     /// created in and is ignored once that generation is over.
     private var generation = 0
 
+    /// Signposted because it is not cheap (an `SFSpeechRecognizer` plus `SpeechAudioResources`'
+    /// `AVAudioEngine`) and must run once per workout — it used to run on every header render.
     init(locale: Locale = .current) {
+        let interval = signposter.beginInterval("OnDeviceSpeechRecognizer.init")
+        defer { signposter.endInterval("OnDeviceSpeechRecognizer.init", interval) }
         recognizer = SFSpeechRecognizer(locale: locale)
     }
 

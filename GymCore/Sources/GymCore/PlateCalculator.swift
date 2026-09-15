@@ -53,7 +53,8 @@ public struct PlateLoad: Hashable, Sendable {
     }
 
     static func format(_ value: Double) -> String {
-        value == value.rounded() ? String(Int(value)) : String(value)
+        guard value.isFinite else { return "—" }
+        return value == value.rounded() ? String(Int(value)) : String(value)
     }
 }
 
@@ -87,16 +88,12 @@ public enum PlateCalculator {
         if target < base - 0.001 { return .tooLight(bar: bar) }
 
         let perSideTarget = (target - base) / 2
-        var belowPlates: [Double] = []
-        var abovePlates: [Double]?
-        for option in combinations(plates) {
-            if option.total <= perSideTarget + epsilon {
-                belowPlates = option.plates
-            } else {
-                abovePlates = option.plates
-                break
-            }
-        }
+        let options = combinations(plates)
+        let firstAbove = firstIndexAbove(perSideTarget, in: options)
+        // The table always starts with the empty side (total 0), so `firstAbove` is never 0
+        // here — `target < base` was rejected above; guard anyway rather than index -1.
+        let belowPlates = firstAbove > 0 ? options[firstAbove - 1].plates : []
+        let abovePlates = firstAbove < options.count ? options[firstAbove].plates : nil
 
         let below = PlateLoad(target: target, bar: bar, perSide: belowPlates, collarsKg: collarsKg)
         if below.isExact { return .exact(below) }
@@ -111,11 +108,27 @@ public enum PlateCalculator {
     /// Exposed so callers (and tests) can ask "can this actually be loaded?" with the same
     /// search `load` uses.
     static func perSide(atOrBelow perSideTarget: Double, plates: [PlateStock]) -> [Double] {
-        var best: [Double] = []
-        for option in combinations(plates) where option.total <= perSideTarget + epsilon {
-            best = option.plates
+        let options = combinations(plates)
+        let firstAbove = firstIndexAbove(perSideTarget, in: options)
+        return firstAbove > 0 ? options[firstAbove - 1].plates : []
+    }
+
+    /// The index of the first combination whose total is above `perSideTarget` (+ `epsilon`),
+    /// or `options.count` when none is. A binary search: `combinations` is sorted by total, and
+    /// `load` runs several times per prescription and once per keypad keystroke, so a linear
+    /// walk over a rich inventory's thousands of rungs was the hot spot.
+    private static func firstIndexAbove(_ perSideTarget: Double, in options: [Combination]) -> Int {
+        var low = 0
+        var high = options.count
+        while low < high {
+            let mid = (low + high) / 2
+            if options[mid].total <= perSideTarget + epsilon {
+                low = mid + 1
+            } else {
+                high = mid
+            }
         }
-        return best
+        return low
     }
 
     /// One loadable per-side combination.

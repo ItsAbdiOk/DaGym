@@ -166,4 +166,35 @@ struct StreaksTests {
         #expect(result.longest == 2)
         #expect(result.current == 2)
     }
+
+    @Test("weeks are keyed by (yearForWeekOfYear, weekOfYear), so a streak crosses the year boundary")
+    func streakCrossesYearBoundary() {
+        let cal = calendar
+        var components = DateComponents(year: 2025, month: 1, day: 8, hour: 12) // Wed in ISO week 2
+        components.timeZone = cal.timeZone
+        let now = cal.date(from: components) ?? Date()
+        var workouts: [Date] = []
+        for weeksAgo in 0..<6 { workouts += dates(weeksAgo: weeksAgo, count: 4, now: now) }
+        let result = Streaks.weekly(workoutDates: workouts, weeklyGoal: 4, calendar: cal, now: now)
+        #expect(result.current == 6)
+        #expect(result.longest == 6)
+        #expect(Streaks.WeekKey(now, calendar: cal)?.week == 2)
+        let lastYear = Streaks.WeekKey(now, calendar: cal)?.previous(calendar: cal)?.previous(calendar: cal)
+        #expect(lastYear?.year == 2024)
+        #expect(lastYear?.week == 52)
+        #expect(lastYear?.next(calendar: cal)?.next(calendar: cal) == Streaks.WeekKey(now, calendar: cal))
+    }
+
+    @Test("a two-year history with a long streak is one lookup per week, and the maths still agrees")
+    func longHistoryStaysCorrect() {
+        let now = Date()
+        var workouts: [Date] = []
+        for weeksAgo in 0..<104 where weeksAgo != 60 {
+            workouts += dates(weeksAgo: weeksAgo, count: 4, now: now)
+        }
+        let result = Streaks.weekly(workoutDates: workouts, weeklyGoal: 4, calendar: calendar, now: now)
+        #expect(result.current == 60)
+        #expect(result.longest == 60)
+        #expect(result.thisWeekCount == 4)
+    }
 }

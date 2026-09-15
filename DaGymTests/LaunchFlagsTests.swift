@@ -18,6 +18,13 @@ struct LaunchFlagsTests {
         #expect(ProcessInfo.processInfo.arguments.contains("-dgTestHost"))
     }
 
+    @Test("-dgLaunchTiming is off unless passed")
+    func launchTimingFlagIsOffByDefault() {
+        #expect(
+            LaunchFlags.isLaunchTiming == ProcessInfo.processInfo.arguments.contains("-dgLaunchTiming")
+        )
+    }
+
     /// The test host is launched without `-dgInitCloudKitSchema`, so the flag is off; and it is
     /// `#if DEBUG` like every other launch flag — in Release the body is the literal `false`,
     /// which `releaseBuildCompilesFlagOut` pins by mirroring the same gate.

@@ -71,7 +71,6 @@ public struct WeeklyRecap: Sendable, Hashable {
 /// notifications (plan.md §6.4). No UI, no persistence — everything here is pure functions over
 /// dates the caller already fetched from the store.
 public enum ConsistencyCalendar {
-    // swiftlint:disable large_tuple
     /// Buckets `workouts` by calendar day inside `[from, to]` (inclusive, one `DayCell` per day
     /// even when nothing happened that day) and assigns each day a 0…4 level.
     ///
@@ -83,7 +82,6 @@ public enum ConsistencyCalendar {
     public static func cells(
         workouts: [(date: Date, sets: Int, minutes: Int)], from: Date, to: Date, calendar: Calendar
     ) -> [DayCell] {
-        // swiftlint:enable large_tuple
         let start = calendar.startOfDay(for: from)
         let end = calendar.startOfDay(for: to)
         guard start <= end else { return [] }

@@ -6,17 +6,18 @@ import SwiftUI
 
 /// The active-workout entry point for voice logging: the hold-to-talk button, the live partial
 /// transcript while held, the "what I understood" card, and error states. Mount once per
-/// `ActiveWorkoutView` — it owns its own `VoiceLogController` and reuses the screen's existing
-/// `UndoAction` toast (`undoAction`) so a voice-logged set undoes exactly like any other set.
+/// `ActiveWorkoutView`, which owns the `VoiceLogController` (built once in its `onAppear`) and
+/// passes it in — a `@State` initial value here was re-evaluated on every construction of this
+/// struct, i.e. every header render, allocating and discarding an `SFSpeechRecognizer`, an
+/// `AVAudioEngine` and a synthesizer per rest tick. It reuses the screen's existing `UndoAction`
+/// toast (`undoAction`) so a voice-logged set undoes exactly like any other set.
 struct VoiceLogEntryPoint: View {
     var session: WorkoutSession
     var store: WorkoutStore
     var preferences: Preferences
+    var controller: VoiceLogController
     @Binding var undoAction: UndoAction?
 
-    @State private var controller = VoiceLogController(
-        recognizer: OnDeviceSpeechRecognizer(), speaker: VoiceSpeechSynthesizer()
-    )
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var reviewCard: VoiceLogController.ReviewCard?
     @State private var activeError: VoiceLogController.VoiceLogError?

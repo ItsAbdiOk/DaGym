@@ -1,14 +1,25 @@
 import GymCore
 import SwiftUI
+import Synchronization
 
 /// The read-only display pieces of `ExerciseDetailView`'s body — hero art, title, stat tiles and
 /// the 1RM row — split out from the main file to stay under the type-body-length cap.
 extension ExerciseDetailView {
     /// The seed keeps instructions as one string with the numbering inline; the parser lives in
-    /// GymCore so the splitting rules are testable without a view.
+    /// GymCore so the splitting rules are testable without a view. Parsed once per exercise:
+    /// `body` reads this on every re-render (favourite toggle, sheet dismiss) and the parse walks
+    /// an ~8 KB string, so a cache keyed on the raw text keeps it off the render path.
     var instructionSteps: [ExerciseInstructionStep] {
-        ExerciseInstructions.steps(from: exercise.instructions)
+        Self.instructionCache.withLock { cache in
+            if let hit = cache[exercise.instructions] { return hit }
+            let steps = ExerciseInstructions.steps(from: exercise.instructions)
+            if cache.count > 32 { cache.removeAll(keepingCapacity: true) }
+            cache[exercise.instructions] = steps
+            return steps
+        }
     }
+
+    private static let instructionCache = Mutex<[String: [ExerciseInstructionStep]]>([:])
 
     var oneRepMaxRow: some View {
         Button {

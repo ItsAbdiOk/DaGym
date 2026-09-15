@@ -2,96 +2,6 @@ import GymCore
 import SwiftData
 import SwiftUI
 
-/// One cell of the month grid: what happened (or is planned) on that day.
-struct MonthCalendarDay: Identifiable, Hashable {
-    enum State: Hashable {
-        /// A finished workout exists; `workoutID` opens its detail.
-        case trained(workoutID: UUID, title: String)
-        /// Routines are scheduled; `rescheduled` when the date carries an override.
-        case planned(routineIDs: [UUID], title: String, rescheduled: Bool)
-        case free
-    }
-
-    var id: String { key }
-    let key: String
-    let date: Date
-    let dayNumber: Int
-    let state: State
-    let isToday: Bool
-    let isPast: Bool
-
-    var workoutID: UUID? {
-        if case .trained(let id, _) = state { return id }
-        return nil
-    }
-
-    var plannedRoutineIDs: [UUID] {
-        if case .planned(let ids, _, _) = state { return ids }
-        return []
-    }
-
-    var isRescheduled: Bool {
-        if case .planned(_, _, let rescheduled) = state { return rescheduled }
-        return false
-    }
-
-    var title: String? {
-        switch state {
-        case .trained(_, let title), .planned(_, let title, _): title
-        case .free: nil
-        }
-    }
-}
-
-/// Pure layout of a month for the calendar sheet: leading blanks so day 1 lands on its
-/// weekday, then one `MonthCalendarDay` per day. A finished workout on a date wins over a
-/// planned one, so a day never shows as both.
-struct MonthCalendarModel: Hashable {
-    let monthStart: Date
-    let leadingBlanks: Int
-    let days: [MonthCalendarDay]
-
-    init(
-        month: Date, records: [WorkoutRecord], schedule: WeeklySchedule, routines: [RoutineInfo],
-        calendar: Calendar, now: Date = Date()
-    ) {
-        let components = calendar.dateComponents([.year, .month], from: month)
-        let start = calendar.date(from: components) ?? month
-        monthStart = start
-        let weekday = calendar.component(.weekday, from: start)
-        leadingBlanks = (weekday - calendar.firstWeekday + 7) % 7
-        let dayCount = calendar.range(of: .day, in: .month, for: start)?.count ?? 30
-        let today = calendar.startOfDay(for: now)
-        let trained = Dictionary(grouping: records) { DateKey.string(for: $0.date, calendar: calendar) }
-        days = (0..<dayCount).compactMap { offset in
-            guard let date = calendar.date(byAdding: .day, value: offset, to: start) else { return nil }
-            let key = DateKey.string(for: date, calendar: calendar)
-            let state: MonthCalendarDay.State
-            if let record = trained[key]?.min(by: { $0.date < $1.date }) {
-                state = .trained(workoutID: record.id, title: record.title)
-            } else {
-                let ids = schedule.routineIDs(on: date, calendar: calendar)
-                let planned = ids.compactMap { id in routines.first { $0.id == id } }
-                if planned.isEmpty {
-                    state = .free
-                } else {
-                    state = .planned(
-                        routineIDs: planned.map(\.id), title: RoutineInfo.joinedNames(planned),
-                        rescheduled: schedule.isRescheduled(date, calendar: calendar)
-                    )
-                }
-            }
-            return MonthCalendarDay(
-                key: key, date: date, dayNumber: offset + 1, state: state,
-                isToday: calendar.isDate(date, inSameDayAs: today), isPast: date < today
-            )
-        }
-    }
-
-    var trainedCount: Int { days.filter { $0.workoutID != nil }.count }
-    var plannedCount: Int { days.filter { !$0.plannedRoutineIDs.isEmpty }.count }
-}
-
 /// Month grid from History: trained days filled, planned days ringed, rescheduled ones marked
 /// with an arrow. Tapping a trained day opens its detail; any other day offers Move Session
 /// (when something is planned) or Log a Past Workout (when the day isn't in the future).
@@ -107,6 +17,9 @@ struct MonthCalendarSheet: View {
     @Environment(Preferences.self) private var preferences
     @Environment(\.dismiss) private var dismiss
     @State private var month = Date()
+    /// Rebuilt only when the month or the inputs change — as a computed property it regrouped
+    /// every record and looked up 30 schedule days on every tap of a day cell.
+    @State private var model: MonthCalendarModel?
     @State private var selected: MonthCalendarDay?
     @State private var moveDate: Date?
 
@@ -135,12 +48,18 @@ struct MonthCalendarSheet: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
         .dgAnimation(DGMotion.standard, value: selected)
+        .onAppear(perform: rebuildModel)
+        .onChange(of: month) { _, _ in rebuildModel() }
+        .onChange(of: records) { _, _ in rebuildModel() }
+        .onChange(of: schedule) { _, _ in rebuildModel() }
+        .onChange(of: routines) { _, _ in rebuildModel() }
+        .onChange(of: preferences.weekStartsMonday) { _, _ in rebuildModel() }
     }
 
     private var calendar: Calendar { preferences.trainingCalendar }
 
-    private var model: MonthCalendarModel {
-        MonthCalendarModel(
+    private func rebuildModel() {
+        model = MonthCalendarModel(
             month: month, records: records, schedule: schedule, routines: routines, calendar: calendar
         )
     }
@@ -170,9 +89,12 @@ struct MonthCalendarSheet: View {
         }
     }
 
+    @ViewBuilder
     private var grid: some View {
-        let current = model
-        return LazyVGrid(columns: Self.columns, spacing: DGSpace.s1) {
+        let current = model ?? MonthCalendarModel(
+            month: month, records: records, schedule: schedule, routines: routines, calendar: calendar
+        )
+        LazyVGrid(columns: Self.columns, spacing: DGSpace.s1) {
             ForEach(0..<current.leadingBlanks, id: \.self) { _ in
                 Color.clear.frame(height: 44)
             }
@@ -180,7 +102,7 @@ struct MonthCalendarSheet: View {
                 Button {
                     select(day)
                 } label: {
-                    DayCell(day: day, isSelected: day == selected)
+                    MonthCalendarDayCell(day: day, isSelected: day == selected)
                 }
                 .buttonStyle(.dgControl)
                 .accessibilityLabel(Self.accessibilityLabel(day))
@@ -190,9 +112,9 @@ struct MonthCalendarSheet: View {
 
     private var legend: some View {
         HStack(spacing: DGSpace.s4) {
-            LegendDot(kind: .filled, label: "Trained")
-            LegendDot(kind: .ring, label: "Planned")
-            LegendDot(kind: .arrow, label: "Moved")
+            MonthCalendarLegendDot(kind: .filled, label: "Trained")
+            MonthCalendarLegendDot(kind: .ring, label: "Planned")
+            MonthCalendarLegendDot(kind: .arrow, label: "Moved")
             Spacer()
         }
         .padding(.top, DGSpace.s1)
@@ -288,16 +210,24 @@ struct MonthCalendarSheet: View {
         moveDate = nil
     }
 
-    private static func monthLabel(_ date: Date) -> String {
+    private static let monthFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM yyyy"
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE d MMMM"
+        return formatter
+    }()
+
+    private static func monthLabel(_ date: Date) -> String {
+        monthFormatter.string(from: date)
     }
 
     private static func dayLabel(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE d MMMM"
-        return formatter.string(from: date).uppercased()
+        dayFormatter.string(from: date).uppercased()
     }
 
     private static func accessibilityLabel(_ day: MonthCalendarDay) -> String {
@@ -308,62 +238,6 @@ struct MonthCalendarSheet: View {
             return "\(base), \(rescheduled ? "moved" : "planned"), \(title)"
         case .free: return base
         }
-    }
-}
-
-/// One day: number, filled for trained, ringed for planned, arrow for rescheduled.
-private struct DayCell: View {
-    var day: MonthCalendarDay
-    var isSelected: Bool
-
-    var body: some View {
-        ZStack {
-            if day.workoutID != nil {
-                Circle().fill(DGColor.coral)
-            } else if !day.plannedRoutineIDs.isEmpty {
-                Circle().strokeBorder(DGColor.coral, lineWidth: 2)
-            }
-            if isSelected {
-                Circle().strokeBorder(DGColor.ink1, lineWidth: 2).padding(-3)
-            }
-            Text("\(day.dayNumber)")
-                .font(day.isToday ? DGFont.condensedLabel(15) : DGFont.subhead)
-                .foregroundStyle(day.workoutID != nil ? DGColor.inkOnCoral : DGColor.ink1)
-            if day.isRescheduled {
-                Image(systemName: "arrow.turn.down.right")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(DGColor.coralText)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    .padding(3)
-            }
-        }
-        .frame(width: 40, height: 40)
-        .frame(maxWidth: .infinity)
-        .frame(height: 44)
-        .contentShape(Rectangle())
-    }
-}
-
-private struct LegendDot: View {
-    enum Kind { case filled, ring, arrow }
-
-    var kind: Kind
-    var label: String
-
-    var body: some View {
-        HStack(spacing: DGSpace.s1) {
-            switch kind {
-            case .filled: Circle().fill(DGColor.coral).frame(width: 10, height: 10)
-            case .ring: Circle().strokeBorder(DGColor.coral, lineWidth: 2).frame(width: 10, height: 10)
-            case .arrow:
-                Image(systemName: "arrow.turn.down.right")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(DGColor.coralText)
-            }
-            Text(label).font(DGFont.footnote).foregroundStyle(DGColor.ink3)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label)
     }
 }
 

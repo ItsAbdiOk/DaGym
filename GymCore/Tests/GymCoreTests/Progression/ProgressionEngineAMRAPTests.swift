@@ -52,6 +52,17 @@ struct ProgressionEngineAMRAPTests {
         #expect(result.stall.consecutiveMisses == 0)
     }
 
+    @Test("the back-off copy is derived from the miss fraction, not hard-coded")
+    func backoffCopyMatchesConstant() {
+        let result = ProgressionEngine.prescribe(
+            rule: rule, planned: planned, history: [entry(amrapReps: 5)],
+            stall: StallState(consecutiveMisses: 1, lastWeightKg: 100)
+        )
+        let percent = Int(((1 - TrainingConstants.amrapMissFraction) * 100).rounded())
+        #expect(ProgressionEngine.amrapMissPercent == percent)
+        #expect(result.reason.body.contains("dropping \(percent)%"))
+    }
+
     @Test("a second miss on the empty bar holds instead of backing off to the same weight")
     func secondMissOnEmptyBarHolds() {
         let result = ProgressionEngine.prescribe(

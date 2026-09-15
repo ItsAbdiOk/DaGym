@@ -10,11 +10,16 @@ struct WorkoutBuilder {
 
     /// Groups this row's set into the right workout/exercise by `workoutKey` (unique per
     /// workout, e.g. "date|workout name") and `entry.exerciseName`, creating either as needed.
+    ///
+    /// An `endedAt` before `startedAt` (a timezone-shifted Hevy `end_time`, an edited workout)
+    /// is dropped rather than stored: a negative session length would poison the duration-drift
+    /// coach rule and the session-length chart, and "unknown" is what the app falls back from.
     mutating func addSet(_ set: ImportedSet, workoutKey: String, entry: WorkoutRowInfo) {
         if workouts[workoutKey] == nil {
             order.append(workoutKey)
+            let endedAt = entry.endedAt.flatMap { $0 >= entry.startedAt ? $0 : nil }
             workouts[workoutKey] = WorkoutInProgress(
-                startedAt: entry.startedAt, endedAt: entry.endedAt, title: entry.title,
+                startedAt: entry.startedAt, endedAt: endedAt, title: entry.title,
                 notes: entry.workoutNotes
             )
         }

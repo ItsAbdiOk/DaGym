@@ -4,7 +4,7 @@ import SwiftData
 /// A reusable training plan: an ordered list of exercises with planned sets.
 @Model
 final class RoutineModel {
-    var id: UUID = UUID()
+    var id = UUID()
     var name: String = ""
     var notes: String = ""
     var progressionRule: String = "doubleProgression"
@@ -14,8 +14,8 @@ final class RoutineModel {
     /// `progressionRule`/`repRangeLow`/`repRangeHigh` stay as the display fallback for routines
     /// saved before this existed — see `Mapping.swift`'s `RoutineModel.progressionRuleValue`.
     var progressionRuleJSON: String = ""
-    var createdAt: Date = Date()
-    var updatedAt: Date = Date()
+    var createdAt = Date()
+    var updatedAt = Date()
     var sortOrder: Int = 0
     var isArchived: Bool = false
     /// The `PlanRoutine.id` this routine was created from, when it arrived via a shared

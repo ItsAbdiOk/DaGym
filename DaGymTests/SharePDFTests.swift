@@ -2,6 +2,7 @@ import Foundation
 import GymCore
 import PDFKit
 import SwiftData
+import Synchronization
 import Testing
 
 @testable import DaGym
@@ -155,5 +156,34 @@ struct SharePDFTests {
         #expect(PlanPDFRenderer.weekSubtitle(PlanProgramWeek(index: 2, kind: "deload")).contains("60%"))
         #expect(PlanPDFRenderer.weekSubtitle(PlanProgramWeek(index: 2, kind: "deload")).contains("90%"))
         #expect(PlanPDFRenderer.weekSubtitle(PlanProgramWeek(index: 2, kind: "rest")) == "Rest week")
+    }
+
+    @Test("the share menu's PDF is not rendered until ShareLink asks for the file")
+    func lazyPDFRendersOnExportOnly() throws {
+        let renders = Mutex(0)
+        let document = document(weeks: ["normal", "deload"])
+        let file = LazyPlanPDFFile(document: document, unit: .lb, filename: "Upper-Block") { document, unit in
+            renders.withLock { $0 += 1 }
+            return PlanPDFRenderer.render(document, unit: unit)
+        }
+        #expect(renders.withLock { $0 } == 0)
+
+        let url = try file.renderToTemporaryFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        #expect(renders.withLock { $0 } == 1)
+        #expect(url.lastPathComponent == "Upper-Block.pdf")
+        #expect(url.deletingLastPathComponent() == FileManager.default.temporaryDirectory)
+        let exported = try #require(PDFDocument(url: url))
+        #expect(exported.pageCount == 3)
+    }
+
+    @Test("the default renderer produces a real PDF")
+    func lazyPDFDefaultRendererIsThePlanRenderer() throws {
+        let file = LazyPlanPDFFile(document: document(weeks: ["normal"]), unit: .kg, filename: "Push")
+        let url = try file.renderToTemporaryFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let data = try Data(contentsOf: url)
+        #expect(data.starts(with: Data("%PDF".utf8)))
     }
 }

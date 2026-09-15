@@ -4,7 +4,7 @@ import SwiftData
 /// One exercise slot inside a `RoutineModel`, carrying its planned sets.
 @Model
 final class RoutineExerciseModel {
-    var id: UUID = UUID()
+    var id = UUID()
     var order: Int = 0
     /// Exercises sharing a group id are a superset.
     var supersetGroup: Int?

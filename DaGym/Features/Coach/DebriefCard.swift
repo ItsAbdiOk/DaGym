@@ -1,5 +1,10 @@
 import GymCore
+import os
 import SwiftUI
+import Synchronization
+
+/// Shared by the Coach feature's views and loaders.
+let coachLogger = Logger(subsystem: "dev.abdirahmanmohamed.dagym", category: "coach")
 
 /// The workout debrief on `WorkoutSummaryView`: a score out of ten and three short lists,
 /// streamed in from `CoachLanguageModel.debrief(facts:)`. Skeleton rows while the first
@@ -93,38 +98,57 @@ struct DebriefCard: View {
         .accessibilityLabel("Writing the debrief")
     }
 
-    /// Streams the model's debrief; on any failure shows the rule debrief instead, and hides
-    /// the card when even that has nothing to say (`DebriefValidator` returned nil).
+    /// Streams the model's debrief, repainting on every snapshot so the card fills in as the
+    /// model writes; on any failure shows the rule debrief instead, and hides the card when
+    /// even that has nothing to say (`DebriefValidator` returned nil).
     private func load() async {
-        debrief = await DebriefLoader.load(facts: facts, model: coach.model)
-        isHidden = debrief == nil
+        let result = await DebriefLoader.load(facts: facts, model: coach.model) { snapshot in
+            debrief = snapshot
+        }
+        guard !Task.isCancelled else { return }
+        debrief = result
+        isHidden = result == nil
     }
 }
 
 /// The debrief's fallback ladder, off the view so it can be pinned in a test: the model's last
-/// streamed snapshot; the rule debrief when the stream throws, yields nothing, or has not
-/// yielded within `timeout` (a model that is warming up or throttled never throws — it just
-/// never answers, and the skeleton would shimmer for good); nil when even the rules have
-/// nothing cited to say.
+/// streamed snapshot — including a partial one when the stream then throws or has not finished
+/// within `timeout` (a model that is warming up or throttled never throws — it just never
+/// answers, and the skeleton would shimmer for good); the rule debrief when nothing streamed
+/// at all; nil when even the rules have nothing cited to say. `onSnapshot` fires for every
+/// snapshot as it arrives, on the main actor, so the card can show the model's work in
+/// progress instead of a skeleton until the stream ends.
 enum DebriefLoader {
     static let defaultTimeout: Duration = .seconds(8)
 
     static func load(
-        facts: SessionSummaryFacts, model: any CoachLanguageModel, timeout: Duration = defaultTimeout
+        facts: SessionSummaryFacts, model: any CoachLanguageModel, timeout: Duration = defaultTimeout,
+        onSnapshot: @escaping @MainActor @Sendable (SessionDebrief) -> Void = { _ in }
     ) async -> SessionDebrief? {
+        // Shared between the stream and the timeout task, so whichever finishes first can hand
+        // back whatever had streamed by then.
+        let latest = Mutex<SessionDebrief?>(nil)
         let streamed = await withTaskGroup(of: SessionDebrief?.self) { group in
             group.addTask {
-                var last: SessionDebrief?
                 do {
-                    for try await snapshot in model.debrief(facts: facts) { last = snapshot }
-                } catch {
+                    for try await snapshot in model.debrief(facts: facts) {
+                        latest.withLock { $0 = snapshot }
+                        await onSnapshot(snapshot)
+                    }
+                } catch where !(error is CancellationError) {
+                    // A stream that *failed* mid-way leaves a half-written list; the rules are
+                    // always complete, so they win here. A timeout (below) keeps the partial —
+                    // a slow model's first bullets are still better than none.
+                    coachLogger.error("Debrief stream failed: \(error, privacy: .public)")
                     return nil
+                } catch {
+                    // Cancelled by the timeout below or by the card leaving the screen.
                 }
-                return last
+                return latest.withLock { $0 }
             }
             group.addTask {
                 try? await Task.sleep(for: timeout)
-                return nil
+                return latest.withLock { $0 }
             }
             let first = await group.next().flatMap { $0 }
             group.cancelAll()

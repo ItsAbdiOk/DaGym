@@ -4,7 +4,7 @@ import SwiftData
 /// One exercise performed inside a `WorkoutModel`, carrying its logged sets.
 @Model
 final class WorkoutExerciseModel {
-    var id: UUID = UUID()
+    var id = UUID()
     var order: Int = 0
     var supersetGroup: Int?
     var note: String = ""

@@ -27,10 +27,23 @@ public enum CSVParser {
     private static let carriageReturn = UInt8(ascii: "\r")
     private static let newline = UInt8(ascii: "\n")
 
+    /// The most a file may weigh before `parse` refuses it. `parse` copies the whole text into a
+    /// byte array; a 200 MB paste would be copied whole and could take the app down. A real
+    /// export is a few MB — years of Strong history is under 10 — so 64 MB is far above anything
+    /// legitimate. `WorkoutImport.parse` reports an oversized file as an `ImportProblem`.
+    public static let maxBytes = 64 * 1024 * 1024
+
+    /// Whether `text` is over `maxBytes`. O(1) for a native string.
+    public static func isOversized(_ text: String) -> Bool {
+        text.utf8.count > maxBytes
+    }
+
     /// Parses `text` into rows of fields. A trailing blank line produces no extra empty row. A
     /// leading UTF-8 BOM (some exports, notably Excel-authored CSVs, write one) is stripped first
-    /// so it never ends up glued to the first header cell.
+    /// so it never ends up glued to the first header cell. Anything over `maxBytes` parses as
+    /// no rows at all — check `isOversized` first to tell that apart from an empty file.
     public static func parse(_ text: String) -> [[String]] {
+        guard !isOversized(text) else { return [] }
         var bytes = Array(text.utf8)
         if bytes.starts(with: [0xEF, 0xBB, 0xBF]) {
             bytes.removeFirst(3)

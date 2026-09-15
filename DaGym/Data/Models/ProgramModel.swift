@@ -5,7 +5,7 @@ import SwiftData
 /// normal/deload/rest weeks (plan.md §6.5). Only one program is active at a time.
 @Model
 final class ProgramModel {
-    var id: UUID = UUID()
+    var id = UUID()
     var name: String = ""
     var weeks: Int = 4
     var startedAt: Date?
@@ -13,7 +13,7 @@ final class ProgramModel {
     var isActive: Bool = false
     /// JSON-encoded `[UUID]` — the routine to run each day of the cycle, in order.
     var routineIDsJSON: String = "[]"
-    var createdAt: Date = Date()
+    var createdAt = Date()
 
     @Relationship(deleteRule: .cascade, inverse: \ProgramWeekModel.program)
     var programWeeks: [ProgramWeekModel]?

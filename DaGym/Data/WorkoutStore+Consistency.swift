@@ -31,12 +31,10 @@ extension WorkoutStore {
 
     // MARK: - Helpers
 
-    // swiftlint:disable large_tuple
     /// One `(date, sets, minutes)` per finished workout started on or after `since`. Sets counted
     /// are completed, stats-counting sets only — mirrors `WorkoutStore+History.swift`.
     private func dailyActivity(since: Date) -> [(date: Date, sets: Int, minutes: Int)] {
-        // swiftlint:enable large_tuple
-        let predicate = #Predicate<WorkoutModel> { $0.endedAt != nil && $0.startedAt >= since }
+            let predicate = #Predicate<WorkoutModel> { $0.endedAt != nil && $0.startedAt >= since }
         let descriptor = FetchDescriptor<WorkoutModel>(predicate: predicate)
         let workouts = fetch(descriptor)
         return workouts.map { workout in

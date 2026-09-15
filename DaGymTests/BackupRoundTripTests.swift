@@ -41,7 +41,7 @@ struct BackupRoundTripTests {
         session.exercises[0].sets[1].isDone = true
         _ = store.finish(session: session)
         // Finishing rewrites the engine memory; the hand-set values below are what export must carry.
-        slot.stallJSON = #"{"misses":2}"#
+        slot.stallStateValue = StallState(consecutiveMisses: 2, lastWeightKg: 60)
         slot.trainingMaxKg = 100
         let workoutID = try #require(session.workoutID)
         let workout = try #require(store.fetchWorkoutModel(id: workoutID))
@@ -64,9 +64,13 @@ struct BackupRoundTripTests {
         let document = try BackupCodec.decode(BackupCodec.encode(exportedDocument))
 
         let exported = try #require(document.routines.first { $0.id == routineID })
+        // Format 2 nests the rule and stall; the format-1 strings ride along for one more format.
+        #expect(exported.rule == .doubleProgression(low: 6, high: 8, incrementKg: 2.5))
         #expect(exported.progressionRuleJSON?.isEmpty == false)
+        #expect(exported.exercises.first?.rule == .linear(incrementKg: 5))
         #expect(exported.exercises.first?.progressionRuleJSON?.isEmpty == false)
-        #expect(exported.exercises.first?.stallJSON == #"{"misses":2}"#)
+        #expect(exported.exercises.first?.stall?.consecutiveMisses == 2)
+        #expect(exported.exercises.first?.stall?.lastWeightKg == 60)
         #expect(exported.exercises.first?.trainingMaxKg == 100)
         #expect(document.workouts.first?.exercises.first?.wasPlannedDeload == true)
         #expect(document.workouts.first?.routineID == routineID)
@@ -78,10 +82,12 @@ struct BackupRoundTripTests {
         #expect(report.problems.isEmpty)
 
         let routine = try #require(destination.fetchRoutineModel(id: routineID))
-        #expect(routine.progressionRuleJSON == exported.progressionRuleJSON)
+        // Compared as values: the import re-encodes the nested rule, so key order may differ.
+        #expect(routine.progressionRuleValue == exported.resolvedRule)
         let slot = try #require(routine.exercises?.first)
-        #expect(slot.progressionRuleJSON == exported.exercises.first?.progressionRuleJSON)
-        #expect(slot.stallJSON == #"{"misses":2}"#)
+        #expect(slot.overrideRuleValue == exported.exercises.first?.resolvedRule)
+        #expect(slot.stallStateValue.consecutiveMisses == 2)
+        #expect(slot.stallStateValue.lastWeightKg == 60)
         #expect(slot.trainingMaxKg == 100)
         #expect(destination.effectiveRule(routine: routine, routineExercise: slot) != nil)
 

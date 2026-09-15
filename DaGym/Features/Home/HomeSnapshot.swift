@@ -1,5 +1,8 @@
 import Foundation
 import GymCore
+import os
+
+private let signposter = OSSignposter(subsystem: "dev.abdirahmanmohamed.dagym", category: "perf")
 
 /// Everything Home computes from the store in one pass: today's routine (or the rest-day
 /// headline), streak, weekly count, recovery map and deload suggestion — all against
@@ -32,6 +35,8 @@ struct HomeSnapshot {
 
     @MainActor
     static func make(store: WorkoutStore, preferences: Preferences, now: Date = Date()) -> HomeSnapshot {
+        let interval = signposter.beginInterval("HomeSnapshot.make")
+        defer { signposter.endInterval("HomeSnapshot.make", interval) }
         let calendar = preferences.trainingCalendar
         let weeklyGoal = preferences.weeklyGoal
         let streak = Streaks.weekly(
@@ -44,10 +49,17 @@ struct HomeSnapshot {
             guard let latestKg = latest?.bodyweightKg, let pastKg = past?.bodyweightKg else { return nil }
             return latestKg - pastKg
         }()
+        // One schedule read and one routine read for everything below. `store.todaysRoutine()`
+        // and `store.nextSession()` each re-fetch both (the routines with ~1 000 prefetched
+        // slots), so going through them cost this pass four extra fetches per refresh.
+        let schedule = store.schedule()
+        let routines = store.routines()
         return HomeSnapshot(
-            routine: store.todaysRoutine(calendar: calendar, now: now),
-            hasSchedule: !store.schedule().days.isEmpty || !store.schedule().overrides.isEmpty,
-            nextSessionText: nextSessionText(store.nextSession(calendar: calendar, now: now)),
+            routine: todaysRoutine(schedule: schedule, routines: routines, calendar: calendar, now: now),
+            hasSchedule: !schedule.days.isEmpty || !schedule.overrides.isEmpty,
+            nextSessionText: nextSessionText(
+                nextSession(schedule: schedule, routines: routines, calendar: calendar, now: now)
+            ),
             streakCurrent: streak.current,
             streakLongest: streak.longest,
             thisWeekCount: streak.thisWeekCount,
@@ -59,17 +71,43 @@ struct HomeSnapshot {
                 snoozedUntil: preferences.deloadSnoozedUntil, weeklyGoal: weeklyGoal, now: now,
                 calendar: calendar
             ),
-            hasAnyRoutines: !store.routines().isEmpty,
+            hasAnyRoutines: !routines.isEmpty,
             bodyweightKg: latest?.bodyweightKg,
             bodyweightDeltaKg: bodyweightDelta
         )
     }
 
+    /// `WorkoutStore.todaysRoutine` over an already-read schedule and routine list: the first
+    /// routine planned for today, or — with no plan at all — the first routine as a suggestion.
+    static func todaysRoutine(
+        schedule: WeeklySchedule, routines: [RoutineInfo], calendar: Calendar, now: Date
+    ) -> RoutineInfo? {
+        guard !schedule.dayRoutines.isEmpty || !schedule.dateOverrides.isEmpty else { return routines.first }
+        return schedule.routineIDs(on: now, calendar: calendar).lazy
+            .compactMap { id in routines.first { $0.id == id } }
+            .first
+    }
+
+    /// `WorkoutStore.nextSession` over an already-read schedule and routine list. Days whose
+    /// routines no longer exist are skipped, not treated as the end of the search.
+    static func nextSession(
+        schedule: WeeklySchedule, routines: [RoutineInfo], calendar: Calendar, now: Date
+    ) -> (date: Date, routine: RoutineInfo)? {
+        let byID = Dictionary(routines.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        guard let next = schedule.nextSession(after: now, calendar: calendar, where: { byID[$0] != nil }),
+              let routine = byID[next.routineID] else { return nil }
+        return (next.date, routine)
+    }
+
     /// "Next: Pull B · Thursday" for the rest-day card; `nil` when nothing is scheduled.
     static func nextSessionText(_ next: (date: Date, routine: RoutineInfo)?) -> String? {
         guard let next else { return nil }
+        return "Next: \(next.routine.name) · \(weekdayFormatter.string(from: next.date))"
+    }
+
+    private static let weekdayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE"
-        return "Next: \(next.routine.name) · \(formatter.string(from: next.date))"
-    }
+        return formatter
+    }()
 }

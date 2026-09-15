@@ -121,4 +121,42 @@ struct WidgetWriterTests {
         #expect(WidgetSnapshotStore.read(from: suite).routineName == nil)
         #expect(reloads.count == 2)
     }
+
+    @Test("a fresh writer decodes the suite once, then compares against its own last write")
+    func comparesAgainstCachedSnapshot() throws {
+        let store = try makeStore()
+        let preferences = Preferences(suite: makeSuite(#function + "prefs"))
+        let suite = makeSuite(#function)
+        let push = makeRoutine(store, name: "Push A")
+        var schedule = WeeklySchedule()
+        schedule.days[.wednesday] = push.id
+        store.saveSchedule(schedule)
+        let wednesday = Self.wednesday()
+        let reloads = ReloadCounter()
+        let writer = WidgetSnapshotWriter(
+            suite: suite, isTesting: false, reloadTimelines: { reloads.count += 1 }
+        )
+
+        // Nothing cached yet: falls back to decoding the suite, finds it empty, writes.
+        #expect(writer.cache.lastWritten == nil)
+        writer.refresh(store: store, preferences: preferences, now: wednesday)
+        #expect(reloads.count == 1)
+        #expect(writer.cache.lastWritten?.routineName == "Push A")
+
+        // Someone else rewrites the blob behind the writer's back; the cache still says the
+        // content is unchanged, so no decode-and-compare and no reload.
+        WidgetSnapshotStore.write(.empty, to: suite)
+        writer.refresh(store: store, preferences: preferences, now: wednesday)
+        #expect(reloads.count == 1)
+
+        // A second writer on a suite that already holds the same content reads it once and
+        // also stays quiet — the first-call fallback path.
+        WidgetSnapshotStore.write(try #require(writer.cache.lastWritten), to: suite)
+        let second = WidgetSnapshotWriter(
+            suite: suite, isTesting: false, reloadTimelines: { reloads.count += 1 }
+        )
+        second.refresh(store: store, preferences: preferences, now: wednesday)
+        #expect(reloads.count == 1)
+        #expect(second.cache.lastWritten?.routineName == "Push A")
+    }
 }

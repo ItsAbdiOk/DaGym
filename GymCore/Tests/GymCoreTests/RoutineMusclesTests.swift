@@ -1,4 +1,3 @@
-// swiftlint:disable large_tuple
 import Foundation
 import Testing
 @testable import GymCore
@@ -71,4 +70,3 @@ struct RoutineMusclesTests {
         #expect(RoutineMuscles.summary(hitMap: [:]) == "Nothing yet")
     }
 }
-// swiftlint:enable large_tuple

@@ -1,6 +1,17 @@
 import Foundation
 import GymCore
+import os
 import WidgetKit
+
+/// The last snapshot a `WidgetSnapshotWriter` wrote (or read back) from a suite, so the
+/// "did anything change?" check on every foreground compares two values in memory rather
+/// than JSON-decoding the App Group blob each time. A class so `live`, which builds a fresh
+/// writer per call, still shares one cache across the process.
+@MainActor
+final class WidgetSnapshotCache {
+    static let shared = WidgetSnapshotCache()
+    var lastWritten: WidgetSnapshot?
+}
 
 /// Writes the current `WidgetSnapshot` to the App Group and reloads the widget timelines.
 /// Called from `WorkoutStore.finish(session:)`, `saveRoutine`/`deleteRoutine`, the schedule
@@ -21,14 +32,18 @@ struct WidgetSnapshotWriter {
     /// How far back workout days are kept, for the dot row and the weekly streak.
     private static let historyDays = 400
 
+    private static let signposter = OSSignposter(subsystem: "dev.abdirahmanmohamed.dagym", category: "perf")
+
     var suite: UserDefaults?
     var isTesting: Bool
     var reloadTimelines: @MainActor () -> Void
+    /// Per-writer by default so tests on separate suites never see each other's last write.
+    var cache = WidgetSnapshotCache()
 
     static var live: WidgetSnapshotWriter {
         WidgetSnapshotWriter(
             suite: WidgetSnapshotStore.appGroupSuite, isTesting: LaunchFlags.isTesting,
-            reloadTimelines: { WidgetCenter.shared.reloadAllTimelines() }
+            reloadTimelines: { WidgetCenter.shared.reloadAllTimelines() }, cache: .shared
         )
     }
 
@@ -38,13 +53,18 @@ struct WidgetSnapshotWriter {
     }
 
     /// Writes only when something the widget shows actually changed, so calling this on every
-    /// foreground doesn't burn WidgetKit's daily reload budget.
+    /// foreground doesn't burn WidgetKit's daily reload budget. The comparison is against the
+    /// cached last write; only the first call in a process decodes what is already on disk.
     func refresh(store: WorkoutStore, preferences: Preferences, now: Date = Date()) {
         guard !isTesting, let suite else { return }
+        let state = Self.signposter.beginInterval("WidgetSnapshotWriter.refresh")
+        defer { Self.signposter.endInterval("WidgetSnapshotWriter.refresh", state) }
         let next = Self.snapshot(store: store, preferences: preferences, now: now)
-        let current = WidgetSnapshotStore.read(from: suite)
+        let current = cache.lastWritten ?? WidgetSnapshotStore.read(from: suite)
+        cache.lastWritten = current
         guard !next.sameContent(as: current) else { return }
         WidgetSnapshotStore.write(next, to: suite)
+        cache.lastWritten = next
         reloadTimelines()
     }
 

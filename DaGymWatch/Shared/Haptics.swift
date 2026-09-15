@@ -10,7 +10,11 @@ import WatchKit
 /// they are confirmations you cannot see.
 @MainActor
 enum Haptics {
-    private static var enabled: Bool { WatchPreferences.shared.haptics }
+    /// Whose Haptics toggle gates the optional events. `WatchStore.init` points this at the
+    /// preferences it was given, so a test that injects its own controls what plays.
+    static var preferences: WatchPreferences = .shared
+
+    private static var enabled: Bool { preferences.haptics }
 
     static func warm() {}
 

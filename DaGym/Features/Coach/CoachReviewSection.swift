@@ -18,13 +18,17 @@ struct CoachReviewSection: View {
     @State private var hasReviewed = false
     /// Why the last Approve did nothing, shown under the cards until the next tap.
     @State private var applyFailure: String?
+    /// The in-flight review, cancelled when the section leaves the screen.
+    @State private var reviewTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
             HStack {
                 Text("Review").dgLabel()
                 Spacer()
-                Button(isReviewing ? "Reviewing…" : "Review my training") { Task { await review() } }
+                Button(isReviewing ? "Reviewing…" : "Review my training") {
+                    reviewTask = Task { await review() }
+                }
                     .buttonStyle(.dgControl)
                     .font(DGFont.condensedLabel(13))
                     .textCase(.uppercase)
@@ -56,14 +60,25 @@ struct CoachReviewSection: View {
                     .accessibilityIdentifier(A11yID.coachApplyFailure)
             }
         }
+        .onDisappear { reviewTask?.cancel() }
     }
 
     private func review() async {
         isReviewing = true
-        defer { isReviewing = false; hasReviewed = true }
+        defer { isReviewing = false }
         let now = Date()
         let digest = store.trainingDigest(now: now, calendar: preferences.trainingCalendar)
-        let fromModel = try? await coach.model.reviewTraining(digest: digest)
+        let fromModel: [ReviewProposal]?
+        do {
+            fromModel = try await coach.model.reviewTraining(digest: digest)
+        } catch {
+            coachLogger.error("Training review failed, falling back to rules: \(error, privacy: .public)")
+            fromModel = nil
+        }
+        // A cancelled review (the tab was left) must not repaint a view that is gone, nor
+        // count as "reviewed" and show "Nothing to change" next time.
+        guard !Task.isCancelled else { return }
+        hasReviewed = true
         let proposals = ReviewApproval.proposals(fromModel: fromModel, digest: digest)
         let interactions = store.coachInteractions()
         var built: [CoachCard] = []

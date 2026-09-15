@@ -27,11 +27,12 @@ done
 echo "  clean."
 
 # Installing the linter is infrastructure; finding a violation is a real gate.
-# A brew hiccup warns, a lint violation fails the build.
-if ! command -v swiftlint >/dev/null 2>&1; then
-    echo "Installing SwiftLint..."
-    brew install swiftlint || echo "warning: could not install SwiftLint; skipping lint." >&2
-fi
+# An install hiccup warns, a lint violation fails the build. Pinned via .tool-versions
+# (ci_post_clone.sh already installed them; this is a no-op when the versions match).
+PATH="$HOME/.dagym-tools/bin:$PATH"
+export PATH
+echo "Ensuring pinned SwiftLint and XcodeGen (.tool-versions)..."
+scripts/install-tools.sh >/dev/null || echo "warning: could not install pinned tools; lint may be skipped." >&2
 if command -v swiftlint >/dev/null 2>&1; then
     echo "Linting..."
     swiftlint lint --strict

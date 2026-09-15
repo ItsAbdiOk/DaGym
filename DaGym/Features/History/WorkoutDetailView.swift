@@ -144,15 +144,23 @@ struct WorkoutDetailView: View {
         .dgCard()
     }
 
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE"
+        return formatter
+    }()
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+
     private static func dateRangeLine(_ detail: WorkoutDetail) -> String {
-        let day = DateFormatter()
-        day.dateFormat = "EEEE"
-        let time = DateFormatter()
-        time.dateFormat = "HH:mm"
-        let dayText = day.string(from: detail.startedAt).uppercased()
-        let start = time.string(from: detail.startedAt)
+        let dayText = dayFormatter.string(from: detail.startedAt).uppercased()
+        let start = timeFormatter.string(from: detail.startedAt)
         guard let endedAt = detail.endedAt else { return "\(dayText) · \(start)" }
-        return "\(dayText) · \(start)–\(time.string(from: endedAt))"
+        return "\(dayText) · \(start)–\(timeFormatter.string(from: endedAt))"
     }
 }
 

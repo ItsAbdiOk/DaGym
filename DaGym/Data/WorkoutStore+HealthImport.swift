@@ -18,7 +18,7 @@ extension WorkoutStore {
             predicate: #Predicate { $0.healthKitID == healthKitID }
         )
         ours.fetchLimit = 1
-        if ((try? context.fetch(ours))?.first) != nil { return true }
+        if fetchFirst(ours) != nil { return true }
         return importedHealthWorkout(healthKitID: healthKitID) != nil
     }
 
@@ -123,7 +123,7 @@ extension WorkoutStore {
         let imported = FetchDescriptor<WorkoutModel>(
             predicate: #Predicate { $0.sourceDevice == "Health" }
         )
-        let strays = (try? context.fetch(imported)) ?? []
+        let strays = fetch(imported)
         for stray in strays {
             // Deliberately NOT `hasWorkout`: the stray itself is still in the main store under
             // this id, so that check would always say "already have it" and the move would
@@ -142,7 +142,7 @@ extension WorkoutStore {
         let measurements = FetchDescriptor<BodyMeasurementModel>(
             predicate: #Predicate { $0.source == "health" }
         )
-        let healthRows = (try? context.fetch(measurements)) ?? []
+        let healthRows = fetch(measurements)
         healthRows.forEach(context.delete)
         let removed = strays.count + healthRows.count
         guard removed > 0 else { return 0 }

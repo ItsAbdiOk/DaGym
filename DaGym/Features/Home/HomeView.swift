@@ -71,7 +71,7 @@ struct HomeView: View {
         }
         .dgWarmHaptics()
         .task { refresh() }
-        .onChange(of: store.changeToken) { refresh() }
+        .refreshOnStoreChange(refresh)
         .onChange(of: preferences.weeklyGoal) { refresh() }
         .onChange(of: preferences.weekStartsMonday) { refresh() }
         .sheet(isPresented: $showingSettings) { SettingsView() }

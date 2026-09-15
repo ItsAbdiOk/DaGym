@@ -17,7 +17,8 @@
 #   --allow-removals   proceed even when the diff removes a type or field
 #                      (a removed field breaks sync for every older build)
 #   --skip-init        skip the build/launch; only export, diff, import
-#   --device <udid>    simulator to use (default: iPhone 16 Pro, iOS 27)
+#   --device <udid>    simulator to use (default: the "iPhone 16 Pro (iOS 27)" simulator,
+#                      resolved by name via scripts/lib/sim.sh; never a hard-coded UDID)
 #   --phone            use the paired iPhone via devicectl instead of a simulator
 #
 # Exit codes:
@@ -33,11 +34,12 @@
 #   (token from https://icloud.developer.apple.com/dashboard → Manage Tokens)
 set -eu
 cd "$(dirname "$0")/.."
+. scripts/lib/sim.sh
 
 TEAM_ID=5AF2LBU5A3
 CONTAINER_ID=iCloud.dev.abdirahmanmohamed.dagym
 BUNDLE_ID=dev.abdirahmanmohamed.dagym
-DEFAULT_DEVICE=4109ECC0-2528-4A1B-A75D-2023BE51DF41   # iPhone 16 Pro (iOS 27)
+DEFAULT_DEVICE_NAME="iPhone 16 Pro (iOS 27)"
 DERIVED=/tmp/dagym-schema-build
 SCRATCH=scratch/cloudkit
 MARKER=Documents/schema-init.json
@@ -47,9 +49,9 @@ DEPLOY=0
 ALLOW_REMOVALS=0
 SKIP_INIT=0
 PHONE=0
-DEVICE="$DEFAULT_DEVICE"
+DEVICE=""
 
-usage() { sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -63,6 +65,14 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
+
+if [ -z "$DEVICE" ] && [ "$PHONE" != 1 ]; then
+    DEVICE_INFO=$(sim_resolve_by_name "$DEFAULT_DEVICE_NAME") \
+        || { echo "error: no simulator named \"$DEFAULT_DEVICE_NAME\"; pass --device <udid>." >&2; exit 1; }
+    DEVICE=$(sim_udid "$DEVICE_INFO")
+elif [ -z "$DEVICE" ]; then
+    echo "error: --phone needs --device <udid> (xcrun devicectl list devices)." >&2; exit 1
+fi
 
 # --- 1. preconditions --------------------------------------------------------
 if ! xcrun --find cktool >/dev/null 2>&1; then

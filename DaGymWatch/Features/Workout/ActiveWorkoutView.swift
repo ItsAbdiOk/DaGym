@@ -45,7 +45,7 @@ struct ActiveWorkoutView: View {
         return TabView(selection: $store.pageIndex) {
             if let session = store.session {
                 ForEach(Array(session.exercises.enumerated()), id: \.element.id) { index, entry in
-                    ExercisePage(entry: entry).tag(index)
+                    ExercisePage(entry: entry, pageIndex: index).tag(index)
                 }
                 FinishPage().tag(session.exercises.count)
             }
@@ -60,12 +60,16 @@ struct FinishPage: View {
     @Environment(WatchStore.self) private var store
     @State private var confirmDiscard = false
 
+    /// The pager keeps this page mounted beside the last exercise; ticking every second there
+    /// re-rendered it behind a page nobody was looking at.
+    private var isShowing: Bool { store.pageIndex == (store.session?.exercises.count ?? 0) }
+
     var body: some View {
         let session = store.session
         VStack(spacing: 8) {
             SafeBandText(text: session?.title ?? "Workout", font: WatchFont.title, color: WatchColor.ink)
             Spacer()
-            TimelineView(.periodic(from: .now, by: 1)) { context in
+            TimelineView(.periodic(from: .now, by: isShowing ? 1 : 60)) { context in
                 Text(WorkoutSession.clock(session?.elapsedSeconds(at: context.date) ?? 0))
                     .font(WatchFont.value(34, weight: .bold))
                     .foregroundStyle(WatchColor.ink)

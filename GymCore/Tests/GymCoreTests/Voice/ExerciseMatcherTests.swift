@@ -58,6 +58,19 @@ struct ExerciseMatcherTests {
         #expect(matches.first?.name == expectedName)
     }
 
+    @Test("a candidate's match keys are computed once and follow a renamed candidate")
+    func candidateKeysArePrecomputed() {
+        var candidate = ParseContext.ExerciseCandidate(id: UUID(), name: "Incline Dumbbell Presses")
+        #expect(candidate.normalizedName == "incline dumbbell presses")
+        #expect(candidate.tokens == ["incline", "dumbbell", "press"])
+        #expect(candidate.tokenSet == ["incline", "dumbbell", "press"])
+        candidate.name = "Barbell Rows"
+        #expect(candidate.normalizedName == "barbell rows")
+        #expect(candidate.tokens == ["barbell", "row"])
+        let scored = ExerciseMatcher.score(phrase: "barbell row", candidate: candidate)
+        #expect(scored > 0.9)
+    }
+
     @Test("exact alias short-circuits at score 1.0")
     func aliasShortCircuit() {
         let id = UUID()

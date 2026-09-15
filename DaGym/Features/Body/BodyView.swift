@@ -12,6 +12,7 @@ struct BodyView: View {
     // the module either way.
     @Environment(Preferences.self) var preferences
     @Environment(HealthInsightsService.self) var healthInsights
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var series: [BodyMeasurementInfo] = []
     @State private var recent: [BodyMeasurementInfo] = []
@@ -21,6 +22,9 @@ struct BodyView: View {
     @State private var isSyncing = false
     @State private var isShowingPhotos = false
     @State var isShowingHealthSettings = false
+    /// The in-flight `refresh()`; a newer one cancels it so a slow HealthKit answer to an older
+    /// save can't land after a newer one.
+    @State private var refreshTask: Task<Void, Never>?
 
     var body: some View {
         ZStack {
@@ -40,10 +44,12 @@ struct BodyView: View {
             }
         }
         .task { await refresh() }
-        .onChange(of: store.changeToken) { Task { await refresh() } }
+        // Every store save bumps `changeToken`; only re-query Health while we're on screen.
+        .onChange(of: store.changeToken) { if scenePhase == .active { scheduleRefresh() } }
+        .onDisappear { refreshTask?.cancel() }
         .sheet(
             isPresented: $isLoggingWeight,
-            onDismiss: { Task { await refresh() } },
+            onDismiss: scheduleRefresh,
             content: { BodyweightSheet() }
         )
         .sheet(isPresented: $isEditingGoal) { BodyweightSheet(purpose: .goal) }
@@ -52,7 +58,7 @@ struct BodyView: View {
         }
         .sheet(
             isPresented: $isShowingHealthSettings,
-            onDismiss: { Task { await refresh() } },
+            onDismiss: scheduleRefresh,
             content: { HealthSettingsView() }
         )
     }
@@ -170,10 +176,20 @@ struct BodyView: View {
         }
     }
 
+    /// Cancels any refresh still waiting on HealthKit and starts a fresh one.
+    private func scheduleRefresh() {
+        refreshTask?.cancel()
+        refreshTask = Task { await refresh() }
+    }
+
     private func refresh() async {
         recent = store.recentBodyMeasurements()
-        series = await healthInsights.mergedBodyweightSeries()
-        composition = await healthInsights.bodyComposition()
+        let merged = await healthInsights.mergedBodyweightSeries()
+        guard !Task.isCancelled else { return }
+        series = merged
+        let latestComposition = await healthInsights.bodyComposition()
+        guard !Task.isCancelled else { return }
+        composition = latestComposition
     }
 
     /// "Sync" re-reads Health rather than copying it in: bodyweight held in Health is read live
@@ -181,7 +197,8 @@ struct BodyView: View {
     /// put HealthKit data in iCloud (App Store Guideline 5.1.3).
     private func syncWithHealth() {
         isSyncing = true
-        Task {
+        refreshTask?.cancel()
+        refreshTask = Task {
             await refresh()
             isSyncing = false
         }
@@ -246,20 +263,30 @@ private struct MeasurementRow: View {
         }
     }
 
-    private static func dateLabel(_ date: Date) -> String {
+    private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "d MMM"
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private static func dateLabel(_ date: Date) -> String {
+        Self.dateFormatter.string(from: date)
     }
 }
 
 /// "PROGRESS PHOTOS" card — latest thumbnail per pose plus "Add Photo" (plan.md §6.4). Tapping
 /// anywhere opens the full `ProgressPhotosView` (behind `PhotoLockGate`, see `BodyView.body`).
+/// Thumbnails are decoded once into `thumbnails` so a Body re-render never touches JPEG bytes;
+/// the card re-fetches on store saves only while it is on screen in the active scene.
 private struct ProgressPhotosCard: View {
     var onOpen: () -> Void
 
     @Environment(WorkoutStore.self) private var store
+    @Environment(\.scenePhase) private var scenePhase
     @State private var latest: [ProgressPhotoInfo] = []
+    @State private var thumbnails: [UUID: UIImage] = [:]
+    @State private var isOnScreen = false
+    @State private var cardRefreshTask: Task<Void, Never>?
 
     var body: some View {
         Button(action: onOpen) {
@@ -286,12 +313,21 @@ private struct ProgressPhotosCard: View {
             RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
                 .strokeBorder(DGColor.hairline, lineWidth: 1)
         }
-        .task { refresh() }
+        .task { await refresh() }
+        .onAppear { isOnScreen = true }
+        .onDisappear { isOnScreen = false }
+        .onChange(of: store.changeToken) {
+            guard isOnScreen, scenePhase == .active else { return }
+            // One refresh in flight at a time: a delete then an add bump the token twice, and
+            // the older fetch finishing last would put the older photos back.
+            cardRefreshTask?.cancel()
+            cardRefreshTask = Task { await refresh() }
+        }
     }
 
     private func thumbnail(_ photo: ProgressPhotoInfo) -> some View {
         Group {
-            if let data = photo.thumbnailData, let image = UIImage(data: data) {
+            if let image = thumbnails[photo.id] {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
                 Rectangle().fill(DGColor.surface3)
@@ -301,8 +337,18 @@ private struct ProgressPhotosCard: View {
         .clipShape(RoundedRectangle(cornerRadius: DGRadius.chip, style: .continuous))
     }
 
-    private func refresh() {
-        latest = ProgressPhotoPose.allCases.compactMap { store.latestPhoto(pose: $0) }
+    /// Re-fetches the latest photo per pose and decodes only thumbnails not already cached.
+    private func refresh() async {
+        let fetched = ProgressPhotoPose.allCases.compactMap { store.latestPhoto(pose: $0) }
+        var decoded = thumbnails.filter { id, _ in fetched.contains { $0.id == id } }
+        for photo in fetched where decoded[photo.id] == nil {
+            if let image = await PhotoDecoder.decodeForDisplay(photo.thumbnailData) {
+                decoded[photo.id] = image
+            }
+        }
+        guard !Task.isCancelled else { return }
+        thumbnails = decoded
+        latest = fetched
     }
 }
 

@@ -111,9 +111,13 @@ struct EffortCard: View {
     }
 
     private static func weekLabel(_ date: Date, calendar: Calendar) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.dateFormat = "'W'w"
-        return formatter.string(from: date)
+        weekFormatter.calendar = calendar
+        return weekFormatter.string(from: date)
     }
+
+    private static let weekFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "'W'w"
+        return formatter
+    }()
 }

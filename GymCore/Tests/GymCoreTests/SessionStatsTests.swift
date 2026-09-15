@@ -1,4 +1,3 @@
-// swiftlint:disable large_tuple
 import Foundation
 import Testing
 @testable import GymCore
@@ -45,4 +44,3 @@ struct SessionStatsTests {
         #expect(hit[.chest] == 1.0)
     }
 }
-// swiftlint:enable large_tuple

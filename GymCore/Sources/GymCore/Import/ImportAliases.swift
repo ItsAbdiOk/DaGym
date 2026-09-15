@@ -45,13 +45,14 @@ public enum ImportAliases {
     private static func canonicalQualifier(_ qualifier: String) -> String {
         switch qualifier {
         case "ez bar", "ez-bar": "ezbar"
+        case "smith machine": "smith"
         default: qualifier
         }
     }
 
     private static let knownQualifiers: Set<String> = [
         "barbell", "dumbbell", "machine", "cable", "kettlebell", "bodyweight", "ezbar", "ez bar",
-        "ez-bar", "smith", "band", "assisted", "weighted"
+        "ez-bar", "smith", "smith machine", "band", "assisted", "weighted"
     ]
 
     /// normalised(unqualified name) → equipment qualifier → seed id.
@@ -65,12 +66,16 @@ public enum ImportAliases {
         "sumo deadlift": ["barbell": "Sumo_Deadlift"],
         "bench press": ["barbell": "Barbell_Bench_Press_-_Medium_Grip", "dumbbell": "Dumbbell_Bench_Press"],
         "incline bench press": [
-            "barbell": "Barbell_Incline_Bench_Press_-_Medium_Grip", "dumbbell": "Incline_Bench_Press_Dumbbell"
+            "barbell": "Barbell_Incline_Bench_Press_-_Medium_Grip",
+            "dumbbell": "Incline_Bench_Press_Dumbbell", "smith": "Smith_Machine_Incline_Bench_Press"
         ],
         "overhead press": ["barbell": "Standing_Military_Press"],
         "military press": ["barbell": "Standing_Military_Press"],
         "ohp": ["barbell": "Standing_Military_Press"],
-        "shoulder press": ["barbell": "Barbell_Shoulder_Press", "dumbbell": "Dumbbell_Shoulder_Press"],
+        "shoulder press": [
+            "barbell": "Barbell_Shoulder_Press", "dumbbell": "Dumbbell_Shoulder_Press",
+            "machine": "Machine_Shoulder_Military_Press"
+        ],
         "lat pulldown": ["cable": "Wide-Grip_Lat_Pulldown", "machine": "Wide-Grip_Lat_Pulldown"],
         "pulldown": ["cable": "Wide-Grip_Lat_Pulldown"],
         "barbell row": ["barbell": "Bent_Over_Barbell_Row"],
@@ -84,7 +89,7 @@ public enum ImportAliases {
         "leg press": ["machine": "Leg_Press"],
         "leg extension": ["machine": "Leg_Extensions"],
         "leg curl": ["machine": "Lying_Leg_Curls"],
-        "pull up": ["bodyweight": "Pullups"],
+        "pull up": ["bodyweight": "Pullups", "assisted": "Assisted_Pull_Up"],
         "pull-up": ["bodyweight": "Pullups"],
         "pullup": ["bodyweight": "Pullups"],
         "chin up": ["bodyweight": "Chin-Up"],
@@ -92,7 +97,7 @@ public enum ImportAliases {
         "push up": ["bodyweight": "Push_Up"],
         "push-up": ["bodyweight": "Push_Up"],
         "shrug": ["barbell": "Barbell_Shrug", "dumbbell": "Dumbbell_Shrug"],
-        "lateral raise": ["dumbbell": "Side_Lateral_Raise"],
+        "lateral raise": ["dumbbell": "Side_Lateral_Raise", "cable": "Side_Lateral_Raise_Cable"],
         "side lateral raise": ["dumbbell": "Side_Lateral_Raise"],
         "tricep pushdown": ["cable": "Triceps_Pushdown"],
         "triceps pushdown": ["cable": "Triceps_Pushdown"],
@@ -100,6 +105,22 @@ public enum ImportAliases {
         "skullcrusher": ["ezbar": "EZ-Bar_Skullcrusher"],
         "cable row": ["cable": "Seated_Cable_Row"],
         "seated row": ["cable": "Seated_Cable_Row"],
-        "face pull": ["cable": "Face_Pull"]
+        "face pull": ["cable": "Face_Pull"],
+        // Strong's machine/cable catalogue names, as they appear in a real 2026 export.
+        "cable crossover": ["cable": "Cable_Crossover"],
+        "chest press": ["machine": "Leverage_Chest_Press", "cable": "Cable_Chest_Press"],
+        "incline chest press": ["machine": "Leverage_Incline_Chest_Press"],
+        "iso-lateral row": ["machine": "Leverage_Iso_Row"],
+        "pec deck": ["machine": "Pec_Deck"],
+        "preacher curl": [
+            "machine": "Machine_Preacher_Curls", "barbell": "Preacher_Curl", "cable": "Cable_Preacher_Curl"
+        ],
+        "reverse fly": ["machine": "Reverse_Machine_Flyes", "dumbbell": "Reverse_Flyes"],
+        "seated dips": ["machine": "Dip_Machine"],
+        "seated wide-grip row": ["cable": "Seated_Cable_Row"],
+        // Strong spells the attachment inside the qualifier, which `normalised` leaves in the base.
+        "triceps pushdown (cable - straight bar)": ["cable": "Triceps_Pushdown"],
+        "triceps pushdown (cable - rope)": ["cable": "Triceps_Pushdown_-_Rope_Attachment"],
+        "triceps pushdown (cable - v-bar)": ["cable": "Triceps_Pushdown_-_V-Bar_Attachment"]
     ]
 }

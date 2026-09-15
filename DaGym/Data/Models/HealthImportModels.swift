@@ -14,14 +14,14 @@ import SwiftData
 /// into the same `WorkoutRecord` list the main store's workouts produce.
 @Model
 final class ImportedHealthWorkoutModel {
-    var id: UUID = UUID()
+    var id = UUID()
     /// `HKWorkout.uuid.uuidString` — the dedupe key, and what
     /// `WorkoutStore.hasWorkout(healthKitID:)` matches on.
     var healthKitID: String = ""
     var title: String = ""
-    var startedAt: Date = Date()
-    var endedAt: Date = Date()
-    var importedAt: Date = Date()
+    var startedAt = Date()
+    var endedAt = Date()
+    var importedAt = Date()
 
     init(
         id: UUID = UUID(), healthKitID: String = "", title: String = "", startedAt: Date = Date(),
@@ -45,7 +45,7 @@ final class ImportedHealthWorkoutModel {
 @Model
 final class IgnoredHealthWorkoutModel {
     var healthKitID: String = ""
-    var ignoredAt: Date = Date()
+    var ignoredAt = Date()
 
     init(healthKitID: String = "", ignoredAt: Date = Date()) {
         self.healthKitID = healthKitID

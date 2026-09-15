@@ -1,23 +1,14 @@
 import GymCore
 import SwiftUI
 
-/// Settings — units, effort scale, rest timer, training defaults, display
-/// and about. Every control binds directly to `Preferences`, the single
+/// Settings — a list of section cards (units, effort, rest timer, training, reminders, …)
+/// plus the About card. Every control binds directly to `Preferences`, the single
 /// persisted source of truth (see `DaGym/Design/UnitEnvironment.swift`).
 struct SettingsView: View {
     @Environment(Preferences.self) private var preferences
-    @Environment(WorkoutStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var showingAcknowledgements = false
     @State private var showingPrivacyPolicy = false
-    /// What the last calendar sync refused to do, shown under the Calendar card — the same
-    /// message `ScheduleView` shows. Nil when the last sync was fine (or never ran).
-    @State private var syncProblem: String?
-    /// The weekly-goal stepper needs its own reschedule (S14/F14): `RemindersSettingsSection`'s
-    /// three bindings reschedule on change, but the notification body embeds
-    /// `weeklyGoal - thisWeekCount` at schedule time, so a goal edit here must reschedule too or
-    /// Saturday's push keeps saying the old number.
-    private let notificationScheduler = TrainingNotificationScheduler()
 
     var body: some View {
         ZStack {
@@ -27,21 +18,18 @@ struct SettingsView: View {
                     header
                     UnitsSettingsSection()
                     EffortSettingsSection()
-                    restTimerCard
-                    trainingCard
+                    RestTimerSettingsSection()
+                    TrainingSettingsSection()
                     RemindersSettingsSection()
                     VoiceSettingsSection()
                     CoachSettingsSection()
                     DisplaySettingsSection()
-                    calendarCard
+                    CalendarSettingsSection()
                     ICloudSettingsSection()
                     DataSettingsSection()
                     ImportSettingsSection()
                     EquipmentSettingsSection()
                     AppleHealthSettingsCard()
-                    #if DEBUG
-                    DeveloperSettingsSection()
-                    #endif
                     aboutCard
                 }
                 .padding(.horizontal, DGSpace.s4)
@@ -62,155 +50,6 @@ struct SettingsView: View {
             Spacer()
             DGIconButton(symbol: "xmark", accessibilityLabel: "Close") { dismiss() }
         }
-    }
-
-    private var restTimerCard: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            restTimerRows
-            Text("Default rest applies to every exercise unless you set its own rest timer in"
-                + " Exercise Detail. \"Off\" turns the rest timer off completely — no countdown, no alert.")
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink4)
-        }
-    }
-
-    private var restTimerRows: some View {
-        SettingsSection(title: "Rest Timer") {
-            SettingsRow(label: "Default rest") {
-                Stepper(value: binding(\.defaultRestSeconds), in: 0...300, step: 15) {
-                    Text(restTimerLabel).font(DGFont.subhead).foregroundStyle(DGColor.ink3)
-                }
-                .accessibilityLabel("Default rest")
-                .accessibilityValue(restTimerLabel)
-            }
-            SettingsDivider()
-            SettingsRow(label: "Rest-pause rest") {
-                Stepper(value: binding(\.restPauseSeconds), in: 5...60, step: 5) {
-                    Text(WorkoutSession.clock(preferences.restPauseSeconds))
-                        .font(DGFont.subhead)
-                        .foregroundStyle(DGColor.ink3)
-                }
-                .accessibilityLabel("Rest-pause rest")
-                .accessibilityValue(WorkoutSession.clock(preferences.restPauseSeconds))
-            }
-            SettingsDivider()
-            SettingsRow(label: "Sound") {
-                Toggle("Sound", isOn: binding(\.restSound)).tint(DGColor.coral).labelsHidden()
-            }
-            SettingsDivider()
-            SettingsRow(label: "Play on silent") {
-                Toggle("Play on silent", isOn: binding(\.playRestSoundOnSilent))
-                    .tint(DGColor.coral).labelsHidden()
-            }
-            SettingsDivider()
-            SettingsRow(label: "Haptics") {
-                Toggle("Haptics", isOn: binding(\.restHaptics)).tint(DGColor.coral).labelsHidden()
-            }
-            SettingsDivider()
-            SettingsRow(label: "Screen flash") {
-                Toggle("Screen flash", isOn: binding(\.restScreenFlash)).tint(DGColor.coral).labelsHidden()
-            }
-        }
-    }
-
-    /// "Off" at 0 seconds (features #20); otherwise the usual `m:ss` clock.
-    private var restTimerLabel: String {
-        preferences.defaultRestSeconds == 0 ? "Off" : WorkoutSession.clock(preferences.defaultRestSeconds)
-    }
-
-    private var trainingCard: some View {
-        SettingsSection(title: "Training") {
-            TrainingGoalRow(onApply: {
-                preferences.applyTrainingGoalDefaults()
-                notificationScheduler.rescheduleAll(store: store, preferences: preferences)
-            })
-            SettingsDivider()
-            SettingsRow(label: "Weekly goal") {
-                Stepper(value: weeklyGoalBinding, in: 1...7) {
-                    Text("\(preferences.weeklyGoal)").font(DGFont.subhead).foregroundStyle(DGColor.ink3)
-                }
-                .accessibilityLabel("Weekly goal")
-                .accessibilityValue("\(preferences.weeklyGoal) workouts")
-            }
-            SettingsDivider()
-            SettingsRow(label: "Week starts") {
-                Picker("Week starts", selection: weekStartsMondayBinding) {
-                    Text("MON").tag(true)
-                    Text("SUN").tag(false)
-                }
-                .pickerStyle(.segmented)
-                .tint(DGColor.coral)
-                .frame(width: 120)
-            }
-            SettingsDivider()
-            SettingsRow(label: "Weigh in before workouts") {
-                Toggle("Weigh in before workouts", isOn: binding(\.weighInBeforeWorkout))
-                    .tint(DGColor.coral).labelsHidden()
-            }
-            SettingsDivider()
-            CheckInCardButton()
-        }
-    }
-
-    private var calendarCard: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            calendarRows
-            if let message = calendarProblemMessage {
-                Text(message).font(DGFont.footnote).foregroundStyle(DGColor.danger)
-            }
-        }
-    }
-
-    private var calendarRows: some View {
-        SettingsSection(title: "Calendar") {
-            SettingsRow(label: "Add my schedule to Calendar") {
-                Toggle("Add my schedule to Calendar", isOn: calendarSyncBinding)
-                    .tint(DGColor.coral).labelsHidden()
-            }
-            SettingsDivider()
-            SettingsRow(label: "Start time") {
-                Stepper(value: binding(\.scheduledStartHour), in: 0...23) {
-                    Text(startHourLabel).font(DGFont.subhead).foregroundStyle(DGColor.ink3)
-                }
-                .accessibilityLabel("Start time")
-                .accessibilityValue(startHourLabel)
-            }
-        }
-    }
-
-    /// Wraps `calendarSyncEnabled` so turning it on kicks off an immediate sync (turning it off
-    /// just stops future syncs — already-created events are left alone).
-    private var calendarSyncBinding: Binding<Bool> {
-        Binding(
-            get: { preferences.calendarSyncEnabled },
-            set: { enabled in
-                preferences.calendarSyncEnabled = enabled
-                syncProblem = nil
-                if enabled { syncCalendarNow() }
-            }
-        )
-    }
-
-    /// `CalendarSyncCoordinator` owns the serialising chain (this toggle and a schedule edit
-    /// could otherwise sync concurrently over the same event ids) and reports a refusal instead
-    /// of swallowing it behind a `try?` — which used to leave the toggle switched on while every
-    /// sync silently failed. A refusal also turns `calendarSyncEnabled` back off.
-    private func syncCalendarNow() {
-        guard !LaunchFlags.isTesting else { return }
-        Task {
-            let outcome = await CalendarSyncCoordinator.sync(store: store, preferences: preferences)
-            syncProblem = outcome.problemMessage
-        }
-    }
-
-    private var startHourLabel: String {
-        var components = DateComponents()
-        components.hour = preferences.scheduledStartHour
-        components.minute = 0
-        let date = Calendar.current.date(from: components) ?? Date()
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h a"
-        return formatter.string(from: date)
     }
 
     private var aboutCard: some View {
@@ -261,36 +100,10 @@ struct SettingsView: View {
         return "\(version) (\(build))"
     }
 
-    private func binding<T>(_ keyPath: ReferenceWritableKeyPath<Preferences, T>) -> Binding<T> {
-        Binding(get: { preferences[keyPath: keyPath] }, set: { preferences[keyPath: keyPath] = $0 })
-    }
-
-    /// "This week" moving changes which days the goal-at-risk and recap notifications belong to,
-    /// so the pending ones have to be rebuilt — otherwise the change only lands on next launch.
-    private var weekStartsMondayBinding: Binding<Bool> {
-        Binding(
-            get: { preferences.weekStartsMonday },
-            set: {
-                preferences.weekStartsMonday = $0
-                notificationScheduler.rescheduleAll(store: store, preferences: preferences)
-                WidgetSnapshotWriter.refresh(store: store, preferences: preferences)
-            }
-        )
-    }
-
-    private var weeklyGoalBinding: Binding<Int> {
-        Binding(
-            get: { preferences.weeklyGoal },
-            set: {
-                preferences.weeklyGoal = $0
-                notificationScheduler.rescheduleAll(store: store, preferences: preferences)
-            }
-        )
-    }
 }
 
 /// A labeled "SECTION" title above a `.dgCard()` of hairline-separated rows. Not `private`:
-/// `AppleHealthSettingsCard.swift` reuses this and `SettingsRow`/`SettingsDivider` below for the
+/// the section files alongside reuse this and `SettingsRow`/`SettingsDivider` below for the
 /// same visual language — `private` is file-scoped in Swift, so a different file can't see it.
 struct SettingsSection<Content: View>: View {
     var title: String
@@ -358,19 +171,12 @@ struct TrainingGoalRow: View {
     }
 }
 
-/// Hairline separator between rows, indented to align with row text.
+/// Hairline separator between rows, indented to align with row text. The one divider for every
+/// Settings card (`DisplaySettingsSection`, `RemindersSettingsSection`, `HealthSettingsView`
+/// included) — it used to exist four times over.
 struct SettingsDivider: View {
     var body: some View {
         Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
-    }
-}
-
-extension SettingsView {
-    /// The toggle's own sync result first; otherwise whatever the last launch / foreground
-    /// sync recorded on `CalendarSyncCoordinator.status`, which no view awaits. `status` is
-    /// `@Observable`, so reading it from `body` re-renders the calendar card when it changes.
-    fileprivate var calendarProblemMessage: String? {
-        syncProblem ?? CalendarSyncCoordinator.status.problemMessage
     }
 }
 

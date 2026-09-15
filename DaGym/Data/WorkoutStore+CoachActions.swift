@@ -7,9 +7,9 @@ import SwiftData
 /// undo tapped after a refresh still resolves against live objects.
 struct CoachDeloadApplication {
     /// Each planned set that was rewritten, with the target it had before.
-    fileprivate var previousTargets: [(setID: UUID, weightKg: Double?)]
+    var previousTargets: [(setID: UUID, weightKg: Double?)]
     /// Each routine whose `updatedAt` was bumped, with the stamp it had before.
-    fileprivate var previousRoutineStamps: [(routineID: UUID, updatedAt: Date)]
+    var previousRoutineStamps: [(routineID: UUID, updatedAt: Date)]
     /// What the lifter was told would happen, for the toast.
     var exerciseName: String
     var weightKg: Double
@@ -86,7 +86,7 @@ extension WorkoutStore {
     /// Puts back exactly what `applyCoachDeload` overwrote — the planned targets and the routines'
     /// edit stamps, so the progression engine goes back to prescribing from history.
     func undoCoachDeload(_ application: CoachDeloadApplication) {
-        let sets = (try? context.fetch(FetchDescriptor<PlannedSetModel>())) ?? []
+        let sets = fetch(FetchDescriptor<PlannedSetModel>())
         let byID = Dictionary(sets.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         for entry in application.previousTargets {
             byID[entry.setID]?.targetWeightKg = entry.weightKg
@@ -101,7 +101,7 @@ extension WorkoutStore {
     /// Matched by exercise **id**: matching by name hit archived routines and any other custom
     /// exercise the lifter happened to give the same name.
     private func routineExercises(matching exerciseID: UUID?, name: String) -> [RoutineExerciseModel] {
-        let all = (try? context.fetch(FetchDescriptor<RoutineExerciseModel>())) ?? []
+        let all = fetch(FetchDescriptor<RoutineExerciseModel>())
         return all.filter { routineExercise in
             guard let exercise = routineExercise.exercise,
                   routineExercise.routine?.isArchived != true else { return false }

@@ -28,7 +28,7 @@ struct ProgramsView: View {
             }
         }
         .task { refresh() }
-        .onChange(of: store.changeToken) { refresh() }
+        .refreshOnStoreChange(refresh)
         .dgUndoToast($undoAction)
         .confirmationDialog("New Program", isPresented: $showingNew, titleVisibility: .visible) {
             Button("Build one for me") { showingGenerator = true }

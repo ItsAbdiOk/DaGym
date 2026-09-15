@@ -12,8 +12,8 @@ import SwiftData
 /// store later (if that ever changes) costs nothing.
 @Model
 final class ProgressPhotoModel {
-    var id: UUID = UUID()
-    var date: Date = Date()
+    var id = UUID()
+    var date = Date()
     /// "front", "side" or "back" — see `ProgressPhotoPose`.
     var pose: String = "front"
     /// Full-size JPEG, downscaled to a 1600px long edge. `.externalStorage` keeps large blobs out

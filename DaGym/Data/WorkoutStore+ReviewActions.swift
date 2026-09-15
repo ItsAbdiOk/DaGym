@@ -6,9 +6,9 @@ import SwiftData
 /// they had before), the schedule it moved, or the deload it applied. Handed straight back to
 /// `undoReviewChange` by the Coach screen's Undo toast.
 struct ReviewApplication {
-    fileprivate var previousRoutines: [RoutineSnapshot] = []
-    fileprivate var previousSchedule: WeeklySchedule?
-    fileprivate var deload: CoachDeloadApplication?
+    var previousRoutines: [RoutineSnapshot] = []
+    var previousSchedule: WeeklySchedule?
+    var deload: CoachDeloadApplication?
     /// What the lifter was told happened, for the toast.
     var message: String
 }

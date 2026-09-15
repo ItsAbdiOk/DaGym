@@ -7,7 +7,7 @@ import SwiftData
 /// property defaults, every relationship optional.
 @Model
 final class ExerciseModel {
-    var id: UUID = UUID()
+    var id = UUID()
     /// The JSON "id" for seeded exercises. Nil for custom exercises.
     var seedID: String?
     var name: String = ""
@@ -29,7 +29,7 @@ final class ExerciseModel {
     var restSeconds: Int = 150
     var instructions: String = ""
     var notes: String = ""
-    var createdAt: Date = Date()
+    var createdAt = Date()
     /// Provenance of `instructions`/`primaryMuscles`/etc: "" (free-exercise-db,
     /// the original seed), "wger", or "" for user-created custom exercises.
     var dataSource: String = ""

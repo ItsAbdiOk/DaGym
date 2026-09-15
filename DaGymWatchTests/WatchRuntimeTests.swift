@@ -1,4 +1,5 @@
 import Foundation
+import HealthKit
 import Testing
 
 @testable import DaGymWatch
@@ -32,5 +33,25 @@ struct WatchRuntimeStartTokenTests {
         token.clear() // `begin` opened the session.
         #expect(!token.isPending)
         #expect(!token.isCurrent(second))
+    }
+
+    /// HealthKit can end a session underneath the app; holding a dead reference refused every
+    /// later start for the rest of the launch. Our own `end()` reaches `.stopped` first and
+    /// must save before the references go.
+    @Test("stopped saves, ended releases, running and paused do nothing")
+    func stateReactions() {
+        #expect(WatchWorkoutRuntime.reaction(to: .stopped) == .save)
+        #expect(WatchWorkoutRuntime.reaction(to: .ended) == .release)
+        #expect(WatchWorkoutRuntime.reaction(to: .running) == WatchWorkoutRuntime.StateReaction.none)
+        #expect(WatchWorkoutRuntime.reaction(to: .paused) == WatchWorkoutRuntime.StateReaction.none)
+        #expect(WatchWorkoutRuntime.reaction(to: .notStarted) == WatchWorkoutRuntime.StateReaction.none)
+    }
+
+    @Test("the read set stays heart rate and active energy, share is the workout type only")
+    @MainActor
+    func authorisationSets() {
+        let read: Set<HKObjectType> = [HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned)]
+        #expect(WatchWorkoutRuntime.readTypes == read)
+        #expect(WatchWorkoutRuntime.shareTypes == [HKObjectType.workoutType()])
     }
 }

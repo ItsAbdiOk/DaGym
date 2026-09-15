@@ -14,7 +14,12 @@ struct ImportSettingsSection: View {
     @State private var errorMessage: String?
     @State private var confirmationMessage: String?
     @State private var showingHevyKeySheet = false
-    @State private var hevyAPIKey = KeychainStore.string(account: HevyAPIClient.keychainAccount) ?? ""
+    /// The in-flight unit re-parse; a new pick cancels it so a slow LB parse can't land after a
+    /// faster KG one and import every weight 2.2× off.
+    @State private var reparseTask: Task<Void, Never>?
+    /// Read in `.task`, not here: a `@State` initial value is evaluated on every `SettingsView`
+    /// render, which made every stepper tap up there a Keychain round-trip.
+    @State private var hevyAPIKey = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
@@ -46,6 +51,7 @@ struct ImportSettingsSection: View {
             "Couldn't Complete That", isPresented: errorBinding,
             actions: {}, message: { Text(errorMessage ?? "") }
         )
+        .task { hevyAPIKey = KeychainStore.string(account: HevyAPIClient.keychainAccount) ?? "" }
     }
 
     private var importRow: some View {
@@ -147,11 +153,24 @@ struct ImportSettingsSection: View {
             errorMessage = "Couldn't read that file."
             return
         }
-        guard let preview = WorkoutImportService.preview(csv: csv, store: store) else {
+        guard let preview = await parsePreview(csv: csv, assumedWeightUnit: nil) else {
             errorMessage = "That doesn't look like a Strong, Hevy or FitNotes export."
             return
         }
         pendingImport = PendingCSVImport(preview: preview, csv: csv)
+    }
+
+    /// The parse (`WorkoutImport.parse`, pure over the text) runs off the main thread; only the
+    /// name-matching against the library, which needs the store's main-actor context, runs here.
+    /// A multi-thousand-row Strong export used to parse on main and beach-ball Settings.
+    private func parsePreview(csv: String, assumedWeightUnit: WeightUnit?) async -> ImportPreview? {
+        let result = await Task.detached(priority: .userInitiated) {
+            WorkoutImport.parse(csv: csv, assumedWeightUnit: assumedWeightUnit)
+        }.value
+        guard let result else { return nil }
+        return WorkoutImportService.preview(
+            result: result, store: store, assumedWeightUnit: assumedWeightUnit
+        )
     }
 
     /// The picker's action, or nil for a source with no re-parsable text (the Hevy API path,
@@ -165,11 +184,13 @@ struct ImportSettingsSection: View {
     /// Re-parsing (rather than scaling the already-parsed numbers) keeps one code path honest
     /// about per-row unit columns and rounding.
     private func reparse(_ pending: PendingCSVImport, unit: WeightUnit) {
-        guard let csv = pending.csv,
-              let preview = WorkoutImportService.preview(
-                  csv: csv, store: store, assumedWeightUnit: unit
-              ) else { return }
-        pendingImport = pending.reparsed(preview: preview)
+        guard let csv = pending.csv else { return }
+        reparseTask?.cancel()
+        reparseTask = Task {
+            guard let preview = await parsePreview(csv: csv, assumedWeightUnit: unit),
+                  !Task.isCancelled else { return }
+            pendingImport = pending.reparsed(preview: preview)
+        }
     }
 
     private func readCSV(url: URL) async -> String? {
@@ -179,10 +200,17 @@ struct ImportSettingsSection: View {
         }.value
     }
 
+    /// `WorkoutImportService.apply` writes every workout in one main-actor call; the sheet comes
+    /// down and the row spins first, and the yield gets that spinner on screen before it starts.
     private func confirmImport(_ preview: ImportPreview) {
-        let report = WorkoutImportService.apply(preview: preview, store: store)
         pendingImport = nil
-        confirmationMessage = report.summary
+        isBusy = true
+        Task {
+            defer { isBusy = false }
+            await Task.yield()
+            let report = WorkoutImportService.apply(preview: preview, store: store)
+            confirmationMessage = report.summary
+        }
     }
 
     // MARK: - Hevy API import
@@ -224,63 +252,6 @@ struct ImportSettingsSection: View {
     }
 }
 
-/// A single API-key text field, presented the first time "Import from Hevy" is tapped and
-/// reachable again from the same row afterward to remove the key.
-private struct HevyAPIKeySheet: View {
-    var apiKey: String
-    var onSave: (String) -> Void
-    var onRemove: () -> Void
-
-    @State private var draft = ""
-
-    var body: some View {
-        VStack(spacing: DGSpace.s5) {
-            Capsule()
-                .fill(DGColor.ink4)
-                .frame(width: 36, height: 5)
-                .padding(.top, DGSpace.s2)
-            VStack(alignment: .leading, spacing: DGSpace.s2) {
-                Text("Hevy API Key")
-                    .font(DGFont.title2)
-                    .textCase(.uppercase)
-                    .foregroundStyle(DGColor.ink1)
-                Text(
-                    "From hevy.app → Settings → API (Hevy Pro). Stored in the Keychain — it's only "
-                        + "ever sent to Hevy's own API."
-                )
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink3)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            TextField("API key", text: $draft)
-                .textFieldStyle(.plain)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .padding(DGSpace.s4)
-                .dgCard(padding: 0)
-            DGPrimaryButton(title: "Connect", action: save)
-                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            if !apiKey.isEmpty {
-                Button("Remove Key", role: .destructive, action: onRemove)
-                    .buttonStyle(.dgControl)
-                    .dgLabel(DGColor.danger)
-            }
-        }
-        .padding(.horizontal, DGSpace.s4)
-        .padding(.bottom, DGSpace.s5)
-        .frame(maxWidth: .infinity, alignment: .top)
-        .background(DGColor.surface1)
-        .clipShape(RoundedRectangle(cornerRadius: DGRadius.sheet, style: .continuous))
-        .presentationDetents([.height(340)])
-        .presentationDragIndicator(.hidden)
-        .task { draft = apiKey }
-    }
-
-    private func save() {
-        onSave(draft.trimmingCharacters(in: .whitespacesAndNewlines))
-    }
-}
-
 /// Wraps `ImportPreview` for `.sheet(item:)`, which needs `Identifiable`.
 /// Not private: `FeatureImportSheetTests` checks `reparsed(preview:)` keeps the sheet's identity.
 struct PendingCSVImport: Identifiable {
@@ -298,158 +269,6 @@ struct PendingCSVImport: Identifiable {
         var copy = self
         copy.preview = preview
         return copy
-    }
-}
-
-/// Source badge, counts, unmatched exercises and problems for one parsed CSV, before the user
-/// confirms the import.
-private struct ImportCSVPreviewSheet: View {
-    var preview: ImportPreview
-    var onConfirm: () -> Void
-    var onCancel: () -> Void
-    /// Called when the user picks a weight unit for a file that named none; nil hides the picker.
-    var onPickUnit: ((WeightUnit) -> Void)?
-
-    /// The picker's own selection. Routing the choice through `@State` + `onChange` rather than a
-    /// `Binding(get:set:)` over `onPickUnit` keeps a non-`Sendable` closure out of `Binding`'s
-    /// `@Sendable` setter — which Swift 6 rejects, and which the compiler crashes on if you make
-    /// the closure type `@MainActor @Sendable` to satisfy it.
-    @State private var pickedUnit = WeightUnit.kg
-
-    var body: some View {
-        VStack(spacing: DGSpace.s5) {
-            Capsule()
-                .fill(DGColor.ink4)
-                .frame(width: 36, height: 5)
-                .padding(.top, DGSpace.s2)
-            header
-            // The unmatched-name and problem lists are unbounded (a Strong export can carry
-            // dozens), so they scroll and the Cancel/Import row stays reachable underneath.
-            ScrollView {
-                VStack(spacing: DGSpace.s5) {
-                    countsCard
-                    if preview.weightUnitAssumed, let onPickUnit {
-                        unitPicker(onPickUnit)
-                    }
-                    if !preview.matchedExercises.isEmpty {
-                        namesCard(
-                            title: "\(preview.matchedExercises.count) matched exercise"
-                                + (preview.matchedExercises.count == 1 ? "" : "s"),
-                            names: preview.matchedExercises.map { "\($0.sourceName) → \($0.libraryName)" }
-                        )
-                    }
-                    if !preview.unmatchedExerciseNames.isEmpty {
-                        namesCard(
-                            title: "\(preview.unmatchedExerciseNames.count) new exercise"
-                                + (preview.unmatchedExerciseNames.count == 1 ? "" : "s"),
-                            names: preview.unmatchedExerciseNames
-                        )
-                    }
-                    if !preview.problems.isEmpty {
-                        namesCard(
-                            title: "\(preview.problems.count) problem"
-                                + (preview.problems.count == 1 ? "" : "s"),
-                            names: preview.problems.map { "Line \($0.line): \($0.message)" }
-                        )
-                    }
-                }
-            }
-            actions
-        }
-        .padding(.horizontal, DGSpace.s4)
-        .padding(.bottom, DGSpace.s5)
-        .frame(maxWidth: .infinity, alignment: .top)
-        .background(DGColor.surface1)
-        .clipShape(RoundedRectangle(cornerRadius: DGRadius.sheet, style: .continuous))
-        .presentationDetents(hasExtras ? [.medium, .large] : [.medium])
-        .presentationDragIndicator(.hidden)
-    }
-
-    private var hasExtras: Bool {
-        !preview.unmatchedExerciseNames.isEmpty || !preview.problems.isEmpty
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s2) {
-            Text("Import from \(preview.source.displayName)")
-                .font(DGFont.title2)
-                .textCase(.uppercase)
-                .foregroundStyle(DGColor.ink1)
-            Text("Nothing is imported until you confirm")
-                .font(DGFont.subhead)
-                .foregroundStyle(DGColor.ink3)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var countsCard: some View {
-        VStack(spacing: DGSpace.s2) {
-            DGAdaptiveStack(spacing: 0, threshold: .accessibility3) {
-                StatTile(value: "\(preview.newWorkoutCount)", label: "Workouts")
-                StatTile(value: "\(preview.setsCount)", label: "Sets")
-            }
-            .dgCard(padding: 0)
-            if preview.alreadyImportedCount > 0 {
-                Text("\(preview.alreadyImportedCount) already in your history — they'll be skipped.")
-                    .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.ink4)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-    }
-
-    /// Shown only when the file's weight column named no unit. Assuming kg silently turns an
-    /// American lifter's 225 lb bench into a 225 kg one, so the guess is made visible and
-    /// changeable before anything is written.
-    private func unitPicker(_ onPick: @escaping (WeightUnit) -> Void) -> some View {
-        VStack(alignment: .leading, spacing: DGSpace.s2) {
-            Text("Weight unit").dgLabel()
-            Text("This file doesn't say what unit its weights are in. Reading them as:")
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink3)
-            Picker("Weight unit", selection: $pickedUnit) {
-                Text("Kilograms").tag(WeightUnit.kg)
-                Text("Pounds").tag(WeightUnit.lb)
-            }
-            .pickerStyle(.segmented)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(DGSpace.s4)
-        .dgCard(padding: 0)
-        .onAppear { pickedUnit = preview.weightUnit }
-        // Only a real change re-parses; the `onAppear` seed above must not kick one off.
-        .onChange(of: pickedUnit) { _, unit in
-            if unit != preview.weightUnit { onPick(unit) }
-        }
-    }
-
-    private func namesCard(title: String, names: [String]) -> some View {
-        VStack(alignment: .leading, spacing: DGSpace.s2) {
-            Text(title).dgLabel()
-            VStack(alignment: .leading, spacing: DGSpace.s2) {
-                ForEach(names, id: \.self) { name in
-                    Text(name).font(DGFont.footnote).foregroundStyle(DGColor.ink3)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(DGSpace.s4)
-            .dgCard(padding: 0)
-        }
-    }
-
-    private var actions: some View {
-        HStack(spacing: DGSpace.s3) {
-            Button("Cancel", action: onCancel)
-                .buttonStyle(.dgControl)
-                .font(DGFont.condensedLabel(15))
-                .tracking(1.5)
-                .textCase(.uppercase)
-                .foregroundStyle(DGColor.ink3)
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 52)
-                .dgGlass(.regular, radius: DGRadius.lg)
-            DGPrimaryButton(title: "Import", action: onConfirm)
-        }
     }
 }
 

@@ -23,8 +23,21 @@ extension WorkoutStore {
     func addPhoto(
         image data: Data, pose: ProgressPhotoPose, date: Date = Date(), bodyweightKg: Double? = nil
     ) -> ProgressPhotoModel? {
-        guard let photoContext, let image = UIImage(data: data), let processed = PhotoProcessor.process(image)
-        else { return nil }
+        guard let image = UIImage(data: data), let processed = PhotoProcessor.process(image) else {
+            return nil
+        }
+        return addPhoto(processed: processed, pose: pose, date: date, bodyweightKg: bodyweightKg)
+    }
+
+    /// Saves an already-processed photo — the capture flow decodes and resizes off the main
+    /// actor (`PhotoProcessor.process` is ~300–500 ms for a camera JPEG) and hands the result
+    /// here. Returns `nil` without writing when the photo store is unavailable.
+    @discardableResult
+    func addPhoto(
+        processed: PhotoProcessor.ProcessedPhoto, pose: ProgressPhotoPose, date: Date = Date(),
+        bodyweightKg: Double? = nil
+    ) -> ProgressPhotoModel? {
+        guard let photoContext else { return nil }
         let model = ProgressPhotoModel(
             date: date, pose: pose.rawValue, imageData: processed.imageData,
             thumbnailData: processed.thumbnailData, bodyweightKg: bodyweightKg

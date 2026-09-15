@@ -1,4 +1,5 @@
 import GymCore
+import OSLog
 import SwiftData
 import SwiftUI
 
@@ -10,6 +11,7 @@ struct HistoryTabView: View {
     @Environment(Preferences.self) private var preferences
 
     @State private var records: [WorkoutRecord] = []
+    @State private var groups: [HistoryWeekGroup] = []
     @State private var routines: [RoutineInfo] = []
     @State private var workoutsCount = 0
     @State private var volumeKg: Double = 0
@@ -24,23 +26,51 @@ struct HistoryTabView: View {
     @State private var undo: UndoAction?
     @State private var backfillSession: WorkoutSession?
     @State private var finishedWorkout: FinishedWorkout?
+    /// A store change landed while this tab's own backfill cover was up (`store.sync` bumps the
+    /// token per set); paid once when the cover goes away rather than per tap underneath it.
+    @State private var needsRefresh = false
+    /// Bumped by every `refresh()`; `ProgressChartsSection` re-reads its series when it changes,
+    /// so the weekly-volume chart follows a delete/undo/backfill instead of going stale.
+    @State private var chartsGeneration = 0
+
+    private static let signposter = OSSignposter(subsystem: "dev.abdirahmanmohamed.dagym", category: "perf")
 
     var body: some View {
         NavigationStack(path: $path) {
             HistoryView(
-                records: records, workoutsCount: workoutsCount, volumeKg: volumeKg,
+                groups: groups, workoutsCount: workoutsCount, volumeKg: volumeKg,
                 recordsCount: recordsCount, recoveryHeadline: recoveryHeadline,
                 currentStreakWeeks: currentStreakWeeks,
                 onBackfill: { beginBackfill(date: Date()) }, onDelete: deleteWorkout,
                 onCalendar: { showingCalendar = true },
-                charts: AnyView(ProgressChartsSection())
+                charts: AnyView(ProgressChartsSection(generation: chartsGeneration))
             )
             .navigationDestination(for: UUID.self) { id in
                 WorkoutDetailView(workoutID: id)
             }
         }
         .dgUndoToast($undo)
-        .task { refresh() }
+        // The charts section runs its own first read on appearance; bumping here would double it.
+        .task { refresh(reloadCharts: false) }
+        // Health auto-imports, CloudKit merges and photo deletes all bump the token while this
+        // tab sits on screen; without this the list only caught up on the next tab switch.
+        // Tab visibility is handled by the modifier; the local backfill cover is handled here.
+        .refreshOnStoreChange {
+            if backfillSession == nil, finishedWorkout == nil {
+                refresh()
+            } else {
+                needsRefresh = true
+            }
+        }
+        // A discarded backfill dismisses without `onDone`; a finished one refreshes there.
+        .onChange(of: backfillSession?.id) { _, _ in
+            if backfillSession == nil, finishedWorkout == nil, needsRefresh { refresh() }
+        }
+        // The buckets depend on the week start and on which week "now" falls in.
+        .onChange(of: preferences.weekStartsMonday) { _, _ in regroup() }
+        .onReceive(
+            NotificationCenter.default.publisher(for: .NSCalendarDayChanged).receive(on: DispatchQueue.main)
+        ) { _ in regroup() }
         .sheet(isPresented: $showingBackfill) {
             BackfillSheet(
                 routines: routines, initialDate: backfillDate, records: records,
@@ -69,8 +99,13 @@ struct HistoryTabView: View {
         }
     }
 
-    private func refresh() {
+    private func refresh(reloadCharts: Bool = true) {
+        let state = Self.signposter.beginInterval("HistoryTabView.refresh")
+        defer { Self.signposter.endInterval("HistoryTabView.refresh", state) }
+        needsRefresh = false
+        if reloadCharts { chartsGeneration += 1 }
         records = store.history()
+        regroup()
         let stats = store.lifetimeStats()
         workoutsCount = stats.workouts
         volumeKg = stats.volumeKg
@@ -82,6 +117,11 @@ struct HistoryTabView: View {
             workoutDates: store.workoutDates(), weeklyGoal: preferences.weeklyGoal,
             calendar: preferences.trainingCalendar, now: Date()
         ).current
+    }
+
+    /// Buckets `records` into week/month sections once, so `HistoryView` renders a ready list.
+    private func regroup() {
+        groups = HistoryView.weekGroups(records: records, now: Date(), calendar: preferences.trainingCalendar)
     }
 
     private func deleteWorkout(_ id: UUID) {

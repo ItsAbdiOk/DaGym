@@ -8,6 +8,12 @@ import SwiftUI
 /// their own top-of-tab sections (consistency, milestones) as sibling views — this one only
 /// owns its own card stack.
 struct ProgressChartsSection: View {
+    /// Bumped by the owner (`HistoryTabView.refresh`) whenever history changed; the series are
+    /// re-read on every change. Deliberately not `store.changeToken` — the owner gates that on
+    /// tab visibility and skips the per-set bumps of a backfill session, and the section is an
+    /// `AnyView` with stable identity, so nothing else would ever re-run `.task`.
+    var generation = 0
+
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
     @State private var bundle: WorkoutStore.BodySeriesBundle?
@@ -34,7 +40,7 @@ struct ProgressChartsSection: View {
                 )
             }
         }
-        .task { refresh() }
+        .task(id: generation) { refresh() }
         .sheet(isPresented: $showingProgress) {
             ProgressScreen()
         }
@@ -221,22 +227,36 @@ struct WeeklyVolumeCard: View {
     /// `Calendar.current` — otherwise a locale/preference mismatch can print "W37" under a bar
     /// the data already grouped into week 38.
     private static func weekLabel(_ date: Date, calendar: Calendar) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.dateFormat = "'W'w"
-        return formatter.string(from: date)
+        weekFormatter.calendar = calendar
+        return weekFormatter.string(from: date)
     }
+
+    private static let weekFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "'W'w"
+        return formatter
+    }()
 }
 
 /// Sorted-descending horizontal bars for the top 8 muscles, plus a hit-mode body map pair.
 struct SetsPerMuscleCard: View {
     var setsPerMuscle: [Muscle: Double]
 
-    private var topMuscles: [(muscle: Muscle, sets: Double)] {
-        setsPerMuscle.sorted { $0.value > $1.value }.prefix(8).map { (muscle: $0.key, sets: $0.value) }
-    }
+    /// Sorted once at construction; this card sits in the History header, which re-renders with
+    /// the list, and `body` used to sort the dictionary three times per pass.
+    private let topMuscles: [(muscle: Muscle, sets: Double)]
+    private let maxSets: Double
+    private let hitIntensity: [Muscle: Double]
 
-    private var maxSets: Double { topMuscles.map(\.sets).max() ?? 1 }
+    init(setsPerMuscle: [Muscle: Double]) {
+        self.setsPerMuscle = setsPerMuscle
+        let top = setsPerMuscle.sorted { $0.value > $1.value }.prefix(8)
+            .map { (muscle: $0.key, sets: $0.value) }
+        let maxSets = top.map(\.sets).max() ?? 1
+        topMuscles = top
+        self.maxSets = maxSets
+        hitIntensity = maxSets > 0 ? setsPerMuscle.mapValues { min(1, $0 / maxSets) } : [:]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s4) {
@@ -257,11 +277,6 @@ struct SetsPerMuscleCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .dgCard()
-    }
-
-    private var hitIntensity: [Muscle: Double] {
-        guard maxSets > 0 else { return [:] }
-        return setsPerMuscle.mapValues { min(1, $0 / maxSets) }
     }
 }
 

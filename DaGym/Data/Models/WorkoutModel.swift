@@ -4,9 +4,9 @@ import SwiftData
 /// One training session, in progress, finished or backfilled.
 @Model
 final class WorkoutModel {
-    var id: UUID = UUID()
+    var id = UUID()
     var title: String = ""
-    var startedAt: Date = Date()
+    var startedAt = Date()
     var endedAt: Date?
     var notes: String = ""
     var isBackfilled: Bool = false
@@ -18,6 +18,13 @@ final class WorkoutModel {
     /// Nil until then, and nil forever if Health sync is off — the presence of a value is what
     /// makes a second sync attempt a no-op (plan.md §6.8).
     var healthKitID: String?
+    /// Σ (load lifted × reps) over completed working sets, stamped by `WorkoutStore.finish`
+    /// (`stampTotals`) so the History header's lifetime tonnage is a sum over one column rather
+    /// than a fault of every set ever logged. `loadedVolumeKg` is the same number computed from
+    /// the rows; this is its persisted copy. 0 until stamped.
+    var volumeKg: Double = 0
+    /// Completed working-set count, stamped alongside `volumeKg`. 0 until stamped.
+    var setsDone: Int = 0
 
     @Relationship(deleteRule: .cascade, inverse: \WorkoutExerciseModel.workout)
     var exercises: [WorkoutExerciseModel]?

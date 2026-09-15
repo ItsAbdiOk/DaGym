@@ -41,7 +41,9 @@ opt_in_rules:
   - operator_usage_whitespace
   - overridden_super_call
   - prefer_self_type_over_type_of_self
+  - private_over_fileprivate
   - redundant_nil_coalescing
+  - redundant_type_annotation
   - sorted_first_last
   - toggle_bool
   - unavailable_function
@@ -49,8 +51,9 @@ opt_in_rules:
   - unowned_variable_capture
   - yoda_condition
 
-analyzer_rules:
-  - unused_import
+# No analyzer_rules: they only run under `swiftlint analyze --compiler-log-path`, which needs a
+# full xcodebuild log and re-parses every file through SourceKit (minutes for ~650 files),
+# and every gate here runs `swiftlint lint`. Listing `unused_import` implied it was enforced.
 
 # Nothing a user types or a network returns may be force-unwrapped.
 force_unwrapping:
@@ -78,6 +81,12 @@ file_length:
   warning: 400
   error: 600
   ignore_comment_only_lines: true
+
+# Configured rather than `swiftlint:disable`d inline: three-element tuples are the fixture
+# shape the tests use; four is where a struct earns its name.
+large_tuple:
+  warning: 3
+  error: 4
 
 cyclomatic_complexity:
   warning: 10
@@ -107,6 +116,29 @@ custom_rules:
     regex: '"(sk-ant-|sk-|AIza)[A-Za-z0-9_\-]{12,}"'
     excluded: ".*Tests?\\.swift"
     message: "Never hard-code an API key. Keys live in the Keychain, entered by the user."
+    severity: error
+
+  no_inline_formatter:
+    name: "Formatter built per call"
+    # A DateFormatter/NumberFormatter costs milliseconds to construct; inside `body` or a
+    # helper it is rebuilt on every render. Hoist it to a `static let` — the one form allowed:
+    # the two look-behinds accept `static let f = DateFormatter()` and the closure form
+    # (`static let f: DateFormatter = {` on the line above). Look-behinds must be bounded, hence
+    # the {0,120}; a line longer than that is already a line_length error.
+    regex: '(?<!static (let|var)[^\n]{0,120})(?<!static (let|var)[^\n]{0,120}\n[^\n]{0,120})\b((ISO8601)?DateFormatter|NumberFormatter)\(\)'
+    included: "DaGym/(Features|Design)/.*\\.swift"
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "Don't construct a formatter inline; hoist it to a `private static let` in this file."
+    severity: error
+
+  no_wall_clock_in_core:
+    name: "Wall clock in GymCore"
+    # GymCore is pure: callers pass `now:` and `calendar:` so tests pin them. A default
+    # parameter value (`now: Date = Date()`) is that injection point and is allowed.
+    regex: '(?<!:\s{0,3}Date\s{0,3}=\s{0,3})\bDate\(\)|\bCalendar\.current\b'
+    included: "GymCore/Sources/.*\\.swift"
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "GymCore takes `now:`/`calendar:` parameters; never read the wall clock here."
     severity: error
 
   no_todo_without_owner:

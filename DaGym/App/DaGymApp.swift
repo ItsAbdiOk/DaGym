@@ -4,6 +4,7 @@ import UIKit
 import os
 
 private let appLogger = Logger(subsystem: "dev.abdirahmanmohamed.dagym", category: "app")
+private let launchSignposter = OSSignposter(subsystem: "dev.abdirahmanmohamed.dagym", category: "perf")
 
 @main
 struct DaGymApp: App {
@@ -21,7 +22,7 @@ struct DaGymApp: App {
             } else if let route = DebugRoute.fromLaunchArguments {
                 DebugRootView(route: route)
             } else {
-                AppRootContainer(preferences: appDelegate.preferences)
+                AppRootContainer(preferences: appDelegate.preferences, healthSync: appDelegate.healthSync)
             }
         }
     }
@@ -46,6 +47,10 @@ struct AppRootContainer: View {
     }
 
     private let preferences: Preferences
+    /// The app delegate's `HealthSyncService` (nil in test hosts and schema-init launches),
+    /// reused rather than re-created so the background observer and the finish hooks share one
+    /// `lastSyncDate`/authorization state — two instances over the same store used to diverge.
+    private let healthSync: HealthSyncService?
     @State private var phase = LaunchPhase.loading
     // Mirrors `preferences.hasCompletedOnboarding` in `@State` so finishing onboarding is
     // guaranteed to invalidate this view. `preferences` is a plain `let`: reading its properties
@@ -61,7 +66,7 @@ struct AppRootContainer: View {
 
     /// `preferences` is the app delegate's instance — the one process-wide `Preferences`, so the
     /// HealthKit background observer and the scenes read and write the same object.
-    init(preferences: Preferences) {
+    init(preferences: Preferences, healthSync: HealthSyncService? = nil) {
         if LaunchFlags.isUITesting {
             UIView.setAnimationsEnabled(false)
             // `-dgUITest` alone should land existing smoke tests straight on the tab bar;
@@ -70,6 +75,7 @@ struct AppRootContainer: View {
             preferences.hasCompletedOnboarding = !LaunchFlags.forcesOnboarding
         }
         self.preferences = preferences
+        self.healthSync = healthSync
         _hasCompletedOnboarding = State(initialValue: preferences.hasCompletedOnboarding)
         _coachServices = State(initialValue: CoachServices.make(preferences: preferences))
     }
@@ -163,7 +169,11 @@ struct AppRootContainer: View {
     private func seed() async {
         let provider = ContainerProvider.shared
         guard let store = provider.store(cloudKitEnabled: preferences.iCloudSyncEnabled) else { return }
-        ExerciseSeeder.seedIfNeeded(context: store.context)
+        let interval = launchSignposter.beginInterval("coldLaunchSeed")
+        // A store already at the bundled seed version returns from each seeder after a count or
+        // a flag read; the 1.4 MB JSON is only decoded (off the main actor) on a version bump or
+        // a fresh install. The one fold pass for everything is `dedupeSeededRows()` below.
+        await ExerciseSeeder.seedIfNeededAsync(context: store.context)
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
         EquipmentSeeder.seedIfNeeded(store: store, unit: preferences.weightUnit)
         store.dedupeSeededRows()
@@ -173,18 +183,17 @@ struct AppRootContainer: View {
             guard let store else { return .step(max(exercise.incrementKg, 0.5)) }
             return store.loadGrid(for: exercise, equipment: store.activeEquipment())
         }
-        // One-time repair: the first Apple Health build wrote HealthKit-derived rows into the
-        // CloudKit-mirrored main store. Move/clear them — App Store Guideline 5.1.3.
-        store.purgeHealthDerivedRowsFromMainStore()
+        purgeHealthDerivedRowsOnce(store: store)
+        store.backfillWorkoutTotalsIfNeeded()
         // A second iCloud device imports the first one's seeded rows after launch; fold those
         // as they land. Kept in `phase` so the observer lives as long as the store does.
         let deduper = store.startRemoteChangeDedupe()
-        let healthSync = HealthSyncService(workoutStore: store, preferences: preferences)
+        let sync = self.healthSync ?? HealthSyncService(workoutStore: store, preferences: preferences)
         let healthInsights = HealthInsightsService(workoutStore: store, preferences: preferences)
         // Both finish hooks are wired *before* the stale-workout purge below: it auto-finishes
         // forgotten sessions through `finish(session:)`, and a session finished before the
         // hooks existed never reached Apple Health or rescheduled the streak/recap reminders.
-        healthSync.bind(to: store)
+        sync.bind(to: store)
         TrainingNotificationScheduler().bind(store: store, preferences: preferences)
         // Workouts left open for more than a day are cleared out before `RootView` offers to
         // resume anything newer. Nothing logged is destroyed: one with completed sets in it is
@@ -194,7 +203,21 @@ struct AppRootContainer: View {
         // Background delivery is registered in `DaGymAppDelegate` instead — a HealthKit
         // background launch renders no scenes, so a `.task` would never run on exactly the
         // launches that need it.
-        phase = .ready(store, healthSync, healthInsights, deduper)
+        launchSignposter.endInterval("coldLaunchSeed", interval)
+        phase = .ready(store, sync, healthInsights, deduper)
+    }
+
+    /// One-time repair: the first Apple Health build wrote HealthKit-derived rows into the
+    /// CloudKit-mirrored main store. Move/clear them — App Store Guideline 5.1.3. Gated on the
+    /// seed-state row like the other seeders: it used to run its two predicate fetches on every
+    /// launch, forever, for a build almost nobody still has data from.
+    private func purgeHealthDerivedRowsOnce(store: WorkoutStore) {
+        let state = SeedState.row(in: store.context)
+        guard !state.healthRowsPurged else { return }
+        store.purgeHealthDerivedRowsFromMainStore()
+        state.healthRowsPurged = true
+        state.updatedAt = Date()
+        store.save()
     }
 }
 

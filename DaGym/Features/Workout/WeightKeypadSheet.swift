@@ -38,6 +38,9 @@ struct WeightKeypadSheet: View {
     var purpose: Purpose = .logSet
     /// The unit line for a plain-number field: "REPS" by default, "MIN"/"KM"/"%" for cardio.
     var plainLabel = "REPS"
+    /// The active equipment profile for the plate line, fetched once by the presenter (see
+    /// `PlateChip.inventory`). `nil` — a bodyweight, a preview — falls back to the standard set.
+    var inventory: ProgressionEquipment?
     var onDone: () -> Void
 
     @State private var buffer = ""
@@ -50,7 +53,7 @@ struct WeightKeypadSheet: View {
             stepperRow
             metaLabel
             if unit != nil, purpose.showsPlateLine {
-                PlateLine(target: value, bar: bar ?? preferences.weightUnit.defaultBar)
+                PlateLine(target: value, bar: bar ?? preferences.weightUnit.defaultBar, inventory: inventory)
             }
             keyGrid
             DGPrimaryButton(
@@ -256,16 +259,15 @@ private struct KeypadKey: View {
 private struct PlateLine: View {
     var target: Double
     var bar: Bar
-
-    @Environment(Preferences.self) private var preferences
-    /// Optional so the sheet still renders in a preview with no store.
-    @Environment(WorkoutStore.self) private var store: WorkoutStore?
-
     /// The active equipment profile — the same inventory the plate chip and the progression
     /// engine use. A generic standard set here is what made the keypad contradict the chip.
+    var inventory: ProgressionEquipment?
+
+    @Environment(Preferences.self) private var preferences
+
+    /// Once per body (`result` used to be reached three times, each a store fetch).
     private var result: PlateCalculator.Result {
-        let inventory = store?.activeInventory()
-        return PlateCalculator.load(
+        PlateCalculator.load(
             target: target, bar: bar,
             plates: inventory?.plates ?? WeightUnit.plateStock(for: preferences.weightUnit),
             collarsKg: inventory?.collarsKg ?? 0
@@ -273,7 +275,9 @@ private struct PlateLine: View {
     }
 
     var body: some View {
-        Text(description)
+        let result = result
+        let isInvalid = Self.isInvalid(result)
+        Text(description(result))
             .font(DGFont.footnote)
             .foregroundStyle(isInvalid ? DGColor.danger : DGColor.ink2)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -285,7 +289,7 @@ private struct PlateLine: View {
             }
     }
 
-    private var isInvalid: Bool {
+    private static func isInvalid(_ result: PlateCalculator.Result) -> Bool {
         if case .nearest = result { return true }
         return false
     }
@@ -294,7 +298,7 @@ private struct PlateLine: View {
         load.perSide.map { preferences.formatWeight(kg: $0) }.joined(separator: " + ")
     }
 
-    private var description: String {
+    private func description(_ result: PlateCalculator.Result) -> String {
         let barText = "Bar \(preferences.formatWeight(kg: bar.weightKg))"
         switch result {
         case .tooLight:

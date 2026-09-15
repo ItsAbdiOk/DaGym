@@ -131,11 +131,13 @@ extension WorkoutStore {
         guard let source = fetchRoutineModel(id: id), let drafts = routineDrafts(id: id)?.drafts else {
             return nil
         }
+        // One read of the routine table for both the copy's name and its sort order.
+        let all = allRoutineModels()
         let copy = RoutineModel(
-            name: copyName(for: source.name), notes: source.notes,
+            name: copyName(for: source.name, among: all), notes: source.notes,
             progressionRule: source.progressionRule, repRangeLow: source.repRangeLow,
             repRangeHigh: source.repRangeHigh, progressionRuleJSON: source.progressionRuleJSON,
-            sortOrder: nextRoutineSortOrder(), symbolName: source.symbolName, tint: source.tint
+            sortOrder: nextRoutineSortOrder(among: all), symbolName: source.symbolName, tint: source.tint
         )
         context.insert(copy)
         // The init sets `routine:`, which is the inverse — assigning `copy.exercises` as well
@@ -204,6 +206,11 @@ extension WorkoutStore {
         )
     }
 
+    /// One routine by id, nil when it doesn't exist or was folded away.
+    func routine(id: UUID) -> RoutineInfo? {
+        fetchRoutineModel(id: id).map(routineInfo)
+    }
+
     private func routineInfo(_ model: RoutineModel) -> RoutineInfo {
         let routineExercises = (model.exercises ?? []).sorted { $0.order < $1.order }
         let exercises = routineExercises.compactMap { $0.exercise.map(ExerciseInfo.init(model:)) }
@@ -216,9 +223,9 @@ extension WorkoutStore {
 
     /// "Push A" → "Push A (Copy)", then "(Copy 2)", "(Copy 3)"… — counted from the base name,
     /// so copying a copy doesn't nest "(Copy) (Copy)". Archived routines hold their names too.
-    private func copyName(for name: String) -> String {
+    private func copyName(for name: String, among routines: [RoutineModel]) -> String {
         let base = Self.copyBaseName(name)
-        let taken = Set(fetch(FetchDescriptor<RoutineModel>()).map(\.name))
+        let taken = Set(routines.map(\.name))
         let first = "\(base) (Copy)"
         guard taken.contains(first) else { return first }
         var index = 2
@@ -235,9 +242,16 @@ extension WorkoutStore {
         return inner.isEmpty || isCounted ? String(name[..<open.lowerBound]) : name
     }
 
-    private func nextRoutineSortOrder() -> Int {
-        let all = fetch(FetchDescriptor<RoutineModel>())
-        return (all.map(\.sortOrder).max() ?? -1) + 1
+    /// `among` is every routine, archived included, read once by the caller — `duplicateRoutine`
+    /// needs the same list for `copyName`, so the two share one fetch.
+    private func nextRoutineSortOrder(among routines: [RoutineModel]) -> Int {
+        (routines.map(\.sortOrder).max() ?? -1) + 1
+    }
+
+    /// Every routine row, archived and tombstoned included — the base `copyName` and
+    /// `nextRoutineSortOrder` both read.
+    private func allRoutineModels() -> [RoutineModel] {
+        fetch(FetchDescriptor<RoutineModel>())
     }
 
     private func insertedRoutine() -> RoutineModel {

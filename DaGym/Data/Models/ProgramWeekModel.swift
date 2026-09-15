@@ -4,7 +4,7 @@ import SwiftData
 /// One week of a `ProgramModel`'s cycle.
 @Model
 final class ProgramWeekModel {
-    var id: UUID = UUID()
+    var id = UUID()
     var index: Int = 0
     /// "normal" / "deload" / "rest".
     var kind: String = "normal"

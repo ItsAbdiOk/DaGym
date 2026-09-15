@@ -84,6 +84,55 @@ struct BackupImportExtrasTests {
         #expect(try photos.fetch(FetchDescriptor<ProgressPhotoModel>()).count == 1)
     }
 
+    /// The Settings path generates thumbnails off the main actor first; the import must use
+    /// those rather than decode the JPEG again on the main actor.
+    @Test("thumbnails handed in are used as-is; the off-main generator matches the inline one")
+    func precomputedThumbnailsAreUsed() throws {
+        let id = UUID()
+        let photo = BackupProgressPhoto(id: id, date: Date(), imageBase64: Self.jpegBase64)
+        let generated = BackupService.thumbnails(for: [photo])
+        #expect(generated[id] != nil)
+        #expect(BackupService.thumbnails(for: [BackupProgressPhoto(id: UUID(), date: Date())]).isEmpty)
+
+        let photos = try photoContext()
+        let marker = Data("precomputed".utf8)
+        let report = BackupService.import(
+            document: document(photos: [photo]), context: try mainContext(), photoContext: photos,
+            thumbnails: [id: marker]
+        )
+        #expect(report.photosImported == 1)
+        let row = try #require(try photos.fetch(FetchDescriptor<ProgressPhotoModel>()).first)
+        #expect(row.thumbnailData == marker)
+    }
+
+    /// History and Home redraw on `changeToken`; an import that saved through the context
+    /// alone never bumped it, so the restored rows stayed invisible until an unrelated save.
+    @Test("importing on the live store bumps its changeToken")
+    func importOnLiveStoreBumpsChangeToken() throws {
+        let store = WorkoutStore(context: try mainContext())
+        let before = store.changeToken
+        let document = document(photos: [BackupProgressPhoto(id: UUID(), date: Date())])
+        BackupService.import(
+            document: document, context: store.context, photoContext: store.photoContext, store: store
+        )
+        #expect(store.changeToken > before)
+    }
+
+    @Test("the async Settings entry point restores photos and reports like the sync one")
+    func asyncImportRestoresPhotos() async throws {
+        let store = WorkoutStore(context: try mainContext())
+        let id = UUID()
+        let photo = BackupProgressPhoto(id: id, date: Date(), imageBase64: Self.jpegBase64)
+        let report = await BackupService.import(
+            document: document(photos: [photo]), store: store, preferences: Preferences()
+        )
+        #expect(report.photosImported == 1)
+        let photos = try #require(store.photoContext)
+        let row = try #require(try photos.fetch(FetchDescriptor<ProgressPhotoModel>()).first)
+        #expect(row.id == id)
+        #expect(row.thumbnailData != nil)
+    }
+
     @Test("an unreadable image restores the row without image or thumbnail rather than failing")
     func garbageImageKeepsTheRow() throws {
         let id = UUID()

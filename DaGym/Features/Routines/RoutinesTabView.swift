@@ -52,7 +52,7 @@ struct RoutinesTabView: View {
                 .toolbar(.hidden, for: .navigationBar)
             }
             .task { refresh() }
-            .onChange(of: store.changeToken) { refresh() }
+            .refreshOnStoreChange(refresh)
         }
         .dgWarmHaptics()
     }

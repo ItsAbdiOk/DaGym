@@ -68,7 +68,9 @@ enum VoiceAudioSession {
     /// every later sound (the rest bleep included) through the recording configuration. Errors
     /// are swallowed: deactivating is always best-effort cleanup, never something a caller should
     /// have to handle. Idempotent, so the release path, the route observer and `deinit` can all
-    /// call it.
+    /// call it. A no-op when nothing was ever activated: `setActive(false)` on a session this
+    /// type never touched still deactivates it — which, from a discarded recognizer's `deinit`
+    /// mid-rest, cut off the rest bleep and the user's music for nothing.
     static func deactivate() {
         let saved: Saved? = state.withLock { state in
             guard state.isRecordingActive || state.saved != nil else { return nil }
@@ -76,9 +78,9 @@ enum VoiceAudioSession {
             defer { state.saved = nil }
             return state.saved
         }
+        guard let saved else { return }
         let session = AVAudioSession.sharedInstance()
         try? session.setActive(false, options: .notifyOthersOnDeactivation)
-        guard let saved else { return }
         try? session.setCategory(
             AVAudioSession.Category(rawValue: saved.category),
             mode: AVAudioSession.Mode(rawValue: saved.mode),

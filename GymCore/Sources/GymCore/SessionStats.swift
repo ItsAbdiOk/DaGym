@@ -22,7 +22,6 @@ public enum SessionStats {
             .reduce(0) { $0 + $1.weightKg * Double($1.reps) }
     }
 
-    // swiftlint:disable large_tuple
     /// How much each muscle was worked this session, normalised so the most
     /// worked muscle is 1.0; secondary muscles count at half weight.
     public static func musclesHit(
@@ -46,5 +45,4 @@ public enum SessionStats {
         guard let maxScore = raw.values.max(), maxScore > 0 else { return [:] }
         return raw.mapValues { min(1.0, $0 / maxScore) }
     }
-    // swiftlint:enable large_tuple
 }

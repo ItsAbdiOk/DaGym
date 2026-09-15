@@ -9,7 +9,7 @@ import SwiftData
 /// CloudKit sync overhead this doesn't need.
 @Model
 final class EquipmentProfileModel {
-    var id: UUID = UUID()
+    var id = UUID()
     var name: String = "Gym"
     var isActive: Bool = false
     var barKg: Double = 20
@@ -21,7 +21,7 @@ final class EquipmentProfileModel {
     var plateStockKg: [Double] = []
     var plateCounts: [Int] = []
     var collarsKg: Double = 0
-    var createdAt: Date = Date()
+    var createdAt = Date()
     /// Stable identity for a profile `EquipmentSeeder` created ("gym"/"home"), `nil` for a
     /// profile the user made themselves. Lets `WorkoutStore.dedupeEquipmentProfiles()` fold two
     /// independently-seeded copies (two devices seeding before the first one's rows synced) back

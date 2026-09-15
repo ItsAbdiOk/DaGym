@@ -175,4 +175,36 @@ struct CoachEngineTests {
         let second = CoachEngine.cards(for: input, now: now, calendar: calendar)
         #expect(first == second)
     }
+
+    @Test("the suppression index gives the same answer as the per-card scan, whatever the order")
+    func suppressionIndexMatchesScan() {
+        let fingerprint = CoachCard.makeFingerprint(rule: .stalledLift, key: "Bench Press")
+        let other = CoachCard.makeFingerprint(rule: .stalledLift, key: "Squat")
+        let cooldown = Double(CoachRule.stalledLift.cooldownDays) * 86_400
+        let card = CoachCard(
+            rule: .stalledLift, severity: .warning, title: "", body: "", evidence: [],
+            suggestedAction: .none, distinguishingKey: "Bench Press", firedDate: now
+        )
+        func interaction(_ key: String, secondsAgo: Double) -> CoachInteraction {
+            CoachInteraction(
+                rule: .stalledLift, fingerprint: key, outcome: .dismissed,
+                date: now.addingTimeInterval(-secondsAgo)
+            )
+        }
+        let old = interaction(fingerprint, secondsAgo: cooldown + 60)
+        let recent = interaction(fingerprint, secondsAgo: 60)
+        let unrelated = interaction(other, secondsAgo: 0)
+        let future = interaction(fingerprint, secondsAgo: -60)
+        let histories = [
+            [old], [recent], [old, recent], [recent, old], [unrelated], [old, unrelated], [future, old]
+        ]
+        for interactions in histories {
+            let index = CoachEngine.SuppressionIndex(interactions: interactions)
+            let expected = interactions.contains {
+                $0.fingerprint == fingerprint && ($0.date > now || now.timeIntervalSince($0.date) < cooldown)
+            }
+            #expect(index.isSuppressed(card, now: now) == expected, "\(interactions.map(\.date))")
+            #expect(CoachEngine.isSuppressed(card, interactions: interactions, now: now) == expected)
+        }
+    }
 }

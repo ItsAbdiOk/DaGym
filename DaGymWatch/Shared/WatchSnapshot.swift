@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let snapshotLogger = Logger(subsystem: "dev.abdirahmanmohamed.dagym", category: "watch-snapshot")
 
 /// What the complications and the Smart Stack card show, written to the App Group by the watch
 /// app (`WatchSnapshotWriter`) and read by `DaGymWatchWidgets`. The widget never opens the
@@ -25,6 +28,21 @@ struct WatchSnapshot: Codable, Equatable {
     }
 
     static let empty = WatchSnapshot()
+
+    /// The snapshot as it should read at `now`: a rest that has already ended is dropped (the
+    /// app writes `rest: nil` at rest end, but a kill mid-rest leaves the old one behind, and a
+    /// countdown to a past date traps `Text(timerInterval:)`), and a "next session" whose day
+    /// has passed is cleared rather than left saying "Push A today" all morning.
+    func expiring(at now: Date, calendar: Calendar = .current) -> WatchSnapshot {
+        var snapshot = self
+        if let rest, rest.endDate <= now { snapshot.rest = nil }
+        if let date = nextSessionDate, date < calendar.startOfDay(for: now) {
+            snapshot.nextRoutineName = nil
+            snapshot.nextSessionDate = nil
+            snapshot.isNextToday = false
+        }
+        return snapshot
+    }
 }
 
 enum WatchSnapshotStore {
@@ -34,15 +52,23 @@ enum WatchSnapshotStore {
     static var appGroupSuite: UserDefaults? { UserDefaults(suiteName: appGroupID) }
 
     static func write(_ snapshot: WatchSnapshot, to suite: UserDefaults) {
-        guard let data = try? JSONEncoder().encode(snapshot) else { return }
-        suite.set(data, forKey: key)
+        do {
+            suite.set(try JSONEncoder().encode(snapshot), forKey: key)
+        } catch {
+            snapshotLogger.error("Snapshot encode failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
+    /// The empty snapshot when nothing has been written yet; a decode failure (a Codable drift
+    /// between the app and an older extension) is logged so a blank face after an update has
+    /// a cause in Console.
     static func read(from suite: UserDefaults) -> WatchSnapshot {
-        guard let data = suite.data(forKey: key),
-              let snapshot = try? JSONDecoder().decode(WatchSnapshot.self, from: data) else {
+        guard let data = suite.data(forKey: key) else { return .empty }
+        do {
+            return try JSONDecoder().decode(WatchSnapshot.self, from: data)
+        } catch {
+            snapshotLogger.error("Snapshot decode failed: \(error.localizedDescription, privacy: .public)")
             return .empty
         }
-        return snapshot
     }
 }

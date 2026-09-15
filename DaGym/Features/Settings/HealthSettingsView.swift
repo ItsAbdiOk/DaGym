@@ -76,7 +76,7 @@ struct HealthSettingsView: View {
                     detail: writeWorkoutsDetail,
                     isOn: binding(\.healthWriteWorkouts)
                 )
-                HealthDivider()
+                SettingsDivider()
                 HealthToggleRow(
                     title: "Sync bodyweight",
                     detail: "Health becomes the source of truth for your bodyweight: readings sync "
@@ -84,14 +84,14 @@ struct HealthSettingsView: View {
                         + "Health too.",
                     isOn: binding(\.healthSyncBodyweight)
                 )
-                HealthDivider()
+                SettingsDivider()
                 HealthToggleRow(
                     title: "Read body composition",
                     detail: "Body fat percentage, lean body mass and height fill in Body screen "
                         + "fields automatically when Health has them. Read-only — never written.",
                     isOn: binding(\.healthReadBodyComposition)
                 )
-                HealthDivider()
+                SettingsDivider()
                 HealthToggleRow(
                     title: "Read recovery context",
                     detail: "Resting heart rate, heart-rate variability and last night's sleep show up "
@@ -99,7 +99,7 @@ struct HealthSettingsView: View {
                         + "readiness score or training recommendation.",
                     isOn: binding(\.healthReadRecovery)
                 )
-                HealthDivider()
+                SettingsDivider()
                 HealthToggleRow(
                     title: "Import workouts from other apps",
                     detail: "Strength workouts logged on your Watch or in another app can be "
@@ -108,7 +108,7 @@ struct HealthSettingsView: View {
                     isOn: binding(\.healthImportWorkouts)
                 )
                 if preferences.healthImportWorkouts {
-                    HealthDivider()
+                    SettingsDivider()
                     HealthToggleRow(
                         title: "Import automatically",
                         detail: "Off by default: imports happen when you tap Import in Settings. "
@@ -117,7 +117,7 @@ struct HealthSettingsView: View {
                         isOn: binding(\.healthAutoImportWorkouts)
                     )
                 }
-                HealthDivider()
+                SettingsDivider()
                 HealthToggleRow(
                     title: "Estimate calories",
                     detail: "Off by default: we don't guess. Turning this on adds a rough "
@@ -154,7 +154,7 @@ struct HealthSettingsView: View {
             Text("Exactly what's read and written").dgLabel()
             VStack(spacing: 0) {
                 ForEach(Array(Self.permissionRows.enumerated()), id: \.offset) { index, row in
-                    if index > 0 { HealthDivider() }
+                    if index > 0 { SettingsDivider() }
                     HealthPermissionRow(row: row)
                 }
             }
@@ -235,12 +235,6 @@ private struct HealthToggleRow: View {
         }
         .padding(.horizontal, DGSpace.s5)
         .padding(.vertical, DGSpace.s4)
-    }
-}
-
-private struct HealthDivider: View {
-    var body: some View {
-        Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
     }
 }
 

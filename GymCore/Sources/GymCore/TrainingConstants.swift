@@ -32,6 +32,13 @@ public enum TrainingConstants {
 
     // MARK: - Progression
 
+    /// The heaviest load any single set may carry, whatever the source — a spoken number, an
+    /// imported CSV cell, a shared plan's target. The heaviest anything lifted in competition is
+    /// a ~500 kg deadlift; a leg-press sled with every plate in the gym is around here. Above
+    /// it the value is a mishearing or a corrupt cell, not a set, and every validator rejects it
+    /// rather than storing it. Voice, import and plan sanitising all read this one number.
+    public static let maxLoadKg = 600.0
+
     /// Default per-set weight increments when an exercise doesn't override them.
     public static let defaultUpperBodyIncrementKg = 2.5
     public static let defaultLowerBodyIncrementKg = 5.0
@@ -100,7 +107,6 @@ public enum TrainingConstants {
     public static let trainingMaxUpperIncrementKg = 2.5
     public static let trainingMaxLowerIncrementKg = 5.0
 
-    // swiftlint:disable large_tuple
     /// The 5/3/1-style 4-week wave: week → [(percent of TM, reps, isAMRAP)].
     public static let waveScheme: [Int: [(percent: Double, reps: Int, isAMRAP: Bool)]] = [
         1: [(0.65, 5, false), (0.75, 5, false), (0.85, 5, true)],
@@ -108,7 +114,6 @@ public enum TrainingConstants {
         3: [(0.75, 5, false), (0.85, 3, false), (0.95, 1, true)],
         4: [(0.40, 5, false), (0.50, 5, false), (0.60, 5, false)]
     ]
-    // swiftlint:enable large_tuple
 
     /// Deload detection thresholds (plan.md §7).
     ///
@@ -276,7 +281,7 @@ extension TrainingConstants {
     public static let coachReviewCooldownDays = 14
 
     /// Long layoff: days since the last logged workout before a "return to training" card fires.
-    public static let coachLayoffMinDays = 10.0
+    public static let coachLayoffMinDays = 10
     public static let coachLayoffCooldownDays = 14
     /// Long layoff: the working weight fraction suggested for the first session back.
     public static let coachLayoffEaseBackFraction = 0.8

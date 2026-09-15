@@ -14,12 +14,14 @@ extension BackupService {
     static func importExtras(
         _ document: BackupDocument, index: ExerciseIndex, context: ModelContext,
         photoContext: ModelContext? = nil, healthContext: ModelContext? = nil,
-        report: inout ImportReport
+        thumbnails: [UUID: Data]? = nil, report: inout ImportReport
     ) {
         importExerciseNotes(document.exerciseNotes ?? [], index: index, context: context, report: &report)
         importGymCards(document.gymCards ?? [], context: context)
         importCoachInteractions(document.coachInteractions ?? [], context: context)
-        importPhotos(document.progressPhotos ?? [], context: photoContext, report: &report)
+        importPhotos(
+            document.progressPhotos ?? [], context: photoContext, thumbnails: thumbnails, report: &report
+        )
         importHealth(document.healthImports, context: healthContext, report: &report)
     }
 
@@ -70,7 +72,8 @@ extension BackupService {
     /// Photos live in their own local-only store, so they need their own context and their own
     /// save. A row whose image didn't fit in the backup still restores its date, pose and notes.
     private static func importPhotos(
-        _ items: [BackupProgressPhoto], context: ModelContext?, report: inout ImportReport
+        _ items: [BackupProgressPhoto], context: ModelContext?, thumbnails: [UUID: Data]?,
+        report: inout ImportReport
     ) {
         guard !items.isEmpty else { return }
         guard let context else {
@@ -85,18 +88,35 @@ extension BackupService {
             context.insert(
                 ProgressPhotoModel(
                     id: item.id, date: item.date, pose: item.pose, imageData: data,
-                    thumbnailData: data.flatMap(thumbnail(from:)),
+                    thumbnailData: thumbnails?[item.id] ?? data.flatMap(thumbnail(from:)),
                     bodyweightKg: item.bodyweightKg, notes: item.notes
                 )
             )
             report.photosImported += 1
         }
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            report.problems.append("Saving the progress photos failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// The grid thumbnails for every photo in `items`, keyed by photo id — the decode and
+    /// resize of each restored JPEG, which is the expensive part of a photo restore and needs
+    /// no store, so `import(document:store:preferences:)` runs it off the main actor first.
+    nonisolated static func thumbnails(for items: [BackupProgressPhoto]) -> [UUID: Data] {
+        var result: [UUID: Data] = [:]
+        for item in items {
+            guard let data = item.imageBase64.flatMap({ Data(base64Encoded: $0) }),
+                  let thumbnail = thumbnail(from: data) else { continue }
+            result[item.id] = thumbnail
+        }
+        return result
     }
 
     /// The grid thumbnail, regenerated from the restored full-size JPEG rather than carried in the
     /// backup — it's derived data, and doubling the file size to store it would be wasteful.
-    private static func thumbnail(from data: Data) -> Data? {
+    nonisolated private static func thumbnail(from data: Data) -> Data? {
         guard let image = UIImage(data: data) else { return nil }
         return PhotoProcessor.resized(image, longEdge: PhotoProcessor.thumbnailLongEdge)?
             .jpegData(compressionQuality: PhotoProcessor.thumbnailQuality)
@@ -130,6 +150,12 @@ extension BackupService {
             context.insert(IgnoredHealthWorkoutModel(healthKitID: identifier))
             report.healthTombstonesImported += 1
         }
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            report.problems.append(
+                "Saving the Apple Health import history failed: \(error.localizedDescription)"
+            )
+        }
     }
 }

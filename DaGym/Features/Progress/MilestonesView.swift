@@ -77,7 +77,7 @@ enum MilestoneCopy {
         guard let nextThreshold else { return "Every tier earned" }
         switch metric {
         case .strengthRatio:
-            return "Need \(WeightFormat.kg(nextThreshold))× bodyweight"
+            return "Need \(RatioFormat.plain(nextThreshold))× bodyweight"
         case .workoutCount:
             return "Need \(Int(nextThreshold)) workouts"
         case .streakWeeks:
@@ -91,7 +91,7 @@ enum MilestoneCopy {
 
     static func thresholdLabel(metric: MilestoneMetric, threshold: Double, unit: WeightUnit) -> String {
         switch metric {
-        case .strengthRatio: return "\(WeightFormat.kg(threshold))× bodyweight"
+        case .strengthRatio: return "\(RatioFormat.plain(threshold))× bodyweight"
         case .workoutCount: return "\(Int(threshold)) workouts"
         case .streakWeeks: return "\(Int(threshold))-week streak"
         case .lifetimeTonnageKg: return "\(unit.format(kg: threshold)) \(unit.symbol) lifetime"

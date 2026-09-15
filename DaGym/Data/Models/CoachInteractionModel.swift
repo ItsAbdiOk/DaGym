@@ -10,14 +10,14 @@ import SwiftData
 /// model stores raw facts, not derived state.
 @Model
 final class CoachInteractionModel {
-    var id: UUID = UUID()
+    var id = UUID()
     /// `GymCore.CoachRule.rawValue`.
     var rule: String = ""
     /// `GymCore.CoachCard.fingerprint` — identifies the evidence, not just the rule.
     var fingerprint: String = ""
     /// "dismissed" or "approved" (`GymCore.CoachInteraction.Outcome`).
     var outcome: String = "dismissed"
-    var date: Date = Date()
+    var date = Date()
 
     init(
         id: UUID = UUID(), rule: String = "", fingerprint: String = "", outcome: String = "dismissed",

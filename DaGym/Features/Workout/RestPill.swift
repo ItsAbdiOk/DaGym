@@ -79,6 +79,35 @@ struct RestPillCompact: View {
     }
 }
 
+/// The rest pill, in its own view so that it — and only it — depends on the session's rest
+/// state. `WorkoutSession.tickRest()` writes `restRemaining` once a second; when the parent
+/// read it, that tick re-rendered the whole screen (muscle map, stat strip, every card).
+struct RestPillSection: View {
+    var session: WorkoutSession
+
+    var body: some View {
+        if session.isResting {
+            RestPill(
+                remaining: session.restRemaining, total: session.restTotal,
+                nextLabel: session.restNextLabel, nextWeightKg: session.restNextWeightKg,
+                nextReps: session.restNextReps,
+                onAddThirty: { session.adjustRest(by: 30) }, onSkip: { session.skipRest() }
+            )
+        }
+    }
+}
+
+/// `RestPillSection`'s counterpart for the condensed chrome.
+struct RestPillCompactSection: View {
+    var session: WorkoutSession
+
+    var body: some View {
+        if session.isResting {
+            RestPillCompact(remaining: session.restRemaining, total: session.restTotal)
+        }
+    }
+}
+
 private struct RestRing: View {
     var remaining: Int
     var total: Int

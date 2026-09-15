@@ -7,6 +7,12 @@ public struct BackupEquipmentProfile: Codable, Sendable, Identifiable {
     public var isActive: Bool
     public var barKg: Double
     public var availableEquipment: [String]
+    /// The plate inventory as (weight, count) pairs — format 2. Read through
+    /// `resolvedPlateStock`, which also understands the format-1 parallel arrays.
+    public var plateStock: [BackupPlateStock]?
+    /// Format 1: plate weights and counts as two parallel arrays. Still read; no longer
+    /// written. Nothing guaranteed them the same length, so a hand-edited file could pair a
+    /// plate with the wrong count — `resolvedPlateStock` zips them and drops the tail.
     public var plateStockKg: [Double]
     public var plateCounts: [Int]
     public var collarsKg: Double
@@ -24,7 +30,8 @@ public struct BackupEquipmentProfile: Codable, Sendable, Identifiable {
 
     public init(
         id: UUID, name: String, isActive: Bool = false, barKg: Double = 20,
-        availableEquipment: [String] = [], plateStockKg: [Double] = [], plateCounts: [Int] = [],
+        availableEquipment: [String] = [], plateStock: [BackupPlateStock]? = nil,
+        plateStockKg: [Double] = [], plateCounts: [Int] = [],
         collarsKg: Double = 0, createdAt: Date = Date(), seedKey: String? = nil,
         restrictsMachines: Bool? = nil, availableMachines: [String]? = nil
     ) {
@@ -33,6 +40,7 @@ public struct BackupEquipmentProfile: Codable, Sendable, Identifiable {
         self.isActive = isActive
         self.barKg = barKg
         self.availableEquipment = availableEquipment
+        self.plateStock = plateStock
         self.plateStockKg = plateStockKg
         self.plateCounts = plateCounts
         self.collarsKg = collarsKg
@@ -40,5 +48,29 @@ public struct BackupEquipmentProfile: Codable, Sendable, Identifiable {
         self.seedKey = seedKey
         self.restrictsMachines = restrictsMachines
         self.availableMachines = availableMachines
+    }
+
+    /// The inventory as `PlateStock`, from the pairs or — for a format-1 file — the parallel
+    /// arrays zipped, so a truncated array can't mis-pair a plate with another plate's count.
+    public var resolvedPlateStock: [PlateStock] {
+        if let plateStock {
+            return plateStock.map { PlateStock(weightKg: $0.weightKg, count: $0.count) }
+        }
+        return zip(plateStockKg, plateCounts).map { PlateStock(weightKg: $0, count: $1) }
+    }
+}
+
+/// One plate size and how many of it the gym has (format 2's `BackupEquipmentProfile.plateStock`).
+public struct BackupPlateStock: Codable, Sendable, Hashable {
+    public var weightKg: Double
+    public var count: Int
+
+    public init(weightKg: Double, count: Int) {
+        self.weightKg = weightKg
+        self.count = count
+    }
+
+    public init(_ stock: PlateStock) {
+        self.init(weightKg: stock.weightKg, count: stock.count)
     }
 }

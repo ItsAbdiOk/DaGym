@@ -11,15 +11,15 @@ struct DisplaySettingsSection: View {
             Text("Display").dgLabel()
             VStack(spacing: 0) {
                 row(label: "Keep screen awake", isOn: keepScreenAwakeBinding)
-                SettingsSectionDivider()
+                SettingsDivider()
                 row(label: "Lock progress photos", isOn: lockPhotosBinding)
-                SettingsSectionDivider()
+                SettingsDivider()
                 accentRow
-                SettingsSectionDivider()
+                SettingsDivider()
                 colorBlindHeatmapsRow
-                SettingsSectionDivider()
+                SettingsDivider()
                 appearanceRow
-                SettingsSectionDivider()
+                SettingsDivider()
                 bodyFigureRow
             }
             .dgCard(padding: 0)
@@ -158,14 +158,6 @@ private struct AccentSwatch: View {
         .buttonStyle(.dgControl)
         .accessibilityLabel(accent.displayName)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-    }
-}
-
-/// Hairline separator matching `SettingsView`'s private `SettingsDivider` — duplicated (not
-/// shared) since that type is file-private to `SettingsView.swift`.
-private struct SettingsSectionDivider: View {
-    var body: some View {
-        Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
     }
 }
 

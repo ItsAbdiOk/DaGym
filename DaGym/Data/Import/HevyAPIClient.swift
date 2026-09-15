@@ -141,12 +141,14 @@ enum HevyAPIClient {
 
 /// Parses the ISO-8601 timestamps the Hevy API returns, with or without fractional seconds.
 enum HevyDateFormat {
-    // Built per call: `ISO8601DateFormatter` isn't Sendable, and an import parses a few hundred
-    // dates at most.
+    // `Date.ISO8601FormatStyle` is a Sendable value, so the two styles are built once rather
+    // than two `ISO8601DateFormatter`s per date parsed (which aren't Sendable, and so couldn't
+    // be hoisted).
+    private static let withFractional = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+    private static let withoutFractional = Date.ISO8601FormatStyle()
+
     static func date(from text: String) -> Date? {
-        let withFractional = ISO8601DateFormatter()
-        withFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return withFractional.date(from: text) ?? ISO8601DateFormatter().date(from: text)
+        (try? withFractional.parse(text)) ?? (try? withoutFractional.parse(text))
     }
 }
 

@@ -1,6 +1,5 @@
 import Foundation
 
-// swiftlint:disable large_tuple
 /// Turns a routine's planned exercises into the "muscles hit" body-map
 /// intensities, and those intensities into the plain-language "HITS" line
 /// shown next to the map (e.g. "Chest, delts, triceps · light on back").
@@ -64,4 +63,3 @@ public enum RoutineMuscles {
         return "\(namedText) · \(lightClause)"
     }
 }
-// swiftlint:enable large_tuple

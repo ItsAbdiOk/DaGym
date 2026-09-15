@@ -164,15 +164,15 @@ actor ExercisePhotoStore {
 
     /// The start and end photographs for `seedID`, or `nil` when this exercise has none bundled
     /// (or its files are missing, which a test catches before it can ship).
-    func photos(forSeedID seedID: String) -> ExercisePhotoPair? {
+    func photos(forSeedID seedID: String) async -> ExercisePhotoPair? {
         if let cached = cache[seedID] {
             touch(seedID)
             return cached
         }
         guard
             let names = ExercisePhotoCatalog.photoNames(for: seedID),
-            let start = Self.loadImage(named: names.start),
-            let end = Self.loadImage(named: names.end)
+            let start = await Self.loadImage(named: names.start),
+            let end = await Self.loadImage(named: names.end)
         else { return nil }
         let pair = ExercisePhotoPair(start: start, end: end)
         cache[seedID] = pair
@@ -210,13 +210,18 @@ actor ExercisePhotoStore {
         )
     }
 
-    private static func loadImage(named name: String) -> Image? {
+    /// Decoded here, not on first draw: `UIImage(data:)` over a mapped HEIC defers the ~1.7 MB
+    /// decode to the frame the hero first appears, on the main thread — which is what made the
+    /// detail push hitch despite this being an actor. `byPreparingForDisplay` does that work
+    /// now, off the main thread, so what gets cached is ready to draw.
+    private static func loadImage(named name: String) async -> Image? {
         guard
             let url = url(named: name),
             let data = try? Data(contentsOf: url, options: .mappedIfSafe),
             let image = UIImage(data: data)
         else { return nil }
-        return Image(uiImage: image)
+        let prepared = await image.byPreparingForDisplay() ?? image
+        return Image(uiImage: prepared)
     }
 }
 

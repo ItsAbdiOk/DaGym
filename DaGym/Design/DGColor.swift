@@ -1,4 +1,5 @@
 import SwiftUI
+import Synchronization
 import UIKit
 
 /// The five accent themes a user can pick in Settings › Display (plan.md Phase 8). Coral is the
@@ -112,13 +113,16 @@ enum DGColor {
     // "coral" is the historical name; it now resolves from the active `DGAccent` (`current`,
     // default `.coral`) so every existing call site — buttons, active-tab fills, progress rings —
     // re-themes without being touched. Computed (not `static let`), so each access re-reads
-    // `current` rather than caching the value from first launch.
-    static var coral: Color { accentAware { $0.base(dark: $1) } }
+    // `current` rather than caching the value from first launch — but cached *per accent*
+    // (`cached(_:)`): a fresh `UIColor` provider per access gave every view body a new, unequal
+    // `Color`, so SwiftUI could never skip a subtree that touched coral, and `BodyMapView` was
+    // allocating ~60 of them per thumbnail per frame.
+    static var coral: Color { cached(.base) { accentAware { $0.base(dark: $1) } } }
     static var coralPress: Color { current.press }
-    static var coralWash: Color { coral.opacity(0.14) }
+    static var coralWash: Color { cached(.wash) { coral.opacity(0.14) } }
     static let inkOnCoral = Color(hex: 0x2B0C07)
     /// Coral as small text: steps down in light mode for 4.5:1 contrast.
-    static var coralText: Color { accentAware { $0.text(dark: $1) } }
+    static var coralText: Color { cached(.text) { accentAware { $0.text(dark: $1) } } }
 
     // MARK: Set types — each hue is load-bearing
     static let setWarmup = Color(hex: 0xF5B23C)
@@ -199,10 +203,32 @@ enum DGColor {
     static let bodyMapInert = dynamic(dark: 0xFFFFFF, light: 0x121213, alpha: 0.10)
     /// "Muscles hit" steps: 22 / 46 / 72 / 100 % coral.
     static var hitSteps: [Color] {
-        [coral.opacity(0.22), coral.opacity(0.46), coral.opacity(0.72), coral]
+        [
+            cached(.hit22) { coral.opacity(0.22) }, cached(.hit46) { coral.opacity(0.46) },
+            cached(.hit72) { coral.opacity(0.72) }, coral
+        ]
     }
 
     // MARK: Helpers
+
+    /// The accent-derived colours, one `Color` per `(accent, slot)`. Keyed by accent rather than
+    /// invalidated when `current` changes, so switching accents hands every call site a
+    /// different (unequal) value — which is what makes the views re-render — while within one
+    /// accent every read is the same value and SwiftUI's diffing can short-circuit. A `Mutex`,
+    /// not `nonisolated(unsafe)`: unlike `current`, a dictionary can't tolerate a torn write.
+    private enum AccentSlot: Hashable {
+        case base, text, wash, hit22, hit46, hit72
+    }
+
+    private static let accentCache = Mutex<[DGAccent: [AccentSlot: Color]]>([:])
+
+    private static func cached(_ slot: AccentSlot, make: () -> Color) -> Color {
+        let accent = current
+        if let hit = accentCache.withLock({ $0[accent]?[slot] }) { return hit }
+        let color = make()
+        accentCache.withLock { $0[accent, default: [:]][slot] = color }
+        return color
+    }
     private static func dynamic(dark: UInt32, light: UInt32, alpha: CGFloat = 1) -> Color {
         Color(uiColor: UIColor { trait in
             trait.userInterfaceStyle == .dark

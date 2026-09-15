@@ -14,6 +14,17 @@ struct NumberWordsTests {
         #expect(value("nineteen") == 19)
     }
 
+    @Test("a literal digit string above the cap is not a number, so it can never reach Int(Double)")
+    func literalCap() {
+        #expect(value("99999999999999999999999") == nil)
+        #expect(value("1000001") == nil)
+        #expect(value("1000000") == 1_000_000)
+        #expect(value("102.5") == 102.5)
+        #expect(NumberWords.parseSingleWord("1e30") == nil)
+        #expect(NumberWords.parseSingleWord("inf") == nil)
+        #expect(NumberWords.parseSingleWord("nan") == nil)
+    }
+
     @Test("tens and compounds")
     func tens() {
         #expect(value("twenty") == 20)

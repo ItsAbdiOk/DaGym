@@ -31,7 +31,10 @@ extension ActiveWorkoutView {
                 "Set steppers", systemImage: "plusminus",
                 isOn: $prefs.showSetSteppers
             )
-            Button("Add routine…", systemImage: "list.bullet.rectangle") { activeSheet = .addRoutine }
+            Button("Add routine…", systemImage: "list.bullet.rectangle") {
+                addRoutineChoices = store.routines()
+                activeSheet = .addRoutine
+            }
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 17, weight: .semibold))
@@ -80,11 +83,14 @@ extension ActiveWorkoutView {
             DGPrimaryButton(title: "Finish", height: 44) { showFinishConfirm = true }
                 .frame(width: 96)
                 .accessibilityIdentifier(A11yID.workoutFinish)
-            // Voice logging entry point (plan: DaGym/Features/Voice). Self-contained — owns its
-            // own controller — so this is the one line the rest of the screen needs.
-            VoiceLogEntryPoint(
-                session: session, store: store, preferences: preferences, undoAction: $undoAction
-            )
+            // Voice logging entry point (plan: DaGym/Features/Voice). The controller is the
+            // screen's (`voiceController`), owned once for the whole workout.
+            if let voiceController {
+                VoiceLogEntryPoint(
+                    session: session, store: store, preferences: preferences, controller: voiceController,
+                    undoAction: $undoAction
+                )
+            }
             headerMenu
         }
         .fixedSize(horizontal: true, vertical: false)
@@ -157,9 +163,7 @@ extension ActiveWorkoutView {
     /// that opens the add-exercise sheet, replacing the full action bar.
     var condensedBottomGroup: some View {
         HStack(spacing: DGSpace.s3) {
-            if session.isResting {
-                RestPillCompact(remaining: session.restRemaining, total: session.restTotal)
-            }
+            RestPillCompactSection(session: session)
             Spacer(minLength: 0)
             Button { activeSheet = .addExercise } label: {
                 Image(systemName: "plus")

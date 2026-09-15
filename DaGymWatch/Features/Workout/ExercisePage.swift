@@ -5,18 +5,50 @@ import SwiftUI
 /// the set position with its progress dots, the layout for the current set's shape, and the
 /// one capsule. Logging swaps the middle block for the inline rest (3A) in place, so the next
 /// set arrives where the last one was.
+///
+/// `session.exercises` is a value array on an `@Observable`, so every crown detent on any
+/// page replaces it and re-evaluates every mounted page. What the page derives from the set's
+/// *identity* — its shape, position and dot counts — is kept in `layout` and only rebuilt when
+/// the on-deck set changes; a detent only re-reads the numbers.
 struct ExercisePage: View {
     @Environment(WatchStore.self) private var store
     @Environment(WatchPreferences.self) private var preferences
     var entry: WorkoutExerciseEntry
+    /// This page's position in the pager, from the `ForEach` — searching the session for it
+    /// on every render was one more walk per detent per page.
+    var pageIndex: Int
 
     @State private var focus: CrownField?
     @State private var crown: Double = 0
     @State private var showEffortPicker = false
     @State private var showVoice = false
+    @State private var layout: SetLayout?
 
     private var session: WorkoutSession? { store.session }
     private var currentSet: SetEntry? { entry.sets.first { !$0.isDone } }
+    private var isCurrentPage: Bool { store.pageIndex == pageIndex }
+
+    /// What the page derives from which set is on deck, not from its values.
+    struct SetLayout: Equatable {
+        var setID: UUID
+        var shape: SetShape
+        var position: (index: Int, count: Int)
+        var dotsDone: Int
+        var dotsTotal: Int
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.setID == rhs.setID && lhs.shape == rhs.shape && lhs.position == rhs.position
+                && lhs.dotsDone == rhs.dotsDone && lhs.dotsTotal == rhs.dotsTotal
+        }
+
+        init(entry: WorkoutExerciseEntry, set: SetEntry) {
+            setID = set.id
+            shape = SetShape.shape(for: entry, set: set)
+            position = SetFormat.position(of: set, in: entry)
+            dotsDone = entry.sets.filter { $0.isDone && $0.kind.countsTowardStats }.count
+            dotsTotal = entry.sets.filter { $0.kind.countsTowardStats }.count
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,52 +59,60 @@ struct ExercisePage: View {
             )
             .padding(.top, WatchMetric.pageTop)
             if let set = currentSet {
-                setBody(set)
+                setBody(set, layout: layout(for: set))
             } else {
                 completedBody
             }
         }
         .padding(.horizontal, WatchMetric.gutter)
-        .modifier(CrownBinding(crown: $crown, focus: focus, step: crownStep, range: crownRange))
-        .onChange(of: crown) { _, value in applyCrown(value) }
-        .onChange(of: currentSet?.id) { _, _ in focus = nil }
+        .modifier(
+            ExerciseCrownModifier(entry: entry, currentSetID: currentSet?.id, focus: $focus, crown: $crown)
+        )
+        .onChange(of: currentSet?.id, initial: true) { _, _ in
+            layout = currentSet.map { SetLayout(entry: entry, set: $0) }
+        }
         .sheet(isPresented: $showEffortPicker) { EffortPickerSheet(entry: entry) }
         .sheet(isPresented: $showVoice) { VoiceLogView() }
         .onAppear {
-            if store.debugShowVoice, store.pageIndex == pageIndex {
+            if store.debugShowVoice, isCurrentPage {
                 store.debugShowVoice = false
                 showVoice = true
             }
         }
     }
 
-    @ViewBuilder private func setBody(_ set: SetEntry) -> some View {
-        let shape = SetShape.shape(for: entry, set: set)
-        let position = SetFormat.position(of: set, in: entry)
+    /// The cached layout when it is for `set`; built on the spot for the first render, before
+    /// `onChange(initial:)` has stored one.
+    private func layout(for set: SetEntry) -> SetLayout {
+        if let layout, layout.setID == set.id { return layout }
+        return SetLayout(entry: entry, set: set)
+    }
+
+    @ViewBuilder private func setBody(_ set: SetEntry, layout: SetLayout) -> some View {
         let resting = session.map { $0.isResting && $0.restTotal <= InlineRestView.maxInlineSeconds } ?? false
+        let showsInlineRest = resting && isCurrentPage
         // The header and steppers are one VoiceOver container, so the row reads as one element
         // ("Set 2 of 4, 100 kilograms by 5 reps") before its children.
         VStack(spacing: 0) {
             SetHeader(
-                shape: shape, set: set, position: position,
-                dotsDone: entry.sets.filter { $0.isDone && $0.kind.countsTowardStats }.count,
-                dotsTotal: entry.sets.filter { $0.kind.countsTowardStats }.count,
+                shape: layout.shape, set: set, position: layout.position,
+                dotsDone: layout.dotsDone, dotsTotal: layout.dotsTotal,
                 amrapTarget: store.amrapTargets[set.id]
             )
-            if resting, store.pageIndex == pageIndex {
+            if showsInlineRest {
                 InlineRestView(entry: entry)
             } else {
                 SetShapeView(
-                    entry: entry, set: set, shape: shape, focus: $focus, unit: preferences.weightUnit,
+                    entry: entry, set: set, shape: layout.shape, focus: $focus, unit: preferences.weightUnit,
                     onFocus: give(focus:), onAdjust: adjust(field:direction:), onEffortTap: effortTap
                 )
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(setRowLabel(shape: shape, set: set, position: position))
-        if !(resting && store.pageIndex == pageIndex) {
+        .accessibilityLabel(setRowLabel(shape: layout.shape, set: set, position: layout.position))
+        if !showsInlineRest {
             Spacer(minLength: 4)
-            footer(shape: shape, set: set)
+            footer(shape: layout.shape, set: set)
         }
     }
 
@@ -82,8 +122,6 @@ struct ExercisePage: View {
             targetSeconds: set.cardioSeconds, unit: preferences.weightUnit
         )
     }
-
-    private var pageIndex: Int { session?.exercises.firstIndex { $0.id == entry.id } ?? -1 }
 
     private var completedBody: some View {
         VStack(spacing: 8) {
@@ -160,58 +198,22 @@ struct ExercisePage: View {
     private func give(focus field: CrownField) {
         guard let set = currentSet else { return }
         focus = field
-        crown = crownValue(for: field, set: set)
+        crown = ExerciseCrown.value(for: field, set: set, entry: entry, preferences: preferences)
         Haptics.step()
-    }
-
-    private func crownValue(for field: CrownField, set: SetEntry) -> Double {
-        let unit = preferences.weightUnit
-        switch field {
-        case .weight: return unit.display(kg: set.weightKg)
-        case .reps: return Double(entry.exercise.isPerSide ? set.reps / 2 : set.reps)
-        case .effort: return set.effort?.rpe ?? 8
-        case .assistance: return unit.display(kg: WorkoutStore.assistanceKg(set, style: .assisted) ?? 0)
-        case .distance: return (set.cardioMeters ?? 0) / preferences.distanceUnit.meters
-        }
-    }
-
-    private var crownStep: Double {
-        CrownDetents.step(for: focus ?? .reps, exercise: entry.exercise, unit: preferences.weightUnit)
-    }
-
-    private var crownRange: ClosedRange<Double> { CrownDetents.range(for: focus ?? .reps) }
-
-    private func applyCrown(_ value: Double) {
-        guard let focus else { return }
-        write(field: focus, value: value)
     }
 
     /// VoiceOver's swipe up / down on a stepper: one crown detent either way, clamped to the
     /// crown's own range, without moving crown focus.
     private func adjust(field: CrownField, direction: AccessibilityAdjustmentDirection) {
         guard let set = currentSet else { return }
-        let step = CrownDetents.step(for: field, exercise: entry.exercise, unit: preferences.weightUnit)
-        let range = CrownDetents.range(for: field)
-        let current = crownValue(for: field, set: set)
-        let next = direction == .increment ? current + step : current - step
-        write(field: field, value: min(range.upperBound, max(range.lowerBound, next)))
+        let current = ExerciseCrown.value(for: field, set: set, entry: entry, preferences: preferences)
+        let next = ExerciseCrown.adjusted(
+            current, field: field, direction: direction, exercise: entry.exercise,
+            unit: preferences.weightUnit
+        )
+        ExerciseCrown.write(field: field, value: next, entry: entry, preferences: preferences, store: store)
         if focus == field { crown = next }
         Haptics.step()
-    }
-
-    private func write(field: CrownField, value: Double) {
-        let unit = preferences.weightUnit
-        store.updateSet(exerciseID: entry.id) { set in
-            switch field {
-            case .weight: set.weightKg = unit.toKg(value)
-            case .reps: set.reps = Int(value.rounded()) * (entry.exercise.isPerSide ? 2 : 1)
-            case .effort: set.effort = Effort(rpe: value)
-            case .assistance: set.weightKg = unit.toKg(value)
-            case .distance:
-                let meters = value * preferences.distanceUnit.meters
-                if set.isDone { set.distanceMeters = meters } else { set.targetDistanceMeters = meters }
-            }
-        }
     }
 }
 

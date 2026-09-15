@@ -5,14 +5,14 @@ import SwiftData
 /// Never the source of truth — always recomputable from `SetLogModel`s.
 @Model
 final class PersonalRecordModel {
-    var id: UUID = UUID()
+    var id = UUID()
     var exerciseID: UUID?
     /// "e1rm", "maxWeight", "maxRepsAtWeight", "volume", "longestHold", "leastAssistance".
     var kind: String = "e1rm"
     var value: Double = 0
     var weightKg: Double = 0
     var reps: Int = 0
-    var date: Date = Date()
+    var date = Date()
     var workoutID: UUID?
 
     init(

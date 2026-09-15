@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Fuzzy-matches a spoken exercise phrase against the library, boosted by
 /// session membership, favourites, equipment words, and a curated/learned
@@ -26,18 +27,22 @@ public enum ExerciseMatcher {
 
     /// All candidates, best score first.
     public static func match(_ phrase: String, in context: ParseContext) -> [ExerciseMatch] {
+        let state = GymCorePerf.signposter.beginInterval("ExerciseMatcher.match")
+        defer { GymCorePerf.signposter.endInterval("ExerciseMatcher.match", state) }
         let normalizedPhrase = normalize(phrase)
         if let id = context.aliases[normalizedPhrase] {
-            let allCandidates = context.sessionExercises + context.library
-            let name = allCandidates.first(where: { $0.id == id })?.name ?? phrase
+            let name = context.sessionExercises.first(where: { $0.id == id })?.name
+                ?? context.library.first(where: { $0.id == id })?.name ?? phrase
             return [ExerciseMatch(id: id, name: name, score: 1.0)]
         }
 
+        let phrase = MatchPhrase(normalized: normalizedPhrase)
         var seen = Set<UUID>()
         var scored: [ExerciseMatch] = []
-        for candidate in context.sessionExercises + context.library {
+        scored.reserveCapacity(context.sessionExercises.count + context.library.count)
+        for candidate in [context.sessionExercises, context.library].joined() {
             guard seen.insert(candidate.id).inserted else { continue }
-            let candidateScore = score(phrase: normalizedPhrase, candidate: candidate)
+            let candidateScore = score(phrase: phrase, candidate: candidate)
             scored.append(ExerciseMatch(id: candidate.id, name: candidate.name, score: candidateScore))
         }
         return scored.sorted { $0.score > $1.score }
@@ -65,36 +70,54 @@ public enum ExerciseMatcher {
         return (.spoken(phrase, candidates: Array(matches.prefix(3))), best.score)
     }
 
+    /// `phrase` must already be normalised (`normalize`); the candidate carries its own keys.
     static func score(phrase: String, candidate: ParseContext.ExerciseCandidate) -> Double {
-        let phraseTokens = tokens(phrase)
-        let nameTokens = tokens(candidate.name)
-        let normalizedName = normalize(candidate.name)
-        var value = 0.6 * tokenSetRatio(phraseTokens, nameTokens) + 0.4 * jaroWinkler(phrase, normalizedName)
+        score(phrase: MatchPhrase(normalized: phrase), candidate: candidate)
+    }
+
+    /// The phrase side of a match, tokenised once per utterance instead of once per candidate.
+    struct MatchPhrase {
+        var normalized: String
+        var tokens: [String]
+        var tokenSet: Set<String>
+        var hasEquipment: Bool
+
+        init(normalized: String) {
+            self.normalized = normalized
+            tokens = ExerciseMatcher.tokens(normalized: normalized)
+            tokenSet = Set(tokens)
+            hasEquipment = !equipmentWords.isDisjoint(with: tokenSet)
+        }
+    }
+
+    private static func score(phrase: MatchPhrase, candidate: ParseContext.ExerciseCandidate) -> Double {
+        var value = 0.6 * tokenSetRatio(phrase.tokenSet, candidate.tokenSet)
+            + 0.4 * jaroWinkler(phrase.normalized, candidate.normalizedName)
         var boost = 0.0
         if candidate.isInSession { boost += 0.10 }
         if candidate.isFavorite { boost += 0.05 }
-        if Set(phraseTokens).isStrictSubset(of: Set(nameTokens)) { boost = min(boost, subsetBoostCap) }
+        if phrase.tokenSet.isStrictSubset(of: candidate.tokenSet) { boost = min(boost, subsetBoostCap) }
         value += boost
-        let phraseHasEquipment = !equipmentWords.isDisjoint(with: Set(phraseTokens))
-        let nameHasEquipment = !equipmentWords.isDisjoint(with: Set(nameTokens))
-        if let equipment = candidate.equipment?.lowercased(), phraseTokens.contains(equipment) {
+        let nameHasEquipment = !equipmentWords.isDisjoint(with: candidate.tokenSet)
+        if let equipment = candidate.equipment?.lowercased(), phrase.tokenSet.contains(equipment) {
             value += 0.03
-        } else if phraseHasEquipment && nameHasEquipment {
+        } else if phrase.hasEquipment && nameHasEquipment {
             value += 0.03
         }
-        let missingQualifiers = nameTokens.filter {
-            qualifierWords.contains($0) && !phraseTokens.contains($0)
+        let missingQualifiers = candidate.tokens.filter {
+            qualifierWords.contains($0) && !phrase.tokenSet.contains($0)
         }
         value -= 0.05 * Double(missingQualifiers.count)
         return max(0, min(1, value))
     }
 
-    private static func normalize(_ text: String) -> String {
+    static func normalize(_ text: String) -> String {
         Tokenizer.words(text).joined(separator: " ")
     }
 
-    private static func tokens(_ text: String) -> [String] {
-        normalize(text).split(separator: " ").map { stem(String($0)) }
+    /// Stemmed tokens of an already-normalised string.
+    static func tokens(normalized text: String) -> [String] {
+        text.split(separator: " ").map { stem(String($0)) }
     }
 
     private static func stem(_ word: String) -> String {
@@ -106,7 +129,10 @@ public enum ExerciseMatcher {
     /// Dice coefficient over token sets — a cheap stand-in for fuzzywuzzy's
     /// token_set_ratio that's order- and duplicate-insensitive.
     static func tokenSetRatio(_ first: [String], _ second: [String]) -> Double {
-        let setA = Set(first), setB = Set(second)
+        tokenSetRatio(Set(first), Set(second))
+    }
+
+    static func tokenSetRatio(_ setA: Set<String>, _ setB: Set<String>) -> Double {
         guard !setA.isEmpty, !setB.isEmpty else { return 0 }
         let common = setA.intersection(setB).count
         return 2.0 * Double(common) / Double(setA.count + setB.count)

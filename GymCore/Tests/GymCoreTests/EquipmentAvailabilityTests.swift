@@ -22,6 +22,9 @@ struct MachineTests {
             for alias in machine.aliases {
                 let key = alias.lowercased()
                 #expect(key != machine.displayName.lowercased(), "\(machine) repeats its own name")
+                // A substring of the display name adds nothing to search but takes a hint slot.
+                let name = machine.displayName.lowercased()
+                #expect(!name.contains(key), "\(machine): '\(alias)' is in its name")
                 let other = seen[key].map { "\($0)" } ?? ""
                 #expect(seen[key] == nil, "'\(alias)' names both \(machine) and \(other)")
                 seen[key] = machine
@@ -40,6 +43,19 @@ struct MachineTests {
         #expect(Machine.search("row").contains(.rowMachine))
         #expect(Machine.search("row").contains(.seatedRowMachine))
         #expect(Machine.search("row").contains(.rower))
+    }
+
+    @Test("a short query matches only at a word start, so 'rig' finds the rig and not the upright bike")
+    func shortQueriesMatchWordStarts() {
+        #expect(Machine.search("rig") == [.pullUpBar])
+        #expect(Machine.search("erg").contains(.rower))
+        #expect(!Machine.search("erg").contains(.stationaryBike))
+        #expect(Machine.search("ghd") == [.gluteHamDeveloper])
+        #expect(Machine.search("bike") == [.stationaryBike])
+        // Four characters and up still match anywhere in a name.
+        #expect(Machine.search("right").contains(.stationaryBike))
+        #expect(Machine.search("tension").contains(.legExtension))
+        #expect(Machine.minimumSubstringQueryLength == 4)
     }
 
     @Test("the brand labels a PureGym floor prints resolve to one station each")

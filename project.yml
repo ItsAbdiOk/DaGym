@@ -214,11 +214,15 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.dagym.tests
         GENERATE_INFOPLIST_FILE: YES
 
+  # The UI bundle runs out of process and cannot `import DaGym`, so the accessibility
+  # identifiers are compiled straight into it — a rename on the app side is then a compile
+  # error here, not a UI-smoke failure four minutes into the gate.
   DaGymUITests:
     type: bundle.ui-testing
     platform: iOS
     sources:
       - path: DaGymUITests
+      - path: DaGym/Design/AccessibilityIDs.swift
     dependencies:
       - target: DaGym
     settings:
@@ -293,8 +297,8 @@ targets:
       - path: DaGym/Data/ModelContainer+DaGym.swift
       - path: DaGym/Data/Health/HealthExternalWorkout.swift
       - path: DaGym/Features/Library/EquipmentOption.swift
-      # The seeders carry the CloudKit fold (`dedupeSeededRows`) the watch runs after remote
-      # imports; the watch never calls their seed entry points — rows arrive from the phone.
+      # The seeders are pulled in by `SeedStateModel.dedupeSeededRows`; the watch never seeds or
+      # folds — the phone runs the fold and the result syncs.
       - path: DaGym/Data/ExerciseSeeder.swift
       - path: DaGym/Data/RoutineSeeder.swift
       - path: DaGym/Data/RoutineSeeder+Programs.swift
@@ -304,6 +308,13 @@ targets:
         excludes:
           - "WorkoutStore+Photos.swift"
           - "WorkoutStore+Reset.swift"
+          # Phone-only surfaces (coach actions, consistency card, notes, program generator,
+          # the review digest). Everything else is reached from `finish` or History on the wrist.
+          - "WorkoutStore+CoachActions.swift"
+          - "WorkoutStore+Consistency.swift"
+          - "WorkoutStore+Notes.swift"
+          - "WorkoutStore+ProgramGenerator.swift"
+          - "WorkoutStore+ReviewActions.swift"
       - path: DaGym/SampleData
       - path: DaGym/Features/Workout/WorkoutSession+Supersets.swift
       - path: DaGym/Features/Workout/WorkoutSession+TimedHold.swift
@@ -328,8 +339,8 @@ targets:
         # Voice logging on the wrist goes through the system dictation sheet (watchOS has no
         # Speech framework); the text never leaves the device.
         NSHealthShareUsageDescription: >-
-          DaGym reads your heart rate during a workout so the timer keeps running with your
-          wrist down. Nothing read from Health is stored in iCloud.
+          DaGym reads your heart rate and active energy during a workout so the workout saved to
+          Apple Health shows them. Nothing read from Health is stored in iCloud.
         NSHealthUpdateUsageDescription: >-
           DaGym saves your strength workouts to Apple Health so your rings get credit.
         WKBackgroundModes:
@@ -415,16 +426,20 @@ schemes:
       config: Debug
     test:
       config: Debug
-      gatherCoverageData: true
+      # Off: coverage instruments every target and slows both the build and the run, and no
+      # gate reads the report. `scripts/verify.sh --coverage` turns it on for one run.
+      gatherCoverageData: false
       # The unit-test host launches with this flag so it stays inert (no CloudKit, seeding,
       # HealthKit or notifications) and the runner connects instantly. XCUITest launches
       # the app itself with its own arguments, so this does not affect UI tests.
       commandLineArguments:
         "-dgTestHost": true
+      # GymCoreTests is deliberately not here: verify.sh and both CIs run it with `swift test`,
+      # and listing it made xcodebuild compile GymCore a second time (plus its 700 tests) even
+      # when -only-testing skipped running them. Run it from the GymCore package in Xcode.
       targets:
         - DaGymTests
         - DaGymUITests
-        - package: GymCore/GymCoreTests
     archive:
       config: Release
 

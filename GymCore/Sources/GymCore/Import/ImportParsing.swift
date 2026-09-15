@@ -6,10 +6,11 @@ import Foundation
 /// a value that later breaks something else (a non-finite weight makes `JSONEncoder` throw, so a
 /// single bad row would make every future backup fail).
 ///
-/// The ceilings are deliberately far above anything real — no lifter benches 2,000 kg or does
+/// The ceilings are deliberately far above anything real — no lifter benches 600 kg or does
 /// 1,000 reps — so a legitimate row is never rejected, while a nonsense one never lands.
 enum ImportLimits {
-    static let maxWeightKg = 2000.0
+    /// `TrainingConstants.maxLoadKg` — the same ceiling voice logging and plan sanitising use.
+    static let maxWeightKg = TrainingConstants.maxLoadKg
     static let maxReps = 1000
     /// One week, in seconds: longer than any set, hold or cardio bout.
     static let maxDurationSeconds = 60 * 60 * 24 * 7
@@ -61,9 +62,12 @@ enum ImportParsing {
 
     /// Effort hygiene for an imported RPE column (recommendation 3): blank/non-numeric/≤0 is
     /// unrated rather than a bogus low effort; anything above the 1–10 scale (Hevy sometimes
-    /// exports 0–100 "difficulty") clamps to the max instead of being stored verbatim.
+    /// exports 0–100 "difficulty") clamps to the max instead of being stored verbatim. Anything
+    /// below `Effort.minimumRPE` is unrated too: `Effort(rpe:)` clamps up to 5, so an RPE 4 set
+    /// would otherwise be stored as "RPE 5, five in the tank" rather than "not rated".
     static func rpe(_ text: String?) -> Double? {
         guard let value = double(text), value > 0 else { return nil }
+        guard value >= Effort.minimumRPE else { return nil }
         return min(value, 10)
     }
 

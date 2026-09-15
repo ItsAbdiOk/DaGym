@@ -28,8 +28,15 @@ extension WorkoutStore {
     /// to the first saved routine (the original Home behaviour) only when no schedule has ever
     /// been saved, so existing users see no change until they visit the schedule screen.
     func todaysRoutines(calendar: Calendar = .current, now: Date = Date()) -> [RoutineInfo] {
-        let currentSchedule = schedule()
-        let all = routines()
+        todaysRoutines(from: routines(), schedule: schedule(), calendar: calendar, now: now)
+    }
+
+    /// `todaysRoutines()` over a routine list and schedule already read — `RootView` refreshes
+    /// all three of its routine facts from one fetch rather than three.
+    func todaysRoutines(
+        from all: [RoutineInfo], schedule currentSchedule: WeeklySchedule, calendar: Calendar = .current,
+        now: Date = Date()
+    ) -> [RoutineInfo] {
         guard !currentSchedule.dayRoutines.isEmpty || !currentSchedule.dateOverrides.isEmpty else {
             return all.first.map { [$0] } ?? []
         }
@@ -60,12 +67,20 @@ extension WorkoutStore {
     func nextSession(
         calendar: Calendar = .current, now: Date = Date()
     ) -> (date: Date, routine: RoutineInfo)? {
+        nextSession(from: routines(), schedule: schedule(), calendar: calendar, now: now)
+    }
+
+    /// `nextSession()` over a routine list and schedule already read (see `todaysRoutines(from:)`).
+    func nextSession(
+        from all: [RoutineInfo], schedule currentSchedule: WeeklySchedule, calendar: Calendar = .current,
+        now: Date = Date()
+    ) -> (date: Date, routine: RoutineInfo)? {
         // Days whose routines no longer exist are skipped rather than ending the search: the
         // old version took the planned day's *first* routine id and gave up when it had been
         // deleted, so one stale id blanked Home's "Next:" card entirely instead of showing the
         // session after it.
-        let byID = Dictionary(routines().map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        guard let next = schedule().nextSession(
+        let byID = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        guard let next = currentSchedule.nextSession(
             after: now, calendar: calendar, where: { byID[$0] != nil }
         ), let routine = byID[next.routineID] else { return nil }
         return (next.date, routine)

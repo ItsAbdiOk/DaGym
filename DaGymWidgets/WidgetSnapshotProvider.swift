@@ -9,9 +9,14 @@ struct WidgetSnapshotEntry: TimelineEntry {
     let day: ResolvedWidgetDay
 
     init(date: Date, snapshot: WidgetSnapshot) {
+        self.init(date: date, snapshot: snapshot, day: snapshot.resolved(on: date))
+    }
+
+    /// For `entries(for:now:)`, which resolves every entry against one shared day set.
+    init(date: Date, snapshot: WidgetSnapshot, day: ResolvedWidgetDay) {
         self.date = date
         self.snapshot = snapshot
-        day = snapshot.resolved(on: date)
+        self.day = day
     }
 }
 
@@ -52,7 +57,12 @@ struct WidgetSnapshotProvider: TimelineProvider {
     /// One entry per date `WidgetSnapshot.entryDates(from:)` names — that function lives in the
     /// shared file so `WidgetSnapshotTests` can walk it across a day boundary.
     static func entries(for snapshot: WidgetSnapshot, now: Date) -> [WidgetSnapshotEntry] {
-        snapshot.entryDates(from: now).map { WidgetSnapshotEntry(date: $0, snapshot: snapshot) }
+        let workoutDaySet = snapshot.workoutDaySet(calendar: snapshot.calendar)
+        return snapshot.entryDates(from: now).map { date in
+            WidgetSnapshotEntry(
+                date: date, snapshot: snapshot, day: snapshot.resolved(on: date, workoutDaySet: workoutDaySet)
+            )
+        }
     }
 
     private func current() -> WidgetSnapshot {

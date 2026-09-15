@@ -4,7 +4,9 @@ import Foundation
 /// says which unit the `Weight` column is in — a bare `Weight` header instead falls back to a
 /// per-row `Weight Unit` column when present, then to the unit the user picked in the preview.
 /// `Set Order` carries "W1"/"W2" for warm-ups and "Dropset"/"Failure" for those kinds; anything
-/// else is a working set.
+/// else is a working set. Newer exports also write a `Rest Timer` row after each set (0 kg,
+/// 0 reps, the rest length in `Seconds`); those are timers, not sets, and are dropped — read
+/// as sets they became a 120-second hold after every bench press.
 ///
 /// Real exports write a literal `0` in `Distance` and `Seconds` on every ordinary weight set
 /// rather than leaving them blank, so both are read through `ImportRow`, which treats a measured
@@ -71,6 +73,7 @@ enum StrongCSVImporter {
         guard let exerciseName = columns.value(row, "Exercise Name") else {
             throw ImportRowError("Missing exercise name.")
         }
+        if isRestTimerRow(columns.value(row, "Set Order")) { return true }
         let weight = try ImportRow.weightKg(
             columns.value(row, unitColumns.weightColumn), columnUnit: unitColumns.weightColumnUnit,
             perRowUnit: columns.value(row, "Weight Unit") ?? columns.value(row, "unit"),
@@ -104,13 +107,32 @@ enum StrongCSVImporter {
         return startedAt.addingTimeInterval(TimeInterval(seconds))
     }
 
+    /// `Set Order` is "1"/"2"… for working sets and "W1"/"W2" for warm-ups in every export we
+    /// have seen; drop and failure sets are documented as "Dropset"/"Failure" but Strong has
+    /// shipped single-letter codes in places, so a bare "D"/"F" — with or without a digit suffix,
+    /// like the warm-up branch — is read the same way. Assumption, not verified against a real
+    /// drop-set export: a lone letter is never a working set, so nothing real is misread.
+    /// A `Set Order` of "Rest Timer" (seen in 2025+ exports) — the rest that followed the
+    /// previous set, not a set. Also drops a "Note" row, which some exports write for a
+    /// free-text note with nothing measured.
+    static func isRestTimerRow(_ raw: String?) -> Bool {
+        guard let raw else { return false }
+        let lower = raw.trimmingCharacters(in: .whitespaces).lowercased()
+        return lower == "rest timer" || lower == "note"
+    }
+
     private static func setKind(_ raw: String?) -> SetKind {
         guard let raw else { return .working }
         let lower = raw.lowercased()
-        if lower.hasPrefix("w"), lower.dropFirst().allSatisfy(\.isNumber) { return .warmup }
         if lower.contains("drop") { return .drop }
         if lower.contains("fail") { return .failure }
-        return .working
+        guard let first = lower.first, lower.dropFirst().allSatisfy(\.isNumber) else { return .working }
+        switch first {
+        case "w": return .warmup
+        case "d": return .drop
+        case "f": return .failure
+        default: return .working
+        }
     }
 }
 

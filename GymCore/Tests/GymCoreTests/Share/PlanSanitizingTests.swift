@@ -15,6 +15,14 @@ struct PlanSanitizingTests {
         #expect(set.targetRPE == 10)
     }
 
+    @Test("a target weight above the shared load ceiling is dropped, not handed to the engine")
+    func targetWeightIsDropped() {
+        let set = PlanSet(order: 0, kind: "working", targetReps: 5, targetWeightKg: 1e9).sanitised()
+        #expect(set.targetWeightKg == nil)
+        let fine = PlanSet(order: 0, kind: "working", targetReps: 5, targetWeightKg: 180).sanitised()
+        #expect(fine.targetWeightKg == 180)
+    }
+
     @Test("a crossed rep range on a set is swapped back into order")
     func setRepRangeSwap() {
         let set = PlanSet(order: 0, kind: "working", targetReps: 12, targetRepsHigh: 8).sanitised()

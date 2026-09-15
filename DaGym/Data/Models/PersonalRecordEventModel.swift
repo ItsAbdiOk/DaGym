@@ -8,7 +8,7 @@ import SwiftData
 /// `WorkoutStore.rebuildPersonalRecords()`.
 @Model
 final class PersonalRecordEventModel {
-    var id: UUID = UUID()
+    var id = UUID()
     var exerciseID: UUID?
     var workoutID: UUID?
     /// `GymCore.PRKind` raw value — "e1rm", "maxWeight", "maxRepsAtWeight", "volume",
@@ -18,7 +18,7 @@ final class PersonalRecordEventModel {
     var weightKg: Double = 0
     var reps: Int = 0
     /// The workout's `startedAt`, so date-window counts follow the training calendar.
-    var date: Date = Date()
+    var date = Date()
 
     init(
         id: UUID = UUID(), exerciseID: UUID? = nil, workoutID: UUID? = nil, kind: String = "e1rm",

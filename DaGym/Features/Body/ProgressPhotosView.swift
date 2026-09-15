@@ -159,10 +159,14 @@ private struct PhotoGridCell: View {
         }
     }
 
-    private static func dateLabel(_ date: Date) -> String {
+    private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "d MMM"
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private static func dateLabel(_ date: Date) -> String {
+        Self.dateFormatter.string(from: date)
     }
 }
 

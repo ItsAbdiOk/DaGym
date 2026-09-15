@@ -17,14 +17,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install tools
-        run: brew install swiftlint xcodegen
+      # Exact versions from .tool-versions (the pre-push hook checks the same file), so a new
+      # SwiftLint default rule or XcodeGen output change can't turn CI red on its own.
+      - name: Install pinned tools
+        run: echo "$(scripts/install-tools.sh | tail -1)" >> "$GITHUB_PATH"
 
       - name: Lint (strict)
         run: swiftlint lint --strict
 
       - name: GymCore unit tests
-        run: cd GymCore && swift test
+        run: cd GymCore && swift test -Xswiftc -warnings-as-errors
 
       - name: Generate Xcode project
         run: xcodegen generate

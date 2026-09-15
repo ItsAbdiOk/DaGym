@@ -5,11 +5,13 @@ import Testing
 
 @Suite("Auto-fill")
 struct AutoFillTests {
-    @Test("weight formatting drops a trailing .0")
-    func weightFormat() {
-        #expect(WeightFormat.kg(82.5) == "82.5")
-        #expect(WeightFormat.kg(80) == "80")
-        #expect(WeightFormat.kg(0) == "0")
+    @Test("ratio formatting drops a trailing .0 and never traps on a bad number")
+    func ratioFormat() {
+        #expect(RatioFormat.plain(1.5) == "1.5")
+        #expect(RatioFormat.plain(2) == "2")
+        #expect(RatioFormat.plain(0) == "0")
+        #expect(RatioFormat.plain(.nan) == "—")
+        #expect(RatioFormat.plain(.infinity) == "—")
     }
 
     @Test("matches previous sets by position within the same kind")
@@ -30,7 +32,8 @@ struct AutoFillTests {
         #expect(result[1].weightKg == 80 && result[1].reps == 8)
         #expect(result[2].weightKg == 82.5 && result[2].reps == 7)
         #expect(result.allSatisfy { $0.reason == "Same as last time" })
-        #expect(result[1].previous == "80 × 8")
+        // `previous` is the matched set itself, not a formatted string — the app owns the unit.
+        #expect(result[1].previous == PreviousSet(kind: .working, weightKg: 80, reps: 8))
     }
 
     @Test("working sets only match previous working sets, not warm-ups")
@@ -57,7 +60,7 @@ struct AutoFillTests {
         // The plan target is a starting point; what you actually lifted last time is current.
         #expect(result[0].weightKg == 80)
         #expect(result[0].reps == 8)
-        #expect(result[0].previous == "80 × 8")
+        #expect(result[0].previous == PreviousSet(kind: .working, weightKg: 80, reps: 8))
     }
 
     @Test("no previous, no plan target: reason invites the first entry")
@@ -78,7 +81,7 @@ struct AutoFillTests {
         ]
         let previous = [PreviousSet(kind: .working, weightKg: 0, reps: 1, durationSeconds: 45)]
         let result = AutoFill.prescriptions(planned: planned, previous: previous, incrementKg: 2.5)
-        #expect(result[0].previous == "0:45")
+        #expect(result[0].previous?.durationSeconds == 45)
         #expect(result[0].durationSeconds == 45)
     }
 

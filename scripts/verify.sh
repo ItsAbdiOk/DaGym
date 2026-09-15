@@ -1,69 +1,88 @@
 #!/bin/sh
-# One command that proves the app is healthy: lint, GymCore unit tests, app
-# database tests, and the simulator UI smoke test. Used by the pre-push hook
-# and before every device install.
+# One command that proves the app is healthy: lint, GymCore unit tests, app database tests,
+# the simulator UI smoke test, and the watch test bundle. Used by the pre-push hook and
+# before every device install.
+#
+#   scripts/verify.sh [--coverage] [--skip-lint]
+#
+#   --coverage   gather code coverage for the xcodebuild runs (off by default: it instruments
+#                every target and slows both the build and the tests, and nothing reads the
+#                report on a normal push — open the .xcresult in Xcode when you want it)
+#   --skip-lint  the pre-push hook lints (and checks tool versions) before calling this, so it
+#                passes this to avoid running SwiftLint twice per push
 set -eu
 cd "$(dirname "$0")/.."
+. scripts/lib/sim.sh
 
-echo "▶ lint"
-swiftlint lint --strict --quiet
+COVERAGE=NO
+LINT=1
+for arg in "$@"; do
+    case "$arg" in
+        --coverage) COVERAGE=YES ;;
+        --skip-lint) LINT=0 ;;
+        *) echo "usage: scripts/verify.sh [--coverage] [--skip-lint]" >&2; exit 2 ;;
+    esac
+done
 
+# Per-run log directory: several gates can run at once on this machine (parallel sessions),
+# and fixed /tmp paths made one run's failure grep print another run's errors.
+LOG_DIR=$(mktemp -d "${TMPDIR:-/tmp}/dagym-verify.XXXXXX")
+echo "logs: $LOG_DIR"
+
+if [ "$LINT" = 1 ]; then
+    echo "▶ lint"
+    swiftlint lint --strict --quiet
+fi
+
+# GymCore is only compiled here (it is no longer in the DaGym scheme's test action, so the
+# xcodebuild below links the already-built product instead of compiling it a second time).
+# The app builds with SWIFT_TREAT_WARNINGS_AS_ERRORS; -warnings-as-errors keeps a GymCore
+# warning failing in this 30 s step rather than minutes later in the xcodebuild one.
 echo "▶ GymCore tests"
-(cd GymCore && swift test --quiet)
+(cd GymCore && swift test --quiet -Xswiftc -warnings-as-errors)
 
-# Resolve name AND UDID together, from one JSON listing, on the newest runtime that has an
-# "iPhone … Pro" device — two separate greps (one for the name, one for the UDID) can disagree
-# (T5): a "Pro Max"-only machine loses the name match entirely, and a machine with the same
-# device name under two runtimes can boot one while `xcodebuild` resolves to the other.
-SIM_INFO=$(xcrun simctl list devices available -j | python3 -c '
-import json, re, sys
-data = json.load(sys.stdin)
+# The single failure grep — the hook relays this script's output verbatim rather than keeping
+# its own copy of the pattern.
+FAIL_PATTERN="✘|error:|Expectation failed|Test Case .* failed|failed \(|hung"
 
-def runtime_version(key):
-    m = re.search(r"iOS-(\d+)-(\d+)", key)
-    return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
-
-def model_number(name):
-    m = re.search(r"iPhone (\d+) Pro", name)
-    return int(m.group(1)) if m else -1
-
-best = None
-for runtime, devices in data["devices"].items():
-    for device in devices:
-        name = device.get("name", "")
-        if name.startswith("iPhone") and "Pro" in name and device.get("isAvailable", True):
-            key = (runtime_version(runtime), model_number(name))
-            if best is None or key > best[0]:
-                best = (key, name, device["udid"])
-if best:
-    print(best[1])
-    print(best[2])
-')
-SIM=$(printf "%s\n" "$SIM_INFO" | sed -n 1p)
-UDID=$(printf "%s\n" "$SIM_INFO" | sed -n 2p)
-[ -n "$UDID" ] || { echo "no iPhone …Pro simulator available" >&2; exit 1; }
-
+# $1 = label, $2 = scheme, $3 = destination udid, $4 = log name, $5… = -only-testing:… flags
 run_xctest() {
-    # $1 = label, $2 = -only-testing target. Separate invocations: a long UI run can leave the
-    # simulator in a state where the next test host hangs "before establishing connection".
-    echo "▶ $1 on $SIM ($UDID)"
-    xcodebuild test -project DaGym.xcodeproj -scheme DaGym \
-        -destination "id=$UDID" \
-        -only-testing:"$2" > "/tmp/dagym-verify-$2.log" 2>&1 \
-        || { grep -E "✘|error:|Expectation failed|Test Case .* failed|failed \(|hung" "/tmp/dagym-verify-$2.log" | head -30 >&2; echo "log: /tmp/dagym-verify-$2.log" >&2; exit 1; }
-    grep -E "Test run with|Executed [1-9]" "/tmp/dagym-verify-$2.log" | tail -2
+    label=$1; scheme=$2; udid=$3; log="$LOG_DIR/$4.log"; shift 4
+    echo "▶ $label ($scheme on $udid)"
+    xcodebuild test -project DaGym.xcodeproj -scheme "$scheme" \
+        -destination "id=$udid" -enableCodeCoverage "$COVERAGE" "$@" > "$log" 2>&1 \
+        || { grep -E "$FAIL_PATTERN" "$log" | head -30 >&2; echo "log: $log" >&2; exit 1; }
+    grep -E "Test run with|Executed [1-9]" "$log" | tail -3
     # A failed grep inside the pipeline above doesn't trip `set -e`, and "Executed 0 tests" (a
     # renamed target, a broken -only-testing filter, a bundle that failed to load) passes it
     # silently — this is the actual proof step; a green run with no tests proves nothing.
-    grep -qE "Executed [1-9][0-9]* tests?|Test run with [1-9]" "/tmp/dagym-verify-$2.log" \
-        || { echo "$1: no tests were actually executed (log: /tmp/dagym-verify-$2.log)" >&2; exit 1; }
+    grep -qE "Executed [1-9][0-9]* tests?|Test run with [1-9]" "$log" \
+        || { echo "$label: no tests were actually executed (log: $log)" >&2; exit 1; }
 }
+
+SIM_INFO=$(sim_resolve_iphone_pro) || { echo "no iPhone …Pro simulator available" >&2; exit 1; }
+SIM=$(sim_name "$SIM_INFO")
+UDID=$(sim_udid "$SIM_INFO")
+
 # A hosted unit-test run that follows a UI-test run on the same simulator reliably hangs
 # "before establishing connection"; a fresh boot avoids it (~15 s). Same UDID resolved above, so
 # the reboot and the test run can never target different devices.
 xcrun simctl shutdown "$UDID" >/dev/null 2>&1 || true
 xcrun simctl boot "$UDID" >/dev/null 2>&1 || true
 xcrun simctl bootstatus "$UDID" -b >/dev/null 2>&1 || true
-run_xctest "app + database tests" DaGymTests
-run_xctest "UI smoke test" DaGymUITests
+# The onboarding walkthrough drives the real Health permission sheet and notification alert;
+# once granted they never show again on that simulator, so a second run takes a different
+# path (and waits 8 s for a sheet that never comes). Reset so every run is the first run.
+xcrun simctl privacy "$UDID" reset all dev.abdirahmanmohamed.dagym >/dev/null 2>&1 || true
+# Both iOS bundles in ONE invocation: each xcodebuild re-checks the whole build graph and
+# re-installs the host, so a second invocation cost ~30–60 s for nothing.
+echo "  $SIM"
+run_xctest "app + database tests, UI smoke test" DaGym "$UDID" ios \
+    -only-testing:DaGymTests -only-testing:DaGymUITests
+
+# Watch bundle (prescription parity, wrist-finish persistence, haptic/crown tables). The watch
+# app already *built* above (embedded in DaGym), so this only catches behaviour breaks.
+WATCH_INFO=$(sim_resolve_watch) || { echo "no Apple Watch simulator available" >&2; exit 1; }
+echo "  $(sim_name "$WATCH_INFO")"
+run_xctest "watch tests" DaGymWatch "$(sim_udid "$WATCH_INFO")" watch -only-testing:DaGymWatchTests
 echo "✓ all green"

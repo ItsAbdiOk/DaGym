@@ -42,10 +42,14 @@ public enum WeightUnit: String, CaseIterable, Codable, Sendable {
 
     /// Formats a canonical kg value in this unit, rounded to `displayStep`,
     /// dropping a trailing ".0" (e.g. "82.5", "180").
+    ///
+    /// A non-finite input formats as "—" rather than trapping in `Int(_:)`: this is public and
+    /// fed any `Double` the app has, and one NaN from a bad row must not take a screen down.
     public func format(kg: Double, decimals: Int = 1) -> String {
         let step = displayStep
         let raw = display(kg: kg)
         let rounded = (raw / step).rounded() * step
+        guard rounded.isFinite else { return "—" }
         if abs(rounded - rounded.rounded()) < 0.001 {
             return String(Int(rounded.rounded()))
         }

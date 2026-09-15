@@ -1,12 +1,19 @@
 import GymCore
 import SwiftData
 import SwiftUI
+import os
+
+private let signposter = OSSignposter(subsystem: "dev.abdirahmanmohamed.dagym", category: "perf")
 
 /// Exercise Library — search, filter chips and a scrolling list of
 /// exercises grouped under the active filter, driven by the store.
 struct LibraryView: View {
     @Environment(WorkoutStore.self) private var store
 
+    /// The live library, read once per store change. Every search keystroke and chip tap is an
+    /// in-memory filter over this rather than a fresh two-fetch catalogue build (~60 ms on a
+    /// Low Power Mode debug build, on the main thread, per key).
+    @State private var catalogue: WorkoutStore.ExerciseCatalogue?
     @State private var exercises: [ExerciseInfo] = []
     @State private var totalCount = 0
     @State private var searchText = ""
@@ -54,18 +61,15 @@ struct LibraryView: View {
             .sheet(isPresented: $showingNewExercise) {
                 NewExerciseSheet { _ in refresh() }
             }
-            .task {
-                totalCount = store.exercises().count
-                profile = store.activeProfile()
-                refresh()
-            }
-            .onChange(of: store.changeToken) { _, _ in
-                totalCount = store.exercises().count
-                profile = store.activeProfile()
-                refresh()
-            }
+            .task { reload() }
+            .refreshOnStoreChange(reload)
             .onChange(of: showAllEquipment) { _, _ in refresh() }
-            .onChange(of: searchText) { _, _ in refresh() }
+            // Debounced: a fast typist's intermediate strings are never filtered at all.
+            .task(id: searchText) {
+                try? await Task.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled else { return }
+                refresh()
+            }
             .onChange(of: selectedMuscle) { _, _ in refresh() }
             .onChange(of: selectedEquipment) { _, _ in refresh() }
             .onChange(of: favoritesOnly) { _, _ in refresh() }
@@ -135,16 +139,38 @@ struct LibraryView: View {
         return .navigationBarDrawer(displayMode: .automatic)
     }
 
+    /// Re-reads the store: the catalogue, the placeholder's count (a `fetchCount`, not a
+    /// materialised 1 500-row fetch) and the active profile. Then filters.
+    private func reload() {
+        catalogue = store.exerciseCatalogue()
+        totalCount = store.fetchCount(Self.liveExerciseCount())
+        profile = store.activeProfile()
+        refresh()
+    }
+
+    /// Live rows only — the same `mergedIntoID == nil` rule as `WorkoutStore.isLive`, as a
+    /// predicate so the count never materialises the library.
+    private static func liveExerciseCount() -> FetchDescriptor<ExerciseModel> {
+        FetchDescriptor<ExerciseModel>(predicate: #Predicate { $0.mergedIntoID == nil })
+    }
+
+    /// Filters the held catalogue in memory; no store round trip.
     private func refresh() {
+        guard let catalogue else { return }
+        let interval = signposter.beginInterval("LibraryView.refresh")
+        defer { signposter.endInterval("LibraryView.refresh", interval) }
         let all = store.exercises(
-            matching: searchText, muscle: selectedMuscle, equipment: selectedEquipment?.rawValue,
-            favoritesOnly: favoritesOnly, customOnly: customOnly
+            in: catalogue, matching: searchText, muscle: selectedMuscle,
+            equipment: selectedEquipment?.rawValue, favoritesOnly: favoritesOnly, customOnly: customOnly
         )
-        hidden = availability?.hiddenCounts(of: all.map { ($0.equipment, $0.machine) }) ?? HiddenCounts()
-        exercises = all.filter { exercise in
-            showAllEquipment
-                || availability?.allows(equipment: exercise.equipment, machine: exercise.machine) ?? true
+        guard let availability else {
+            hidden = HiddenCounts()
+            exercises = all
+            return
         }
+        exercises = ExercisePickerFilter.visible(
+            all, availability: availability, showingAll: showAllEquipment, hidden: &hidden
+        )
     }
 
     /// Nil (no filter) unless the active profile leaves some equipment or station out.
@@ -153,9 +179,9 @@ struct LibraryView: View {
         return profile.availability
     }
 
+    /// The save bumps `changeToken`, and this tab is showing, so `reload()` follows on its own.
     private func toggleFavorite(_ id: UUID) {
         store.toggleFavorite(id: id)
-        refresh()
     }
 }
 

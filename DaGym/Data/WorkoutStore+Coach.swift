@@ -38,7 +38,7 @@ extension WorkoutStore {
 
         return CoachInput(
             schedule: schedule(),
-            workoutDates: workoutDates(),
+            workoutDates: workoutDates(finishedWorkouts: finishedWorkouts),
             // Adherence is scored against *logged* sessions only — an imported Apple Health run
             // broke the rest day (so it belongs in `workoutDates`, which feeds `Streaks`) but it
             // is not one of the planned gym sessions the schedule asked for.
@@ -56,7 +56,9 @@ extension WorkoutStore {
             ),
             substitutionLibrary: substitutionCandidates(),
             equipmentAvailability: activeEquipmentAvailability() ?? EquipmentAvailability(types: []),
-            recoveryMap: recoverySnapshot(now: now, calendar: calendar).map,
+            // Only the map is read here; `recoverySnapshot` builds the per-muscle detail on top
+            // of it with two more fetches the engine has no use for.
+            recoveryMap: recoveryMap(now: now, calendar: calendar),
             recentPRs: recentPRHighlights(now: now),
             recentAchievements: recentAchievementHighlights(now: now),
             lastWorkoutDate: finishedWorkouts.first?.startedAt,
@@ -70,7 +72,7 @@ extension WorkoutStore {
     /// cooldown-window filtering against this list. Home's "Why a deload?" card reads and writes
     /// the same rows (`WorkoutStore+Deload.swift`), so a dismissal in one place holds in both.
     func coachInteractions() -> [CoachInteraction] {
-        let models = (try? context.fetch(FetchDescriptor<CoachInteractionModel>())) ?? []
+        let models = fetch(FetchDescriptor<CoachInteractionModel>())
         return models.compactMap { model in
             guard let rule = CoachRule(rawValue: model.rule), let outcome = Self.outcome(from: model.outcome)
             else { return nil }
@@ -98,7 +100,7 @@ extension WorkoutStore {
     func removeCoachInteraction(id: UUID) {
         var descriptor = FetchDescriptor<CoachInteractionModel>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
-        guard let model = (try? context.fetch(descriptor))?.first else { return }
+        guard let model = fetchFirst(descriptor) else { return }
         context.delete(model)
         save()
     }
@@ -106,13 +108,18 @@ extension WorkoutStore {
     // MARK: - CoachInput assembly helpers
 
     private func recentSessions(from workouts: [WorkoutModel]) -> [CoachSessionSummary] {
-        workouts.map { workout in
+        // One batched routine lookup for the window, not a `fetchRoutineModel` per session.
+        let routines = fetchRoutineModels(ids: Set(workouts.compactMap(\.routineID)))
+        return workouts.map { workout in
             let completed = (workout.exercises ?? []).flatMap { exercise in
                 (exercise.sets ?? []).filter { $0.isCompleted && $0.setKind.countsTowardStats }
             }
             let duration = workout.endedAt.map { max(0, Int($0.timeIntervalSince(workout.startedAt))) } ?? 0
             return CoachSessionSummary(
-                date: workout.startedAt, plannedSetCount: plannedSetCount(for: workout),
+                date: workout.startedAt,
+                plannedSetCount: plannedSetCount(
+                    for: workout, routine: workout.routineID.flatMap { routines[$0] }
+                ),
                 completedSetCount: completed.count, durationSeconds: duration
             )
         }
@@ -126,10 +133,8 @@ extension WorkoutStore {
     /// `CoachRules.sessionDriftCards` is told "no set signal here, skip me". It used to fall back
     /// to the completed count, which is a perfect 1.0 ratio — so every freestyle session quietly
     /// raised the baseline that the lifter's planned sessions were then judged against.
-    private func plannedSetCount(for workout: WorkoutModel) -> Int {
-        guard let routineID = workout.routineID, let routine = fetchRoutineModel(id: routineID) else {
-            return 0
-        }
+    private func plannedSetCount(for workout: WorkoutModel, routine: RoutineModel?) -> Int {
+        guard let routine else { return 0 }
         let exerciseIDs = Set((workout.exercises ?? []).compactMap { $0.exercise?.id })
         return (routine.exercises ?? [])
             .filter { $0.exercise.map { exerciseIDs.contains($0.id) } ?? false }
@@ -151,7 +156,7 @@ extension WorkoutStore {
 
     /// Every routine-exercise slot in the running programme, non-archived routines only.
     private func programmeRoutineExercises() -> [RoutineExerciseModel] {
-        let models = (try? context.fetch(FetchDescriptor<RoutineExerciseModel>())) ?? []
+        let models = fetch(FetchDescriptor<RoutineExerciseModel>())
         let allowed = programmeRoutineIDs()
         return models.filter { model in
             guard let routine = model.routine, !routine.isArchived else { return false }
@@ -330,7 +335,7 @@ extension WorkoutStore {
         let predicate = #Predicate<PersonalRecordEventModel> {
             $0.kind == headline && $0.date >= since && $0.date <= now
         }
-        let events = (try? context.fetch(FetchDescriptor(predicate: predicate))) ?? []
+        let events = fetch(FetchDescriptor(predicate: predicate))
         // One query for every exercise named, not one per event — a good week is a PR per lift.
         let exercises = fetchExerciseModels(ids: Set(events.compactMap(\.exerciseID)))
         return events.compactMap { event -> CoachPersonalRecordHighlight? in
@@ -346,7 +351,7 @@ extension WorkoutStore {
     private func recentAchievementHighlights(now: Date) -> [CoachAchievementHighlight] {
         let since = now.addingTimeInterval(-Self.coachRecentHighlightDays * 86_400)
         let predicate = #Predicate<AchievementModel> { $0.earnedAt >= since && $0.earnedAt <= now }
-        let models = (try? context.fetch(FetchDescriptor(predicate: predicate))) ?? []
+        let models = fetch(FetchDescriptor(predicate: predicate))
         return models.compactMap { model -> CoachAchievementHighlight? in
             guard let tier = Self.coachTier(from: model.tier),
                   let definition = Milestones.definitions.first(where: { $0.id == model.milestoneID })

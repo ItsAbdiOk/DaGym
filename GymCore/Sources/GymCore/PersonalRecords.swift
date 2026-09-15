@@ -196,7 +196,7 @@ public enum PersonalRecords {
             return "Best set \(unit.format(kg: pr.weightKg)) × \(pr.reps) "
                 + "(\(unit.format(kg: pr.value)) \(unit.symbol))"
         case .longestHold:
-            return "Hold \(clock(Int(pr.value)))"
+            return "Hold \(clock(CardioPace.wholeSeconds(pr.value)))"
         case .leastAssistance:
             return "Assistance down to \(unit.format(kg: pr.value)) \(unit.symbol)"
         case .longestDistance:
@@ -205,7 +205,7 @@ public enum PersonalRecords {
             // `value` is seconds per km; re-expressed per the display unit.
             let perUnit = pr.value * distanceUnit.meters / 1000
             let floor = distanceUnit.formatWithSymbol(meters: paceMinimumDistanceMeters, decimals: 1)
-            let pace = CardioPace.clock(Int(perUnit.rounded()))
+            let pace = CardioPace.clock(CardioPace.wholeSeconds(perUnit))
             return "Fastest \(pace) /\(distanceUnit.symbol) over \(floor)+"
         }
     }
@@ -306,15 +306,17 @@ public enum PersonalRecords {
                 bestRepsByWeight[key] = set.reps
             }
         }
+        // `existing` can hold more than one row in the same 0.25 kg bucket (e.g. a pre-rounding
+        // 60.0004 kg row beside a 60.0 kg one) — beat the best of them, not just the first match.
+        // Bucketed once rather than filtered per weight, so this stays O(B + E) as the cache grows.
+        var existingBestByWeight: [Double: Int] = [:]
+        for record in existing where record.kind == .maxRepsAtWeight {
+            let key = weightKey(record.weightKg)
+            existingBestByWeight[key] = max(existingBestByWeight[key] ?? 0, record.reps)
+        }
         var records: [PersonalRecord] = []
         for (weight, reps) in bestRepsByWeight.sorted(by: { $0.key < $1.key }) {
-            // `existing` can hold more than one row in the same 0.25 kg bucket (e.g. a pre-rounding
-            // 60.0004 kg row beside a 60.0 kg one) — beat the best of them, not just the first match.
-            let currentBest = existing
-                .filter { $0.kind == .maxRepsAtWeight && weightKey($0.weightKg) == weight }
-                .map(\.reps)
-                .max()
-            if let currentBest, reps <= currentBest { continue }
+            if let currentBest = existingBestByWeight[weight], reps <= currentBest { continue }
             records.append(
                 PersonalRecord(
                     kind: .maxRepsAtWeight, value: Double(reps), weightKg: weight, reps: reps, date: date

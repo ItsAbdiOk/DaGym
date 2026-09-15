@@ -11,6 +11,8 @@ struct OnboardingFlow: View {
     var onComplete: () -> Void
 
     @State private var step = OnboardingStep.welcome
+    /// True while "Explore with sample data" is building eight weeks of history.
+    @State private var isSeeding = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
@@ -47,17 +49,28 @@ struct OnboardingFlow: View {
     }
 
     /// Welcome's "Explore with sample data" — seeds eight weeks of history on the starter
-    /// routines and skips straight to the tab bar, same as "Skip and start lifting".
+    /// routines and skips straight to the tab bar, same as "Skip and start lifting". The seed
+    /// is a few hundred SwiftData writes on the main actor; the yield lets the busy state
+    /// paint first so the tap doesn't look ignored.
     private func exploreSampleData() {
-        SampleDataSeeder.seed(store: store, preferences: preferences)
-        complete()
+        guard !isSeeding else { return }
+        isSeeding = true
+        Task {
+            await Task.yield()
+            SampleDataSeeder.seed(store: store, preferences: preferences)
+            isSeeding = false
+            complete()
+        }
     }
 
     @ViewBuilder
     private var stepContent: some View {
         switch step {
         case .welcome:
-            OnboardingWelcomeStep(onStart: advance, onSkip: complete, onExploreSampleData: exploreSampleData)
+            OnboardingWelcomeStep(
+                isSeeding: isSeeding, onStart: advance, onSkip: complete,
+                onExploreSampleData: exploreSampleData
+            )
         case .units:
             OnboardingUnitsStep(onNext: advance)
         case .goal:

@@ -42,18 +42,24 @@ struct LastSessionIntent: AppIntent {
         "\(unit.format(kg: weightKg)) \(unit.symbol) × \(reps.map(String.init).joined(separator: ", "))"
     }
 
+    /// One query, for this exercise's rows in finished workouts only — it used to walk every
+    /// finished workout newest-first, faulting `exercises` and each row's `exercise`, so an
+    /// exercise never trained walked the whole history before Siri answered "nothing yet".
+    /// Sorted in memory by the workout's date: a `SortDescriptor` through the optional
+    /// `workout` relationship isn't expressible, and the predicate already keeps the result to
+    /// this exercise's own sessions.
     @MainActor
     static func lastSession(exerciseID: UUID, store: WorkoutStore) -> LastSession? {
-        let predicate = #Predicate<WorkoutModel> { $0.endedAt != nil }
-        let descriptor = FetchDescriptor<WorkoutModel>(
-            predicate: predicate, sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
-        )
-        let workouts = (try? store.context.fetch(descriptor)) ?? []
-        for workout in workouts {
-            guard let match = (workout.exercises ?? []).first(where: { $0.exercise?.id == exerciseID }) else {
-                continue
-            }
-            let sets = (match.sets ?? [])
+        let predicate = #Predicate<WorkoutExerciseModel> {
+            $0.exercise?.id == exerciseID && $0.workout?.endedAt != nil
+        }
+        var descriptor = FetchDescriptor<WorkoutExerciseModel>(predicate: predicate)
+        descriptor.relationshipKeyPathsForPrefetching = [\.workout, \.sets]
+        let rows = store.fetch(descriptor)
+            .compactMap { row in row.workout.map { (workout: $0, row: row) } }
+            .sorted { $0.workout.startedAt > $1.workout.startedAt }
+        for (workout, row) in rows {
+            let sets = (row.sets ?? [])
                 .filter { $0.isCompleted && $0.setKind.countsTowardStats }
                 .sorted { $0.order < $1.order }
             guard let first = sets.first else { continue }

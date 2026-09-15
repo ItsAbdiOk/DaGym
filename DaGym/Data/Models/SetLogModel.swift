@@ -5,7 +5,7 @@ import SwiftData
 /// One logged set inside a `WorkoutExerciseModel`.
 @Model
 final class SetLogModel {
-    var id: UUID = UUID()
+    var id = UUID()
     var order: Int = 0
     /// `SetKind` raw value.
     var kind: String = "working"

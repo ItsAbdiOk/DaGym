@@ -47,4 +47,31 @@ struct EquipmentProfileUnitTests {
     func barStepperKeepsHalfKgStepInKg() {
         #expect(EquipmentStep.stepKg(for: .kg) == 0.5)
     }
+
+    /// The plate list used to key rows on `weightKg`, so two near-identical saved sizes (an
+    /// lb-derived value before and after a rounding change) gave `ForEach` duplicate ids.
+    @Test("two saved sizes within the tolerance collapse into one row")
+    func nearIdenticalExistingSizesShareOneRow() {
+        let existing = [PlateStock(weightKg: 20.4116, count: 2), PlateStock(weightKg: 20.4117, count: 4)]
+        let rows = EquipmentStep.rows(standard: [20, 10], existing: existing)
+
+        let sizes = rows.map(\.weightKg)
+        #expect(sizes.count == Set(sizes).count)
+        #expect(rows.filter { abs($0.weightKg - 20.4116) < EquipmentStep.sameSizeToleranceKg }.count == 1)
+        #expect(rows.first { abs($0.weightKg - 20.4116) < EquipmentStep.sameSizeToleranceKg }?.count == 6)
+        // `count` here is a plate quantity, not a Collection.count.
+        // swiftlint:disable:next empty_count
+        #expect(rows.contains { $0.weightKg == 20 && $0.count == 0 })
+        // swiftlint:disable:next empty_count
+        #expect(rows.contains { $0.weightKg == 10 && $0.count == 0 })
+    }
+
+    @Test("distinct saved sizes keep their own rows and counts")
+    func distinctExistingSizesStaySeparate() {
+        let existing = [PlateStock(weightKg: 20, count: 2), PlateStock(weightKg: 10, count: 4)]
+        let rows = EquipmentStep.rows(standard: [20, 10, 5], existing: existing)
+
+        #expect(rows.map(\.weightKg) == [20, 10, 5])
+        #expect(rows.map(\.count) == [2, 4, 0])
+    }
 }

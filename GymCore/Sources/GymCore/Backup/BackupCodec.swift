@@ -1,46 +1,37 @@
 import Foundation
+import os
 
-/// Encodes/decodes `BackupDocument` as stable JSON: sorted keys (so two
-/// exports of identical data diff cleanly) and ISO 8601 dates.
+/// Encodes/decodes `BackupDocument` as stable JSON — `VersionedJSONCodec` with the backup's
+/// restore-coverage logging on top.
 public enum BackupCodec {
-    public enum CodecError: Error, Equatable, Sendable {
-        /// The file's `formatVersion` is newer than this build understands.
-        case unsupportedFormatVersion(found: Int, supported: Int)
-        case decodingFailed(String)
-    }
-
-    private struct FormatHeader: Decodable {
-        var formatVersion: Int
-    }
+    public typealias CodecError = VersionedCodecError
 
     public static func encode(_ document: BackupDocument) throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
-        encoder.dateEncodingStrategy = .iso8601
-        return try encoder.encode(document)
+        let state = GymCorePerf.signposter.beginInterval("BackupCodec.encode")
+        defer { GymCorePerf.signposter.endInterval("BackupCodec.encode", state) }
+        return try VersionedJSONCodec<BackupDocument>.encode(document)
     }
 
-    /// Decodes a backup file. Unknown future fields are ignored (Codable's
-    /// default behaviour); a `formatVersion` newer than this build supports
-    /// fails fast with a typed error rather than silently dropping data.
+    /// Decodes a backup file, then logs which optional sections the file doesn't carry and which
+    /// sections it carries that this build can't read (a newer file on an older device), so a
+    /// restore that quietly drops photos or coach history leaves a trace. The same lists are on
+    /// the document (`absentSections`/`unreadableSections`) for the preview to show.
     public static func decode(_ data: Data) throws -> BackupDocument {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let header: FormatHeader
-        do {
-            header = try decoder.decode(FormatHeader.self, from: data)
-        } catch {
-            throw CodecError.decodingFailed(String(describing: error))
+        let state = GymCorePerf.signposter.beginInterval("BackupCodec.decode")
+        defer { GymCorePerf.signposter.endInterval("BackupCodec.decode", state) }
+        let document = try VersionedJSONCodec<BackupDocument>.decode(data)
+        let absent = document.absentSections
+        if !absent.isEmpty {
+            let names = absent.joined(separator: ", ")
+            let version = document.formatVersion
+            GymCorePerf.logger.info("Backup (format \(version)) has no \(names, privacy: .public)")
         }
-        guard header.formatVersion <= BackupDocument.currentFormatVersion else {
-            throw CodecError.unsupportedFormatVersion(
-                found: header.formatVersion, supported: BackupDocument.currentFormatVersion
-            )
+        let unreadable = document.unreadableSections
+        if !unreadable.isEmpty {
+            let names = unreadable.joined(separator: ", ")
+            let version = document.formatVersion
+            GymCorePerf.logger.warning("Backup \(version) has unknown sections: \(names, privacy: .public)")
         }
-        do {
-            return try decoder.decode(BackupDocument.self, from: data)
-        } catch {
-            throw CodecError.decodingFailed(String(describing: error))
-        }
+        return document
     }
 }

@@ -123,12 +123,22 @@ extension WorkoutStore {
         eraser(CoachInteractionModel.self)
     ]
 
+    /// Per row on purpose — see `deleteAllMainModels`: a batch `delete(model:)` never reaches
+    /// CloudKit. The photo and Health stores are local-only, which is why *they* may batch. A
+    /// fetch failure is logged rather than swallowed: a wipe that left rows behind must not read
+    /// as a clean reset.
     private static func eraser<Model: PersistentModel>(
         _ type: Model.Type
     ) -> @MainActor (ModelContext) -> Void {
         { context in
-            for model in (try? context.fetch(FetchDescriptor<Model>())) ?? [] {
-                context.delete(model)
+            do {
+                for model in try context.fetch(FetchDescriptor<Model>()) {
+                    context.delete(model)
+                }
+            } catch {
+                let name = String(describing: Model.self)
+                let reason = error.localizedDescription
+                storeLogger.error("Wipe of \(name, privacy: .public) failed: \(reason, privacy: .public)")
             }
         }
     }

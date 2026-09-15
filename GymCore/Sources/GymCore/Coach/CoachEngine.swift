@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// One entry point for the rule-based coach: ten deterministic rules over training history,
 /// producing cards the lifter can approve or dismiss. No AI, no model, no network — every
@@ -20,6 +21,8 @@ public enum CoachEngine {
     ///  * `returnFromLayoff` claims "you didn't train": `adherenceDrop` and `muscleCoverageGap`
     ///    are exactly the same fact, restated as a completion rate and as a set count.
     public static func cards(for input: CoachInput, now: Date, calendar: Calendar) -> [CoachCard] {
+        let state = GymCorePerf.signposter.beginInterval("CoachEngine.cards")
+        defer { GymCorePerf.signposter.endInterval("CoachEngine.cards", state) }
         var cards: [CoachCard] = []
 
         var coveredLifts: Set<String> = []
@@ -28,7 +31,7 @@ public enum CoachEngine {
         cards += CoachRules.e1rmDowntrendCards(input: input, now: now, coveredLifts: coveredLifts)
         cards += CoachRules.deloadOverdueCards(input: input, now: now, coveredLifts: coveredLifts)
 
-        let layoff = CoachRules.returnFromLayoffCards(input: input, now: now)
+        let layoff = CoachRules.returnFromLayoffCards(input: input, now: now, calendar: calendar)
         cards += layoff
         if layoff.isEmpty {
             cards += CoachRules.adherenceDropCards(input: input, now: now, calendar: calendar)
@@ -40,7 +43,8 @@ public enum CoachEngine {
         cards += CoachRules.recoveryDebtCards(input: input, now: now)
         cards += CoachRules.prMilestoneCards(input: input, now: now)
 
-        let active = cards.filter { !isSuppressed($0, interactions: input.interactions, now: now) }
+        let suppression = SuppressionIndex(interactions: input.interactions)
+        let active = cards.filter { !suppression.isSuppressed($0, now: now) }
         return Array(active.sorted(by: >).prefix(TrainingConstants.coachMaxCards))
     }
 
@@ -58,12 +62,35 @@ public enum CoachEngine {
     public static func isSuppressed(
         _ card: CoachCard, interactions: [CoachInteraction], now: Date
     ) -> Bool {
-        interactions.contains { interaction in
-            guard interaction.rule == card.rule, interaction.fingerprint == card.fingerprint else {
+        SuppressionIndex(interactions: interactions).isSuppressed(card, now: now)
+    }
+
+    /// The latest interaction per (rule, fingerprint), built once per `evaluate` so a session
+    /// with years of dismissals costs O(cards + interactions) rather than O(cards × interactions).
+    /// Only the most recent date matters: if it is inside the cooldown (or in the future) the
+    /// card is suppressed, and an older one can't be inside it when the newest isn't.
+    public struct SuppressionIndex: Sendable {
+        private var latestDate: [Key: Date] = [:]
+
+        private struct Key: Hashable {
+            var rule: CoachRule
+            var fingerprint: String
+        }
+
+        public init(interactions: [CoachInteraction]) {
+            for interaction in interactions {
+                let key = Key(rule: interaction.rule, fingerprint: interaction.fingerprint)
+                if let current = latestDate[key], current >= interaction.date { continue }
+                latestDate[key] = interaction.date
+            }
+        }
+
+        public func isSuppressed(_ card: CoachCard, now: Date) -> Bool {
+            guard let date = latestDate[Key(rule: card.rule, fingerprint: card.fingerprint)] else {
                 return false
             }
-            guard interaction.date <= now else { return true }
-            let elapsedDays = now.timeIntervalSince(interaction.date) / 86_400
+            guard date <= now else { return true }
+            let elapsedDays = now.timeIntervalSince(date) / 86_400
             return elapsedDays < Double(card.rule.cooldownDays)
         }
     }

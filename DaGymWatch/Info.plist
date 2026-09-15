@@ -21,7 +21,7 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>DaGym reads your heart rate during a workout so the timer keeps running with your wrist down. Nothing read from Health is stored in iCloud.</string>
+	<string>DaGym reads your heart rate and active energy during a workout so the workout saved to Apple Health shows them. Nothing read from Health is stored in iCloud.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>DaGym saves your strength workouts to Apple Health so your rings get credit.</string>
 	<key>UIBackgroundModes</key>

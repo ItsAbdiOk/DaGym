@@ -40,20 +40,48 @@ struct WatchBodyMap: View {
 }
 
 /// One merged path per muscle plus one inert path, parsed once per side — the watch's copy of
-/// the phone's `BodyMapRegionCache`.
+/// the phone's `BodyMapRegionCache`. `warm()` does the parse off the main actor at workout
+/// start; the first Summary after Finish then finds both sides ready instead of building every
+/// SVG path on the main thread while the screen waits.
 @MainActor
 final class WatchBodyRegions {
     static let shared = WatchBodyRegions()
 
-    struct Region {
+    struct Region: Sendable {
         let muscle: Muscle?
         let path: Path
     }
 
     private var storage: [BodySide: [Region]] = [:]
+    private var warming: Task<Void, Never>?
 
     func regions(side: BodySide) -> [Region] {
         if let cached = storage[side] { return cached }
+        let built = Self.build(side: side)
+        storage[side] = built
+        return built
+    }
+
+    /// Parses both sides on a background task and caches them. A no-op once cached or while
+    /// already warming.
+    static func warm() { shared.startWarming() }
+
+    private func startWarming() {
+        guard storage.count < 2, warming == nil else { return }
+        warming = Task.detached(priority: .utility) { [weak self] in
+            let front = Self.build(side: .front)
+            let back = Self.build(side: .back)
+            await self?.store(front: front, back: back)
+        }
+    }
+
+    private func store(front: [Region], back: [Region]) {
+        if storage[.front] == nil { storage[.front] = front }
+        if storage[.back] == nil { storage[.back] = back }
+        warming = nil
+    }
+
+    nonisolated static func build(side: BodySide) -> [Region] {
         var inert = Path()
         var byMuscle: [Muscle: Path] = [:]
         for part in BodyPathProvider.paths(gender: .male, side: side) {
@@ -72,7 +100,6 @@ final class WatchBodyRegions {
         built += byMuscle.keys.sorted { $0.rawValue < $1.rawValue }.map {
             Region(muscle: $0, path: byMuscle[$0] ?? Path())
         }
-        storage[side] = built
         return built
     }
 }

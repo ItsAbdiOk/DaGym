@@ -105,7 +105,10 @@ struct ProgressScreen: View {
 
     private func pickDefaultExercise() {
         guard exercise == nil else { return }
-        exercise = store.exercises(favoritesOnly: true).first ?? store.exercises().first
+        // One catalogue (two fetches + the PR table) for both lookups, not one per call.
+        let catalogue = store.exerciseCatalogue()
+        exercise = store.exercises(in: catalogue, favoritesOnly: true).first
+            ?? store.exercises(in: catalogue).first
     }
 }
 

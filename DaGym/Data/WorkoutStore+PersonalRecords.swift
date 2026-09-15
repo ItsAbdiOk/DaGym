@@ -82,6 +82,19 @@ extension WorkoutStore {
         return fetchCount(FetchDescriptor(predicate: predicate))
     }
 
+    /// `prCount(for:)` for every workout at once — one fetch of the headline events, grouped by
+    /// workout, for `history()`, which used to issue one `fetchCount` per finished workout.
+    func prCountsByWorkout() -> [UUID: Int] {
+        let headline = PRKind.e1rm.rawValue
+        let predicate = #Predicate<PersonalRecordEventModel> { $0.kind == headline }
+        var counts: [UUID: Int] = [:]
+        for event in fetch(FetchDescriptor(predicate: predicate)) {
+            guard let workoutID = event.workoutID else { continue }
+            counts[workoutID, default: 0] += 1
+        }
+        return counts
+    }
+
     /// Headline (e1RM) records set by workouts started in `[from, to)`, from the event log.
     func prCount(from: Date, to: Date) -> Int {
         let headline = PRKind.e1rm.rawValue
@@ -98,8 +111,12 @@ extension WorkoutStore {
     /// "one PR line per exercise" UI. The other kinds (maxWeight, volume, maxRepsAtWeight, …) are
     /// cached for `exerciseInfo(for:)`-style lookups and future screens without changing what the
     /// Finish summary shows.
+    ///
+    /// `finishedWorkouts` is the finished list *without* this workout (newest first), as `finish`
+    /// read it before stamping `endedAt`; left nil it is fetched here.
     func evaluatePRs(
-        session: WorkoutSession, workout: WorkoutModel, unit: WeightUnit = .kg
+        session: WorkoutSession, workout: WorkoutModel, unit: WeightUnit = .kg,
+        finishedWorkouts: [WorkoutModel]? = nil
     ) -> [PersonalRecordInfo] {
         // A workout dated before one that is already logged cannot be judged incrementally: the
         // cache it would be compared against holds records set *after* it. That used to mean a
@@ -113,7 +130,9 @@ extension WorkoutStore {
         // There is only one honest answer for a past-dated session and it is the replay, which
         // is exactly what deleting a workout already does. No banner: a session logged for last
         // Tuesday is not a PR moment today, and the records list shows what it earned.
-        if let latest = latestFinishedWorkoutDate(excluding: workout.id), workout.startedAt < latest {
+        let latest = (finishedWorkouts ?? finishedWorkoutModelsNewestFirst())
+            .first { $0.id != workout.id }?.startedAt
+        if let latest, workout.startedAt < latest {
             rebuildPersonalRecords()
             return []
         }
@@ -136,32 +155,81 @@ extension WorkoutStore {
     }
 
     /// Throws away the PR cache and event log and replays every finished workout, oldest first,
-    /// so both reflect exactly the sets that still exist. Used after deleting a workout and after
-    /// a backup import; cheap enough for a settings "recompute" too.
+    /// so both reflect exactly the sets that still exist. Used after deleting a workout, after a
+    /// backup import and for a past-dated finish; cheap enough for a settings "recompute" too.
+    ///
+    /// The replay keeps the cache in memory (`[exercise: [kind/weight: record]]`) and writes the
+    /// rows once at the end. Upserting through the store as it went cost a fetch of the
+    /// exercise's records plus a `fetchFirst` per kind per exercise per workout — O(workouts ×
+    /// exercises × kinds) queries on the main thread, seconds of freeze on a long history for
+    /// every delete.
     func rebuildPersonalRecords() {
+        let state = storeSignposter.beginInterval("rebuildPersonalRecords")
+        defer { storeSignposter.endInterval("rebuildPersonalRecords", state) }
         deleteAll(PersonalRecordModel.self)
         deleteAll(PersonalRecordEventModel.self)
-        let workouts = finishedWorkoutModelsNewestFirst().reversed()
-        for workout in workouts {
-            replayRecords(in: workout)
+        var cache: [UUID: [PRCacheKey: CachedRecord]] = [:]
+        let bodyweight = bodyweightLookup()
+        for workout in finishedWorkoutModelsNewestFirst().reversed() {
+            replayRecords(in: workout, cache: &cache, bodyweight: bodyweight)
+        }
+        for (exerciseID, records) in cache {
+            for cached in records.values {
+                let model = PersonalRecordModel(exerciseID: exerciseID, kind: cached.record.kind.rawValue)
+                context.insert(model)
+                Self.apply(cached.record, workoutID: cached.workoutID, to: model)
+            }
         }
         save()
     }
 
-    private func replayRecords(in workout: WorkoutModel) {
+    /// `maxRepsAtWeight` keeps one row per weight (a lifter can hold separate rep records at 60 kg
+    /// and 80 kg); every other kind keeps a single best row — the same rule `cacheRecord` upserts by.
+    private struct PRCacheKey: Hashable {
+        var kind: PRKind
+        var weightKg: Double?
+
+        init(_ record: PersonalRecord) {
+            kind = record.kind
+            weightKg = record.kind == .maxRepsAtWeight ? record.weightKg : nil
+        }
+    }
+
+    private struct CachedRecord {
+        var record: PersonalRecord
+        var workoutID: UUID
+    }
+
+    /// Every weigh-in, newest first, read once — so the replay's per-exercise "bodyweight as of
+    /// this workout" (`latestBodyMeasurement(asOf:)`) is a scan of that array, not a query per
+    /// assisted or weighted-bodyweight row in history.
+    private func bodyweightLookup() -> (Date) -> Double? {
+        let descriptor = FetchDescriptor<BodyMeasurementModel>(
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        let readings = fetch(descriptor).map { (date: $0.date, kg: $0.bodyweightKg) }
+        return { asOf in readings.first { $0.date <= asOf }.flatMap(\.kg) }
+    }
+
+    private func replayRecords(
+        in workout: WorkoutModel, cache: inout [UUID: [PRCacheKey: CachedRecord]],
+        bodyweight: @escaping (Date) -> Double?
+    ) {
         for exerciseModel in (workout.exercises ?? []).sorted(by: { $0.order < $1.order }) {
             guard let exercise = exerciseModel.exercise else { continue }
             let entry = WorkoutExerciseEntry(model: exerciseModel, exercise: ExerciseInfo(model: exercise))
-            let performed = performedSets(in: entry, date: workout.startedAt)
+            let performed = performedSets(in: entry, date: workout.startedAt, bodyweight: bodyweight)
             guard !performed.isEmpty else { continue }
             // Replayed in date order, so every earlier workout is already in the cache and no
             // later one is: a backfill can never claim a record against a session after it.
+            let existing = (cache[exercise.id] ?? [:]).values.map(\.record)
             let records = PersonalRecords.evaluate(
-                newSets: performed, existing: existingRecords(exerciseID: exercise.id),
-                workoutDate: workout.startedAt
+                newSets: performed, existing: existing, workoutDate: workout.startedAt
             )
             for record in records {
-                cacheRecord(record, exerciseID: exercise.id, workoutID: workout.id)
+                cache[exercise.id, default: [:]][PRCacheKey(record)] = CachedRecord(
+                    record: record, workoutID: workout.id
+                )
                 logRecordEvent(record, exerciseID: exercise.id, workoutID: workout.id)
             }
         }
@@ -181,16 +249,14 @@ extension WorkoutStore {
         )
     }
 
-    /// The other finished workout's `startedAt` closest to now (excluding this one), used so a
-    /// backfilled workout can't claim a PR against a session that happened later.
-    private func latestFinishedWorkoutDate(excluding workoutID: UUID) -> Date? {
-        finishedWorkoutModelsNewestFirst().first { $0.id != workoutID }?.startedAt
-    }
-
-    private func performedSets(in entry: WorkoutExerciseEntry, date: Date) -> [PerformedSet] {
+    /// `bodyweight` resolves the lifter's bodyweight as of a date; the default is one store
+    /// query, the replay passes an in-memory lookup over every weigh-in read once.
+    private func performedSets(
+        in entry: WorkoutExerciseEntry, date: Date, bodyweight: ((Date) -> Double?)? = nil
+    ) -> [PerformedSet] {
         let style = entry.exercise.loggingStyle
         let bodyweightKg = Self.needsBodyweight(style)
-            ? latestBodyMeasurement(asOf: date)?.bodyweightKg : nil
+            ? (bodyweight?(date) ?? latestBodyMeasurement(asOf: date)?.bodyweightKg) : nil
         return entry.sets.filter { $0.isDone && $0.kind.countsTowardStats }.map { setEntry in
             PerformedSet(
                 kind: setEntry.kind, weightKg: Self.loadedWeightKg(setEntry, style: style),
@@ -270,6 +336,10 @@ extension WorkoutStore {
         let existing = fetchFirst(FetchDescriptor(predicate: predicate))
         let model = existing ?? PersonalRecordModel(exerciseID: exerciseID, kind: kind)
         if existing == nil { context.insert(model) }
+        Self.apply(record, workoutID: workoutID, to: model)
+    }
+
+    private static func apply(_ record: PersonalRecord, workoutID: UUID, to model: PersonalRecordModel) {
         model.value = record.value
         model.weightKg = record.weightKg
         model.reps = record.reps

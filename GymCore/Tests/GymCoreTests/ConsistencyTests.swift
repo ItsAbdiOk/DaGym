@@ -31,7 +31,6 @@ struct ConsistencyTests {
     func levelsAreQuantilesOfMax() {
         let base = calendar.startOfDay(for: Date())
         // Busiest day: 20 sets. Others at 25%, 50%, 75%+ of that.
-        // swiftlint:disable:next large_tuple
         let workouts: [(date: Date, sets: Int, minutes: Int)] = [
             (day(0, from: base), 20, 60),
             (day(1, from: base), 4, 20), // 20% of max -> level 1
@@ -50,7 +49,6 @@ struct ConsistencyTests {
     @Test("multiple workouts on the same day sum their sets and minutes")
     func sameDaySums() {
         let base = calendar.startOfDay(for: Date())
-        // swiftlint:disable:next large_tuple
         let workouts: [(date: Date, sets: Int, minutes: Int)] = [
             (base, 5, 20), (base, 3, 10)
         ]
@@ -63,7 +61,6 @@ struct ConsistencyTests {
     @Test("workouts outside the range are ignored")
     func outsideRangeIgnored() {
         let base = calendar.startOfDay(for: Date())
-        // swiftlint:disable:next large_tuple
         let workouts: [(date: Date, sets: Int, minutes: Int)] = [
             (day(-5, from: base), 10, 30), (base, 4, 15)
         ]

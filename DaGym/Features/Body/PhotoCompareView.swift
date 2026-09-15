@@ -5,7 +5,8 @@ import UIKit
 /// mask + `DragGesture` (plan.md §6.4). Defaults to the oldest and newest photo in `photos`
 /// (`WorkoutStore.photos(pose:)` returns newest-first, so that's the last and first index).
 /// `photos` carries thumbnails only; the two photos on screen are fetched at full size through
-/// `WorkoutStore.photo(id:)` as they're picked.
+/// `WorkoutStore.photo(id:)` as they're picked and decoded once into `fullImages` — `body`
+/// re-runs on every slider frame, so it must never decode.
 struct PhotoCompareView: View {
     var pose: ProgressPhotoPose
     var photos: [ProgressPhotoInfo]
@@ -17,7 +18,7 @@ struct PhotoCompareView: View {
     @State private var afterIndex: Int
     @State private var isSideBySide = true
     @State private var sliderFraction: CGFloat = 0.5
-    @State private var fullImageData: [UUID: Data] = [:]
+    @State private var fullImages: [UUID: UIImage] = [:]
 
     init(pose: ProgressPhotoPose, photos: [ProgressPhotoInfo]) {
         self.pose = pose
@@ -43,7 +44,7 @@ struct PhotoCompareView: View {
             }
             .navigationTitle("Compare \(pose.label)")
             .navigationBarTitleDisplayMode(.inline)
-            .task(id: [beforeIndex, afterIndex]) { loadFullImages() }
+            .task(id: [beforeIndex, afterIndex]) { await loadFullImages() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Done") { dismiss() }
@@ -135,19 +136,21 @@ struct PhotoCompareView: View {
             }
     }
 
-    private func loadFullImages() {
+    /// Fetches the full-size bytes for the two picked photos and decodes them off-main, falling
+    /// back to the thumbnail bytes when the full row is gone. Cached per photo id, so re-picking
+    /// an already-shown photo is free.
+    private func loadFullImages() async {
         for index in [beforeIndex, afterIndex] {
-            guard let id = photos[safe: index]?.id, fullImageData[id] == nil,
-                  let data = store.photo(id: id)?.imageData else { continue }
-            fullImageData[id] = data
+            guard let photo = photos[safe: index], fullImages[photo.id] == nil else { continue }
+            let data = store.photo(id: photo.id)?.imageData ?? photo.imageData ?? photo.thumbnailData
+            guard let image = await PhotoDecoder.decodeForDisplay(data), !Task.isCancelled else { continue }
+            fullImages[photo.id] = image
         }
     }
 
     private func image(for index: Int) -> some View {
         Group {
-            if let photo = photos[safe: index],
-               let data = fullImageData[photo.id] ?? photo.imageData ?? photo.thumbnailData,
-               let uiImage = UIImage(data: data) {
+            if let photo = photos[safe: index], let uiImage = fullImages[photo.id] {
                 Image(uiImage: uiImage).resizable()
             } else {
                 Rectangle().fill(DGColor.surface2)
@@ -155,10 +158,14 @@ struct PhotoCompareView: View {
         }
     }
 
-    private static func dateLabel(_ date: Date) -> String {
+    private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "d MMM"
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private static func dateLabel(_ date: Date) -> String {
+        Self.dateFormatter.string(from: date)
     }
 }
 

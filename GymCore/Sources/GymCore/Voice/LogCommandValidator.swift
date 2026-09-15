@@ -267,7 +267,7 @@ public enum LogCommandValidator {
         _ values: inout LogSetSpec.SetValues, target: Target, previous: ParseContext.CompletedSetRef?
     ) -> Result<[ValidationFlag], ValidationError>? {
         guard let weight = values.weightKg else { return nil }
-        guard weight >= 0, weight <= 600 else { return .failure(.weightOutOfBounds) }
+        guard weight >= 0, weight <= TrainingConstants.maxLoadKg else { return .failure(.weightOutOfBounds) }
 
         var flags: [ValidationFlag] = []
 

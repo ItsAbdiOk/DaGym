@@ -10,6 +10,8 @@ struct ExercisePickerSheet: View {
 
     @Environment(WorkoutStore.self) private var store
     @Environment(\.dismiss) private var dismiss
+    /// Read once on appear; every keystroke filters it in memory (see `LibraryView.catalogue`).
+    @State private var catalogue: WorkoutStore.ExerciseCatalogue?
     @State private var exercises: [ExerciseInfo] = []
     @State private var searchText = ""
     @State private var selectedMuscle: Muscle?
@@ -50,9 +52,14 @@ struct ExercisePickerSheet: View {
         .presentationCornerRadius(DGRadius.sheet)
         .task {
             profile = store.activeProfile()
+            catalogue = store.exerciseCatalogue()
             refresh()
         }
-        .onChange(of: searchText) { _, _ in refresh() }
+        .task(id: searchText) {
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            refresh()
+        }
         .onChange(of: selectedMuscle) { _, _ in refresh() }
         .onChange(of: showAllEquipment) { _, _ in refresh() }
     }
@@ -87,7 +94,8 @@ struct ExercisePickerSheet: View {
     }
 
     private func refresh() {
-        let all = store.exercises(matching: searchText, muscle: selectedMuscle)
+        guard let catalogue else { return }
+        let all = store.exercises(in: catalogue, matching: searchText, muscle: selectedMuscle)
         guard let profile, profile.restrictsLibrary else {
             exercises = all
             return

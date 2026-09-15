@@ -45,6 +45,12 @@ enum DaGymSchema {
         let localIDs = Set((photoModels + healthModels).map(ObjectIdentifier.init))
         return models.filter { !localIDs.contains(ObjectIdentifier($0)) }
     }
+
+    /// The three `Schema`s, built once per process. `Schema(_:)` walks every model's
+    /// metadata; the test suite opens ~150 in-memory containers and paid that walk each time.
+    static let mainSchema = Schema(mainModels)
+    static let photoSchema = Schema(photoModels)
+    static let healthSchema = Schema(healthModels)
 }
 
 extension ModelContainer {
@@ -62,7 +68,7 @@ extension ModelContainer {
         // ONE configuration per container. A single container with two configurations (main +
         // photos) trapped inside SwiftData's entity→store routing on a real device at the first
         // fetch after seeding; photos therefore live in their own container (`dagymPhotos`).
-        let schema = Schema(DaGymSchema.mainModels)
+        let schema = DaGymSchema.mainSchema
         guard !inMemory else {
             // `.none` is explicit: the default (`.automatic`) starts CloudKit mirroring whenever
             // the entitlement is present, which is what tests and previews must never do.
@@ -84,7 +90,7 @@ extension ModelContainer {
     /// Progress photos (plan.md §6.4 "don't sync photos"): a separate, always-local container
     /// so photos never touch iCloud no matter what the main store does.
     static func dagymPhotos(inMemory: Bool = false) throws -> ModelContainer {
-        let schema = Schema(DaGymSchema.photoModels)
+        let schema = DaGymSchema.photoSchema
         let configuration = inMemory
             ? ModelConfiguration(
                 "DaGymPhotos", schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none
@@ -99,7 +105,7 @@ extension ModelContainer {
     /// separate, always-local container so nothing read out of Apple Health can ever reach
     /// iCloud, whatever `Preferences.iCloudSyncEnabled` is set to. App Store Guideline 5.1.3.
     static func dagymHealth(inMemory: Bool = false) throws -> ModelContainer {
-        let schema = Schema(DaGymSchema.healthModels)
+        let schema = DaGymSchema.healthSchema
         let configuration = inMemory
             ? ModelConfiguration(
                 "DaGymHealth", schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none

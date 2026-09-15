@@ -56,8 +56,13 @@ extension WorkoutStore {
     /// the store never reads `Preferences` itself. Left at `.current` it fell back to the device
     /// locale's week start, so a Sunday-start lifter could be handed a planned deload on a
     /// different day from the one the Programmes screen showed them.
-    func makeSessionFacts(routineID: UUID?, calendar: Calendar = .current) -> SessionFacts {
-        let finished = finishedWorkoutModelsNewestFirst()
+    ///
+    /// Pass `finishedWorkouts` (newest first) to reuse a list already in hand — `finish` reads it
+    /// once for everything it does — instead of querying the store again.
+    func makeSessionFacts(
+        routineID: UUID?, calendar: Calendar = .current, finishedWorkouts: [WorkoutModel]? = nil
+    ) -> SessionFacts {
+        let finished = finishedWorkouts ?? finishedWorkoutModelsNewestFirst()
         var facts = SessionFacts(
             finishedWorkouts: finished,
             equipment: activeEquipment(),
@@ -215,10 +220,13 @@ extension WorkoutStore {
     /// entry actually came from, not against `WorkoutModel.routineID` — which names only the
     /// first routine, so every lift appended from a second one used to accumulate no misses at
     /// all and could never deload.
-    func persistProgression(session: WorkoutSession) {
-        guard let workoutID = session.workoutID, let workout = fetchWorkoutModel(id: workoutID) else {
-            return
-        }
+    ///
+    /// `workout` is the session's own model and `finishedWorkouts` the finished list as it stood
+    /// before this session (newest first): `finish` has both in hand and passes them so this
+    /// commit adds no fetch of its own.
+    func persistProgression(
+        session: WorkoutSession, workout: WorkoutModel, finishedWorkouts: [WorkoutModel]
+    ) {
         // `SessionFacts` is per routine (the program week/cycle is), and cached: the common
         // single-routine session still pays for exactly one build, as it did before.
         var factsByRoutine: [UUID: SessionFacts] = [:]
@@ -229,7 +237,7 @@ extension WorkoutStore {
             if let cached = factsByRoutine[routineID] {
                 facts = cached
             } else {
-                facts = makeSessionFacts(routineID: routineID)
+                facts = makeSessionFacts(routineID: routineID, finishedWorkouts: finishedWorkouts)
                 factsByRoutine[routineID] = facts
             }
             persistProgression(entry: entry, routine: routine, facts: facts)

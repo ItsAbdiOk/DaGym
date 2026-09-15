@@ -98,10 +98,14 @@ private struct RecordRow: View {
         .frame(minHeight: DGTap.min)
     }
 
-    private static func dateLabel(_ date: Date) -> String {
+    private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "d MMM"
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private static func dateLabel(_ date: Date) -> String {
+        dateFormatter.string(from: date)
     }
 }
 

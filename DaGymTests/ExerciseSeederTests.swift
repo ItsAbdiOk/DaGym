@@ -105,6 +105,62 @@ struct ExerciseSeederTests {
         #expect(SeedState.row(in: context).exerciseSeedVersion == 5)
     }
 
+    /// `needsSeeding` is what lets a cold launch skip the 1.4 MB decode: it must say "no" for a
+    /// store at the bundled version with rows in it, and "yes" for a version behind or an empty
+    /// library (a fresh install, or the store the reset just wiped).
+    @Test("a store at the bundled version with rows in it needs no seeding; a stale or empty one does")
+    func needsSeedingGatesOnVersionAndCount() throws {
+        let container = try ModelContainer.dagym(inMemory: true)
+        let context = ModelContext(container)
+        #expect(ExerciseSeeder.needsSeeding(context: context))
+
+        ExerciseSeeder.seedIfNeeded(context: context)
+        #expect(!ExerciseSeeder.needsSeeding(context: context))
+        #expect(SeedState.row(in: context).exerciseSeedVersion == ExerciseSeeder.bundledVersion)
+
+        SeedState.row(in: context).exerciseSeedVersion = ExerciseSeeder.bundledVersion - 1
+        try context.save()
+        #expect(ExerciseSeeder.needsSeeding(context: context))
+        ExerciseSeeder.seedIfNeeded(context: context)
+        #expect(!ExerciseSeeder.needsSeeding(context: context))
+
+        for model in try context.fetch(FetchDescriptor<ExerciseModel>()) { context.delete(model) }
+        try context.save()
+        #expect(ExerciseSeeder.needsSeeding(context: context))
+    }
+
+    /// The pinned constant is the only thing standing between a seed regeneration and a launch
+    /// that never notices the new version.
+    @Test("bundledVersion matches the version in exercises.json")
+    func bundledVersionMatchesTheFile() throws {
+        let seed = try ExerciseSeeder.loadSeed(bundle: Bundle(for: BundleAnchor.self))
+        #expect(seed.version == ExerciseSeeder.bundledVersion)
+    }
+
+    @Test("the off-main variant seeds the same library and is a no-op the second time")
+    func asyncSeedMatchesSync() async throws {
+        let container = try ModelContainer.dagym(inMemory: true)
+        let context = ModelContext(container)
+        await ExerciseSeeder.seedIfNeededAsync(context: context)
+        #expect(try context.fetchCount(FetchDescriptor<ExerciseModel>()) == 1466)
+        #expect(SeedState.row(in: context).exerciseSeedVersion == ExerciseSeeder.bundledVersion)
+        await ExerciseSeeder.seedIfNeededAsync(context: context)
+        #expect(try context.fetchCount(FetchDescriptor<ExerciseModel>()) == 1466)
+    }
+
+    /// A fresh insert is stamped with the bundled version straight away and is not followed by
+    /// the version-bump refresh (`updateExisting`): every row was just written from the file.
+    /// Pins the stamp and that the pass leaves the context clean.
+    @Test("a fresh install seeds in one pass: version stamped, nothing left to save")
+    func freshInstallSeedsInOnePass() throws {
+        let container = try ModelContainer.dagym(inMemory: true)
+        let context = ModelContext(container)
+        ExerciseSeeder.seedIfNeeded(context: context)
+        #expect(!context.hasChanges)
+        #expect(SeedState.row(in: context).exerciseSeedVersion == ExerciseSeeder.bundledVersion)
+        #expect(try context.fetchCount(FetchDescriptor<ExerciseModel>()) == 1466)
+    }
+
     @Test("every seeded exercise has non-empty instructions within a sane length")
     func everyExerciseHasInstructions() throws {
         let container = try ModelContainer.dagym(inMemory: true)

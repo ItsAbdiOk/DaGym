@@ -8,10 +8,10 @@ import SwiftData
 /// by `CalendarSyncService` so re-syncing stays idempotent.
 @Model
 final class ScheduleModel {
-    var id: UUID = UUID()
+    var id = UUID()
     var scheduleJSON: String = "{}"
     var eventIDsJSON: String = "{}"
-    var updatedAt: Date = Date()
+    var updatedAt = Date()
 
     init(
         id: UUID = UUID(), scheduleJSON: String = "{}", eventIDsJSON: String = "{}",

@@ -1,15 +1,26 @@
 import GymCore
+import os
 import SwiftData
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// The Settings "DATA" section: export a full JSON backup via `.fileExporter`,
 /// or import one back in via `.fileImporter` — preview counts, then confirm
-/// to merge (plan.md §6.3). Decoding/encoding run off the main thread so a
-/// large file never hitches the UI.
+/// to merge (plan.md §6.3). The file read, JSON decode/encode and document build run
+/// off the main thread; `BackupService` itself is main-actor bound (it walks the store's
+/// `ModelContext`), so the model walk on export and the row writes on import still run
+/// here — after a yield, so the row's spinner is on screen while they do.
 struct DataSettingsSection: View {
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
+
+    /// `backup.export` / `backup.import` intervals for Instruments; the preview that precedes
+    /// an import is `backup.preview`.
+    private static let signposter = OSSignposter(subsystem: "dev.abdirahmanmohamed.dagym", category: "perf")
+    private static let filenameFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
 
     @State private var isBusy = false
     @State private var exportDocument: BackupFileDocument?
@@ -74,16 +85,20 @@ struct DataSettingsSection: View {
         .disabled(isBusy)
     }
 
+    /// `wipeAllData` deletes every row one at a time and reseeds the library, routines and
+    /// equipment before returning — seconds of main-actor work. The yield lets the confirm sheet
+    /// finish dismissing and the row's spinner paint before that starts, so the reset no longer
+    /// looks hung.
     private func performReset() {
-        store.wipeAllData(preferences: preferences)
-        // The wipe deletes every `ExerciseModel`, and seeding otherwise only happens at launch —
-        // so without this the app is left with an empty library until the next cold start, and
-        // anything imported in the meantime (a backup, a CSV) resolves against nothing.
-        BackupService.ensureExerciseLibrary(context: store.context)
-        store.save()
-        completedReport = nil
-        exportWarning = nil
-        confirmationMessage = "Everything was reset"
+        isBusy = true
+        Task {
+            defer { isBusy = false }
+            await Task.yield()
+            store.wipeAllData(preferences: preferences)
+            completedReport = nil
+            exportWarning = nil
+            confirmationMessage = "Everything was reset"
+        }
     }
 
     private var exportRow: some View {
@@ -158,16 +173,19 @@ struct DataSettingsSection: View {
     private func prepareExport() async {
         isBusy = true
         defer { isBusy = false }
+        // Let the spinner paint before the main-actor walk over every model.
+        await Task.yield()
+        let interval = Self.signposter.beginInterval("backup.export")
+        defer { Self.signposter.endInterval("backup.export", interval) }
         let result = BackupService.exportResult(
             context: store.context, photoContext: store.photoContext,
             healthContext: store.healthContext, preferences: preferences
         )
         let document = result.document
         do {
-            let data = try await Task.detached(priority: .userInitiated) {
-                try BackupCodec.encode(document)
+            exportDocument = try await Task.detached(priority: .userInitiated) {
+                try BackupFileDocument(data: BackupCodec.encode(document))
             }.value
-            exportDocument = BackupFileDocument(data: data)
             showingExporter = true
             // Anything the export couldn't carry faithfully (history on a deleted exercise, a
             // photo too large for one file) is said out loud rather than left for the user to
@@ -178,10 +196,9 @@ struct DataSettingsSection: View {
         }
     }
 
-    private static func exportFilename() -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return "DaGym-backup-\(formatter.string(from: Date()))"
+    /// Not private: `SettingsSectionsTests` pins the date-stamped name.
+    static func exportFilename(on date: Date = Date()) -> String {
+        "DaGym-backup-\(filenameFormatter.string(from: date))"
     }
 
     // MARK: - Import
@@ -200,10 +217,13 @@ struct DataSettingsSection: View {
         defer { isBusy = false }
         let didAccess = url.startAccessingSecurityScopedResource()
         defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+        let interval = Self.signposter.beginInterval("backup.preview")
+        defer { Self.signposter.endInterval("backup.preview", interval) }
         do {
-            let data = try Data(contentsOf: url)
+            // The scoped access above is held until this function returns, which is after the
+            // detached read finishes.
             let document = try await Task.detached(priority: .userInitiated) {
-                try BackupCodec.decode(data)
+                try BackupCodec.decode(Data(contentsOf: url))
             }.value
             pendingReport = BackupService.preview(document: document, context: store.context)
             pendingImport = document
@@ -226,15 +246,23 @@ struct DataSettingsSection: View {
     /// The report is what the user gets told. It used to be discarded and replaced with a flat
     /// "Imported", so a restore that dropped hundreds of rows (every workout on a seeded exercise,
     /// after a reset) read exactly like a clean one.
+    ///
+    /// The sheet comes down first and the row spins while `BackupService.import` writes every
+    /// row on the main actor; the yield is what gets that spinner on screen before it starts.
     private func confirmImport(_ document: BackupDocument) {
-        let report = BackupService.import(
-            document: document, context: store.context, mode: .merge,
-            photoContext: store.photoContext, healthContext: store.healthContext,
-            preferences: preferences
-        )
         pendingImport = nil
-        completedReport = report
-        confirmationMessage = report.summary
+        isBusy = true
+        Task {
+            defer { isBusy = false }
+            await Task.yield()
+            let interval = Self.signposter.beginInterval("backup.import")
+            let report = await BackupService.import(
+                document: document, store: store, preferences: preferences
+            )
+            Self.signposter.endInterval("backup.import", interval)
+            completedReport = report
+            confirmationMessage = report.summary
+        }
     }
 }
 
@@ -272,78 +300,8 @@ private struct DataRow: View {
     }
 }
 
-/// Wraps raw JSON `Data` so `.fileExporter` can save it without an
-/// intermediate temp file.
-struct BackupFileDocument: FileDocument {
-    static var readableContentTypes: [UTType] { [.json] }
-
-    var data: Data
-
-    init(data: Data) { self.data = data }
-
-    init(configuration: ReadConfiguration) throws {
-        guard let data = configuration.file.regularFileContents else {
-            throw CocoaError(.fileReadCorruptFile)
-        }
-        self.data = data
-    }
-
-    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        FileWrapper(regularFileWithContents: data)
-    }
-}
-
 extension BackupDocument: @retroactive Identifiable {
     public var id: Date { exportedAt }
-}
-
-/// Typed-confirm gate in front of `WorkoutStore.wipeAllData(preferences:)` — the delete button
-/// stays disabled until the user types "DELETE" exactly, so a destructive row can't fire from a
-/// stray tap or a misread confirmation alert.
-private struct ResetAllDataSheet: View {
-    var onConfirm: () -> Void
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var typed = ""
-
-    private static let confirmationWord = "DELETE"
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s5) {
-            HStack {
-                Text("Reset Everything").font(DGFont.title2).foregroundStyle(DGColor.ink1)
-                Spacer()
-                DGIconButton(symbol: "xmark", accessibilityLabel: "Close") { dismiss() }
-            }
-            Text(
-                "This permanently deletes every routine, workout, exercise, progress photo and "
-                    + "setting on this device. It can't be undone."
-            )
-            .font(DGFont.body)
-            .foregroundStyle(DGColor.ink3)
-            VStack(alignment: .leading, spacing: DGSpace.s2) {
-                Text("Type DELETE to confirm").font(DGFont.footnote).foregroundStyle(DGColor.ink4)
-                TextField(Self.confirmationWord, text: $typed)
-                    .textInputAutocapitalization(.characters)
-                    .autocorrectionDisabled()
-                    .font(DGFont.body)
-                    .padding(DGSpace.s3)
-                    .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            DGPrimaryButton(title: "Delete Everything", symbol: "trash", fill: DGColor.danger, height: 52) {
-                onConfirm()
-                dismiss()
-            }
-            .disabled(typed != Self.confirmationWord)
-            .opacity(typed == Self.confirmationWord ? 1 : 0.4)
-        }
-        .padding(.horizontal, DGSpace.s5)
-        .padding(.top, DGSpace.s6)
-        .padding(.bottom, DGSpace.s8)
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
-        .presentationBackground(DGColor.surface1)
-    }
 }
 
 #Preview {

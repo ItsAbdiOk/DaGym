@@ -7,10 +7,12 @@ import SwiftUI
 /// the user's display unit); this view knows nothing about units or goals beyond the optional
 /// reference line.
 struct TrendChartView: View {
-    struct Point: Identifiable {
-        var id = UUID()
+    /// Identified by its date: a fresh `UUID` per construction gave every render a new identity,
+    /// so `Chart` re-diffed the whole series and could never animate an update.
+    struct Point: Identifiable, Hashable {
         var date: Date
         var value: Double
+        var id: Date { date }
     }
 
     var points: [Point]

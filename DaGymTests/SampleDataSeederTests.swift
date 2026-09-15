@@ -64,4 +64,10 @@ struct SampleDataSeederTests {
         let daysAgo = Calendar.current.dateComponents([.day], from: newest.startedAt, to: now).day
         #expect(daysAgo == 1)
     }
+
+    @Test("the onboarding row says it is building while the seed runs")
+    func welcomeRowShowsBusyState() {
+        #expect(OnboardingWelcomeStep.sampleDataTitle(isSeeding: false) == "Explore with sample data")
+        #expect(OnboardingWelcomeStep.sampleDataTitle(isSeeding: true) == "Building sample data…")
+    }
 }

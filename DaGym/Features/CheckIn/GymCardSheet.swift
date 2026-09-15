@@ -18,6 +18,7 @@ struct GymCardSheet: View {
     @State private var manualValue = ""
     @State private var showingManualEntry = false
     @State private var photoFailed = false
+    @State private var scannerFailure: String?
     @State private var brightness = ScreenBrightness()
 
     var body: some View {
@@ -41,11 +42,13 @@ struct GymCardSheet: View {
         }
         .task { refresh() }
         .onChange(of: store.changeToken) { _, _ in refresh() }
-        .onChange(of: selectedID) { _, id in
-            if let id { store.markGymCardUsed(id: id) }
-        }
         .onAppear { brightness.raise() }
-        .onDisappear { brightness.restore() }
+        .onDisappear {
+            brightness.restore()
+            // Stamped once here, not per rail swipe: `markGymCardUsed` is a fetch + save (and a
+            // CloudKit export with iCloud on), and only the card left showing matters.
+            if let selectedID { store.markGymCardUsed(id: selectedID) }
+        }
         .fullScreenCover(isPresented: $showingScanner) { scannerCover }
         .onChange(of: pickedItem) { _, item in
             if let item { Task { await readPhoto(item) } }
@@ -71,6 +74,11 @@ struct GymCardSheet: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Try a sharper photo with the whole code in frame, or type the number instead.")
+        }
+        .alert("Camera Unavailable", isPresented: scannerFailureBinding, presenting: scannerFailure) { _ in
+            Button("OK", role: .cancel) { scannerFailure = nil }
+        } message: { reason in
+            Text("\(reason) Take a photo of the card or type the number instead.")
         }
     }
 
@@ -120,10 +128,16 @@ struct GymCardSheet: View {
 
     private var scannerCover: some View {
         ZStack(alignment: .topTrailing) {
-            GymCardScannerView { value, symbology in
-                showingScanner = false
-                pendingScan = PendingScan(value: value, symbology: symbology)
-            }
+            GymCardScannerView(
+                onScan: { value, symbology in
+                    showingScanner = false
+                    pendingScan = PendingScan(value: value, symbology: symbology)
+                },
+                onFailure: { reason in
+                    showingScanner = false
+                    scannerFailure = reason
+                }
+            )
             .ignoresSafeArea()
             DGIconButton(symbol: "xmark", accessibilityLabel: "Cancel scan") { showingScanner = false }
                 .padding(DGSpace.s4)
@@ -132,6 +146,10 @@ struct GymCardSheet: View {
 
     private var pendingScanBinding: Binding<Bool> {
         Binding(get: { pendingScan != nil }, set: { if !$0 { pendingScan = nil } })
+    }
+
+    private var scannerFailureBinding: Binding<Bool> {
+        Binding(get: { scannerFailure != nil }, set: { if !$0 { scannerFailure = nil } })
     }
 
     private func refresh() {
@@ -185,6 +203,10 @@ private struct GymCardFace: View {
 
     @State private var renaming = false
     @State private var newName = ""
+    /// Rendered once per value/symbology via `.task(id:)` — never inside `body`, which re-runs
+    /// on every rail swipe and alert toggle.
+    @State private var rendered: UIImage?
+    @State private var renderFailed = false
 
     var body: some View {
         VStack(spacing: DGSpace.s4) {
@@ -218,6 +240,16 @@ private struct GymCardFace: View {
             Text(card.symbology.title).dgLabel()
         }
         .dgCard()
+        .task(id: [card.value, card.symbology.rawValue]) {
+            let value = card.value
+            let symbology = card.symbology
+            let image = await Task.detached(priority: .userInitiated) {
+                BarcodeRenderer.image(value: value, symbology: symbology)
+            }.value
+            guard !Task.isCancelled else { return }
+            rendered = image
+            renderFailed = image == nil
+        }
         .alert("Rename Card", isPresented: $renaming) {
             TextField("Name", text: $newName)
             Button("Save") { onRename(newName) }
@@ -227,7 +259,7 @@ private struct GymCardFace: View {
 
     @ViewBuilder
     private var codeImage: some View {
-        if let image = BarcodeRenderer.image(value: card.value, symbology: card.symbology) {
+        if let image = rendered {
             Image(uiImage: image)
                 .interpolation(.none)
                 .resizable()
@@ -237,10 +269,17 @@ private struct GymCardFace: View {
                 .padding(DGSpace.s4)
                 .background(Color.white, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
                 .accessibilityLabel("\(card.symbology.title) code for \(card.name)")
-        } else {
+        } else if renderFailed {
             Text("This card's value can't be drawn as a \(card.symbology.title) code.")
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.danger)
+        } else {
+            // First render in flight: hold the code's footprint so the card doesn't jump.
+            Color.white
+                .frame(maxWidth: .infinity)
+                .frame(height: card.symbology.isTwoDimensional ? 220 : 120)
+                .padding(DGSpace.s4)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
         }
     }
 }

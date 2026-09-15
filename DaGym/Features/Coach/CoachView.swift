@@ -50,7 +50,7 @@ struct CoachView: View {
         .dgUndoToast($undoAction)
         .task { refresh() }
         .onChange(of: scenePhase) { _, phase in if phase == .active { refresh() } }
-        .onChange(of: store.changeToken) { _, _ in refresh() }
+        .refreshOnStoreChange(refresh)
         .onReceive(
             NotificationCenter.default.publisher(for: .NSCalendarDayChanged).receive(on: DispatchQueue.main)
         ) { _ in refresh() }
@@ -95,8 +95,9 @@ struct CoachView: View {
     }
 
     /// Rebuilds the card list from the store's current state. Called on appear, on return to
-    /// foreground, at midnight and whenever the store saves (a workout finishing included) —
-    /// never on every render, matching `RootView.refresh()`'s own triggers.
+    /// foreground, at midnight and whenever the store saves while this tab is showing (a save
+    /// under the active workout's cover is deferred to the next show — the ten rules plus two
+    /// history fetches must not run on every logged set) — never on every render.
     private func refresh() {
         cards = store.coachCards(
             weeklyGoal: preferences.weeklyGoal, now: Date(), calendar: preferences.trainingCalendar

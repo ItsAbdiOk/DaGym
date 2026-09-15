@@ -30,6 +30,14 @@ struct WeightUnitTests {
         #expect(unit.format(kg: 80.25) == "80.25")
     }
 
+    @Test("a non-finite value formats as a dash instead of trapping")
+    func nonFiniteFormatsAsDash() {
+        #expect(WeightUnit.kg.format(kg: .nan) == "—")
+        #expect(WeightUnit.lb.format(kg: .infinity) == "—")
+        #expect(WeightUnit.kg.format(kg: -.infinity) == "—")
+        #expect(PlateLoad.format(.nan) == "—")
+    }
+
     @Test("lb formatting rounds the display value to the nearest half pound")
     func lbFormattingRounds() {
         let unit = WeightUnit.lb

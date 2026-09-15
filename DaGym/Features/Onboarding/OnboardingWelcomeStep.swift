@@ -4,6 +4,8 @@ import SwiftUI
 /// value lines, and the choice to walk through setup or skip straight to
 /// the app with sensible defaults.
 struct OnboardingWelcomeStep: View {
+    /// Sample data is being built: every button disables and the sample-data row shows it.
+    var isSeeding = false
     var onStart: () -> Void
     var onSkip: () -> Void
     var onExploreSampleData: () -> Void
@@ -58,14 +60,27 @@ struct OnboardingWelcomeStep: View {
                     .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink3)
                     .accessibilityIdentifier(A11yID.onboardingSkipAll)
-                Button("Explore with sample data", action: onExploreSampleData)
-                    .buttonStyle(.dgControl)
-                    .font(DGFont.condensedLabel(13))
-                    .textCase(.uppercase)
-                    .foregroundStyle(DGColor.ink4)
+                Button(action: onExploreSampleData) {
+                    HStack(spacing: DGSpace.s2) {
+                        if isSeeding {
+                            ProgressView().controlSize(.small).tint(DGColor.ink4)
+                        }
+                        Text(Self.sampleDataTitle(isSeeding: isSeeding))
+                    }
+                }
+                .buttonStyle(.dgControl)
+                .font(DGFont.condensedLabel(13))
+                .textCase(.uppercase)
+                .foregroundStyle(DGColor.ink4)
             }
+            .disabled(isSeeding)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// The sample-data row's label; pinned in `SampleDataSeederTests` alongside the seed itself.
+    static func sampleDataTitle(isSeeding: Bool) -> String {
+        isSeeding ? "Building sample data…" : "Explore with sample data"
     }
 }
 

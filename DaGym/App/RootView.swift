@@ -2,6 +2,7 @@ import Combine
 import GymCore
 import SwiftData
 import SwiftUI
+import os
 
 /// App shell: switches between the five tabs and presents the active
 /// workout (and its summary) full-screen when a session is started.
@@ -28,6 +29,7 @@ struct RootView: View {
 
     var body: some View {
         tabs
+        .onAppear(perform: LaunchTiming.markFirstFrame)
         .task {
             refresh()
             // A Siri "start workout" hand-off above wins over the prompt: nothing to resume
@@ -131,11 +133,20 @@ struct RootView: View {
         }
     }
 
+    /// One `routines()` read and one schedule decode for all three derived values. Runs on
+    /// every `changeToken` bump — every logged set — so `todaysRoutine()`/`nextSession()`,
+    /// which each re-fetch the list and re-decode the schedule, are deliberately not used here.
     private func refreshRoutine() {
-        routines = store.routines()
-        routine = store.todaysRoutine()
-        nextSessionText = Self.nextSessionText(store.nextSession())
+        let interval = Self.signposter.beginInterval("refreshRoutine")
+        defer { Self.signposter.endInterval("refreshRoutine", interval) }
+        let all = store.routines()
+        let schedule = store.schedule()
+        routines = all
+        routine = store.todaysRoutines(from: all, schedule: schedule).first
+        nextSessionText = Self.nextSessionText(store.nextSession(from: all, schedule: schedule))
     }
+
+    private static let signposter = OSSignposter(subsystem: "dev.abdirahmanmohamed.dagym", category: "perf")
 
     private var resumePromptBinding: Binding<Bool> {
         Binding(get: { resumePrompt != nil }, set: { if !$0 { resumePrompt = nil } })
@@ -156,10 +167,14 @@ struct RootView: View {
     /// "Next: Pull B · Thursday" for the rest-day card.
     private static func nextSessionText(_ next: (date: Date, routine: RoutineInfo)?) -> String? {
         guard let next else { return nil }
+        return "Next: \(next.routine.name) · \(weekdayFormatter.string(from: next.date))"
+    }
+
+    private static let weekdayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE"
-        return "Next: \(next.routine.name) · \(formatter.string(from: next.date))"
-    }
+        return formatter
+    }()
 
     private func startFromScheduledRoutine() {
         guard let routine else { return }
@@ -286,14 +301,16 @@ struct RootView: View {
         summaryItem = SummaryPresentation(summary: summary, title: title)
         refreshRoutine()
     }
+}
 
-    // MARK: - Plan import (plan.md §6.8)
+// MARK: - Plan import (plan.md §6.8)
 
-    private var planImportErrorBinding: Binding<Bool> {
+private extension RootView {
+    var planImportErrorBinding: Binding<Bool> {
         Binding(get: { planImportError != nil }, set: { if !$0 { planImportError = nil } })
     }
 
-    private func loadPlanImport(url: URL) async {
+    func loadPlanImport(url: URL) async {
         let didAccess = url.startAccessingSecurityScopedResource()
         defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
         do {
@@ -315,7 +332,7 @@ struct RootView: View {
         }
     }
 
-    private static func message(for error: PlanCodec.CodecError) -> String {
+    static func message(for error: PlanCodec.CodecError) -> String {
         switch error {
         case .unsupportedFormatVersion:
             return "That plan was made by a newer version of DaGym. Update the app and try again."
@@ -324,8 +341,11 @@ struct RootView: View {
         }
     }
 
-    private func confirmPlanImport(_ document: PlanDocument) {
+    func confirmPlanImport(_ document: PlanDocument) {
         PlanShareService.importPlan(document: document, context: store.context)
+        // The plan saved the context itself; the cached catalogue and the Routines tab key on
+        // the store's token.
+        store.noteExternalSave()
         pendingPlanImport = nil
         refreshRoutine()
     }
@@ -342,16 +362,31 @@ private extension RootView {
                     onFreestyle: startFreestyle, onBackfill: { showingBackfill = true },
                     onSeeRecovery: { showRecovery = true }, onOpenBody: { showingBody = true }
                 )
+                .environment(\.isTabVisible, isVisible(.today))
             } label: { tabLabel(.today) }
             Tab(value: DGTab.routines) {
                 RoutinesTabView(onStart: startWorkout)
+                    .environment(\.isTabVisible, isVisible(.routines))
             } label: { tabLabel(.routines) }
-            Tab(value: DGTab.progress) { HistoryTabView() } label: { tabLabel(.progress) }
-            Tab(value: DGTab.library) { LibraryView() } label: { tabLabel(.library) }
-            Tab(value: DGTab.coach) { CoachView() } label: { tabLabel(.coach) }
+            Tab(value: DGTab.progress) {
+                HistoryTabView().environment(\.isTabVisible, isVisible(.progress))
+            } label: { tabLabel(.progress) }
+            Tab(value: DGTab.library) {
+                LibraryView().environment(\.isTabVisible, isVisible(.library))
+            } label: { tabLabel(.library) }
+            Tab(value: DGTab.coach) {
+                CoachView().environment(\.isTabVisible, isVisible(.coach))
+            } label: { tabLabel(.coach) }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .tint(DGColor.coral) // the system bar's selected tint follows the accent theme
+    }
+
+    /// A tab is "visible" only when it is selected and nothing covers it: the active-workout
+    /// cover and the summary sheet both sit above the whole bar, and while they're up every
+    /// `store.changeToken` bump would otherwise re-run five screens' refreshes for nobody.
+    func isVisible(_ which: DGTab) -> Bool {
+        tab == which && session == nil && summaryItem == nil
     }
 
     /// `DaGymUITests` taps these identifiers, so they ride on each tab's label.
@@ -359,52 +394,6 @@ private extension RootView {
         Label(tab.title, systemImage: tab.symbol)
             .accessibilityIdentifier(tab.accessibilityID)
     }
-}
-
-/// What the launch-time Resume/Discard prompt shows for the newest workout a crash or
-/// force-quit left unfinished (anything older than a day was already purged at launch).
-struct UnfinishedWorkoutPrompt: Identifiable, Equatable {
-    let id: UUID
-    let title: String
-    let startedAt: Date
-    let setsDone: Int
-
-    /// "Started 25 min ago · 3 sets logged"
-    var detail: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        let started = formatter.localizedString(for: startedAt, relativeTo: Date())
-        let sets = setsDone == 1 ? "1 set logged" : "\(setsDone) sets logged"
-        return "Started \(started) · \(sets)"
-    }
-
-    /// The newest unfinished workout, or `nil` when there is nothing to resume.
-    @MainActor
-    static func newest(in store: WorkoutStore) -> UnfinishedWorkoutPrompt? {
-        guard let model = store.unfinishedWorkouts().first else { return nil }
-        let setsDone = (model.exercises ?? []).flatMap { $0.sets ?? [] }.filter(\.isCompleted).count
-        return UnfinishedWorkoutPrompt(
-            id: model.id, title: model.title.isEmpty ? "Workout" : model.title, startedAt: model.startedAt,
-            setsDone: setsDone
-        )
-    }
-}
-
-/// `sheet(item:)` needs `Identifiable`; a document's export timestamp is a fine key since two
-/// files opened back-to-back are always distinguishable by when they were made.
-extension PlanDocument: @retroactive Identifiable {
-    public var id: Date { exportedAt }
-}
-
-/// Wraps a `WorkoutSummary` (not itself `Identifiable`) for `fullScreenCover(item:)`.
-private struct SummaryPresentation: Identifiable {
-    let id = UUID()
-    let summary: WorkoutSummary
-    let title: String
-}
-
-extension WorkoutSession: Identifiable {
-    nonisolated var id: ObjectIdentifier { ObjectIdentifier(self) }
 }
 
 #Preview {

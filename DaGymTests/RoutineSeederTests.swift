@@ -52,6 +52,8 @@ struct RoutineSeederTests {
         // per-routine bookkeeping `saveRoutine` and `stamp` do for the 13 routines. The old shape
         // was 182 for the same store — two per slot lookup, three when a fallback fired. Exact,
         // not a ceiling: a new query on the first-launch path should be a deliberate change.
+        // Still 72 after the routine fold moved out of this seeder: `dedupeRoutines()` now
+        // reads through `fetch()` (counted), so a `defer` that folded here would show up as 73+.
         #expect(queries == 72, "seeding the starter routines issued \(queries) queries")
     }
 

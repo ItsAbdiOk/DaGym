@@ -216,4 +216,39 @@ struct PlateCalculatorAwkwardTests {
             }
         }
     }
+
+    @Test("the binary search finds the same below/above rungs as a linear walk for every target")
+    func binarySearchMatchesLinearScan() {
+        let inventories: [[PlateStock]] = [
+            PlateStock.standardKg, WeightUnit.plateStock(for: .lb),
+            [PlateStock(weightKg: 25, count: 2), PlateStock(weightKg: 10, count: 2)], []
+        ]
+        for plates in inventories {
+            let options = PlateCalculator.combinations(plates)
+            for step in 0...700 {
+                let target = Double(step) * 0.5
+                let perSideTarget = (target - 20) / 2
+                var linearBelow: [Double] = []
+                var linearAbove: [Double]?
+                for option in options {
+                    if option.total <= perSideTarget + PlateCalculator.epsilon {
+                        linearBelow = option.plates
+                    } else {
+                        linearAbove = option.plates
+                        break
+                    }
+                }
+                #expect(PlateCalculator.perSide(atOrBelow: perSideTarget, plates: plates) == linearBelow)
+                switch PlateCalculator.load(target: target, plates: plates) {
+                case .tooLight:
+                    #expect(target < 20)
+                case .exact(let load):
+                    #expect(load.perSide == linearBelow || load.perSide == linearAbove)
+                case .nearest(let below, let above):
+                    #expect(below?.perSide == linearBelow)
+                    #expect(above?.perSide == linearAbove)
+                }
+            }
+        }
+    }
 }

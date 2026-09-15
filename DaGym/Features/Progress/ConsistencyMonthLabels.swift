@@ -15,15 +15,14 @@ enum ConsistencyMonthLabels {
     static func labels(for grid: [[DayCell?]], calendar: Calendar) -> [Int: String] {
         var placed: [(column: Int, label: String)] = []
         var lastMonth: Int?
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.timeZone = calendar.timeZone
-        formatter.dateFormat = "MMM"
+        // Once per `refresh()`, not per render; `Date.FormatStyle` is a value, so no shared
+        // formatter to guard.
+        let style = Date.FormatStyle(calendar: calendar, timeZone: calendar.timeZone).month(.abbreviated)
         for (index, week) in grid.enumerated() {
             guard let cell = week.compactMap({ $0 }).first else { continue }
             let month = calendar.component(.month, from: cell.date)
             if month != lastMonth {
-                placed.append((index, formatter.string(from: cell.date).uppercased()))
+                placed.append((index, cell.date.formatted(style).uppercased()))
                 lastMonth = month
             }
         }

@@ -103,13 +103,26 @@ public enum Machine: String, CaseIterable, Codable, Sendable {
 
     /// Whether `query` (a search-field string) names this station by its canonical name or any
     /// alias. Empty matches everything.
+    ///
+    /// A query of `minimumSubstringQueryLength` or more characters matches anywhere in a name;
+    /// a shorter one has to start a word — "row" finds "Rower" and "Row Machine", but "rig" no
+    /// longer offers the Upright Bike beside the Pull-Up Bar.
     public func matches(_ query: String) -> Bool {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return true }
-        return ([displayName] + aliases).contains {
-            $0.range(of: trimmed, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        if trimmed.count >= Self.minimumSubstringQueryLength {
+            return ([displayName] + aliases).contains { $0.range(of: trimmed, options: options) != nil }
+        }
+        return ([displayName] + aliases).contains { name in
+            name.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).contains {
+                $0.range(of: trimmed, options: options.union(.anchored)) != nil
+            }
         }
     }
+
+    /// Queries at least this long match as substrings; shorter ones only at a word start.
+    public static let minimumSubstringQueryLength = 4
 
     /// The stations matching `query`, in declaration order.
     public static func search(_ query: String) -> [Machine] {

@@ -7,11 +7,14 @@ public struct Effort: Hashable, Codable, Sendable {
         case rpe, rir
     }
 
+    /// The bottom of the scale the app tracks — anything easier is "not rated", not RPE 5.
+    public static let minimumRPE = 5.0
+
     /// Stored canonically as RPE, 5…10 in half steps allowed.
     public var rpe: Double
 
     public init(rpe: Double) {
-        self.rpe = min(10, max(5, rpe))
+        self.rpe = min(10, max(Self.minimumRPE, rpe))
     }
 
     public init(rir: Int) {
@@ -24,7 +27,8 @@ public struct Effort: Hashable, Codable, Sendable {
     public func displayValue(scale: Scale) -> String {
         switch scale {
         case .rpe:
-            if rpe == rpe.rounded() { return String(Int(rpe)) }
+            // `rpe` is clamped finite by `init`, but the guard costs nothing and `Int(nan)` traps.
+            if rpe.isFinite, rpe == rpe.rounded() { return String(Int(rpe)) }
             return String(rpe)
         case .rir: return String(rir)
         }

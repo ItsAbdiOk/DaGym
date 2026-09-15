@@ -4,7 +4,7 @@ import SwiftUI
 /// Markdown. Not wired into any navigation yet — standalone until the
 /// Settings tab exists.
 struct AcknowledgementsView: View {
-    @State private var rendered: AttributedString = AttributedString(loadingText)
+    @State private var rendered = AttributedString(loadingText)
 
     private static let loadingText = "Loading acknowledgements…"
     private static let fallbackText =

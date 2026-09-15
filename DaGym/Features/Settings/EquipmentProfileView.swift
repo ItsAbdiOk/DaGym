@@ -127,7 +127,9 @@ struct EquipmentProfileView: View {
         return VStack(alignment: .leading, spacing: DGSpace.s3) {
             Text("Plate Inventory").dgLabel()
             VStack(spacing: 0) {
-                ForEach(Array(plateRows.enumerated()), id: \.element.weightKg) { index, row in
+                // Keyed on position, not `weightKg`: the rows are fixed once `.task` builds
+                // them, and `Double` ids from a migrated profile were not guaranteed unique.
+                ForEach(Array(plateRows.enumerated()), id: \.offset) { index, row in
                     plateRow(index: index, row: row, unit: unit)
                     if index < plateRows.count - 1 {
                         Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
@@ -292,8 +294,20 @@ enum EquipmentStep {
     /// Matching by exact kg value dropped every saved size that wasn't in the standard list for
     /// the *current* unit, and Save then wrote the profile back without them. Taking the union
     /// means an lb lifter can see and keep the kg plates a kg-seeded profile came with.
+    ///
+    /// Two saved sizes within the tolerance of each other (20.4116 and 20.4117 kg from a
+    /// rounding change) collapse into one row carrying both counts, so no two rows share a size.
     static func rows(standard: [Double], existing: [PlateStock]) -> [PlateStock] {
-        var rows = existing
+        var rows: [PlateStock] = []
+        for stock in existing {
+            if let index = rows.firstIndex(where: {
+                abs($0.weightKg - stock.weightKg) < sameSizeToleranceKg
+            }) {
+                rows[index].count += stock.count
+            } else {
+                rows.append(stock)
+            }
+        }
         for weight in standard where !rows.contains(where: {
             abs($0.weightKg - weight) < sameSizeToleranceKg
         }) {

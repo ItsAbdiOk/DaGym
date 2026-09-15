@@ -354,11 +354,17 @@ final class Preferences {
     /// unit and grouped with a thin-space thousands separator.
     func formatVolume(kg: Double) -> String {
         let display = weightUnit.display(kg: kg)
+        return Self.volumeFormatter.string(from: NSNumber(value: display)) ?? "\(Int(display))"
+    }
+
+    /// Shared by every volume label on screen; History rows, tiles and recap cards all call
+    /// `formatVolume` per render, and a `NumberFormatter` costs far more than the string.
+    private static let volumeFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.groupingSeparator = "\u{2009}"
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: display)) ?? "\(Int(display))"
-    }
+        return formatter
+    }()
 
 }

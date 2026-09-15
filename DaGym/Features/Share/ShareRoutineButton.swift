@@ -1,3 +1,4 @@
+import CoreTransferable
 import GymCore
 import SwiftUI
 
@@ -6,8 +7,9 @@ import SwiftUI
 /// Used from `RoutinesTabView` cards, `RoutineBuilderView`'s nav bar and `ProgramsView` rows —
 /// callers pass `makeDocument` so this view stays agnostic of routines vs. programs. Its `Bool`
 /// is `includeWeights`: the PDF is the lifter's own printout, so it carries their working
-/// weights; the plan file goes to someone else, so it does not. The file and the PDF are only
-/// built when the menu is opened, not for every card on every appearance.
+/// weights; the plan file goes to someone else, so it does not. The plan file is encoded when
+/// the menu opens, not for every card on every appearance; the PDF is only rendered when the
+/// "Export PDF" row is actually tapped (see `LazyPlanPDFFile`).
 struct ShareRoutineButton: View {
     @Environment(Preferences.self) private var preferences
     var title: String
@@ -15,8 +17,8 @@ struct ShareRoutineButton: View {
 
     var body: some View {
         Menu {
-            // `Menu` builds its content when it opens, so the encode + PDF render run once per
-            // open rather than once per card per appearance.
+            // `Menu` builds its content when it opens, so the encode runs once per open rather
+            // than once per card per appearance.
             ShareMenuItems(
                 title: title, filename: sanitizedFilename, planDocument: makeDocument(false),
                 pdfDocument: makeDocument(true), unit: preferences.weightUnit
@@ -35,11 +37,12 @@ struct ShareRoutineButton: View {
     }
 }
 
-/// The two share rows, with their files built in `init` — i.e. when the menu opens.
+/// The two share rows. The plan file is encoded in `init` — i.e. when the menu opens; the PDF
+/// row only holds the document and renders when `ShareLink` asks for the file.
 private struct ShareMenuItems: View {
     var title: String
     private let planFile: PlanFile?
-    private let pdfFile: PlanPDFFile?
+    private let pdfFile: LazyPlanPDFFile?
 
     init(
         title: String, filename: String, planDocument: PlanDocument?, pdfDocument: PlanDocument?,
@@ -49,9 +52,7 @@ private struct ShareMenuItems: View {
         planFile = planDocument.flatMap { try? PlanCodec.encode($0) }.map {
             PlanFile(data: $0, filename: filename)
         }
-        pdfFile = pdfDocument.map {
-            PlanPDFFile(data: PlanPDFRenderer.render($0, unit: unit), filename: filename)
-        }
+        pdfFile = pdfDocument.map { LazyPlanPDFFile(document: $0, unit: unit, filename: filename) }
     }
 
     var body: some View {
@@ -65,6 +66,32 @@ private struct ShareMenuItems: View {
                 Label("Export PDF", systemImage: "doc.richtext")
             }
         }
+    }
+}
+
+/// A PDF for `ShareLink` that is rendered on demand: `ShareLink` asks for the file when the
+/// row is tapped, so a menu that is opened and closed never pays `PlanPDFRenderer.render`
+/// (multi-page UIKit drawing) for nothing. Same temp-file mechanics as `PlanPDFFile`; the
+/// renderer is injectable so a test can pin that construction alone renders nothing.
+struct LazyPlanPDFFile: Transferable {
+    var document: PlanDocument
+    var unit: WeightUnit
+    var filename: String
+    var render: @Sendable (PlanDocument, WeightUnit) -> Data = { PlanPDFRenderer.render($0, unit: $1) }
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(exportedContentType: .pdf) { file in
+            SentTransferredFile(try file.renderToTemporaryFile())
+        }
+    }
+
+    /// Renders the PDF and writes it under `FileManager.temporaryDirectory` as `<filename>.pdf`.
+    func renderToTemporaryFile() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(filename)
+            .appendingPathExtension("pdf")
+        try render(document, unit).write(to: url, options: .atomic)
+        return url
     }
 }
 

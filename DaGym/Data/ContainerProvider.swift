@@ -108,11 +108,16 @@ final class ContainerProvider {
         inMemory: Bool, cloudKitEnabled: Bool
     ) -> (ModelContainer?, Resolution) {
         if !inMemory {
-            if cloudKitEnabled, let container = try? ModelContainer.dagym(cloudKitEnabled: true) {
-                return (container, .cloudKit)
-            }
             if cloudKitEnabled {
-                containerLogger.error("CloudKit-backed store failed to load; retrying with sync disabled.")
+                do {
+                    return (try ModelContainer.dagym(cloudKitEnabled: true), .cloudKit)
+                } catch {
+                    // The error is what tells a missing entitlement apart from no iCloud account.
+                    let reason = error.localizedDescription
+                    containerLogger.error(
+                        "CloudKit store failed to load; retrying without sync: \(reason, privacy: .public)"
+                    )
+                }
             }
             if let container = try? ModelContainer.dagym(cloudKitEnabled: false) {
                 return (container, .local)

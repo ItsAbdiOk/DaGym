@@ -5,7 +5,7 @@ import SwiftData
 /// A single planned set inside a `RoutineExerciseModel`.
 @Model
 final class PlannedSetModel {
-    var id: UUID = UUID()
+    var id = UUID()
     var order: Int = 0
     /// `SetKind` raw value.
     var kind: String = "working"

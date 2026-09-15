@@ -119,12 +119,13 @@ struct BackupCodecTests {
         #expect(decoded.appVersion == document.appVersion)
     }
 
-    @Test("formatVersion mismatch throws a typed error")
+    @Test("a file needing a newer reader than this build throws a typed error")
     func formatVersionMismatch() throws {
         let document = sampleDocument()
         let data = try BackupCodec.encode(document)
         var json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         json?["formatVersion"] = BackupDocument.currentFormatVersion + 1
+        json?["minimumReaderVersion"] = BackupDocument.currentFormatVersion + 1
         let mutated = try JSONSerialization.data(withJSONObject: json as Any)
 
         #expect(throws: BackupCodec.CodecError.unsupportedFormatVersion(
@@ -132,6 +133,123 @@ struct BackupCodecTests {
         )) {
             try BackupCodec.decode(mutated)
         }
+    }
+
+    @Test("a newer file without a minimumReaderVersion stamp is treated as needing its own version")
+    func newerFileWithoutStampIsRejected() throws {
+        let data = try BackupCodec.encode(sampleDocument())
+        var json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        json?["formatVersion"] = BackupDocument.currentFormatVersion + 1
+        json?.removeValue(forKey: "minimumReaderVersion")
+        let mutated = try JSONSerialization.data(withJSONObject: json as Any)
+
+        #expect(throws: BackupCodec.CodecError.unsupportedFormatVersion(
+            found: BackupDocument.currentFormatVersion + 1, supported: BackupDocument.currentFormatVersion
+        )) {
+            try BackupCodec.decode(mutated)
+        }
+    }
+
+    @Test("a newer file this build may still read decodes and names the sections it can't read")
+    func newerReadableFileReportsUnknownSections() throws {
+        let data = try BackupCodec.encode(sampleDocument())
+        var json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        json?["formatVersion"] = BackupDocument.currentFormatVersion + 1
+        json?["minimumReaderVersion"] = BackupDocument.currentFormatVersion
+        json?["sections"] = BackupDocument.requiredSections + ["programs", "sleepLogs"]
+        json?["programs"] = [] as [Any]
+        json?["sleepLogs"] = [["id": UUID().uuidString, "hours": 7.5]]
+        let mutated = try JSONSerialization.data(withJSONObject: json as Any)
+
+        let decoded = try BackupCodec.decode(mutated)
+        #expect(decoded.formatVersion == BackupDocument.currentFormatVersion + 1)
+        #expect(decoded.unreadableSections == ["sleepLogs"])
+        #expect(decoded.absentSections.contains("progressPhotos"))
+        #expect(!decoded.absentSections.contains("programs"))
+    }
+
+    @Test("a format-1 file (no stamp, no sections list) decodes with nothing reported unreadable")
+    func formatOneFileDecodes() throws {
+        let data = try BackupCodec.encode(sampleDocument())
+        var json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        json?["formatVersion"] = 1
+        json?.removeValue(forKey: "minimumReaderVersion")
+        json?.removeValue(forKey: "sections")
+        let mutated = try JSONSerialization.data(withJSONObject: json as Any)
+
+        let decoded = try BackupCodec.decode(mutated)
+        #expect(decoded.formatVersion == 1)
+        #expect(decoded.minimumReaderVersion == nil)
+        #expect(decoded.unreadableSections.isEmpty)
+        #expect(decoded.absentSections == BackupDocument.optionalSections)
+    }
+
+    @Test("the sections stamp lists exactly the optional sections the document carries")
+    func sectionsStamp() {
+        var document = sampleDocument()
+        document.programs = []
+        document.progressPhotos = nil
+        let stamped = BackupDocument(
+            exportedAt: document.exportedAt, appVersion: document.appVersion,
+            preferences: document.preferences, programs: [], schedule: BackupSchedule(updatedAt: Date())
+        )
+        #expect(stamped.sections == BackupDocument.requiredSections + ["programs", "schedule"])
+        #expect(stamped.minimumReaderVersion == BackupDocument.minimumReaderVersion)
+        #expect(stamped.absentSections.contains("progressPhotos"))
+    }
+
+    @Test("format-1 JSON-in-JSON fields still resolve to typed values")
+    func legacyStringsResolve() throws {
+        let routine = BackupRoutine(
+            id: UUID(), name: "Legs", progressionRuleJSON: #"{"linear":{"incrementKg":5}}"#,
+            exercises: [BackupRoutineExercise(
+                order: 0, exerciseName: "Squat",
+                progressionRuleJSON: #"{"timed":{"stepSeconds":10}}"#,
+                stallJSON: #"{"consecutiveMisses":2,"lastWeightKg":100}"#
+            )]
+        )
+        #expect(routine.resolvedRule == .linear(incrementKg: 5))
+        #expect(routine.exercises[0].resolvedRule == .timed(stepSeconds: 10))
+        #expect(routine.exercises[0].resolvedStall.consecutiveMisses == 2)
+        #expect(routine.exercises[0].resolvedStall.lastWeightKg == 100)
+
+        let blank = BackupRoutineExercise(order: 0, exerciseName: "Squat", stallJSON: "{}")
+        #expect(blank.resolvedStall == StallState())
+        #expect(blank.resolvedRule == nil)
+
+        let planned = WeeklySchedule(days: [.monday: UUID()])
+        let scheduleJSON = try #require(String(data: JSONEncoder().encode(planned), encoding: .utf8))
+        let schedule = BackupSchedule(scheduleJSON: scheduleJSON, updatedAt: Date())
+        #expect(schedule.resolvedSchedule == planned)
+        #expect(BackupSchedule(updatedAt: Date()).resolvedSchedule == nil)
+    }
+
+    @Test("nested values win over legacy strings, and a legacy string that won't parse reads as absent")
+    func nestedValuesWin() {
+        let slot = BackupRoutineExercise(
+            order: 0, exerciseName: "Squat", rule: .linear(incrementKg: 2.5),
+            stall: StallState(consecutiveMisses: 1), progressionRuleJSON: "not json", stallJSON: "nope"
+        )
+        #expect(slot.resolvedRule == .linear(incrementKg: 2.5))
+        #expect(slot.resolvedStall.consecutiveMisses == 1)
+        let broken = BackupRoutineExercise(order: 0, exerciseName: "Squat", progressionRuleJSON: "not json")
+        #expect(broken.resolvedRule == nil)
+    }
+
+    @Test("plate stock resolves from pairs, or from the parallel arrays zipped defensively")
+    func plateStockResolves() {
+        let pairs = BackupEquipmentProfile(
+            id: UUID(), name: "Gym", plateStock: [BackupPlateStock(weightKg: 20, count: 4)],
+            plateStockKg: [25, 20], plateCounts: [2, 2]
+        )
+        #expect(pairs.resolvedPlateStock == [PlateStock(weightKg: 20, count: 4)])
+
+        let legacy = BackupEquipmentProfile(
+            id: UUID(), name: "Gym", plateStockKg: [25, 20, 10], plateCounts: [2, 4]
+        )
+        #expect(legacy.resolvedPlateStock == [
+            PlateStock(weightKg: 25, count: 2), PlateStock(weightKg: 20, count: 4)
+        ])
     }
 
     @Test("corrupted JSON throws a decoding error")

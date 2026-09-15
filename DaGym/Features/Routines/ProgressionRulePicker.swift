@@ -140,7 +140,7 @@ struct ProgressionRulePickerView: View {
 }
 
 extension RuleState {
-    fileprivate static func formatted(_ value: Double) -> String {
+    static func formatted(_ value: Double) -> String {
         value.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(value)) : String(value)
     }
 }

@@ -45,6 +45,17 @@ struct WidgetSnapshotTests {
         #expect(WidgetSnapshotStore.read(from: suite) == WidgetSnapshot.empty)
     }
 
+    @Test("a blob that no longer decodes reads as empty instead of crashing")
+    func corruptBlobReadsEmpty() throws {
+        let suite = makeSuite(#function)
+        suite.set(Data("{not json".utf8), forKey: "widgetSnapshot")
+        #expect(WidgetSnapshotStore.read(from: suite) == WidgetSnapshot.empty)
+
+        // Valid JSON of the wrong shape (`exerciseCount` as a string) is the Codable-drift case.
+        suite.set(Data(#"{"exerciseCount":"five","updatedAt":1000}"#.utf8), forKey: "widgetSnapshot")
+        #expect(WidgetSnapshotStore.read(from: suite) == WidgetSnapshot.empty)
+    }
+
     @Test("the routine glyph round trips too")
     func routineGlyphRoundTrips() throws {
         let suite = makeSuite(#function)
@@ -164,6 +175,29 @@ struct WidgetTimelineTests {
         let later = snapshot.resolved(on: dates[2]).trainedDays
         #expect(later.last == false)
         #expect(later[4])
+    }
+
+    @Test("resolving against a shared day set matches resolving from the raw workout days")
+    func daySetResolvesIdentically() throws {
+        let calendar = Self.calendar()
+        let now = Date()
+        let today = calendar.startOfDay(for: now)
+        // Mid-day timestamps, not midnights: the set must normalise them the way `isDate` did.
+        let workoutDays = [0, 2, 5, 9].compactMap { offset -> Date? in
+            calendar.date(byAdding: .day, value: -offset, to: today)?.addingTimeInterval(13 * 3_600)
+        }
+        let snapshot = snapshot(now: now, plans: ["Push A", nil, "Pull B"], workoutDays: workoutDays)
+        let daySet = snapshot.workoutDaySet(calendar: snapshot.calendar)
+
+        #expect(daySet.count == 4)
+        for date in snapshot.entryDates(from: now) {
+            #expect(snapshot.resolved(on: date, workoutDaySet: daySet) == snapshot.resolved(on: date))
+        }
+        #expect(snapshot.resolved(on: now).trainedDays == [false, true, false, false, true, false, true])
+        #expect(
+            WidgetSnapshot.trainedDays(in: daySet, endingOn: now, calendar: snapshot.calendar)
+                == WidgetSnapshot.trainedDays(workoutDays, endingOn: now, calendar: snapshot.calendar)
+        )
     }
 
     /// `WidgetSnapshotProvider.reloadPolicy` asks WidgetKit back `.after` the last entry only

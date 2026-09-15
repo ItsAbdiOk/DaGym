@@ -8,6 +8,7 @@ extension ActiveWorkoutView {
     // MARK: Finish / discard
 
     func finishSession() {
+        cancelPendingNoteSync()
         RestActivityController.shared.endNow()
         let summary = store.finish(
             session: session, weeklyGoal: preferences.weeklyGoal,
@@ -17,6 +18,7 @@ extension ActiveWorkoutView {
     }
 
     func discardSession() {
+        cancelPendingNoteSync()
         RestActivityController.shared.endNow()
         store.discard(session: session)
         dismiss()
@@ -243,7 +245,9 @@ extension ActiveWorkoutView {
         case .notes(let exerciseID):
             notesSheet(exerciseID: exerciseID)
         case .addRoutine:
-            AddRoutineSheet(routines: store.routines()) { routine in appendRoutine(id: routine.id) }
+            // Fetched when the sheet is asked for, not in this builder — SwiftUI may evaluate
+            // sheet content more than once per presentation.
+            AddRoutineSheet(routines: addRoutineChoices) { routine in appendRoutine(id: routine.id) }
         }
     }
 
@@ -267,34 +271,41 @@ extension ActiveWorkoutView {
 
     @ViewBuilder
     private func keypadSheet(exerciseID: UUID, setID: UUID, field: ActiveSheet.KeypadField) -> some View {
-        if let ei = session.exercises.firstIndex(where: { $0.id == exerciseID }),
-           let si = session.exercises[ei].sets.firstIndex(where: { $0.id == setID }) {
-            let exercise = session.exercises[ei].exercise
-            let previousWeight = session.exercises[ei].sets[si].previousWeightKg
-            let previousReps = session.exercises[ei].sets[si].previousReps
+        if let entry = session.exercises.first(where: { $0.id == exerciseID }),
+           let set = entry.sets.first(where: { $0.id == setID }) {
+            let exercise = entry.exercise
+            let ids = SetAddress(exerciseID: exerciseID, setID: setID)
             switch field {
             case .weight:
                 WeightKeypadSheet(
-                    title: "Weight", value: weightBinding(ei: ei, si: si), step: exercise.incrementKg,
-                    bar: exercise.bar, last: previousWeight.map { preferences.formatWeight(kg: $0) },
-                    unit: preferences.weightUnit, onDone: { store.sync(session: session) }
+                    title: "Weight", value: weightBinding(ids), step: exercise.incrementKg,
+                    bar: exercise.bar, last: set.previousWeightKg.map { preferences.formatWeight(kg: $0) },
+                    unit: preferences.weightUnit, inventory: inventory,
+                    onDone: { store.sync(session: session) }
                 )
             case .reps:
                 WeightKeypadSheet(
-                    title: "Reps", value: repsBinding(ei: ei, si: si), step: 1, bar: nil,
-                    last: previousReps.map(String.init), unit: nil,
+                    title: "Reps", value: repsBinding(ids), step: 1, bar: nil,
+                    last: set.previousReps.map(String.init), unit: nil,
                     onDone: { store.sync(session: session) }
                 )
             case .minutes, .distance, .incline:
-                cardioKeypad(field: field, ei: ei, si: si)
+                cardioKeypad(field: field, set: set, ids: ids)
             }
         }
     }
 
+    /// Where a keypad binding writes: looked up by id on every get/set, never by the indices
+    /// that were current when the sheet opened — a swipe-delete's undo or a Live Activity
+    /// mutation can reorder the sets underneath an open keypad.
+    struct SetAddress {
+        var exerciseID: UUID
+        var setID: UUID
+    }
+
     /// Cardio fields type in the display unit (minutes, km/mi, %) and land on the row as
     /// seconds / metres / percent. The "last" line is the target the row was pre-filled with.
-    private func cardioKeypad(field: ActiveSheet.KeypadField, ei: Int, si: Int) -> some View {
-        let set = session.exercises[ei].sets[si]
+    private func cardioKeypad(field: ActiveSheet.KeypadField, set: SetEntry, ids: SetAddress) -> some View {
         let distanceUnit = preferences.distanceUnit
         let spec: CardioKeypadSpec = switch field {
         case .minutes:
@@ -310,7 +321,7 @@ extension ActiveWorkoutView {
             CardioKeypadSpec(title: "Incline", label: "%", step: 0.5, last: nil)
         }
         return WeightKeypadSheet(
-            title: spec.title, value: cardioBinding(field: field, ei: ei, si: si), step: spec.step, bar: nil,
+            title: spec.title, value: cardioBinding(field: field, ids: ids), step: spec.step, bar: nil,
             last: spec.last, unit: nil, plainLabel: spec.label, onDone: { store.sync(session: session) }
         )
     }
@@ -323,38 +334,53 @@ extension ActiveWorkoutView {
         var last: String?
     }
 
-    private func cardioBinding(field: ActiveSheet.KeypadField, ei: Int, si: Int) -> Binding<Double> {
+    private func cardioBinding(field: ActiveSheet.KeypadField, ids: SetAddress) -> Binding<Double> {
         let unit = preferences.distanceUnit
-        return Binding(
+        return setBinding(ids, fallback: 0) { set in
+            switch field {
+            case .minutes: Double(set.cardioSeconds ?? 0) / 60
+            case .distance: unit.display(meters: set.cardioMeters ?? 0)
+            case .incline, .weight, .reps: set.inclinePercent ?? 0
+            }
+        } write: { set, value in
+            switch field {
+            case .minutes: set.durationSeconds = Int((value * 60).rounded())
+            case .distance: set.distanceMeters = unit.toMeters(value)
+            case .incline, .weight, .reps: set.inclinePercent = value
+            }
+        }
+    }
+
+    private func weightBinding(_ ids: SetAddress) -> Binding<Double> {
+        setBinding(ids, fallback: 0, read: \.weightKg) { set, value in set.weightKg = value }
+    }
+
+    private func repsBinding(_ ids: SetAddress) -> Binding<Double> {
+        // `Int(_:)` traps on a non-finite double; the keypad can't produce one, but a trap is
+        // the wrong failure mode for a text field either way.
+        setBinding(ids, fallback: 0) { Double($0.reps) } write: { set, value in
+            set.reps = value.isFinite ? Int(value) : 0
+        }
+    }
+
+    /// A binding onto one set, resolved by id at access time. A set that has gone (deleted
+    /// while the keypad was up) reads as `fallback` and swallows writes.
+    private func setBinding<Value>(
+        _ ids: SetAddress, fallback: Value, read: @escaping (SetEntry) -> Value,
+        write: @escaping (inout SetEntry, Value) -> Void
+    ) -> Binding<Value> {
+        Binding(
             get: {
-                let set = session.exercises[ei].sets[si]
-                switch field {
-                case .minutes: return Double(set.cardioSeconds ?? 0) / 60
-                case .distance: return unit.display(meters: set.cardioMeters ?? 0)
-                case .incline, .weight, .reps: return set.inclinePercent ?? 0
-                }
+                guard let entry = session.exercises.first(where: { $0.id == ids.exerciseID }),
+                      let set = entry.sets.first(where: { $0.id == ids.setID }) else { return fallback }
+                return read(set)
             },
             set: { value in
-                switch field {
-                case .minutes: session.exercises[ei].sets[si].durationSeconds = Int((value * 60).rounded())
-                case .distance: session.exercises[ei].sets[si].distanceMeters = unit.toMeters(value)
-                case .incline, .weight, .reps: session.exercises[ei].sets[si].inclinePercent = value
-                }
+                guard let ei = session.exercises.firstIndex(where: { $0.id == ids.exerciseID }),
+                      let si = session.exercises[ei].sets.firstIndex(where: { $0.id == ids.setID })
+                else { return }
+                write(&session.exercises[ei].sets[si], value)
             }
-        )
-    }
-
-    private func weightBinding(ei: Int, si: Int) -> Binding<Double> {
-        Binding(
-            get: { session.exercises[ei].sets[si].weightKg },
-            set: { session.exercises[ei].sets[si].weightKg = $0 }
-        )
-    }
-
-    private func repsBinding(ei: Int, si: Int) -> Binding<Double> {
-        Binding(
-            get: { Double(session.exercises[ei].sets[si].reps) },
-            set: { session.exercises[ei].sets[si].reps = Int($0) }
         )
     }
 }

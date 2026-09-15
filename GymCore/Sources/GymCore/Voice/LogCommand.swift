@@ -281,9 +281,16 @@ public struct ParseContext: Sendable {
     /// A library or session exercise the matcher can score against, carrying
     /// enough about its equipment for the validator to round and style-check a
     /// set logged against it by name.
+    ///
+    /// The matcher's view of the name — `normalizedName` and stemmed `tokens` — is computed
+    /// once here, when the context is built, rather than on every `match` call: the tokenizer
+    /// runs ~30 `replacingOccurrences` passes per name, and a parse scores ~1k candidates up to
+    /// three times per utterance. Precomputing takes a watch-side parse from tens of ms to ~1 ms.
     public struct ExerciseCandidate: Sendable {
         public var id: UUID
-        public var name: String
+        public var name: String {
+            didSet { recomputeMatchKeys() }
+        }
         public var equipment: String?
         public var isFavorite: Bool
         public var isInSession: Bool
@@ -291,6 +298,12 @@ public struct ParseContext: Sendable {
         public var loggingStyle: LoggingStyle?
         /// `nil` when unknown — the validator then rounds on `ParseContext.bar` or the default step.
         public var grid: LoadGrid?
+        /// `Tokenizer.words(name)` joined with spaces — the matcher's Jaro-Winkler input.
+        public private(set) var normalizedName: String
+        /// `normalizedName` split and stemmed — the matcher's token-set input.
+        public private(set) var tokens: [String]
+        /// `Set(tokens)`, kept alongside so the subset/equipment checks don't rebuild it per call.
+        public private(set) var tokenSet: Set<String>
 
         public init(
             id: UUID, name: String, equipment: String? = nil, isFavorite: Bool = false,
@@ -303,6 +316,15 @@ public struct ParseContext: Sendable {
             self.isInSession = isInSession
             self.loggingStyle = loggingStyle
             self.grid = grid
+            normalizedName = ExerciseMatcher.normalize(name)
+            tokens = ExerciseMatcher.tokens(normalized: normalizedName)
+            tokenSet = Set(tokens)
+        }
+
+        private mutating func recomputeMatchKeys() {
+            normalizedName = ExerciseMatcher.normalize(name)
+            tokens = ExerciseMatcher.tokens(normalized: normalizedName)
+            tokenSet = Set(tokens)
         }
     }
 }

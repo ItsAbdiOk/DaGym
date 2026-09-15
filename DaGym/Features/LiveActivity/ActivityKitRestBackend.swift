@@ -1,5 +1,8 @@
 import ActivityKit
 import Foundation
+import os
+
+private let activityLogger = Logger(subsystem: "dev.abdirahmanmohamed.dagym", category: "liveActivity")
 
 /// The real `RestActivityBackend`: one `Activity<RestActivityAttributes>` at a time, with the
 /// async ActivityKit calls kicked off in tasks so the controller stays synchronous.
@@ -27,9 +30,18 @@ final class ActivityKitRestBackend: RestActivityBackend {
         }
     }
 
+    /// A failed request (the frequent-push budget, an unsupported device, or the user turning
+    /// activities off between the `areActivitiesEnabled` check and here) leaves `activity`
+    /// nil and says why in Console — the rest-end notification is scheduled regardless.
     func start(attributes: RestActivityAttributes, state: RestActivityAttributes.ContentState) {
-        activity = (try? Activity.request(attributes: attributes, content: Self.content(state)))
-            .map(ActivityHandle.init)
+        do {
+            activity = ActivityHandle(
+                try Activity.request(attributes: attributes, content: Self.content(state))
+            )
+        } catch {
+            activity = nil
+            activityLogger.error("Live Activity request failed: \(error, privacy: .public)")
+        }
     }
 
     func update(state: RestActivityAttributes.ContentState) {

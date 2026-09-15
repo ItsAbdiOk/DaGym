@@ -1,8 +1,7 @@
 import Foundation
 import GymCore
-import HealthKit
+import os
 import SwiftData
-import SwiftUI
 
 /// What Home shows: today's routine (or the routine list on a rest day), the streak and the
 /// next planned day. Rebuilt by `WatchStore.refreshHome()`.
@@ -15,8 +14,13 @@ struct WatchHomeState {
     var nextLabel: String?
     /// An unfinished workout this wrist may pick up (see `WatchStore.resumeGate`).
     var resumableWorkoutID: UUID?
+    /// Where the resumable workout was started — `WatchStore.sourceDevice` for one of ours.
+    var resumableSourceDevice: String?
     /// An unfinished workout that is live on the iPhone right now — shown, never offered.
     var inProgressElsewhereTitle: String?
+    /// Workouts still open on this watch — the Settings sync row's "queued" count. Read here
+    /// so the row doesn't fetch on every render.
+    var unfinishedCount = 0
 }
 
 /// The watch's front door to the shared `WorkoutStore`. Everything that persists — building
@@ -25,16 +29,35 @@ struct WatchHomeState {
 /// code, compiled into this target. This type only adds what the wrist needs on top: the
 /// Home state, the one-second tick, the HealthKit workout session that keeps the app alive
 /// with the wrist down, the live PR preview card and the complication snapshot.
+///
+/// Split by concern: lifecycle (`+Lifecycle`), the tick and rest-end repeat (`+Tick`), the
+/// complication snapshot and the CloudKit remote-change observer (`+Snapshot`), logging and
+/// records (`+Logging`).
 @MainActor
 @Observable
 final class WatchStore {
+    /// What `WorkoutModel.sourceDevice` says for a workout started here. The shared start
+    /// stamps "iPhone"; History groups and labels workouts by this, and the resume gate and
+    /// HealthKit recovery both key on it.
+    static let sourceDevice = "Apple Watch"
+
+    static let signposter = OSSignposter(subsystem: "dev.abdirahmanmohamed.dagym", category: "perf")
+
     let store: WorkoutStore
     let preferences: WatchPreferences
     let runtime: WatchWorkoutRuntime
+    /// The complication snapshot: rebuilt from the store at Home refresh, spliced on rest.
+    let snapshots: WatchSnapshotWriter
 
     var home = WatchHomeState()
+    /// False when the store opened without CloudKit (no account, or the container refused) —
+    /// the Settings sync row says "iCloud off" instead of implying the phone will hear from us.
+    var isCloudSyncOn = true
     var session: WorkoutSession?
     var summary: WorkoutSummary?
+    /// The title of the session `summary` describes — what was actually done, which is not
+    /// always today's routine (a rest-day pick, a resumed phone workout).
+    var summaryTitle: String?
     /// The record card (screen 5); cleared by its own auto-dismiss or any tap.
     var recordCard: WatchRecordCard?
     /// Which exercise page is showing, so voice and rest know the on-deck context. Moving
@@ -61,13 +84,29 @@ final class WatchStore {
     /// `-dgWatchScreen pr`: the record card skips its 1.6 s auto-dismiss so it can be captured.
     var holdsRecordCard = false
 
-    private var ticker: Task<Void, Never>?
-    private var restEndRepeat: Task<Void, Never>?
+    /// Whether `refreshHome` has run at least once this launch — the recovery path refreshes
+    /// only if Home hasn't yet, so a cold launch does the store work once.
+    @ObservationIgnored private(set) var hasRefreshedHome = false
+    /// The 1 Hz loop (`+Tick`); nil while nothing on the session needs a tick.
+    @ObservationIgnored var ticker: Task<Void, Never>?
+    @ObservationIgnored var restEndRepeat: Task<Void, Never>?
+    /// The rest the complication currently shows, to splice back in when the idle snapshot is
+    /// rebuilt mid-workout.
+    @ObservationIgnored var currentRest: WatchSnapshot.Rest?
+    /// The debounced `NSPersistentStoreRemoteChange` subscription (`+Snapshot`).
+    @ObservationIgnored var remoteChanges: WatchRemoteChangeObserver?
 
-    init(store: WorkoutStore, preferences: WatchPreferences = .shared, runtime: WatchWorkoutRuntime? = nil) {
+    init(
+        store: WorkoutStore, preferences: WatchPreferences = .shared, runtime: WatchWorkoutRuntime? = nil,
+        snapshotSuite: UserDefaults? = WatchSnapshotStore.appGroupSuite
+    ) {
         self.store = store
         self.preferences = preferences
         self.runtime = runtime ?? WatchWorkoutRuntime()
+        snapshots = WatchSnapshotWriter(store: store, suite: snapshotSuite) { [preferences] in
+            preferences.trainingCalendar
+        }
+        Haptics.preferences = preferences
         WorkoutSession.defaultWarmupGrid = { [weak store] exercise in
             guard let store else { return .step(max(exercise.incrementKg, 0.5)) }
             return store.loadGrid(for: exercise, equipment: store.activeEquipment())
@@ -76,7 +115,10 @@ final class WatchStore {
 
     // MARK: - Home
 
+    /// Rebuilds Home from the store and, from the same fetches, the idle complication snapshot.
     func refreshHome(now: Date = Date()) {
+        let interval = Self.signposter.beginInterval("refreshHome")
+        defer { Self.signposter.endInterval("refreshHome", interval) }
         let calendar = preferences.trainingCalendar
         var state = WatchHomeState()
         state.routines = store.routines()
@@ -84,7 +126,7 @@ final class WatchStore {
         if let routine = state.todaysRoutine {
             state.todaysLines = todaysLines(for: routine)
         }
-        let dates = store.finishedWorkoutModelsNewestFirst().map(\.startedAt)
+        let dates = store.finishedWorkoutStartDates()
         state.streakWeeks = Streaks.weekly(
             workoutDates: dates, weeklyGoal: WatchPreferences.weeklyGoal, calendar: calendar, now: now
         ).current
@@ -92,7 +134,9 @@ final class WatchStore {
             let day = next.date.formatted(.dateTime.weekday(.abbreviated))
             state.nextLabel = "\(next.routine.name) \(day)"
         }
-        if let unfinished = store.unfinishedWorkouts().first {
+        let unfinished = store.unfinishedWorkouts()
+        state.unfinishedCount = unfinished.count
+        if let unfinished = unfinished.first {
             let lastLogged = (unfinished.exercises ?? []).flatMap { $0.sets ?? [] }
                 .compactMap(\.completedAt).max()
             let verdict = Self.resumeGate(
@@ -102,11 +146,14 @@ final class WatchStore {
             switch verdict {
             case .resumable:
                 state.resumableWorkoutID = unfinished.id
+                state.resumableSourceDevice = unfinished.sourceDevice
             case .liveElsewhere:
                 state.inProgressElsewhereTitle = unfinished.title.isEmpty ? "Workout" : unfinished.title
             }
         }
         home = state
+        hasRefreshedHome = true
+        snapshots.refresh(rest: currentRest, rebuild: true, now: now, workoutDates: dates)
     }
 
     enum ResumeVerdict: Equatable {
@@ -123,7 +170,7 @@ final class WatchStore {
         sourceDevice: String, startedAt: Date, lastLoggedAt: Date?, now: Date,
         staleAfter: TimeInterval = 10 * 60
     ) -> ResumeVerdict {
-        if sourceDevice == "Apple Watch" { return .resumable }
+        if sourceDevice == Self.sourceDevice { return .resumable }
         let lastActivity = lastLoggedAt ?? startedAt
         return now.timeIntervalSince(lastActivity) >= staleAfter ? .resumable : .liveElsewhere
     }
@@ -150,149 +197,5 @@ final class WatchStore {
         guard let reps = first.targetReps else { return "\(count) sets" }
         if let high = first.targetRepsHigh, high > reps { return "\(count)×\(reps)–\(high)" }
         return "\(count)×\(reps)"
-    }
-
-    // MARK: - Lifecycle
-
-    /// Starts today's routine (or `routineID`, or freestyle when nil) the way the phone does,
-    /// then opens the HealthKit session that keeps the timer alive with the wrist down.
-    func start(routineID: UUID?) {
-        let session = routineID.map { store.startWorkout(routineIDs: [$0]) } ?? store.startFreestyle()
-        // The shared start stamps "iPhone"; History groups and labels workouts by this, so a
-        // wrist session says where it was logged.
-        if let workoutID = session.workoutID, let model = store.workout(id: workoutID) {
-            model.sourceDevice = "Apple Watch"
-        }
-        adopt(session)
-        runtime.start(isFreestyle: routineID == nil, startedAt: session.startedAt)
-    }
-
-    func resume(workoutID: UUID) {
-        guard let session = store.resumeSession(for: workoutID) else { return }
-        adopt(session)
-        runtime.start(isFreestyle: session.exercises.isEmpty, startedAt: session.startedAt)
-    }
-
-    /// After a kill mid-workout (see `WatchAppDelegate`): the HealthKit session watchOS kept
-    /// alive is handed to the runtime when there is a wrist workout to resume into, and ended
-    /// when there isn't — a finished or discarded workout has nothing to run for.
-    func adoptRecoveredRuntime(_ hkSession: HKWorkoutSession) {
-        refreshHome()
-        runtime.adopt(recovered: hkSession, keep: home.resumableWorkoutID != nil)
-    }
-
-    private func adopt(_ session: WorkoutSession) {
-        // Always on: the session's flag would silence rest-zero too, and the spec keeps that
-        // one (with Log set) firing under Haptics off. The watch `Haptics` gates the 3-2-1
-        // clicks itself (`WatchHaptic.alwaysFires`).
-        session.restHaptics = true
-        session.onRestStateChange = { [weak self] state in self?.restStateChanged(state) }
-        session.onRestTick = { [weak self] remaining in
-            if let announcement = WatchAccessibility.restAnnouncement(remaining: remaining) {
-                AccessibilityNotification.Announcement(announcement).post()
-            }
-            guard remaining == 0 else { return }
-            self?.scheduleRestEndRepeat()
-        }
-        self.session = session
-        amrapTargets = Dictionary(
-            uniqueKeysWithValues: session.exercises.flatMap(\.sets)
-                .filter { $0.kind == .amrap }
-                .map { ($0.id, $0.reps) }
-        )
-        pageIndex = session.onDeckIndex ?? 0
-        summary = nil
-        startTicking()
-    }
-
-    /// Persists exactly what the phone persists: `finish(session:)` syncs the rows, commits
-    /// progression, stamps `endedAt`, evaluates PRs against the cache and writes the snapshot.
-    /// Then the HealthKit workout is saved so the rings get credit — nothing from Health goes
-    /// into the store.
-    func finish() {
-        guard let session else { return }
-        stopTicking()
-        let result = store.finish(session: session, unit: preferences.weightUnit)
-        preferences.lastSavedAt = Date()
-        summary = result
-        self.session = nil
-        runtime.end(volumeKg: result.volumeKg)
-        WatchSnapshotWriter.refresh(store: store, rest: nil)
-    }
-
-    func discard() {
-        guard let session else { return }
-        stopTicking()
-        store.discard(session: session)
-        self.session = nil
-        runtime.discard()
-        WatchSnapshotWriter.refresh(store: store, rest: nil)
-    }
-
-    func dismissSummary() {
-        summary = nil
-        refreshHome()
-    }
-
-    // MARK: - Tick
-
-    private func startTicking() {
-        ticker?.cancel()
-        ticker = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
-                guard let self, let session = self.session else { return }
-                session.tickRest()
-                self.tickHold(session)
-            }
-        }
-    }
-
-    private func stopTicking() {
-        ticker?.cancel()
-        ticker = nil
-        restEndRepeat?.cancel()
-    }
-
-    private func tickHold(_ session: WorkoutSession) {
-        guard let before = session.timedHold else { return }
-        session.tickTimedHold()
-        guard let after = session.timedHold, let target = after.targetSeconds,
-              before.elapsed < target, after.elapsed >= target else { return }
-        Haptics.holdTarget()
-    }
-
-    /// Rest-zero success is repeated once after five seconds if the lifter hasn't logged or
-    /// moved on (the spec's "repeated once after five seconds if unacknowledged").
-    private func scheduleRestEndRepeat() {
-        restEndRepeat?.cancel()
-        let session = self.session
-        restEndRepeat = Task {
-            try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled, let session, session === self.session, !session.isResting else { return }
-            Haptics.restEnd()
-        }
-    }
-
-    /// True while the five-second repeat is still armed.
-    var isRestEndRepeatPending: Bool {
-        guard let restEndRepeat else { return false }
-        return !restEndRepeat.isCancelled
-    }
-
-    /// Anything that shows the lifter has moved on — a set logged, a hold stopped, a page
-    /// swiped — cancels the repeat: the spec repeats it "if unacknowledged", and starting a new
-    /// rest is not the only acknowledgement.
-    func acknowledgeRestEnd() {
-        restEndRepeat?.cancel()
-    }
-
-    private func restStateChanged(_ state: RestState) {
-        if !state.isEnded { restEndRepeat?.cancel() }
-        let rest: WatchSnapshot.Rest? = state.isEnded ? nil : WatchSnapshot.Rest(
-            endDate: state.endDate, totalSeconds: state.total,
-            nextLabel: state.nextSetLabel(unit: preferences.weightUnit), workoutTitle: state.workoutTitle
-        )
-        WatchSnapshotWriter.refresh(store: store, rest: rest)
     }
 }

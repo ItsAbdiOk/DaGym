@@ -295,24 +295,43 @@ extension WorkoutModel {
                 .reduce(0.0) { $0 + style.loadedWeightKg(logged: $1.weightKg) * Double($1.reps) }
         }
     }
+
+    /// Completed working sets — the count History, the recap and the Health write show. Warm-ups
+    /// are excluded for the same reason everywhere: one definition of "sets".
+    var loadedSetsDone: Int {
+        (exercises ?? []).flatMap { $0.sets ?? [] }
+            .filter { $0.isCompleted && $0.setKind.countsTowardStats }.count
+    }
+
+    /// Whether `finish` (or the backfill pass) has stamped `volumeKg`/`setsDone`. An unstamped
+    /// row reads as all zeros, which is also what a genuinely empty workout stamps — so a zero
+    /// row is recomputed from its sets, which for an empty workout costs nothing.
+    var hasStampedTotals: Bool { volumeKg > 0 || setsDone > 0 }
+
+    /// Writes the persisted totals from the rows. Called by `finish`, `restoreWorkout` and the
+    /// one-shot backfill; anything else that inserts a finished workout (backup import, sample
+    /// data) has to call it too or the History header undercounts.
+    func stampTotals() {
+        volumeKg = loadedVolumeKg
+        setsDone = loadedSetsDone
+    }
 }
 
 extension WorkoutRecord {
     init(model: WorkoutModel, prCount: Int = 0) {
-        let sets = (model.exercises ?? []).flatMap { $0.sets ?? [] }
-        let volume = model.loadedVolumeKg
         let minutes: Int
         if let endedAt = model.endedAt {
             minutes = max(0, Int(endedAt.timeIntervalSince(model.startedAt) / 60))
         } else {
             minutes = 0
         }
-        // Warm-ups are excluded here for the same reason the weekly recap, week stats and the
-        // Health write exclude them — one definition of "sets" everywhere.
-        let setsDone = sets.filter { $0.isCompleted && $0.setKind.countsTowardStats }.count
+        // The stamped columns when `finish` wrote them, so a History row never faults its sets;
+        // otherwise the same numbers from the rows (a workout finished before the columns existed).
+        let stamped = model.hasStampedTotals
         self.init(
             id: model.id, title: model.title, date: model.startedAt, durationMinutes: minutes,
-            volumeKg: volume, sets: setsDone, prCount: prCount
+            volumeKg: stamped ? model.volumeKg : model.loadedVolumeKg,
+            sets: stamped ? model.setsDone : model.loadedSetsDone, prCount: prCount
         )
     }
 }

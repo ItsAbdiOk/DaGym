@@ -146,11 +146,4 @@ extension WorkoutStore {
         }
         return hasDistance ? { $0.distanceMeters ?? 0 } : { Double($0.durationSeconds ?? 0) }
     }
-
-    /// The distance unit the store formats cardio in — `Preferences` is UI state, so the store
-    /// reads the same key directly, the way `preferredWeightUnit` does for kg/lb.
-    var preferredDistanceUnit: DistanceUnit {
-        DistanceUnit(rawValue: UserDefaults.standard.string(forKey: Preferences.Key.distanceUnit) ?? "")
-            ?? DistanceUnit.matching(preferredWeightUnit)
-    }
 }
