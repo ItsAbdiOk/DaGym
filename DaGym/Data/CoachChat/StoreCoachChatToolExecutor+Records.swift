@@ -247,13 +247,35 @@ extension StoreCoachChatToolExecutor {
     /// Library search with the lifter's equipment verdict on every hit, so the model can pick
     /// only what `propose_*` will accept.
     func searchExercises(_ arguments: SearchArguments) throws -> SearchPayload {
-        let query = arguments.query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { throw CoachChatToolError.badArguments("query is empty") }
+        let query = (arguments.query ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let muscle = try arguments.muscle.map { raw -> Muscle in
+            guard let muscle = Muscle(rawValue: raw) else {
+                throw CoachChatToolError.badArguments("unknown muscle '\(raw)'")
+            }
+            return muscle
+        }
+        guard !query.isEmpty || muscle != nil else {
+            throw CoachChatToolError.badArguments("give a muscle, a query, or both")
+        }
         let cap = CoachChatToolCatalog.maxSearchResults
         let limit = min(max(arguments.limit ?? Self.defaultSearchResults, 1), cap)
         let availability = store.equipmentAvailabilityForProgram()
-        let matches = store.exercises(matching: query, equipment: arguments.equipment)
+        let allowedOnly = arguments.allowedOnly ?? true
+        // Allowed exercises first, then the library's own order — the model asked for a muscle
+        // group's options, so what the lifter can actually do should come before what they can't.
+        let candidates = store.exercises(matching: query, muscle: muscle, equipment: arguments.equipment)
             .filter { arguments.machine == nil || $0.machine == arguments.machine }
+        var allowedMatches: [ExerciseInfo] = []
+        var blockedMatches: [ExerciseInfo] = []
+        for exercise in candidates {
+            let verdict = availability.verdict(equipment: exercise.equipment, machine: exercise.machine)
+            if verdict == .allowed {
+                allowedMatches.append(exercise)
+            } else if !allowedOnly {
+                blockedMatches.append(exercise)
+            }
+        }
+        let matches = allowedMatches + blockedMatches
         let exercises = matches.prefix(limit).map { exercise -> ExerciseMatchPayload in
             let verdict = availability.verdict(equipment: exercise.equipment, machine: exercise.machine)
             let reason: String? = switch verdict {

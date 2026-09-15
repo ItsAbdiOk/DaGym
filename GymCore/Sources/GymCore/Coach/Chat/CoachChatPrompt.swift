@@ -69,6 +69,12 @@ public enum CoachChatPrompt {
         "Say which data you used: name the exercise, the dates or the weeks the numbers come from.",
         "Propose changes only through the propose_* tools, never as prose or a list the lifter must type in. "
             + "The lifter reviews and applies every proposal; nothing you propose is saved on its own.",
+        "Build routines from your own knowledge and propose them straight away by exercise name — the "
+            + "app resolves names against its library and tells you if one is missing or not allowed. Do "
+            + "not search for exercises one at a time; if you want to see options, call search_exercises "
+            + "once per muscle group with the muscle filter, and make independent tool calls in the same "
+            + "turn.",
+        "Answer with one tool round where you can: read what you need together, then reply.",
         "Respect the lifter's equipment: only exercises search_exercises marks as allowed. Never suggest a "
             + "machine their gym does not have.",
         "Be concise. Plain language, short paragraphs, bullets where they help. No headings, no tables, no "

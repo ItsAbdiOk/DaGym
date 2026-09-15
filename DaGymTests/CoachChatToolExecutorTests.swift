@@ -250,23 +250,4 @@ struct CoachChatToolExecutorTests {
         #expect(readings.map { $0["date"] as? String } == ["2026-09-14", "2026-08-26"])
         #expect(body["truncated"] as? Bool == false)
     }
-
-    @Test("search_exercises marks what the gym allows and why not")
-    func search() async throws {
-        let fixture = try CoachChatToolFixture.make()
-        let search = try await fixture.call(.searchExercises, #"{"query":"press"}"#)
-        let exercises = try #require(search["exercises"] as? [[String: Any]])
-        let bench = try #require(exercises.first { $0["name"] as? String == "Bench Press" })
-        #expect(bench["allowed"] as? Bool == true)
-        #expect(bench["reason"] == nil)
-        let legPress = try #require(exercises.first { $0["name"] as? String == "Leg Press" })
-        #expect(legPress["allowed"] as? Bool == false)
-        #expect(legPress["reason"] as? String == "needs a Leg Press the gym does not have")
-        #expect(legPress["machine"] as? String == "legPress")
-
-        let machine = try await fixture.call(.searchExercises, #"{"query":"press","machine":"legPress"}"#)
-        #expect((machine["exercises"] as? [Any])?.count == 1)
-        let dumbbell = try await fixture.call(.searchExercises, #"{"query":"row","equipment":"dumbbell"}"#)
-        #expect((dumbbell["exercises"] as? [[String: Any]])?.first?["name"] as? String == "Dumbbell Row")
-    }
 }

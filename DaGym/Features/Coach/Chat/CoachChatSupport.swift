@@ -250,3 +250,48 @@ enum CoachModelSearch {
         }
     }
 }
+
+/// What the transcript draws: messages as they are, except that a run of identical tool calls
+/// (thirty "Searching exercises" chips while the model hunts one exercise at a time) collapses
+/// into one chip with a count. Pure, so a test can pin the grouping.
+enum CoachChatTranscript {
+    enum Entry: Identifiable, Equatable {
+        case message(CoachChatMessage)
+        case toolGroup(label: String, count: Int, failed: Bool)
+
+        var id: String {
+            switch self {
+            case .message(let message): message.id.uuidString
+            case .toolGroup(let label, let count, let failed): "tool:\(label):\(count):\(failed)"
+            }
+        }
+    }
+
+    static func collapse(_ messages: [CoachChatMessage]) -> [Entry] {
+        var entries: [Entry] = []
+        for message in messages {
+            guard message.role == .tool else {
+                entries.append(.message(message))
+                continue
+            }
+            if case .toolGroup(let label, let count, let failed)? = entries.last,
+               label == message.text, failed == message.isToolError {
+                entries[entries.count - 1] = .toolGroup(label: label, count: count + 1, failed: failed)
+            } else {
+                entries.append(.toolGroup(label: message.text, count: 1, failed: message.isToolError))
+            }
+        }
+        return entries
+    }
+
+    /// True while the last thing on screen is the lifter's question or a tool chip — i.e. the
+    /// model has not started its reply yet.
+    static func isWaitingForText(_ messages: [CoachChatMessage]) -> Bool {
+        guard let last = messages.last else { return false }
+        switch last.role {
+        case .user, .tool: return true
+        case .assistant: return last.text.isEmpty
+        case .draft: return false
+        }
+    }
+}

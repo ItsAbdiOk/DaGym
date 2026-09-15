@@ -147,4 +147,26 @@ struct CoachChatSupportTests {
         #expect(CoachChatSuggestedPrompts.all.count == 3)
         #expect(Set(CoachChatSuggestedPrompts.all).count == 3)
     }
+
+    @Test("a run of identical tool chips collapses to one with a count; the thinking row waits for text")
+    func transcriptCollapsesRepeatedTools() {
+        let now = Date()
+        var messages = [CoachChatMessage.user("Build me a split", at: now)]
+        for _ in 0..<12 { messages.append(.tool("search_exercises", at: now)) }
+        messages.append(.tool("get_profile", at: now))
+        let entries = CoachChatTranscript.collapse(messages)
+        #expect(entries.count == 3)
+        if case .toolGroup(let label, let count, let failed) = entries[1] {
+            #expect(label == CoachChatMessage.label(forTool: "search_exercises"))
+            #expect(count == 12)
+            #expect(!failed)
+        } else {
+            Issue.record("expected a collapsed tool group")
+        }
+        #expect(CoachChatTranscript.isWaitingForText(messages))
+        messages.append(.assistant("", at: now))
+        #expect(CoachChatTranscript.isWaitingForText(messages))
+        messages[messages.count - 1].text = "Here's a plan."
+        #expect(!CoachChatTranscript.isWaitingForText(messages))
+    }
 }

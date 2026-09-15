@@ -20,7 +20,7 @@ final class StoreCoachChatToolExecutor: CoachChatToolExecutor {
 
     /// Sessions the history tools return at most before flagging `truncated`.
     static let maxSeriesSessions = 60
-    static let defaultSearchResults = 10
+    static let defaultSearchResults = 40
 
     init(
         store: WorkoutStore, unit: WeightUnit, weeklyGoal: Int = 4, calendar: Calendar = .current,
@@ -135,10 +135,17 @@ final class StoreCoachChatToolExecutor: CoachChatToolExecutor {
     }
 
     struct SearchArguments: Decodable {
-        var query: String
+        var query: String?
+        var muscle: String?
         var equipment: String?
         var machine: String?
+        var allowedOnly: Bool?
         var limit: Int?
+
+        enum CodingKeys: String, CodingKey {
+            case query, muscle, equipment, machine, limit
+            case allowedOnly = "allowed_only"
+        }
     }
 
     /// Empty arguments (`""`, `"{}"`) decode as an empty object, so a no-argument tool never

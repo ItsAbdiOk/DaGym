@@ -103,13 +103,15 @@ struct CoachAssistantBubble: View {
 struct CoachToolChip: View {
     var label: String
     var failed: Bool
+    /// How many consecutive identical tool calls this chip stands for; shown as "×N" past one.
+    var count: Int = 1
 
     var body: some View {
         HStack(spacing: DGSpace.s1) {
             Image(systemName: failed ? "exclamationmark.circle" : "sparkle.magnifyingglass")
                 .font(.system(size: 10, weight: .semibold))
                 .accessibilityHidden(true)
-            Text(label)
+            Text(count > 1 ? "\(label) ×\(count)" : label)
                 .font(DGFont.condensedLabel(12))
                 .tracking(0.8)
                 .textCase(.uppercase)
@@ -136,4 +138,24 @@ struct CoachToolChip: View {
     }
     .padding()
     .background(AmbientWash())
+}
+
+/// The pause before the first words: the model is reading tools or composing, and an empty
+/// transcript for ten seconds reads as "nothing is happening".
+struct CoachThinkingRow: View {
+
+    var body: some View {
+        HStack(spacing: DGSpace.s2) {
+            ProgressView()
+                .controlSize(.small)
+                .tint(DGColor.aiVioletText)
+            Text("Thinking…")
+                .font(DGFont.footnote)
+                .foregroundStyle(DGColor.ink3)
+        }
+        .padding(.horizontal, DGSpace.s3)
+        .frame(minHeight: 28)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Coach is thinking")
+    }
 }

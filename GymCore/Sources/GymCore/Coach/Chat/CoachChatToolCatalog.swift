@@ -24,7 +24,7 @@ public enum CoachChatToolCatalog {
     public static let defaultRecentWorkouts = 10
     public static let weeksRange = 1...26
     public static let defaultWeeks = 4
-    public static let maxSearchResults = 25
+    public static let maxSearchResults = 60
 
     // MARK: - Shared fragments
 
@@ -147,20 +147,25 @@ public enum CoachChatToolCatalog {
         ),
         CoachChatTool(
             name: .searchExercises,
-            description: "Find library exercises by name or muscle, optionally limited to one "
-                + "equipment kind or machine. Returns ids, muscles, equipment and whether the "
-                + "lifter's profile allows each. Use the ids in propose_* tools.",
+            description: "List library exercises the lifter can do, filtered by primary muscle and/or "
+                + "words from the name, optionally one equipment kind or machine. One call per muscle "
+                + "group returns every allowed option for it — do not search one exercise at a time. "
+                + "Not needed before propose_* tools, which accept exercise names and resolve them; "
+                + "search when you want options or a name was rejected.",
             parameters: .object(
                 properties: [
-                    "query": .string("Words from the name or a muscle (e.g. 'row', 'chest')."),
+                    "muscle": .string(
+                        "Primary muscle to list (preferred filter).", enum: Muscle.allCases.map(\.rawValue)
+                    ),
+                    "query": .string("Words from the name (e.g. 'row', 'incline'). Optional with muscle."),
                     "equipment": .string(
                         "Limit to one equipment kind.",
                         enum: ["barbell", "dumbbell", "machine", "cable", "bodyweight"]
                     ),
                     "machine": .string("Limit to one machine.", enum: Machine.allCases.map(\.rawValue)),
-                    "limit": .integer("Most results to return.", in: 1...maxSearchResults)
-                ],
-                required: ["query"]
+                    "allowed_only": .boolean("Only exercises the lifter's equipment allows (default true)."),
+                    "limit": .integer("Most results to return (default 40).", in: 1...maxSearchResults)
+                ]
             )
         )
     ]

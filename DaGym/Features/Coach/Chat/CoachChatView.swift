@@ -77,8 +77,15 @@ struct CoachChatView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: DGSpace.s3) {
-                        ForEach(engine.messages) { message in
-                            row(message)
+                        ForEach(CoachChatTranscript.collapse(engine.messages)) { entry in
+                            switch entry {
+                            case .message(let message): row(message)
+                            case .toolGroup(let label, let count, let failed):
+                                CoachToolChip(label: label, failed: failed, count: count)
+                            }
+                        }
+                        if engine.isStreaming, CoachChatTranscript.isWaitingForText(engine.messages) {
+                            CoachThinkingRow()
                         }
                         Color.clear.frame(height: 1).id("bottom")
                     }
