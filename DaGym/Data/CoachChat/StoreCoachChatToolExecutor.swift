@@ -67,7 +67,13 @@ final class StoreCoachChatToolExecutor: CoachChatToolExecutor {
         .proposeProgram: proposal(ProgramProposal.self, CoachChatDraft.program),
         .proposeSchedule: proposal(ScheduleProposal.self, CoachChatDraft.schedule),
         .proposeDeload: proposal(DeloadProposal.self, CoachChatDraft.deload),
-        .proposeSwap: proposal(SwapProposal.self, CoachChatDraft.swap)
+        .proposeSwap: proposal(SwapProposal.self, CoachChatDraft.swap),
+        // The engine answers the reviewer's agree call itself; this keeps the table complete
+        // so a stray call from either model still gets a sane reply instead of "unknown tool".
+        .agreeWithProposal: { executor, json in
+            _ = try executor.decode(CoachChatAgreement.self, json).validated().get()
+            return try executor.json(["recorded": true])
+        }
     ]
 
     private func handler(for tool: CoachChatToolName) throws -> Handler {
@@ -151,12 +157,83 @@ final class StoreCoachChatToolExecutor: CoachChatToolExecutor {
     /// Empty arguments (`""`, `"{}"`) decode as an empty object, so a no-argument tool never
     /// fails on a missing body; anything else must be the JSON object the schema describes.
     func decode<Arguments: Decodable>(_ type: Arguments.Type, _ json: String) throws -> Arguments {
-        let trimmed = json.trimmingCharacters(in: .whitespacesAndNewlines)
-        let data = Data((trimmed.isEmpty ? "{}" : trimmed).utf8)
+        let cleaned = Self.tolerantJSON(json)
+        let data = Data((cleaned.isEmpty ? "{}" : cleaned).utf8)
         do {
             return try JSONDecoder().decode(type, from: data)
         } catch {
             throw CoachChatToolError.badArguments(Self.describe(error))
+        }
+    }
+
+    /// The small ways a model's argument JSON goes wrong that cost a whole retry round: a
+    /// ```json fence, stray text after the closing brace, a trailing comma before `}`/`]`.
+    /// Each is undone; genuinely broken JSON still fails with the decoder's reason.
+    static func tolerantJSON(_ raw: String) -> String {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.hasPrefix("```") {
+            text = text.replacingOccurrences(of: "```json", with: "")
+                .replacingOccurrences(of: "```", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        // Keep the outermost object/array only: anything after its close is noise.
+        if let open = text.firstIndex(where: { $0 == "{" || $0 == "[" }) {
+            let closer: Character = text[open] == "{" ? "}" : "]"
+            if let close = text.lastIndex(of: closer), close > open { text = String(text[open...close]) }
+        }
+        return stripTrailingCommas(text)
+    }
+
+    /// Drops a `,` that is followed (bar whitespace) by `}` or `]`, outside string literals.
+    static func stripTrailingCommas(_ text: String) -> String {
+        var scanner = TrailingCommaScanner()
+        for character in text { scanner.feed(character) }
+        return scanner.finish()
+    }
+
+    /// Character-at-a-time state for `stripTrailingCommas`: tracks string literals (with
+    /// escapes) and holds one comma back until the next non-space character says whether to keep it.
+    private struct TrailingCommaScanner {
+        private var result = ""
+        /// The comma (and the whitespace after it) held back until the next real character.
+        private var held = ""
+        private var inString = false
+        private var escaped = false
+
+        mutating func feed(_ character: Character) {
+            if inString { return feedInString(character) }
+            if character == "," {
+                result.append(held)
+                held = ","
+                return
+            }
+            if !held.isEmpty {
+                if character.isWhitespace {
+                    held.append(character)
+                    return
+                }
+                if character != "}" && character != "]" { result.append(held) }
+                held = ""
+            }
+            if character == "\"" { inString = true }
+            result.append(character)
+        }
+
+        private mutating func feedInString(_ character: Character) {
+            result.append(character)
+            if escaped {
+                escaped = false
+            } else if character == "\\" {
+                escaped = true
+            } else if character == "\"" {
+                inString = false
+            }
+        }
+
+        mutating func finish() -> String {
+            result.append(held)
+            held = ""
+            return result
         }
     }
 

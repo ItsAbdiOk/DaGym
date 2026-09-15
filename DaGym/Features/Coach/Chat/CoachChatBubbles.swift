@@ -3,10 +3,12 @@ import SwiftUI
 
 /// One transcript entry as the chat screen draws it: a right-aligned coral bubble for the
 /// lifter, a left-aligned card for the coach (paragraphs and bullets, a "stopped" marker when
-/// the reply was cut short), or a compact activity chip while a tool runs. Draft cards are
-/// `CoachDraftCard`, drawn by the screen because they need the draft and its state.
+/// the reply was cut short), a compact activity chip while a tool runs, or the reviewer's
+/// verdict line. Draft cards are `CoachDraftCard`, drawn by the screen because they need the
+/// draft and its state; `review` is the matching entry of the engine's `reviews`, when known.
 struct CoachChatMessageRow: View {
     var message: CoachChatMessage
+    var review: CoachChatReview?
 
     var body: some View {
         switch message.role {
@@ -19,6 +21,61 @@ struct CoachChatMessageRow: View {
             }
         case .tool: CoachToolChip(label: message.text, failed: message.isToolError)
         case .draft: EmptyView()
+        case .review: CoachReviewRow(text: message.text, review: review)
+        }
+    }
+}
+
+/// The second opinion's verdict as one compact transcript line: a green tick when the
+/// reviewer agreed, a violet arrow when it proposed its own version (the card follows), a
+/// muted mark when the review failed. The text is the engine's line; the review only picks
+/// the tone and the accessibility label.
+struct CoachReviewRow: View {
+    var text: String
+    var review: CoachChatReview?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: DGSpace.s2) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .padding(.top, 2)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                if let review {
+                    Text(CoachReviewCopy.transcriptLine(for: review))
+                        .font(DGFont.condensedLabel(12))
+                        .tracking(0.8)
+                        .textCase(.uppercase)
+                }
+                if !text.isEmpty {
+                    Text(text)
+                        .font(DGFont.footnote)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, DGSpace.s3)
+        .frame(minHeight: 28)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(review.map { CoachReviewCopy.transcriptLine(for: $0) + ". " + text } ?? text)
+        .accessibilityIdentifier(A11yID.coachChatReviewRow)
+    }
+
+    private var symbol: String {
+        switch review?.verdict {
+        case .agreed: "checkmark.circle"
+        case .alternative: "arrow.turn.down.right"
+        case .failed: "exclamationmark.circle"
+        case nil: "text.bubble"
+        }
+    }
+
+    private var tint: Color {
+        switch review?.verdict {
+        case .agreed: DGColor.success
+        case .alternative: DGColor.aiVioletText
+        case .failed, nil: DGColor.ink4
         }
     }
 }

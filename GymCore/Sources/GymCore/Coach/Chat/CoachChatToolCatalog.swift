@@ -10,12 +10,20 @@ import Foundation
 /// `CoachChatDraft.swift` (snake_case keys), so an executor decodes the arguments straight
 /// into them.
 public enum CoachChatToolCatalog {
+    /// What the drafter (the conversation model) is offered.
     public static let tools: [CoachChatTool] = readTools + proposalTools
+
+    /// What the second-opinion model is offered: the same reads and proposals, plus
+    /// `agree_with_proposal`. The drafter never sees the agree tool.
+    public static let reviewerTools: [CoachChatTool] = readTools + proposalTools + [agreeTool]
+
+    /// Every tool either model can call, each once.
+    public static let allTools: [CoachChatTool] = tools + [agreeTool]
 
     public static var names: [String] { tools.map(\.name) }
 
     public static func tool(named name: String) -> CoachChatTool? {
-        tools.first { $0.name == name }
+        allTools.first { $0.name == name }
     }
 
     // MARK: - Limits the schemas advertise (the executor enforces the same numbers)

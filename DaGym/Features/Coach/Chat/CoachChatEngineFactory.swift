@@ -5,8 +5,8 @@ import SwiftUI
 /// The one place the chat screen meets the store: builds a `CoachChatEngine` for a thread and
 /// applies or undoes a draft. Every Store-slice name the chat depends on
 /// (`StoreCoachChatToolExecutor`, `lifterProfileFacts`, `apply(_:)`/`undo(_:)`,
-/// `coachModelID`, `coachChatConsentGiven`) is called from here and nowhere else, so a
-/// signature change is a one-file fix.
+/// `coachModelID`, `coachReviewerModelID`, `coachChatConsentGiven`) is called from here and
+/// nowhere else, so a signature change is a one-file fix.
 @MainActor
 enum CoachChatEngineFactory {
     /// A ready engine for `thread` (a fresh one when nil), persisting to the standard archive.
@@ -32,11 +32,14 @@ enum CoachChatEngineFactory {
         )
     }
 
-    /// The two chat preferences as the Services layer wants them.
+    /// The chat preferences as the Services layer wants them: the drafter's model, consent,
+    /// and the reviewer's model (nil when the second opinion is off).
     static func configuration(_ preferences: Preferences) -> CoachChatConfiguration {
-        CoachChatConfiguration(
+        var configuration = CoachChatConfiguration(
             modelID: preferences.coachModelID, consentGiven: preferences.coachChatConsentGiven
         )
+        configuration.reviewerModelID = preferences.coachReviewerModelID
+        return configuration
     }
 
     /// Applies a draft; nil when the store refused it (its target routine is gone).

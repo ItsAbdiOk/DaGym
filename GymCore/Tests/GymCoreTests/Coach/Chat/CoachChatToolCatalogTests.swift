@@ -9,7 +9,10 @@ struct CoachChatToolCatalogTests {
     func completeness() {
         let names = CoachChatToolCatalog.names
         #expect(Set(names).count == names.count)
-        #expect(Set(names) == Set(CoachChatToolName.allCases.map(\.rawValue)))
+        let drafterNames = CoachChatToolName.allCases.filter { !$0.isReviewerOnly }.map(\.rawValue)
+        #expect(Set(names) == Set(drafterNames))
+        let everyName = Set(CoachChatToolName.allCases.map(\.rawValue))
+        #expect(Set(CoachChatToolCatalog.allTools.map(\.name)) == everyName)
         #expect(names.allSatisfy { $0 == $0.lowercased() && !$0.contains(" ") })
         for name in CoachChatToolName.allCases {
             #expect(CoachChatToolCatalog.tool(named: name.rawValue) != nil)
@@ -24,7 +27,7 @@ struct CoachChatToolCatalogTests {
     func roundTrip() throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        for tool in CoachChatToolCatalog.tools {
+        for tool in CoachChatToolCatalog.allTools {
             let data = try encoder.encode(tool)
             let decoded = try JSONDecoder().decode(CoachChatTool.self, from: data)
             #expect(decoded == tool, "\(tool.name)")

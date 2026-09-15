@@ -22,19 +22,32 @@ extension CoachChatToolCatalog {
     )
 
     static let exerciseSchema = CoachChatToolSchema.object(
-        "One exercise with its planned sets. Give exercise_id (preferred) or exercise_name.",
+        "One exercise. Give exercise_name (or exercise_id). Prefer the shorthand set_count + "
+            + "target_reps (+ target_reps_high for a range, target_weight_kg, rpe, warmup_sets); use "
+            + "the `sets` array only when individual sets must differ.",
         properties: [
             "exercise_id": exerciseIDField,
             "exercise_name": exerciseNameField,
+            "set_count": .integer("Working sets (shorthand).", in: CoachChatDraft.Limits.setsPerExercise),
+            "target_reps": .integer("Reps per working set (shorthand).", in: CoachChatDraft.Limits.repsRange),
+            "target_reps_high": .integer(
+                "Top of a rep range, e.g. 8–12 → target_reps 8, target_reps_high 12.",
+                in: CoachChatDraft.Limits.repsRange
+            ),
+            "target_weight_kg": .number(
+                "Working weight in kg (shorthand). Omit for bodyweight or an exercise never done.",
+                in: 0...CoachChatDraft.Limits.maxWeightKg
+            ),
+            "rpe": .number("Target RPE for working sets (shorthand).", in: CoachChatDraft.Limits.rpeRange),
+            "warmup_sets": .integer("Warm-up sets before the working sets (shorthand).", in: 0...3),
             "sets": .array(
-                "\(CoachChatDraft.Limits.setsPerExercise.lowerBound)–"
-                    + "\(CoachChatDraft.Limits.setsPerExercise.upperBound) sets.",
+                "Explicit sets, \(CoachChatDraft.Limits.setsPerExercise.lowerBound)–"
+                    + "\(CoachChatDraft.Limits.setsPerExercise.upperBound), when they differ.",
                 of: setSchema
             ),
             "rest_seconds": .integer("Rest between sets.", in: CoachChatDraft.Limits.restSecondsRange),
             "superset_group": .integer("Exercises sharing a number are a superset.", in: 1...10)
-        ],
-        required: ["sets"]
+        ]
     )
 
     static let routineSchema = CoachChatToolSchema.object(
@@ -121,4 +134,21 @@ extension CoachChatToolCatalog {
             ], required: ["routine_id"])
         )
     ]
+
+    /// The reviewer's other verdict. Its arguments are `CoachChatAgreement`.
+    static let agreeTool = CoachChatTool(
+        name: .agreeWithProposal,
+        description: "Agree that the other coach's proposal is sound as it stands. Give the reasons "
+            + "you checked it against — the lifter reads them. Call this or a propose_* tool, never both.",
+        parameters: .object(properties: [
+            "reasons": .array(
+                "\(CoachChatAgreement.reasonsRange.lowerBound)–\(CoachChatAgreement.reasonsRange.upperBound) "
+                    + "short lines, each one thing you checked and why it holds.",
+                of: .string("One reason, under \(CoachChatAgreement.maxReasonLength) characters.")
+            ),
+            "confidence": .string(
+                "How sure you are.", enum: CoachChatAgreement.Confidence.allCases.map(\.rawValue)
+            )
+        ], required: ["reasons", "confidence"])
+    )
 }

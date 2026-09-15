@@ -4,11 +4,16 @@ import SwiftUI
 /// One `propose_*` result in the transcript: the draft's summary, its exercises/days behind a
 /// disclosure, and Apply / Discard. The screen owns the state (`CoachDraftCardState`) and the
 /// undo toast, so this view only reports taps. Mirrors `CoachCardView`'s shape so the two
-/// coach surfaces read as one.
+/// coach surfaces read as one. With a second opinion on, `originLabel` says whose card this
+/// is, `reviewStrip` carries the reviewer's verdict on the drafter's card, and `rationale` is
+/// the reviewer's own paragraph above its alternative.
 struct CoachDraftCard: View {
     var draft: CoachChatDraft
     var state: CoachDraftCardState
     var formatWeight: (Double) -> String
+    var originLabel: String?
+    var reviewStrip: CoachReviewCopy.Strip?
+    var rationale: String?
     var onApply: () -> Void
     var onDiscard: () -> Void
 
@@ -16,7 +21,22 @@ struct CoachDraftCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
+            if let rationale, !rationale.isEmpty {
+                Text(rationale)
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.ink2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, DGSpace.s3)
+                    .overlay(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 1).fill(DGColor.aiViolet).frame(width: 2)
+                    }
+                    .accessibilityLabel("Reviewer's reasoning: \(rationale)")
+                    .accessibilityIdentifier(A11yID.coachChatDraftRationale)
+            }
             header
+            if let reviewStrip {
+                CoachDraftReviewStrip(strip: reviewStrip)
+            }
             disclosure
             if let caption = state.caption {
                 Text(caption)
@@ -40,11 +60,24 @@ struct CoachDraftCard: View {
                 .padding(.top, 3)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: DGSpace.s1) {
-                Text(kindLabel)
-                    .font(DGFont.condensedLabel(11))
-                    .tracking(1.0)
-                    .textCase(.uppercase)
-                    .foregroundStyle(DGColor.ink4)
+                HStack(spacing: DGSpace.s2) {
+                    Text(kindLabel)
+                        .font(DGFont.condensedLabel(11))
+                        .tracking(1.0)
+                        .textCase(.uppercase)
+                        .foregroundStyle(DGColor.ink4)
+                    if let originLabel {
+                        Text(originLabel)
+                            .font(DGFont.condensedLabel(11))
+                            .tracking(1.0)
+                            .textCase(.uppercase)
+                            .foregroundStyle(DGColor.aiVioletText)
+                            .padding(.horizontal, DGSpace.s2)
+                            .frame(minHeight: 18)
+                            .background(Capsule().fill(DGColor.surface2))
+                            .accessibilityIdentifier(A11yID.coachChatDraftOrigin)
+                    }
+                }
                 Text(draft.summary)
                     .font(DGFont.title3)
                     .foregroundStyle(DGColor.ink1)
@@ -53,7 +86,12 @@ struct CoachDraftCard: View {
             Spacer(minLength: DGSpace.s2)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(kindLabel): \(draft.summary)")
+        .accessibilityLabel(headerAccessibilityLabel)
+    }
+
+    private var headerAccessibilityLabel: String {
+        let base = "\(kindLabel): \(draft.summary)"
+        return originLabel.map { "\($0). \(base)" } ?? base
     }
 
     private var rows: [CoachDraftDetail.Row] { CoachDraftDetail.rows(for: draft, formatWeight: formatWeight) }
@@ -167,10 +205,22 @@ struct CoachDraftCard: View {
         ],
         notes: "Rest two minutes between bench sets."
     )
-    return CoachDraftCard(
-        draft: .routine(routine), state: .proposed, formatWeight: { "\(Int($0)) kg" },
-        onApply: {}, onDiscard: {}
-    )
+    return VStack(spacing: DGSpace.s3) {
+        CoachDraftCard(
+            draft: .routine(routine), state: .proposed, formatWeight: { "\(Int($0)) kg" },
+            originLabel: "Gemini's proposal",
+            reviewStrip: .agreed(
+                title: "Opus agrees", reasons: ["Volume matches your last four weeks", "Bench load is right"],
+                confidence: "High confidence"
+            ),
+            onApply: {}, onDiscard: {}
+        )
+        CoachDraftCard(
+            draft: .routine(routine), state: .notChosen, formatWeight: { "\(Int($0)) kg" },
+            originLabel: "Opus's version", rationale: "Swapped the pulldown for a row: your lats are behind.",
+            onApply: {}, onDiscard: {}
+        )
+    }
     .padding()
     .background(AmbientWash())
 }

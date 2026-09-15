@@ -61,8 +61,30 @@ extension WorkoutStore {
             } ?? [],
             restrictsMachines: availability?.restrictsMachines ?? false,
             activeProgramName: activeProgramModel(now: now, calendar: calendar)?.name,
-            routineNames: routines().map(\.name), workoutsLast4Weeks: recent
+            routineNames: routines().map(\.name), workoutsLast4Weeks: recent,
+            libraryByMuscle: coachLibraryByMuscle(availability: equipmentAvailabilityForProgram())
         )
+    }
+
+    /// Up to `perMuscle` allowed exercise names per primary muscle: what the lifter has trained
+    /// first, then favourites, then the shortest names — the library's classics tend to be the
+    /// short ones ("Bench Press" before "Incline Cable Chest Press, Single Arm").
+    func coachLibraryByMuscle(
+        availability: EquipmentAvailability, perMuscle: Int = 12
+    ) -> [String: [String]] {
+        let catalogue = exerciseCatalogue()
+        var byMuscle: [String: [(name: String, rank: (Int, Int, Int))]] = [:]
+        for exercise in exercises(in: catalogue) {
+            guard availability.verdict(equipment: exercise.equipment, machine: exercise.machine) == .allowed,
+                  let primary = exercise.primary.first else { continue }
+            let trained = catalogue.bestByExercise[exercise.id] != nil ? 0 : 1
+            let favourite = exercise.isFavorite ? 0 : 1
+            byMuscle[primary.rawValue, default: []]
+                .append((exercise.name, (trained, favourite, exercise.name.count)))
+        }
+        return byMuscle.mapValues { entries in
+            entries.sorted { $0.rank < $1.rank }.prefix(perMuscle).map(\.name)
+        }
     }
 
     /// The same, read straight from `Preferences` — what the chat screen calls.
@@ -266,9 +288,12 @@ extension Preferences.TrainingGoal {
 }
 
 extension CoachChatConfiguration {
-    /// The two chat preferences as the value the engine takes.
+    /// The chat preferences as the value the engine takes.
     @MainActor
     init(preferences: Preferences) {
-        self.init(modelID: preferences.coachModelID, consentGiven: preferences.coachChatConsentGiven)
+        self.init(
+            modelID: preferences.coachModelID, reviewerModelID: preferences.coachReviewerModelID,
+            consentGiven: preferences.coachChatConsentGiven
+        )
     }
 }

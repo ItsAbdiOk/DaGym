@@ -1,10 +1,30 @@
 import SwiftUI
 
-/// Picks the coach's model from OpenRouter's live list: searchable, tool-capable models first
-/// (the coach can't work without tools, so the rest are listed but marked), pricing per
-/// million tokens from the API itself, the current choice ticked. Saving writes
-/// `Preferences.coachModelID`; the default is kept even when the fetch fails.
+/// Which of the two chat models a picker or row is about: the coach that drafts, or the
+/// second opinion that reviews each proposal (and can be off).
+enum CoachModelRole: String, Identifiable, Sendable {
+    case coach, reviewer
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .coach: "Coach"
+        case .reviewer: "Second opinion"
+        }
+    }
+
+    var canBeOff: Bool { self == .reviewer }
+}
+
+/// Picks one of the chat's models from OpenRouter's live list: searchable, tool-capable models
+/// first (neither model can work without tools, so the rest are listed but marked), pricing
+/// per million tokens from the API itself, the current choice ticked. The reviewer's picker
+/// has an Off row on top. Saving writes `Preferences.coachModelID` or
+/// `Preferences.coachReviewerModelID`; the current choice is kept even when the fetch fails.
 struct CoachModelPickerSheet: View {
+    var role: CoachModelRole = .coach
+
     @Environment(Preferences.self) private var preferences
     @Environment(\.dismiss) private var dismiss
     @State private var models: [OpenRouterWire.Model] = []
@@ -30,7 +50,7 @@ struct CoachModelPickerSheet: View {
                 AmbientWash()
                 content
             }
-            .navigationTitle("Model")
+            .navigationTitle(role.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
@@ -51,7 +71,7 @@ struct CoachModelPickerSheet: View {
         case .failed(let reason):
             EmptyState(
                 symbol: "wifi.exclamationmark", title: "Couldn't Load Models",
-                message: "\(reason) Your current choice, \(preferences.coachModelID), is kept.",
+                message: "\(reason) Your current choice, \(currentName), is kept.",
                 action: "Try Again", onAction: { Task { await load() } }
             )
             .padding(DGSpace.s6)
@@ -70,6 +90,10 @@ struct CoachModelPickerSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, DGSpace.s5)
                     .padding(.vertical, DGSpace.s3)
+                if role.canBeOff {
+                    offRow
+                    CoachChatSettingsDivider()
+                }
                 ForEach(filtered) { model in
                     row(model)
                     CoachChatSettingsDivider()
@@ -87,10 +111,63 @@ struct CoachModelPickerSheet: View {
         .accessibilityIdentifier(A11yID.coachModelSearch)
     }
 
-    private func row(_ model: OpenRouterWire.Model) -> some View {
-        let isSelected = model.id == preferences.coachModelID
+    /// The saved id for this role; nil means the second opinion is off.
+    private var selectedID: String? {
+        switch role {
+        case .coach: preferences.coachModelID
+        case .reviewer: preferences.coachReviewerModelID
+        }
+    }
+
+    private var currentName: String {
+        selectedID.map(CoachChatConfiguration.displayName(forModelID:)) ?? "Off"
+    }
+
+    private func select(_ id: String?) {
+        switch role {
+        case .coach:
+            if let id { preferences.coachModelID = id }
+        case .reviewer:
+            preferences.coachReviewerModelID = id
+        }
+    }
+
+    private var offRow: some View {
+        let isSelected = selectedID == nil
         return Button {
-            preferences.coachModelID = model.id
+            select(nil)
+        } label: {
+            HStack(alignment: .top, spacing: DGSpace.s3) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Off").font(DGFont.body).foregroundStyle(DGColor.ink1)
+                    Text("Proposals go straight to you, from the coach alone.")
+                        .font(DGFont.footnote)
+                        .foregroundStyle(DGColor.ink3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: DGSpace.s2)
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(DGColor.coralText)
+                        .accessibilityHidden(true)
+                }
+            }
+            .padding(.horizontal, DGSpace.s5)
+            .padding(.vertical, DGSpace.s3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.dgControl)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityLabel("Off, no second opinion")
+        .accessibilityIdentifier(A11yID.coachModelOff)
+    }
+
+    private func row(_ model: OpenRouterWire.Model) -> some View {
+        let isSelected = model.id == selectedID
+        return Button {
+            select(model.id)
         } label: {
             HStack(alignment: .top, spacing: DGSpace.s3) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -145,5 +222,5 @@ struct CoachModelPickerSheet: View {
 }
 
 #Preview {
-    CoachModelPickerSheet().environment(Preferences())
+    CoachModelPickerSheet(role: .reviewer).environment(Preferences())
 }

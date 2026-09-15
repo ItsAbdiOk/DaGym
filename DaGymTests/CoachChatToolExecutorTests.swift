@@ -27,7 +27,8 @@ struct CoachChatToolExecutorTests {
             .proposeSchedule: #"{"days":{"monday":"\#(routine)"}}"#,
             .proposeDeload: #"{"exercise_id":"\#(bench)","percent":10}"#,
             .proposeSwap: #"{"routine_id":"\#(routine)","from_exercise_id":"\#(bench)","#
-                + #""to_exercise_name":"Dumbbell Row"}"#
+                + #""to_exercise_name":"Dumbbell Row"}"#,
+            .agreeWithProposal: #"{"reasons":["Volume matches"],"confidence":"high"}"#
         ]
         for tool in CoachChatToolName.allCases {
             let result = try await fixture.executor.execute(

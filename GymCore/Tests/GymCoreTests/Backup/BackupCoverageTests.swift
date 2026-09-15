@@ -190,8 +190,7 @@ struct BackupCoverageTests {
         value.trainingGoal = "strength"
         value.deloadSnoozedUntil = Self.date
         value.accent = "teal"
-        value.compactWorkoutLayout = true
-        value.showSetSteppers = true
+        (value.compactWorkoutLayout, value.showSetSteppers) = (true, true)
         value.restPauseSeconds = 25
         value.workoutDayReminderEnabled = true
         value.workoutDayReminderHour = 9
@@ -202,7 +201,8 @@ struct BackupCoverageTests {
         value.weighInBeforeWorkout = true
         value.voiceSpeakBackOnHeadphones = false
         value.voiceAutoLogEnabled = true
-        value.coachModelID = "anthropic/claude-sonnet-5"
+        value.coachModelID = "google/gemini-3.1-pro-preview"
+        value.coachReviewerModelID = "anthropic/claude-opus-5"
         value.coachChatConsentGiven = true
         value.distanceUnit = "mi"
         return value

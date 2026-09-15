@@ -2,16 +2,20 @@ import GymCore
 import SwiftUI
 
 /// The cloud-coach half of Settings → Coach: the OpenRouter key row (add / change / remove),
-/// the model row (opens the live picker), the consent state, and a "What's sent" disclosure
-/// listing every tool the coach can call. The first key save presents the consent screen;
-/// declining keeps the key but leaves `coachChatConsentGiven` false, so nothing is ever sent.
+/// the two model rows (the coach that drafts, the second opinion that reviews — each opens
+/// the live picker), a cost hint with both prices, the consent state, and a "What's sent"
+/// disclosure listing every tool the coach can call. The first key save presents the consent
+/// screen; declining keeps the key but leaves `coachChatConsentGiven` false, so nothing is
+/// ever sent.
 struct CoachChatSettingsCard: View {
     @Environment(Preferences.self) private var preferences
     @State private var hasKey = CoachChatSettings.hasAPIKey
     @State private var showingKeySheet = false
-    @State private var showingModelPicker = false
+    @State private var pickerRole: CoachModelRole?
     @State private var showingConsent = false
     @State private var showingWhatIsSent = false
+    /// Prices by model id from one GET /models, for the cost hint; empty until it lands.
+    @State private var pricing: [String: OpenRouterWire.Pricing] = [:]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,8 +31,15 @@ struct CoachChatSettingsCard: View {
             )
             .accessibilityIdentifier(A11yID.coachKeyRow)
             CoachChatSettingsDivider()
-            navigationRow(label: "Model", value: modelName, action: { showingModelPicker = true })
-                .accessibilityIdentifier(A11yID.coachModelRow)
+            navigationRow(label: "Coach", value: coachName, action: { pickerRole = .coach })
+            .accessibilityIdentifier(A11yID.coachModelRow)
+            CoachChatSettingsDivider()
+            navigationRow(
+                label: "Second opinion", value: reviewerName, action: { pickerRole = .reviewer }
+            )
+            .accessibilityIdentifier(A11yID.coachReviewerRow)
+            CoachChatSettingsDivider()
+            caption(costHint).accessibilityIdentifier(A11yID.coachCostHint)
             if hasKey {
                 CoachChatSettingsDivider()
                 consentRow
@@ -40,7 +51,7 @@ struct CoachChatSettingsCard: View {
         .sheet(isPresented: $showingKeySheet) {
             OpenRouterKeySheet(hasKey: hasKey, onSave: saveKey, onRemove: removeKey)
         }
-        .sheet(isPresented: $showingModelPicker) { CoachModelPickerSheet() }
+        .sheet(item: $pickerRole) { role in CoachModelPickerSheet(role: role) }
         .sheet(isPresented: $showingConsent) {
             CoachChatConsentSheet(
                 onAgree: { preferences.coachChatConsentGiven = true; showingConsent = false },
@@ -48,11 +59,31 @@ struct CoachChatSettingsCard: View {
             )
         }
         .onAppear { hasKey = CoachChatSettings.hasAPIKey }
+        .task(id: hasKey) { await loadPricing() }
     }
 
-    /// The saved id's last path piece ("claude-sonnet-5"), since the row is narrow.
-    private var modelName: String {
-        preferences.coachModelID.split(separator: "/").last.map(String.init) ?? preferences.coachModelID
+    private var coachName: String { CoachChatConfiguration.displayName(forModelID: preferences.coachModelID) }
+
+    private var reviewerName: String {
+        preferences.coachReviewerModelID.map(CoachChatConfiguration.displayName(forModelID:)) ?? "Off"
+    }
+
+    private var costHint: String {
+        CoachChatCostHint.line(
+            drafterModelID: preferences.coachModelID, drafterPricing: pricing[preferences.coachModelID],
+            reviewerModelID: preferences.coachReviewerModelID,
+            reviewerPricing: preferences.coachReviewerModelID.flatMap { pricing[$0] }
+        )
+    }
+
+    /// One fetch per key change, only when there is a key to fetch with; a failure leaves the
+    /// hint without prices rather than showing an error in Settings.
+    private func loadPricing() async {
+        guard hasKey, pricing.isEmpty else { return }
+        let client = OpenRouterClient(apiKey: CoachChatSettings.keyProvider)
+        guard let models = try? await client.models() else { return }
+        let pairs = models.compactMap { model in model.pricing.map { (model.id, $0) } }
+        pricing = Dictionary(pairs) { first, _ in first }
     }
 
     private var consentRow: some View {
@@ -113,6 +144,15 @@ struct CoachChatSettingsCard: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+                Text(
+                    "With a second opinion on, each proposal — with your last question and the coach's "
+                        + "reply — is also sent to that model, which can read the same tools before it "
+                        + "agrees or proposes its own version."
+                )
+                .font(DGFont.footnote)
+                .foregroundStyle(DGColor.ink3)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, DGSpace.s1)
                 Text("Chats are kept on this phone only and never sync through iCloud.")
                     .font(DGFont.footnote)
                     .foregroundStyle(DGColor.ink3)

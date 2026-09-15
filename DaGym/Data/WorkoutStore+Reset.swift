@@ -191,6 +191,7 @@ extension WorkoutStore {
         preferences.voiceAutoLogEnabled = false
         preferences.onDeviceCoachEnabled = true
         preferences.coachModelID = CoachChatConfiguration.defaultModelID
+        preferences.coachReviewerModelID = CoachChatConfiguration.defaultReviewerModelID
         preferences.coachChatConsentGiven = false
     }
 }

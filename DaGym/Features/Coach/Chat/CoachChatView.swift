@@ -70,9 +70,9 @@ struct CoachChatView: View {
     @ViewBuilder
     private var transcript: some View {
         if !isReady {
-            setupState
+            CoachChatSetupState(hasKey: CoachChatSettings.hasAPIKey) { showingSettings = true }
         } else if let engine, engine.messages.isEmpty {
-            suggestedPrompts
+            CoachChatSuggestedPromptsView(onPick: { input = $0; send() })
         } else if let engine {
             ScrollViewReader { proxy in
                 ScrollView {
@@ -106,70 +106,23 @@ struct CoachChatView: View {
     @ViewBuilder
     private func row(_ message: CoachChatMessage) -> some View {
         if message.role == .draft, let index = message.draftIndex, let draft = engine?.drafts[safe: index] {
+            let reviews = engine?.reviews ?? []
+            let drafter = preferences.coachModelID
             CoachDraftCard(
                 draft: draft, state: cardStates[index] ?? .proposed, formatWeight: preferences.formatWeight,
+                originLabel: reviews.isEmpty
+                    ? nil : CoachReviewCopy.originLabel(for: index, in: reviews, drafterModelID: drafter),
+                reviewStrip: CoachDraftLinks.review(for: index, in: reviews).map(CoachReviewCopy.strip),
+                rationale: CoachDraftLinks.rationale(for: index, in: reviews),
                 onApply: { apply(draft, at: index) }, onDiscard: { discard(at: index) }
             )
         } else {
-            CoachChatMessageRow(message: message)
+            CoachChatMessageRow(message: message, review: review(for: message))
         }
     }
 
-    private var setupState: some View {
-        VStack {
-            Spacer()
-            EmptyState(
-                symbol: "key",
-                title: "Set Up Your Coach",
-                message: CoachChatSettings.hasAPIKey
-                    ? "Agree to what's sent in Settings before the coach can read your training."
-                    : "Add your OpenRouter API key in Settings. Your key stays in the Keychain and "
-                        + "nothing is sent until you ask a question.",
-                action: "Open Settings", onAction: { showingSettings = true }
-            )
-            .padding(.horizontal, DGSpace.s6)
-            Spacer()
-        }
-    }
-
-    private var suggestedPrompts: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DGSpace.s3) {
-                Text("Try asking").dgLabel()
-                ForEach(CoachChatSuggestedPrompts.all, id: \.self) { prompt in
-                    Button {
-                        input = prompt
-                        send()
-                    } label: {
-                        HStack {
-                            Text(prompt)
-                                .font(DGFont.body)
-                                .foregroundStyle(DGColor.ink1)
-                                .multilineTextAlignment(.leading)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Spacer(minLength: DGSpace.s2)
-                            Image(systemName: "arrow.up.right")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(DGColor.aiVioletText)
-                                .accessibilityHidden(true)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .dgCard(padding: DGSpace.s4)
-                    }
-                    .buttonStyle(.dgControl)
-                    .accessibilityIdentifier(A11yID.coachChatSuggestedPrompt)
-                }
-                Text("The coach reads your log through tools and cites what it used. Proposals arrive as "
-                    + "cards you apply or discard — nothing changes until you tap Apply.")
-                    .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.ink4)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, DGSpace.s2)
-            }
-            .padding(.horizontal, DGSpace.s4)
-            .padding(.top, DGSpace.s5)
-        }
-        .scrollDismissesKeyboard(.interactively)
+    private func review(for message: CoachChatMessage) -> CoachChatReview? {
+        message.reviewIndex.flatMap { engine?.reviews[safe: $0] }
     }
 
     // MARK: - Threads
@@ -257,16 +210,19 @@ struct CoachChatView: View {
 
     /// Applies through the store and offers Undo, like Approve on the rule cards. A refusal
     /// (the routine it targets is gone) leaves the card proposed and says so in the toast.
+    /// The card's linked pair (the drafter's or the reviewer's version of the same proposal)
+    /// settles as "Not chosen"; Undo brings both back.
     private func apply(_ draft: CoachChatDraft, at index: Int) {
         guard let application = CoachChatEngineFactory.apply(draft, store: store) else {
             notice = CoachChatErrorCopy.applyRefused
             return
         }
         notice = nil
-        cardStates[index] = .applied
+        let linked = CoachDraftLinks.linkedDraftIndex(for: index, in: engine?.reviews ?? [])
+        cardStates = CoachDraftLinks.applied(at: index, linked: linked, states: cardStates)
         undoAction = UndoAction(message: "Applied: \(draft.summary)") {
             CoachChatEngineFactory.undo(application, store: store)
-            cardStates[index] = .proposed
+            cardStates = CoachDraftLinks.reverted(at: index, linked: linked, states: cardStates)
         }
     }
 

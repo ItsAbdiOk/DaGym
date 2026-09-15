@@ -61,6 +61,8 @@ public struct BackupPreferences: Codable, Sendable {
     /// The cloud coach's OpenRouter model id and the data-sharing consent. The API key is
     /// never exported: it lives in the Keychain only.
     public var coachModelID: String?
+    /// The second-opinion model; "" when the lifter turned it off, nil in older backups.
+    public var coachReviewerModelID: String?
     public var coachChatConsentGiven: Bool?
     /// `DistanceUnit` raw value ("km"/"mi").
     public var distanceUnit: String?

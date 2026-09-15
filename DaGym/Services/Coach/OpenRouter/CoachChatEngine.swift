@@ -7,27 +7,37 @@ import os
 /// for, send the results back, repeat (at most `maxToolRounds` times), then show the answer.
 /// Tool failures go back to the model as `{"error": …}`; only transport failures reach
 /// `lastError`. Cancelling leaves what was streamed plus a "stopped" marker.
+///
+/// When a second-opinion model is configured, every new proposal the drafter makes is then
+/// sent to it (`CoachChatEngine+Review.swift`): it agrees or puts up its own draft, and the
+/// lifter picks between the cards.
 @MainActor
 @Observable
 final class CoachChatEngine {
     static let maxToolRounds = 8
 
-    private static let logger = Logger(subsystem: "dev.abdirahmanmohamed.dagym", category: "coachChat")
+    static let logger = Logger(subsystem: "dev.abdirahmanmohamed.dagym", category: "coachChat")
 
     let threadID: UUID
     private(set) var messages: [CoachChatMessage]
     private(set) var drafts: [CoachChatDraft]
+    /// Parallel to `drafts`: who wrote each one.
+    private(set) var draftOrigins: [CoachChatDraftOrigin]
+    /// One per reviewed draft, in the order the reviews finished.
+    private(set) var reviews: [CoachChatReview]
     private(set) var isStreaming = false
     private(set) var lastError: OpenRouterError?
     private(set) var usage: CoachChatUsage
 
-    private let client: OpenRouterClient
-    private let executor: any CoachChatToolExecutor
-    private let configuration: CoachChatConfiguration
-    private let systemPrompt: String
-    private let tools: [OpenRouterWire.ToolDefinition]
+    let client: OpenRouterClient
+    let executor: any CoachChatToolExecutor
+    let configuration: CoachChatConfiguration
+    let systemPrompt: String
+    let tools: [OpenRouterWire.ToolDefinition]
+    /// The reviewer's catalogue: the drafter's tools plus `agree_with_proposal`.
+    let reviewerTools: [OpenRouterWire.ToolDefinition]
+    let clock: @Sendable () -> Date
     private let archive: CoachChatArchive?
-    private let clock: @Sendable () -> Date
     private let createdAt: Date
     /// What the model sees: system prompt is prepended per request; tool calls and results stay
     /// so later turns can build on earlier lookups. Rebuilt from text only on restore.
@@ -36,13 +46,15 @@ final class CoachChatEngine {
 
     /// `systemPrompt` is `CoachChatPrompt.system(...)` and `tools` is
     /// `OpenRouterWire.toolDefinitions()` — both built by the caller so a test can hand in a
-    /// one-tool catalogue and a fixed prompt.
+    /// one-tool catalogue and a fixed prompt. `reviewerTools` defaults to the full reviewer
+    /// catalogue; the reviewer only runs when `configuration.reviewerModelID` is set.
     init(
         client: OpenRouterClient,
         executor: any CoachChatToolExecutor,
         configuration: CoachChatConfiguration,
         systemPrompt: String,
         tools: [OpenRouterWire.ToolDefinition],
+        reviewerTools: [OpenRouterWire.ToolDefinition]? = nil,
         thread: CoachChatThread? = nil,
         archive: CoachChatArchive? = nil,
         clock: @escaping @Sendable () -> Date = { Date() }
@@ -52,12 +64,18 @@ final class CoachChatEngine {
         self.configuration = configuration
         self.systemPrompt = systemPrompt
         self.tools = tools
+        self.reviewerTools = reviewerTools
+            ?? (try? OpenRouterWire.toolDefinitions(CoachChatToolCatalog.reviewerTools)) ?? []
         self.archive = archive
         self.clock = clock
         threadID = thread?.id ?? UUID()
         createdAt = thread?.createdAt ?? clock()
         messages = thread?.messages ?? []
-        drafts = thread?.drafts ?? []
+        let restoredDrafts = thread?.drafts ?? []
+        drafts = restoredDrafts
+        let origins = thread?.draftOrigins ?? []
+        draftOrigins = restoredDrafts.indices.map { origins.indices.contains($0) ? origins[$0] : .drafter }
+        reviews = thread?.reviews ?? []
         usage = thread?.usage ?? CoachChatUsage()
         wire = Self.wireTranscript(from: messages)
     }
@@ -66,7 +84,7 @@ final class CoachChatEngine {
     func snapshot() -> CoachChatThread {
         CoachChatThread(
             id: threadID, createdAt: createdAt, updatedAt: messages.last?.sentAt ?? createdAt,
-            messages: messages, drafts: drafts, usage: usage
+            messages: messages, drafts: drafts, draftOrigins: draftOrigins, reviews: reviews, usage: usage
         )
     }
 
@@ -81,7 +99,12 @@ final class CoachChatEngine {
         isStreaming = true
         messages.append(.user(trimmed, at: clock()))
         wire.append(.user(trimmed))
-        let task = Task { await runTurn() }
+        let draftBase = drafts.count
+        let task = Task {
+            let finished = await runTurn()
+            guard finished, configuration.reviewerModelID != nil else { return }
+            await reviewNewDrafts(from: draftBase, request: trimmed)
+        }
         turn = task
         await task.value
         turn = nil
@@ -94,7 +117,9 @@ final class CoachChatEngine {
         turn?.cancel()
     }
 
-    private func runTurn() async {
+    /// True when the turn reached its final text; false when it failed or was stopped, in
+    /// which case nothing the drafter proposed goes for review.
+    private func runTurn() async -> Bool {
         let wireBase = wire.count
         for round in 0...Self.maxToolRounds {
             // Past the round cap the model must answer in words.
@@ -113,22 +138,40 @@ final class CoachChatEngine {
                     + reply.calls.map { "\($0.function.name)(\($0.function.arguments.count)b)" }
                         .joined(separator: " "))
             } catch is CancellationError {
-                return abandonTurn(from: wireBase, stopped: true)
+                abandonTurn(from: wireBase, stopped: true)
+                return false
             } catch let error as OpenRouterError {
-                return fail(error, from: wireBase)
+                fail(error, from: wireBase)
+                return false
             } catch {
-                return fail(.network(error), from: wireBase)
+                fail(.network(error), from: wireBase)
+                return false
+            }
+            if reply.text.isEmpty, reply.calls.isEmpty {
+                // Nothing came back at all — usually the generation cap swallowed by reasoning, or a
+                // provider hiccup. Say so in the transcript rather than end the turn in silence.
+                let why = reply.finishReason == "length"
+                    ? "The model ran out of room before answering (it spent its budget thinking). Try again."
+                    : "The model returned an empty reply. Try again."
+                Self.trace("empty reply, finish \(reply.finishReason ?? "nil")")
+                abandonTurn(from: wireBase, stopped: false)
+                messages.append(.note(why, at: clock()))
+                return false
             }
             wire.append(.assistant(
                 reply.text.isEmpty ? nil : reply.text, toolCalls: reply.calls.isEmpty ? nil : reply.calls
             ))
-            if reply.calls.isEmpty { return }
+            if reply.calls.isEmpty { return true }
             for call in reply.calls {
-                if Task.isCancelled { return abandonTurn(from: wireBase, stopped: true) }
-                let content = await execute(call)
+                if Task.isCancelled {
+                    abandonTurn(from: wireBase, stopped: true)
+                    return false
+                }
+                let content = await execute(call, origin: .drafter, reviewIndex: nil, chipPrefix: nil)
                 wire.append(.tool(callID: call.id, content: content))
             }
         }
+        return true
     }
 
     /// A failed round: the banner gets the typed error, and the transcript gets a line saying so
@@ -141,26 +184,16 @@ final class CoachChatEngine {
         messages.append(.note(Self.failureLine(for: error), at: clock()))
     }
 
-    static func failureLine(for error: OpenRouterError) -> String {
-        switch error.kind {
-        case .missingKey: "No OpenRouter key is set — add one in Settings › Coach."
-        case .unauthorized: "OpenRouter rejected the key. Check it in Settings › Coach."
-        case .insufficientCredits: "The OpenRouter account is out of credit."
-        case .rateLimited: "OpenRouter is rate-limiting this key. Try again in a moment."
-        case .badRequest: "The model rejected that request. \(error.detail)"
-        case .server: "OpenRouter had a server error. Try again."
-        case .network: "Couldn't reach OpenRouter. Check the connection and try again."
-        case .decoding: "OpenRouter sent something this build couldn't read."
-        }
-    }
-
     /// The streamed part of one model reply, with tool-call fragments already concatenated.
-    private struct Reply {
+    struct Reply {
         var text = ""
         var calls: [OpenRouterWire.ToolCall] = []
+        var finishReason: String?
     }
 
-    private func consume(_ request: OpenRouterWire.ChatRequest) async throws -> Reply {
+    /// Streams one reply into the transcript. The drafter's text lands in an assistant bubble;
+    /// a `reviewIndex` puts it in a `.review` row instead. Usage is booked to the request's model.
+    func consume(_ request: OpenRouterWire.ChatRequest, reviewIndex: Int? = nil) async throws -> Reply {
         var reply = Reply()
         var bubbleIndex: Int?
         var calls: [Int: OpenRouterWire.ToolCall] = [:]
@@ -172,7 +205,11 @@ final class CoachChatEngine {
                     messages[bubbleIndex].text = reply.text
                 } else {
                     bubbleIndex = messages.count
-                    messages.append(.assistant(reply.text, at: clock()))
+                    if let reviewIndex {
+                        messages.append(.review(reply.text, index: reviewIndex, at: clock()))
+                    } else {
+                        messages.append(.assistant(reply.text, at: clock()))
+                    }
                 }
             case .toolCallDelta(let index, let id, let name, let chunk):
                 var call = calls[index] ?? OpenRouterWire.ToolCall(
@@ -183,33 +220,30 @@ final class CoachChatEngine {
                 call.function.arguments += chunk
                 calls[index] = call
             case .finished(let reason, let turnUsage):
-                if let turnUsage { usage.add(turnUsage) }
+                if let turnUsage { usage.add(turnUsage, model: request.model) }
+                reply.finishReason = reason
                 if reason == "length", let bubbleIndex { messages[bubbleIndex].isStopped = true }
             }
         }
         // A cancelled consumer sees the stream end rather than throw; make it throw here so the
         // turn is abandoned instead of a half-reply being sent back as if it were whole.
         try Task.checkCancellation()
-        reply.calls = calls.keys.sorted().compactMap { calls[$0] }
-            .filter { !$0.function.name.isEmpty }
-            .map { call in
-                // A tool with no parameters streams no argument fragments at all. Replaying the
-                // call with `"arguments": ""` is rejected as invalid JSON on the next round, which
-                // silently killed every turn that began with `get_profile`.
-                var call = call
-                if call.function.arguments.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    call.function.arguments = "{}"
-                }
-                return call
-            }
+        reply.calls = Self.orderedCalls(calls)
         return reply
     }
 
     /// Runs one tool call, showing an activity chip while it runs, and returns what the model
-    /// gets back: the tool's JSON, the draft's compact summary, or `{"error": …}`.
-    private func execute(_ call: OpenRouterWire.ToolCall) async -> String {
+    /// gets back: the tool's JSON, the draft's compact summary, or `{"error": …}`. The
+    /// reviewer's calls carry its short name on the chip ("Opus · Reading exercise history").
+    func execute(
+        _ call: OpenRouterWire.ToolCall, origin: CoachChatDraftOrigin, reviewIndex: Int?, chipPrefix: String?
+    ) async -> String {
         let chipIndex = messages.count
-        messages.append(.tool(call.function.name, at: clock()))
+        var chip = CoachChatMessage.tool(call.function.name, at: clock())
+        if let subject = Self.chipSubject(from: call.function.arguments) { chip.text += " · \(subject)" }
+        if let chipPrefix { chip.text = "\(chipPrefix) · \(chip.text)" }
+        chip.reviewIndex = reviewIndex
+        messages.append(chip)
         do {
             let result = try await executor.execute(
                 name: call.function.name, argumentsJSON: call.function.arguments
@@ -218,8 +252,7 @@ final class CoachChatEngine {
             case .json(let json):
                 return json
             case .draft(let draft, let summaryJSON):
-                drafts.append(draft)
-                messages.append(.draft(index: drafts.count - 1, summary: draft.summary, at: clock()))
+                appendDraft(draft, origin: origin, reviewIndex: reviewIndex)
                 return summaryJSON
             }
         } catch {
@@ -230,23 +263,6 @@ final class CoachChatEngine {
             Self.trace("failed arguments head: \(call.function.arguments.prefix(300))")
             return Self.errorJSON(error.localizedDescription)
         }
-    }
-
-    /// `-dgCoachTrace` (Debug only) logs each round's shape — counts, tool names, argument
-    /// sizes, never message text or the key — so a silent turn can be read off `log stream`.
-    static func trace(_ line: @autoclosure () -> String) {
-        #if DEBUG
-        guard ProcessInfo.processInfo.arguments.contains("-dgCoachTrace") else { return }
-        let text = line()
-        logger.notice("trace: \(text, privacy: .public)")
-        #endif
-    }
-
-    static func errorJSON(_ message: String) -> String {
-        guard let data = try? JSONEncoder().encode(["error": message]),
-              let json = String(data: data, encoding: .utf8)
-        else { return #"{"error":"Tool failed."}"# }
-        return json
     }
 
     /// Rolls the wire transcript back to the user message so no assistant tool call is left
@@ -281,8 +297,55 @@ final class CoachChatEngine {
             switch message.role {
             case .user: .user(message.text)
             case .assistant: message.text.isEmpty || message.isNote == true ? nil : .assistant(message.text)
-            case .tool, .draft: nil
+            case .tool, .draft, .review: nil
             }
         }
+    }
+}
+
+// MARK: - Drafts and reviews (what the cards read)
+
+extension CoachChatEngine {
+    /// Who wrote `drafts[index]`.
+    func origin(ofDraft index: Int) -> CoachChatDraftOrigin {
+        draftOrigins.indices.contains(index) ? draftOrigins[index] : .drafter
+    }
+
+    /// The review of a drafter's draft, or the review that produced a reviewer's draft.
+    func review(forDraft index: Int) -> CoachChatReview? {
+        reviews.first { $0.draftIndex == index || $0.alternativeDraftIndex == index }
+    }
+
+    /// The other card in a pair: the reviewer's alternative for a drafter's draft, and the
+    /// drafter's original for the alternative. Applying one discards the other.
+    func linkedDraftIndex(for index: Int) -> Int? {
+        guard let review = review(forDraft: index), let alternative = review.alternativeDraftIndex else {
+            return nil
+        }
+        return alternative == index ? review.draftIndex : alternative
+    }
+
+    /// Appends a draft from either model and its card row; returns its index.
+    @discardableResult
+    func appendDraft(_ draft: CoachChatDraft, origin: CoachChatDraftOrigin, reviewIndex: Int?) -> Int {
+        drafts.append(draft)
+        draftOrigins.append(origin)
+        let index = drafts.count - 1
+        var card = CoachChatMessage.draft(index: index, summary: draft.summary, at: clock())
+        card.reviewIndex = reviewIndex
+        messages.append(card)
+        return index
+    }
+
+    func appendMessage(_ message: CoachChatMessage) {
+        messages.append(message)
+    }
+
+    func markToolError(at index: Int) {
+        messages[index].isToolError = true
+    }
+
+    func recordReview(_ review: CoachChatReview) {
+        reviews.append(review)
     }
 }

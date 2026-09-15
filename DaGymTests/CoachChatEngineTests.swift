@@ -9,6 +9,9 @@ import Testing
 @MainActor
 final class FakeCoachChatToolExecutor: CoachChatToolExecutor {
     var results: [String: CoachChatToolResult] = [:]
+    /// Answers to `propose_*` in order, so one script can give the drafter and the reviewer
+    /// different drafts; falls back to `results` when empty.
+    var drafts: [CoachChatToolResult] = []
     var failing: Set<String> = []
     private(set) var calls: [(name: String, arguments: String)] = []
 
@@ -17,6 +20,7 @@ final class FakeCoachChatToolExecutor: CoachChatToolExecutor {
     func execute(name: String, argumentsJSON: String) async throws -> CoachChatToolResult {
         calls.append((name, argumentsJSON))
         if failing.contains(name) { throw Failure() }
+        if name.hasPrefix("propose_"), !drafts.isEmpty { return drafts.removeFirst() }
         return results[name] ?? .json(#"{"unknown":true}"#)
     }
 }
@@ -29,13 +33,15 @@ struct CoachChatEngineTests {
     nonisolated private static let now = Date(timeIntervalSince1970: 1_800_000_000)
     private static let tools: [OpenRouterWire.ToolDefinition] = (try? OpenRouterWire.toolDefinitions()) ?? []
 
+    /// Second opinion off: these tests cover the drafter's loop alone.
     private func engine(
         _ transport: Fake, executor: FakeCoachChatToolExecutor = FakeCoachChatToolExecutor(),
         thread: CoachChatThread? = nil, archive: CoachChatArchive? = nil
     ) -> CoachChatEngine {
         CoachChatEngine(
             client: OpenRouterClient(apiKey: { "or-test" }, transport: transport),
-            executor: executor, configuration: CoachChatConfiguration(consentGiven: true),
+            executor: executor,
+            configuration: CoachChatConfiguration(reviewerModelID: nil, consentGiven: true),
             systemPrompt: "You are a coach.", tools: Self.tools, thread: thread, archive: archive,
             clock: { Self.now }
         )
@@ -68,7 +74,11 @@ struct CoachChatEngineTests {
         #expect(engine.messages.first?.text == "How do I bench more?")
         #expect(engine.isStreaming == false)
         #expect(engine.lastError == nil)
-        #expect(engine.usage == CoachChatUsage(promptTokens: 50, completionTokens: 5))
+        #expect(engine.usage.promptTokens == 50)
+        #expect(engine.usage.completionTokens == 5)
+        #expect(engine.usage.byModel == [
+            CoachChatConfiguration.defaultModelID: CoachChatModelUsage(promptTokens: 50, completionTokens: 5)
+        ])
         let request = try #require(transport.chatRequest(at: 0))
         #expect(request.messages.first == .system("You are a coach."))
         #expect(request.messages.last == .user("How do I bench more?"))
@@ -93,7 +103,8 @@ struct CoachChatEngineTests {
         #expect(engine.messages.map(\.role) == [.user, .tool, .tool, .assistant])
         #expect(engine.messages[1].text == CoachChatToolName.getProfile.activityLabel)
         #expect(engine.messages.last?.text == "Rest a day.")
-        #expect(engine.usage == CoachChatUsage(promptTokens: 150, completionTokens: 15))
+        #expect(engine.usage.promptTokens == 150)
+        #expect(engine.usage.completionTokens == 15)
 
         let second = try #require(transport.chatRequest(at: 1))
         let assistant = try #require(second.messages.dropLast(2).last)
@@ -138,6 +149,8 @@ struct CoachChatEngineTests {
         let engine = engine(transport, executor: executor)
         await engine.send("Build me a push day")
         #expect(engine.drafts == [.routine(proposal)])
+        #expect(engine.draftOrigins == [.drafter])
+        #expect(engine.reviews.isEmpty)
         #expect(engine.messages.map(\.role) == [.user, .tool, .draft, .assistant])
         #expect(engine.messages[2].draftIndex == 0)
         #expect(engine.messages[2].text == proposal.summary)

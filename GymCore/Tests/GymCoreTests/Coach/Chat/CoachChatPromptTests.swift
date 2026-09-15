@@ -16,7 +16,7 @@ struct CoachChatPromptTests {
             workoutsLast4Weeks: 13
         )
         let prompt = CoachChatPrompt.system(profile: profile, now: now, calendar: CoachTestSupport.calendar)
-        #expect(prompt.hasPrefix("You are the coach inside DaGym"))
+        #expect(prompt.hasPrefix("You are the lifter's personal strength coach inside DaGym"))
         #expect(prompt.contains("Today is Tuesday 2026-09-15."))
         #expect(prompt.contains("- Displays weights in lb."))
         #expect(prompt.contains("- Training for muscle, intermediate."))
@@ -28,6 +28,28 @@ struct CoachChatPromptTests {
         for rule in CoachChatPrompt.houseRules {
             #expect(prompt.contains("- \(rule)"))
         }
+        for principle in CoachChatPrompt.coachingPrinciples {
+            #expect(prompt.contains("- \(principle)"))
+        }
+        for guide in CoachChatPrompt.dataGuide {
+            #expect(prompt.contains("- \(guide)"))
+        }
+        #expect(prompt.contains("How you coach:"))
+        #expect(prompt.contains("Reading the data"))
+    }
+
+    @Test("the coaching principles cover fatigue, week-on-week progression and weights from history")
+    func coachingPrinciples() {
+        let text = CoachChatPrompt.coachingPrinciples.joined(separator: " ")
+        #expect(text.contains("get_recovery"))
+        #expect(text.contains("deload"))
+        #expect(text.contains("week on week"))
+        #expect(text.contains("5–10% under the best recent working weight"))
+        #expect(text.contains("Adherence beats optimal"))
+        let addendum = CoachChatPrompt.reviewerAddendum(drafterName: "Gemini 3.1 Pro")
+        #expect(addendum.contains("Gemini 3.1 Pro has read the same data"))
+        #expect(addendum.contains("agree_with_proposal"))
+        #expect(addendum.contains("Do not both agree and propose"))
     }
 
     @Test("a bare profile still gets the rules and asks about equipment")

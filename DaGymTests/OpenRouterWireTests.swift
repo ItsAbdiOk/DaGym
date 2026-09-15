@@ -79,7 +79,7 @@ struct OpenRouterWireTests {
         let models = try decode(OpenRouterWire.ModelsResponse.self, json).data
         #expect(models.count == 2)
         let sonnet = try #require(models.first)
-        #expect(sonnet.id == CoachChatConfiguration.defaultModelID)
+        #expect(sonnet.id == "anthropic/claude-sonnet-5")
         #expect(sonnet.contextLength == 1_000_000)
         #expect(sonnet.supportsTools)
         #expect(sonnet.pricing?.promptUSDPerMillion == Decimal(2))

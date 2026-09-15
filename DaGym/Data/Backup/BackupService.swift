@@ -173,6 +173,7 @@ enum BackupService {
         backup.voiceSpeakBackOnHeadphones = preferences.voiceSpeakBackOnHeadphones
         backup.voiceAutoLogEnabled = preferences.voiceAutoLogEnabled
         backup.coachModelID = preferences.coachModelID
+        backup.coachReviewerModelID = preferences.coachReviewerModelID ?? ""
         backup.coachChatConsentGiven = preferences.coachChatConsentGiven
         backup.distanceUnit = preferences.distanceUnit.rawValue
         return backup

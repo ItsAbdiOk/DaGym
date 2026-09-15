@@ -40,4 +40,37 @@ struct CoachChatToolSearchTests {
             _ = try await fixture.executor.execute(name: "search_exercises", argumentsJSON: "{}")
         }
     }
+
+    @Test("argument JSON with a fence, trailing commas or trailing prose still decodes")
+    func tolerantArguments() {
+        let fenced = """
+        ```json
+        {"query": "press", "limit": 5,}
+        ```
+        """
+        #expect(StoreCoachChatToolExecutor.tolerantJSON(fenced) == #"{"query": "press", "limit": 5}"#)
+        let trailing = #"{"days": {"monday": "a",}, "note": "a, b, c,"} and that's the plan"#
+        let expected = #"{"days": {"monday": "a"}, "note": "a, b, c,"}"#
+        #expect(StoreCoachChatToolExecutor.tolerantJSON(trailing) == expected)
+        #expect(StoreCoachChatToolExecutor.tolerantJSON("   ").isEmpty)
+    }
+
+    @Test("propose_routine accepts the set_count shorthand and expands it into sets")
+    func shorthandSets() async throws {
+        let fixture = try CoachChatToolFixture.make()
+        let draft = try await fixture.draft(
+            .proposeRoutine,
+            #"{"name":"Push","exercises":[{"exercise_name":"Bench Press","set_count":3,"target_reps":8,"#
+                + #""target_reps_high":12,"target_weight_kg":60,"warmup_sets":1}]}"#
+        )
+        guard case .routine(let routine) = draft else {
+            Issue.record("expected a routine draft")
+            return
+        }
+        let sets = try #require(routine.exercises.first?.sets)
+        #expect(sets.count == 4)
+        #expect(sets.first?.kind == .warmup)
+        let working = sets.dropFirst()
+        #expect(working.allSatisfy { $0.kind == .working && $0.targetReps == 8 && $0.targetWeightKg == 60 })
+    }
 }

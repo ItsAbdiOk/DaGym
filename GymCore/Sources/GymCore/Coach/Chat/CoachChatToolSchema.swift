@@ -143,9 +143,14 @@ public enum CoachChatToolName: String, CaseIterable, Codable, Hashable, Sendable
     case proposeSchedule = "propose_schedule"
     case proposeDeload = "propose_deload"
     case proposeSwap = "propose_swap"
+    /// Reviewer-only: the second model's way of saying the drafter's proposal stands.
+    case agreeWithProposal = "agree_with_proposal"
 
     /// True for the tools that build a `CoachChatDraft` rather than read data.
     public var isProposal: Bool { rawValue.hasPrefix("propose_") }
+
+    /// True for the tools only the second-opinion model is offered.
+    public var isReviewerOnly: Bool { self == .agreeWithProposal }
 
     /// The one-line label the chat shows while the tool runs ("Reading bench history").
     public var activityLabel: String {
@@ -170,6 +175,7 @@ public enum CoachChatToolName: String, CaseIterable, Codable, Hashable, Sendable
         case .proposeSchedule: "Drafting a schedule"
         case .proposeDeload: "Drafting a deload"
         case .proposeSwap: "Drafting a swap"
+        case .agreeWithProposal: "Agreeing with the proposal"
         }
     }
 }

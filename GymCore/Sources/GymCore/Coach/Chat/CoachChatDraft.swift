@@ -109,6 +109,63 @@ public struct CoachChatExerciseSpec: Codable, Hashable, Sendable {
         case sets
         case restSeconds = "rest_seconds"
         case supersetGroup = "superset_group"
+        // Shorthand the model may send instead of `sets`: one line per exercise instead of one
+        // object per set. A four-routine program went from 3.7 KB of arguments to under 1 KB,
+        // which is most of the time the model spent writing a proposal.
+        case setCount = "set_count"
+        case targetReps = "target_reps"
+        case targetRepsHigh = "target_reps_high"
+        case targetWeightKg = "target_weight_kg"
+        case rpe
+        case warmupSets = "warmup_sets"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        exerciseID = try container.decodeIfPresent(UUID.self, forKey: .exerciseID)
+        exerciseName = try container.decodeIfPresent(String.self, forKey: .exerciseName)
+        restSeconds = try container.decodeIfPresent(Int.self, forKey: .restSeconds)
+        supersetGroup = try container.decodeIfPresent(Int.self, forKey: .supersetGroup)
+        let explicit = try container.decodeIfPresent([CoachChatSetSpec].self, forKey: .sets) ?? []
+        if !explicit.isEmpty {
+            sets = explicit
+            return
+        }
+        guard let count = try container.decodeIfPresent(Int.self, forKey: .setCount),
+              let reps = try container.decodeIfPresent(Int.self, forKey: .targetReps) else {
+            throw DecodingError.keyNotFound(
+                CodingKeys.sets,
+                DecodingError.Context(
+                    codingPath: container.codingPath,
+                    debugDescription: "give `sets`, or `set_count` with `target_reps`"
+                )
+            )
+        }
+        let weight = try container.decodeIfPresent(Double.self, forKey: .targetWeightKg)
+        let rpe = try container.decodeIfPresent(Double.self, forKey: .rpe)
+        let warmups = try container.decodeIfPresent(Int.self, forKey: .warmupSets) ?? 0
+        // Reps from `target_reps` to `target_reps_high` are spread evenly across the working sets
+        // (the top of the range first — the ramp Apple's own strength apps use is heavier first).
+        let high = try container.decodeIfPresent(Int.self, forKey: .targetRepsHigh) ?? reps
+        let low = min(reps, high)
+        var expanded: [CoachChatSetSpec] = []
+        expanded.reserveCapacity(max(0, warmups) + max(0, count))
+        for _ in 0..<max(0, min(warmups, 3)) {
+            expanded.append(CoachChatSetSpec(kind: .warmup, targetReps: max(low, 8), targetWeightKg: nil))
+        }
+        for _ in 0..<max(0, count) {
+            expanded.append(CoachChatSetSpec(targetReps: low, targetWeightKg: weight, rpe: rpe))
+        }
+        sets = expanded
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(exerciseID, forKey: .exerciseID)
+        try container.encodeIfPresent(exerciseName, forKey: .exerciseName)
+        try container.encode(sets, forKey: .sets)
+        try container.encodeIfPresent(restSeconds, forKey: .restSeconds)
+        try container.encodeIfPresent(supersetGroup, forKey: .supersetGroup)
     }
 
     /// What the card and a rejection call this exercise.

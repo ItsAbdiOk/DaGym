@@ -218,19 +218,45 @@ struct CoachChatApplyTests {
         #expect(Preferences.TrainingGoal.muscle.coachGoal == .hypertrophy)
     }
 
-    @Test("the chat configuration reads the two preferences and nothing else")
+    @Test("the chat configuration reads the three preferences and nothing else")
     func configuration() throws {
         let name = "CoachChatApplyTests.configuration"
         let defaults = try #require(UserDefaults(suiteName: name))
         defaults.removePersistentDomain(forName: name)
         let preferences = Preferences(suite: defaults)
         #expect(CoachChatConfiguration(preferences: preferences) == CoachChatConfiguration())
+        #expect(preferences.coachModelID == "google/gemini-3.1-pro-preview")
+        #expect(preferences.coachReviewerModelID == "anthropic/claude-opus-5")
         preferences.coachModelID = "openai/gpt-5"
+        preferences.coachReviewerModelID = nil
         preferences.coachChatConsentGiven = true
         let configuration = CoachChatConfiguration(preferences: preferences)
         #expect(configuration.modelID == "openai/gpt-5")
+        #expect(configuration.reviewerModelID == nil)
         #expect(configuration.consentGiven)
         #expect(Preferences(suite: defaults).coachModelID == "openai/gpt-5")
+        // "Off" survives a relaunch: nil is stored as "", which is not the never-set default.
+        #expect(Preferences(suite: defaults).coachReviewerModelID == nil)
         #expect(Preferences(suite: defaults).coachChatConsentGiven)
+        preferences.coachReviewerModelID = "anthropic/claude-sonnet-5"
+        #expect(Preferences(suite: defaults).coachReviewerModelID == "anthropic/claude-sonnet-5")
+    }
+
+    @Test("display names come from the model id: vendor dropped, channel suffix dropped")
+    func displayNames() {
+        let configuration = CoachChatConfiguration()
+        #expect(configuration.drafterDisplayName == "Gemini 3.1 Pro")
+        #expect(configuration.reviewerDisplayName == "Claude Opus 5")
+        #expect(configuration.drafterShortName == "Gemini")
+        #expect(configuration.reviewerShortName == "Opus")
+        #expect(CoachChatConfiguration.displayName(forModelID: "openai/gpt-5") == "GPT 5")
+        let thinking = CoachChatConfiguration.displayName(forModelID: "anthropic/claude-sonnet-5:thinking")
+        #expect(thinking == "Claude Sonnet 5")
+        #expect(CoachChatConfiguration.shortName(forModelID: "anthropic/claude-sonnet-5") == "Sonnet")
+        #expect(CoachChatConfiguration.shortName(forModelID: "openai/gpt-5") == "GPT")
+        var off = configuration
+        off.reviewerModelID = nil
+        #expect(off.reviewerDisplayName == nil)
+        #expect(off.reviewerShortName == nil)
     }
 }

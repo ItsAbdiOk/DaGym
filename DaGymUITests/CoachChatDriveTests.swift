@@ -43,23 +43,32 @@ final class CoachChatDriveTests: XCTestCase {
         app.buttons["coach.chat.send"].tap()
 
         // Poll for up to three minutes, snapshotting the transcript every ten seconds.
-        let deadline = Date().addingTimeInterval(180)
+        let deadline = Date().addingTimeInterval(420)
         var lastSummary = ""
         while Date() < deadline {
             sleep(10)
             let chips = elements(app, "coach.chat.tool")
             let bubbles = elements(app, "coach.chat.assistant")
             let drafts = elements(app, "coach.chat.draft")
+            let reviews = elements(app, "coach.chat.review")
             let summary = "chips=\(chips.count) bubbles=\(bubbles.count) drafts=\(drafts.count) "
-                + "streaming=\(app.buttons["coach.chat.stop"].exists)"
+                + "reviews=\(reviews.count) streaming=\(app.buttons["coach.chat.stop"].exists)"
             if summary != lastSummary {
                 print("DRIVE \(Int(deadline.timeIntervalSinceNow))s left: \(summary)")
                 for chip in chips { print("DRIVE chip: \(chip.label)") }
                 for bubble in bubbles { print("DRIVE assistant: \(bubble.label.prefix(600))") }
                 for draft in drafts { print("DRIVE draft: \(draft.label.prefix(300))") }
+                for review in reviews { print("DRIVE review: \(review.label.prefix(400))") }
+                for strip in elements(app, "coach.chat.draft.review") {
+                    print("DRIVE strip: \(strip.label.prefix(300))")
+                }
                 lastSummary = summary
             }
-            if !app.buttons["coach.chat.stop"].exists, !bubbles.isEmpty || !drafts.isEmpty { break }
+            if !app.buttons["coach.chat.stop"].exists, !bubbles.isEmpty || !drafts.isEmpty {
+                // Give a review pass a chance to start before calling the turn done.
+                sleep(8)
+                if !app.buttons["coach.chat.stop"].exists { break }
+            }
         }
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.lifetime = .keepAlways

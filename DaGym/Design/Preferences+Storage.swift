@@ -51,6 +51,7 @@ extension Preferences {
         static let voiceAutoLogEnabled = "voiceAutoLogEnabled"
         static let onDeviceCoachEnabled = "onDeviceCoachEnabled"
         static let coachModelID = "coachModelID"
+        static let coachReviewerModelID = "coachReviewerModelID"
         static let coachChatConsentGiven = "coachChatConsentGiven"
     }
 
@@ -75,6 +76,13 @@ extension Preferences {
 
     static func boolValue(_ suite: UserDefaults, _ key: String, default value: Bool) -> Bool {
         suite.object(forKey: key) as? Bool ?? value
+    }
+
+    /// The stored second-opinion model: nil (never set) means the default, "" means off.
+    static func reviewerModelID(_ stored: String?) -> String? {
+        guard let stored else { return CoachChatConfiguration.defaultReviewerModelID }
+        let trimmed = stored.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     /// The answer to onboarding's "What's your main goal?". It is not decoration: picking one

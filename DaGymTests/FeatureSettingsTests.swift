@@ -421,6 +421,7 @@ struct WorkoutStoreWipeAllDataTests {
         preferences.voiceAutoLogEnabled = true
         preferences.sampleDataMode = true
         preferences.coachModelID = "openai/gpt-5"
+        preferences.coachReviewerModelID = nil
         preferences.coachChatConsentGiven = true
 
         store.wipeAllData(preferences: preferences, effects: .inert)
@@ -430,6 +431,8 @@ struct WorkoutStoreWipeAllDataTests {
         #expect(preferences.voiceAutoLogEnabled == fresh.voiceAutoLogEnabled)
         #expect(preferences.sampleDataMode == fresh.sampleDataMode)
         #expect(preferences.coachModelID == fresh.coachModelID)
+        #expect(preferences.coachReviewerModelID == fresh.coachReviewerModelID)
+        #expect(preferences.coachReviewerModelID == CoachChatConfiguration.defaultReviewerModelID)
         #expect(preferences.coachChatConsentGiven == fresh.coachChatConsentGiven)
     }
 

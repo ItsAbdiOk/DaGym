@@ -260,6 +260,12 @@ final class Preferences {
     var coachModelID: String {
         didSet { defaults.set(coachModelID, forKey: Key.coachModelID) }
     }
+    /// The second-opinion model every proposal is sent to, by OpenRouter id; nil turns the
+    /// second opinion off. Stored as `Key.coachReviewerModelID` with "" meaning off, so "never
+    /// set" (default on) and "turned off" are told apart.
+    var coachReviewerModelID: String? {
+        didSet { defaults.set(coachReviewerModelID ?? "", forKey: Key.coachReviewerModelID) }
+    }
     /// The lifter agreed that their training data is sent to OpenRouter and the chosen model.
     /// Shown once when a key is first saved; nothing is sent until this is true.
     var coachChatConsentGiven: Bool {
@@ -283,6 +289,7 @@ final class Preferences {
         voiceAutoLogEnabled = Self.boolValue(suite, Key.voiceAutoLogEnabled, default: false)
         onDeviceCoachEnabled = Self.boolValue(suite, Key.onDeviceCoachEnabled, default: true)
         coachModelID = suite.string(forKey: Key.coachModelID) ?? CoachChatConfiguration.defaultModelID
+        coachReviewerModelID = Self.reviewerModelID(suite.string(forKey: Key.coachReviewerModelID))
         coachChatConsentGiven = Self.boolValue(suite, Key.coachChatConsentGiven, default: false)
         let unit = WeightUnit(rawValue: suite.string(forKey: Key.weightUnit) ?? "") ?? .kg
         weightUnit = unit

@@ -94,6 +94,10 @@ extension BackupService {
     /// The cloud coach's model and consent; the API key is never in a backup.
     private static func applyCoach(_ backup: BackupPreferences, to preferences: Preferences) {
         if let value = backup.coachModelID, !value.isEmpty { preferences.coachModelID = value }
+        // "" is an explicit "off"; a backup from before the second opinion existed leaves it alone.
+        if let value = backup.coachReviewerModelID {
+            preferences.coachReviewerModelID = Preferences.reviewerModelID(value)
+        }
         if let value = backup.coachChatConsentGiven { preferences.coachChatConsentGiven = value }
     }
 }

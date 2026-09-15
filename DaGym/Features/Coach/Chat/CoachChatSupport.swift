@@ -206,11 +206,13 @@ enum CoachDraftDetail {
     }
 }
 
-/// Where a draft card sits: still proposed, applied (undo lives in the toast), or discarded.
-/// Kept by the screen per draft index; the archive doesn't store it, so a restored thread's
-/// cards come back as proposed and Apply is refused by the store if the target is gone.
+/// Where a draft card sits: still proposed, applied (undo lives in the toast), discarded by
+/// the lifter, or not chosen because its linked card (the drafter's or the reviewer's version
+/// of the same proposal) was applied instead. Kept by the screen per draft index; the archive
+/// doesn't store it, so a restored thread's cards come back as proposed and Apply is refused
+/// by the store if the target is gone.
 enum CoachDraftCardState: Equatable, Sendable {
-    case proposed, applied, discarded
+    case proposed, applied, discarded, notChosen
 
     var isSettled: Bool { self != .proposed }
 
@@ -219,6 +221,7 @@ enum CoachDraftCardState: Equatable, Sendable {
         case .proposed: nil
         case .applied: "Applied"
         case .discarded: "Discarded"
+        case .notChosen: "Not chosen"
         }
     }
 }
@@ -291,7 +294,7 @@ enum CoachChatTranscript {
         switch last.role {
         case .user, .tool: return true
         case .assistant: return last.text.isEmpty
-        case .draft: return false
+        case .draft, .review: return false
         }
     }
 }

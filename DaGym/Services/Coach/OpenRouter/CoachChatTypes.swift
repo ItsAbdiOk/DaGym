@@ -25,6 +25,9 @@ struct CoachChatMessage: Identifiable, Codable, Equatable, Sendable {
         case tool
         /// A proposal card; `draftIndex` points into the thread's `drafts`.
         case draft
+        /// The second-opinion model's words: its streamed text, its verdict line, or the muted
+        /// note when it failed. `reviewIndex` points into the thread's `reviews`.
+        case review
     }
 
     var id: UUID
@@ -32,6 +35,9 @@ struct CoachChatMessage: Identifiable, Codable, Equatable, Sendable {
     var text: String
     var toolName: String?
     var draftIndex: Int?
+    /// For `.review` rows (and the reviewer's tool chips and draft cards): which review they
+    /// belong to. Optional so threads archived before the second opinion existed decode.
+    var reviewIndex: Int?
     /// The tool call failed; the chip says so in passing while the model retries or explains.
     var isToolError = false
     /// The lifter tapped stop mid-answer; the bubble shows a "stopped" marker.
@@ -61,6 +67,13 @@ struct CoachChatMessage: Identifiable, Codable, Equatable, Sendable {
         CoachChatMessage(id: UUID(), role: .draft, text: summary, draftIndex: index, sentAt: date)
     }
 
+    static func review(_ text: String, index: Int, isNote: Bool = false, at date: Date) -> CoachChatMessage {
+        CoachChatMessage(
+            id: UUID(), role: .review, text: text, reviewIndex: index, isNote: isNote ? true : nil,
+            sentAt: date
+        )
+    }
+
     /// The catalogue's own label for a known tool ("Reading exercise history"); an unknown name
     /// (the model invented one) is humanised so the chip still reads.
     static func label(forTool name: String) -> String {
@@ -80,8 +93,41 @@ struct CoachChatMessage: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
-/// Token counts summed over the thread, plus cost when OpenRouter reports it.
+/// Token counts summed over the thread, plus cost when OpenRouter reports it. The totals
+/// cover both models; `byModel` splits them by OpenRouter model id for the usage line.
 struct CoachChatUsage: Codable, Equatable, Sendable {
+    var promptTokens = 0
+    var completionTokens = 0
+    var costUSD: Double?
+    var byModel: [String: CoachChatModelUsage] = [:]
+
+    init(promptTokens: Int = 0, completionTokens: Int = 0, costUSD: Double? = nil,
+         byModel: [String: CoachChatModelUsage] = [:]) {
+        self.promptTokens = promptTokens
+        self.completionTokens = completionTokens
+        self.costUSD = costUSD
+        self.byModel = byModel
+    }
+
+    /// `byModel` is missing from threads archived before the second opinion existed.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        promptTokens = try container.decodeIfPresent(Int.self, forKey: .promptTokens) ?? 0
+        completionTokens = try container.decodeIfPresent(Int.self, forKey: .completionTokens) ?? 0
+        costUSD = try container.decodeIfPresent(Double.self, forKey: .costUSD)
+        byModel = try container.decodeIfPresent([String: CoachChatModelUsage].self, forKey: .byModel) ?? [:]
+    }
+
+    mutating func add(_ usage: OpenRouterWire.Usage, model: String) {
+        promptTokens += usage.promptTokens
+        completionTokens += usage.completionTokens
+        if let cost = usage.cost { costUSD = (costUSD ?? 0) + cost }
+        byModel[model, default: CoachChatModelUsage()].add(usage)
+    }
+}
+
+/// One model's share of a thread's usage.
+struct CoachChatModelUsage: Codable, Equatable, Sendable {
     var promptTokens = 0
     var completionTokens = 0
     var costUSD: Double?
@@ -93,6 +139,12 @@ struct CoachChatUsage: Codable, Equatable, Sendable {
     }
 }
 
+/// Which model wrote a draft. Kept beside the thread's `drafts` (same index) rather than on
+/// the GymCore `CoachChatDraft`, which is the tool contract and knows nothing about models.
+enum CoachChatDraftOrigin: String, Codable, Equatable, Sendable {
+    case drafter, reviewer
+}
+
 /// One conversation, as persisted by `CoachChatArchive` and restored into a `CoachChatEngine`.
 struct CoachChatThread: Identifiable, Codable, Equatable, Sendable {
     var id: UUID
@@ -100,7 +152,44 @@ struct CoachChatThread: Identifiable, Codable, Equatable, Sendable {
     var updatedAt: Date
     var messages: [CoachChatMessage] = []
     var drafts: [CoachChatDraft] = []
+    /// Parallel to `drafts`; a draft with no entry (an older archive) is the drafter's.
+    var draftOrigins: [CoachChatDraftOrigin] = []
+    var reviews: [CoachChatReview] = []
     var usage = CoachChatUsage()
+
+    init(
+        id: UUID, createdAt: Date, updatedAt: Date, messages: [CoachChatMessage] = [],
+        drafts: [CoachChatDraft] = [], draftOrigins: [CoachChatDraftOrigin] = [],
+        reviews: [CoachChatReview] = [], usage: CoachChatUsage = CoachChatUsage()
+    ) {
+        self.id = id
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.messages = messages
+        self.drafts = drafts
+        self.draftOrigins = draftOrigins
+        self.reviews = reviews
+        self.usage = usage
+    }
+
+    /// `draftOrigins` and `reviews` are missing from threads archived before the second
+    /// opinion existed; everything else was always written.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        messages = try container.decodeIfPresent([CoachChatMessage].self, forKey: .messages) ?? []
+        drafts = try container.decodeIfPresent([CoachChatDraft].self, forKey: .drafts) ?? []
+        draftOrigins = try container.decodeIfPresent([CoachChatDraftOrigin].self, forKey: .draftOrigins) ?? []
+        reviews = try container.decodeIfPresent([CoachChatReview].self, forKey: .reviews) ?? []
+        usage = try container.decodeIfPresent(CoachChatUsage.self, forKey: .usage) ?? CoachChatUsage()
+    }
+
+    /// Who wrote `drafts[index]`.
+    func origin(ofDraft index: Int) -> CoachChatDraftOrigin {
+        draftOrigins.indices.contains(index) ? draftOrigins[index] : .drafter
+    }
 
     /// The first user message, trimmed to a line, for the thread list.
     var title: String {
