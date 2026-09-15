@@ -45,10 +45,11 @@ enum RoutineSeeder {
         defer { store.dedupeRoutines() }
         if !state.routinesSeeded {
             if store.routines().isEmpty {
-                seedPushA(store: store)
-                seedPullB(store: store)
-                seedLegs(store: store)
-                seedProgramRoutines(store: store)
+                let catalogue = store.exerciseCatalogue()
+                seedPushA(store: store, catalogue: catalogue)
+                seedPullB(store: store, catalogue: catalogue)
+                seedLegs(store: store, catalogue: catalogue)
+                seedProgramRoutines(store: store, catalogue: catalogue)
             }
             state.routinesSeeded = true
             state.updatedAt = Date()
@@ -73,9 +74,13 @@ enum RoutineSeeder {
         store.save()
     }
 
-    static func seedProgramRoutines(store: WorkoutStore) {
+    /// `catalogue` is the library read once for the whole seed; every slot lookup runs against it.
+    static func seedProgramRoutines(
+        store: WorkoutStore, catalogue: WorkoutStore.ExerciseCatalogue? = nil
+    ) {
+        let catalogue = catalogue ?? store.exerciseCatalogue()
         for spec in programRoutineSpecs() {
-            seed(spec, store: store)
+            seed(spec, store: store, catalogue: catalogue)
         }
     }
 
@@ -86,15 +91,15 @@ enum RoutineSeeder {
 
     // MARK: - Push A
 
-    private static func seedPushA(store: WorkoutStore) {
+    private static func seedPushA(store: WorkoutStore, catalogue: WorkoutStore.ExerciseCatalogue) {
         guard
             let bench = lookup(
-                store, "Barbell Bench Press - Medium Grip", fallback: "Bench Press", muscle: .chest
+                catalogue, "Barbell Bench Press - Medium Grip", fallback: "Bench Press", muscle: .chest
             ),
-            let incline = lookup(store, "Incline Dumbbell Press", muscle: .chest),
-            let shoulderPress = lookup(store, "Barbell Shoulder Press", muscle: .delts),
-            let crossover = lookup(store, "Cable Crossover", muscle: .chest),
-            let pushdown = lookup(store, "Triceps Pushdown", muscle: .triceps)
+            let incline = lookup(catalogue, "Incline Dumbbell Press", muscle: .chest),
+            let shoulderPress = lookup(catalogue, "Barbell Shoulder Press", muscle: .delts),
+            let crossover = lookup(catalogue, "Cable Crossover", muscle: .chest),
+            let pushdown = lookup(catalogue, "Triceps Pushdown", muscle: .triceps)
         else { return }
 
         var pushdownSets = (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 12) }
@@ -143,12 +148,12 @@ enum RoutineSeeder {
 
     // MARK: - Pull B
 
-    private static func seedPullB(store: WorkoutStore) {
+    private static func seedPullB(store: WorkoutStore, catalogue: WorkoutStore.ExerciseCatalogue) {
         guard
-            let deadlift = lookup(store, "Barbell Deadlift", fallback: "Deadlift", muscle: .hams),
-            let pullups = lookup(store, "Pullups", fallback: "Pull-Up", muscle: .lats),
-            let row = lookup(store, "Bent Over Barbell Row", muscle: .lats),
-            let curl = lookup(store, "Dumbbell Bicep Curl", muscle: .biceps)
+            let deadlift = lookup(catalogue, "Barbell Deadlift", fallback: "Deadlift", muscle: .hams),
+            let pullups = lookup(catalogue, "Pullups", fallback: "Pull-Up", muscle: .lats),
+            let row = lookup(catalogue, "Bent Over Barbell Row", muscle: .lats),
+            let curl = lookup(catalogue, "Dumbbell Bicep Curl", muscle: .biceps)
         else { return }
 
         let rule = ProgressionRule.linear(incrementKg: TrainingConstants.defaultUpperBodyIncrementKg)
@@ -183,12 +188,14 @@ enum RoutineSeeder {
 
     // MARK: - Legs
 
-    private static func seedLegs(store: WorkoutStore) {
+    private static func seedLegs(store: WorkoutStore, catalogue: WorkoutStore.ExerciseCatalogue) {
         guard
-            let squat = lookup(store, "Barbell Squat", fallback: "Squat", muscle: .quads),
-            let legCurl = lookup(store, "Lying Leg Curls", fallback: "Leg Curl", muscle: .hams),
-            let calfRaise = lookup(store, "Standing Calf Raises", fallback: "Calf Raise", muscle: .calves),
-            let plank = lookup(store, "Plank", muscle: .abs)
+            let squat = lookup(catalogue, "Barbell Squat", fallback: "Squat", muscle: .quads),
+            let legCurl = lookup(catalogue, "Lying Leg Curls", fallback: "Leg Curl", muscle: .hams),
+            let calfRaise = lookup(
+                catalogue, "Standing Calf Raises", fallback: "Calf Raise", muscle: .calves
+            ),
+            let plank = lookup(catalogue, "Plank", muscle: .abs)
         else { return }
 
         let rule = ProgressionRule.linear(incrementKg: TrainingConstants.defaultUpperBodyIncrementKg)
@@ -274,18 +281,19 @@ enum RoutineSeeder {
     /// result for `fallback` (or `name` if no separate fallback is given),
     /// then to the first exercise whose primary muscle matches.
     static func lookup(
-        _ store: WorkoutStore, _ name: String, fallback: String? = nil, muscle: Muscle
+        _ catalogue: WorkoutStore.ExerciseCatalogue, _ name: String, fallback: String? = nil, muscle: Muscle
     ) -> ExerciseInfo? {
-        let candidates = store.exercises(matching: name)
+        let store = catalogue.store
+        let candidates = store.exercises(in: catalogue, matching: name)
         if let exact = candidates.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
             return exact
         }
         if let first = candidates.first { return first }
         if let fallback, fallback != name {
-            let fallbackCandidates = store.exercises(matching: fallback)
+            let fallbackCandidates = store.exercises(in: catalogue, matching: fallback)
             if let first = fallbackCandidates.first { return first }
         }
-        return store.exercises(muscle: muscle).first { $0.primary.contains(muscle) }
+        return store.exercises(in: catalogue, muscle: muscle).first { $0.primary.contains(muscle) }
     }
 }
 
@@ -315,8 +323,8 @@ extension WorkoutStore {
         for group in byImportID.values where group.count > 1 {
             let ordered = group.sorted(by: Self.routineSurvivesFirst)
             let survivor = ordered[0]
-            survivor.mergedIntoID = nil
-            survivor.mergedAt = nil
+            if survivor.mergedIntoID != nil { survivor.mergedIntoID = nil }
+            if survivor.mergedAt != nil { survivor.mergedAt = nil }
             for duplicate in ordered.dropFirst() {
                 replacements[duplicate.id] = survivor.id
                 if foldRoutine(duplicate, into: survivor) { folded += 1 }
@@ -346,7 +354,9 @@ extension WorkoutStore {
         // `ExerciseSeeder.dedupe` leaves a loser alive: they are the only record of that
         // device's progression until a later pass has merged it, and deleting them through a
         // `.cascade` parent is both destructive and a CloudKit delete that syncs back.
-        duplicate.mergedIntoID = survivor.id
+        // Guarded: SwiftData dirties a row on an equal-value write, and a settled tombstone
+        // would otherwise cost a save on every remote-change pass.
+        if duplicate.mergedIntoID != survivor.id { duplicate.mergedIntoID = survivor.id }
         if duplicate.mergedAt == nil { duplicate.mergedAt = Date() }
         return changed
     }

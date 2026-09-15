@@ -9,7 +9,7 @@ struct SummaryView: View {
 
     var body: some View {
         let summary = store.summary
-        VStack(spacing: 8) {
+        VStack(spacing: WatchMetric.isSmall ? 6 : 8) {
             SafeBandText(text: title, font: WatchFont.title, color: WatchColor.ink)
             HStack(spacing: 6) {
                 statCard("Time", WorkoutSession.clock(summary?.durationSeconds ?? 0))
@@ -17,11 +17,12 @@ struct SummaryView: View {
                 statCard("Volume", volume(summary?.volumeKg ?? 0))
             }
             HStack(spacing: 8) {
-                WatchBodyMap(intensity: summary?.musclesHit ?? [:])
+                WatchBodyMap(intensity: summary?.musclesHit ?? [:], height: WatchMetric.isSmall ? 40 : 48)
                 Text(musclesLine(summary))
                     .font(WatchFont.body)
                     .foregroundStyle(WatchColor.inkSecondary)
-                    .lineLimit(2)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.85)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             Spacer(minLength: 0)
@@ -36,15 +37,20 @@ struct SummaryView: View {
 
     private func statCard(_ label: String, _ value: String) -> some View {
         VStack(spacing: 2) {
-            Text(label).font(WatchFont.secondary).foregroundStyle(WatchColor.inkSecondary)
+            Text(label)
+                .font(WatchFont.secondary)
+                .foregroundStyle(WatchColor.inkSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             Text(value)
                 .font(WatchFont.value(17))
                 .foregroundStyle(WatchColor.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
+        .padding(.horizontal, 2)
         .frame(maxWidth: .infinity)
-        .frame(height: 52)
+        .frame(height: WatchMetric.isSmall ? 44 : 52)
         .background(RoundedRectangle(cornerRadius: WatchMetric.cardRadius).fill(WatchColor.card))
     }
 

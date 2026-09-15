@@ -12,6 +12,7 @@ struct TimedSetView: View {
     @Binding var focus: CrownField?
     var unit: WeightUnit
     var onFocus: (CrownField) -> Void
+    var onAdjust: (CrownField, AccessibilityAdjustmentDirection) -> Void
 
     private var hold: WorkoutSession.TimedHoldState? {
         guard let hold = store.session?.timedHold, hold.setID == set.id else { return nil }
@@ -24,7 +25,7 @@ struct TimedSetView: View {
                 RingView(progress: progress, lineWidth: shape == .cardio ? 6 : 9)
                 VStack(spacing: 0) {
                     Text(clock)
-                        .font(WatchFont.value(shape == .cardio ? 17 : 30))
+                        .font(WatchFont.value(shape == .cardio ? (WatchMetric.isSmall ? 14 : 17) : 30))
                         .foregroundStyle(WatchColor.ink)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -39,16 +40,17 @@ struct TimedSetView: View {
             if shape == .cardio {
                 StepperCard(
                     value: distanceUnit.format(meters: set.cardioMeters ?? 0), label: distanceUnit.symbol,
-                    field: .distance, focus: focus, accessibilityName: "Distance",
-                    accessibilityValue: distanceUnit.formatWithSymbol(meters: set.cardioMeters ?? 0)
-                ) { onFocus(.distance) }
-                .frame(height: 40)
+                    field: .distance, focus: focus, height: WatchMetric.isSmall ? 36 : 40,
+                    accessibilityName: "Distance",
+                    accessibilityValue: distanceUnit.formatWithSymbol(meters: set.cardioMeters ?? 0),
+                    onTap: { onFocus(.distance) }, onAdjust: { onAdjust(.distance, $0) }
+                )
             }
         }
     }
 
     private var ringSize: CGFloat {
-        if shape == .cardio { return WatchMetric.isSmall ? 50 : 58 }
+        if shape == .cardio { return WatchMetric.isSmall ? 48 : 58 }
         return WatchMetric.isSmall ? 84 : 96
     }
     private var distanceUnit: DistanceUnit { DistanceUnit.matching(unit) }

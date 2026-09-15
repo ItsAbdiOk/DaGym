@@ -1,9 +1,11 @@
 import GymCore
 import SwiftUI
 
-/// Mid-workout swap: pick a reason, see why the coach chose these three,
-/// then swap. See mockup 10_01 (left). Suggestions come from
-/// `WorkoutStore.substitutes(for:reason:)` (plan §6.6, rule-based).
+/// Mid-workout swap: pick a reason (or type one), see why the coach chose these three, then
+/// swap. See mockup 10_01 (left). Candidates always come from the rule engine
+/// (`WorkoutStore.scoredSubstitutes`, plan §6.6); when the on-device coach is available it
+/// reorders those same three for the reason in the lifter's own words and explains each — it
+/// can never add an exercise (`SubstitutionRankingValidator`).
 struct SwapExerciseSheet: View {
     var exercise: ExerciseInfo
     /// Sets already ticked on this entry. Above zero the swap keeps them and adds the candidate
@@ -14,9 +16,12 @@ struct SwapExerciseSheet: View {
     var onPick: (ExerciseInfo, Bool) -> Void
 
     @Environment(WorkoutStore.self) private var store
+    @Environment(CoachServices.self) private var coach
     @Environment(\.dismiss) private var dismiss
     @State private var reason = SwapReason.machineTaken
+    @State private var reasonText = ""
     @State private var suggestions: [SubstitutionSuggestion] = []
+    @State private var isRanking = false
     @State private var showingLibrary = false
     @State private var pendingCandidate: ExerciseInfo?
 
@@ -27,7 +32,8 @@ struct SwapExerciseSheet: View {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             reasonChips
-            WhyCard(title: "Why these three", message: whyMessage)
+            reasonField
+            WhyCard(title: isRanking ? "Ordering for your reason…" : "Why these three", message: whyMessage)
             candidateList
             Button("Search the library instead") { showingLibrary = true }
                 .buttonStyle(.dgControl)
@@ -39,10 +45,10 @@ struct SwapExerciseSheet: View {
         .padding(.horizontal, DGSpace.s5)
         .padding(.top, DGSpace.s5)
         .padding(.bottom, DGSpace.s4)
-        .presentationDetents([.height(560)])
+        .presentationDetents([.height(640)])
         .presentationDragIndicator(.visible)
         .presentationBackground(DGColor.surface1)
-        .task(id: reason) { refresh() }
+        .task(id: reason) { await refresh() }
         .sheet(isPresented: $showingLibrary) {
             ExercisePickerSheet(onPick: use)
         }
@@ -74,6 +80,27 @@ struct SwapExerciseSheet: View {
         FlowChips(reason: $reason)
     }
 
+    /// Free text on top of the chips: "left knee's twinging", "only dumbbells free". A typed
+    /// reason that maps onto a chip (`SwapReasonParser`) picks that chip, so the rule engine
+    /// filters correctly; the on-device coach then reads the words themselves.
+    private var reasonField: some View {
+        TextField("Or say why in your own words", text: $reasonText)
+            .font(DGFont.body)
+            .foregroundStyle(DGColor.ink1)
+            .padding(.horizontal, DGSpace.s4)
+            .frame(minHeight: 44)
+            .dgCard(padding: 0)
+            .submitLabel(.done)
+            .onSubmit {
+                if let parsed = SwapReasonParser.parse(reasonText), parsed != reason {
+                    reason = parsed
+                } else {
+                    Task { await refresh() }
+                }
+            }
+            .accessibilityLabel("Reason for the swap, in your own words")
+    }
+
     @ViewBuilder
     private var candidateList: some View {
         if suggestions.isEmpty {
@@ -99,8 +126,23 @@ struct SwapExerciseSheet: View {
                 + "try the library instead."
     }
 
-    private func refresh() {
-        suggestions = store.substitutes(for: exercise.id, reason: reason)
+    /// Rule candidates first (instant), then the model's ordering of those same candidates
+    /// when it's available — on any failure the rule order simply stays.
+    private func refresh() async {
+        let scored = store.scoredSubstitutes(for: exercise.id, reason: reason)
+        suggestions = store.suggestions(from: SubstitutionRankingValidator.ruleOrder(scored))
+        guard coach.isUsingLanguageModel, !scored.isEmpty,
+              let subject = store.fetchExerciseModel(id: exercise.id).map(store.substitutionCandidate(for:))
+        else { return }
+        isRanking = true
+        defer { isRanking = false }
+        let words = reasonText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let described = words.isEmpty ? FlowChips.title(for: reason) : words
+        if let ranked = try? await coach.model.rankSubstitutes(
+            for: subject, reason: described, candidates: scored, recoveryMap: store.recoverySnapshot().map
+        ), !Task.isCancelled {
+            suggestions = store.suggestions(from: ranked)
+        }
     }
 
     private func use(_ candidate: ExerciseInfo) {
@@ -130,6 +172,10 @@ private struct FlowChips: View {
         // it scored its suggestion with has to be one they can actually pick.
         (.strugglingWithExercise, "Struggling with it")
     ]
+
+    static func title(for reason: SwapReason) -> String {
+        options.first { $0.reason == reason }?.title ?? "No reason given"
+    }
 
     var body: some View {
         let columns = [GridItem(.adaptive(minimum: 110), spacing: DGSpace.s2)]
@@ -196,6 +242,7 @@ private struct CandidateRow: View {
                     SwapExerciseSheet(exercise: SampleData.cableFly, onPick: { _, _ in })
                 }
                 .environment(store)
+                .environment(CoachServices.make(preferences: Preferences()))
         )
     }
     return AnyView(EmptyView())

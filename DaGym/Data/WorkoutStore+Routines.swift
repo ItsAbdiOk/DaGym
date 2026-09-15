@@ -83,10 +83,13 @@ struct RoutineExerciseDraft {
 
 extension WorkoutStore {
     func routines() -> [RoutineInfo] {
-        let descriptor = FetchDescriptor<RoutineModel>(
+        var descriptor = FetchDescriptor<RoutineModel>(
             predicate: #Predicate { !$0.isArchived },
             sortBy: [SortDescriptor(\.sortOrder)]
         )
+        // Slots come back materialised instead of as faults: `routineInfo`'s sort by `order`
+        // otherwise fires one fetch per slot (~1 000 on the owner's routines, every Home refresh).
+        descriptor.relationshipKeyPathsForPrefetching = [\.exercises]
         let models = fetch(descriptor).filter { $0.mergedIntoID == nil }
         return models.map(routineInfo)
     }

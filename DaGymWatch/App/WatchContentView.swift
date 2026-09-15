@@ -4,10 +4,28 @@ import SwiftUI
 /// rather than pushing, so the crown and swipes belong to the workout alone.
 struct WatchContentView: View {
     @Environment(WatchStore.self) private var store
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ZStack {
             WatchColor.background.ignoresSafeArea()
+            #if DEBUG
+            if let page = store.debugComplicationsPage {
+                WatchComplicationsDebugView(page: page)
+            } else {
+                screens
+            }
+            #else
+            screens
+            #endif
+        }
+        .preferredColorScheme(.dark)
+        .dynamicTypeSize(WatchLaunchFlags.forcesLargestText ? .accessibility5 : dynamicTypeSize)
+        .onAppear(perform: applyDebugScreen)
+    }
+
+    @ViewBuilder private var screens: some View {
+        Group {
             if store.summary != nil {
                 SummaryView()
             } else if store.session != nil {
@@ -16,8 +34,6 @@ struct WatchContentView: View {
                 HomeView()
             }
         }
-        .preferredColorScheme(.dark)
-        .onAppear(perform: applyDebugScreen)
     }
 
     private func applyDebugScreen() {

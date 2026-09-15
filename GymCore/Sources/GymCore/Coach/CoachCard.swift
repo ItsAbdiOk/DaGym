@@ -45,6 +45,16 @@ public enum CoachSuggestedAction: Hashable, Sendable {
     case restMuscle(Muscle)
     /// Ease back in at `loadFraction` of the last known working weight.
     case easeBackIn(loadFraction: Double)
+    /// Add `exerciseName` to the programme (a training-review proposal).
+    case addExercise(exerciseID: UUID, exerciseName: String)
+    /// Replace `exerciseName` with `withName` wherever the programme runs it.
+    case replaceExercise(exerciseID: UUID, exerciseName: String, withID: UUID, withName: String)
+    /// Set `exerciseName`'s planned working sets to `low`…`high` reps.
+    case changeRepRange(exerciseID: UUID, exerciseName: String, low: Int, high: Int)
+    /// Override `exerciseName`'s progression rule.
+    case changeProgressionRule(exerciseID: UUID, exerciseName: String, rule: ProgressionRule)
+    /// Move the session on `from` to `to`, leaving `from` as a rest day.
+    case moveRestDay(from: Weekday, to: Weekday)
     /// No concrete action — the card is informational only (e.g. a PR callout).
     case none
 }

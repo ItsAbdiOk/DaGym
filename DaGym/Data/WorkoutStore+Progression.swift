@@ -63,7 +63,7 @@ extension WorkoutStore {
             equipment: activeEquipment(),
             bodyweightKg: latestBodyMeasurement()?.bodyweightKg,
             bestE1RM: bestE1RMRecordsByExercise(),
-            sessionCounts: Self.sessionCounts(in: finished)
+            sessionCounts: sessionCounts()
         )
         guard let routineID else { return facts }
         let now = Date()
@@ -81,15 +81,19 @@ extension WorkoutStore {
     }
 
     /// Finished workout-exercise rows per exercise — the same number
-    /// `WorkoutStore+Exercises.swift`'s `sessionCount(exerciseID:)` counts with a `fetchCount`,
-    /// read off the finished-workout list we already hold instead.
-    private static func sessionCounts(in finished: [WorkoutModel]) -> [UUID: Int] {
+    /// `WorkoutStore+Exercises.swift`'s `sessionCount(exerciseID:)` counts with a `fetchCount`.
+    /// One fetch with the exercise prefetched: walking `workout.exercises` and then
+    /// `exercise.exercise?.id` fired a SwiftData fault per row (~1 000 round trips on the
+    /// owner's history, measured on device at launch and again on every Start).
+    private func sessionCounts() -> [UUID: Int] {
+        var descriptor = FetchDescriptor<WorkoutExerciseModel>(
+            predicate: #Predicate { $0.workout?.endedAt != nil }
+        )
+        descriptor.relationshipKeyPathsForPrefetching = [\.exercise]
         var counts: [UUID: Int] = [:]
-        for workout in finished {
-            for exercise in workout.exercises ?? [] {
-                guard let id = exercise.exercise?.id else { continue }
-                counts[id, default: 0] += 1
-            }
+        for entry in fetch(descriptor) {
+            guard let id = entry.exercise?.id else { continue }
+            counts[id, default: 0] += 1
         }
         return counts
     }

@@ -26,6 +26,13 @@ enum A11yID {
     static func keypadKey(_ digit: String) -> String { "keypad.key.\(digit)" }
 
     static let summaryDone = "summary.done"
+    static let debriefCard = "summary.debrief"
+    static let coachReview = "coach.review"
+    static let coachQuestion = "coach.question"
+    static let coachAnswer = "coach.answer"
+    static let programBuild = "program.build"
+    static let programApply = "program.apply"
+    static let coachStatus = "coach.status"
 
     static let historyList = "history.list"
     static let historyRow0 = "history.row.0"

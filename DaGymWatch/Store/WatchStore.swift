@@ -1,6 +1,7 @@
 import Foundation
 import GymCore
 import SwiftData
+import SwiftUI
 
 /// What Home shows: today's routine (or the routine list on a rest day), the streak and the
 /// next planned day. Rebuilt by `WatchStore.refreshHome()`.
@@ -48,6 +49,8 @@ final class WatchStore {
     var debugShowVoice = false
     /// `-dgWatchScreen settings`: Home opens on its Settings page.
     var debugOpensSettings = false
+    /// `-dgWatchScreen complications[-<page>]`: every widget family at its real size, both states.
+    var debugComplicationsPage: Int?
     /// `-dgWatchScreen pr`: the record card skips its 1.6 s auto-dismiss so it can be captured.
     var holdsRecordCard = false
 
@@ -132,9 +135,15 @@ final class WatchStore {
     }
 
     private func adopt(_ session: WorkoutSession) {
-        session.restHaptics = preferences.haptics
+        // Always on: the session's flag would silence rest-zero too, and the spec keeps that
+        // one (with Log set) firing under Haptics off. The watch `Haptics` gates the 3-2-1
+        // clicks itself (`WatchHaptic.alwaysFires`).
+        session.restHaptics = true
         session.onRestStateChange = { [weak self] state in self?.restStateChanged(state) }
         session.onRestTick = { [weak self] remaining in
+            if let announcement = WatchAccessibility.restAnnouncement(remaining: remaining) {
+                AccessibilityNotification.Announcement(announcement).post()
+            }
             guard remaining == 0 else { return }
             self?.scheduleRestEndRepeat()
         }

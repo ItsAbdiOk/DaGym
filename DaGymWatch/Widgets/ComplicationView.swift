@@ -1,14 +1,26 @@
 import SwiftUI
 import WidgetKit
 
+struct WatchSnapshotEntry: TimelineEntry {
+    var date: Date
+    var snapshot: WatchSnapshot
+}
+
 /// The one view behind every family. Resting takes over each of them; otherwise the circular
 /// rings the streak, the corner names the next session, the rectangular is the Smart Stack
-/// card ("Push A today" / "Idle · 12-week streak").
+/// card ("Push A today" / "Idle · 12-week streak"). `family` is passed in rather than read from
+/// the environment so the watch app's `-dgWatchScreen complications` harness can render every
+/// family at its real size (the simulator cannot add a complication).
 struct ComplicationView: View {
-    @Environment(\.widgetFamily) private var family
     var entry: WatchSnapshotEntry
+    var family: WidgetFamily
+    /// True in the Smart Stack (the card has room for its "DaGym" header line); false on a
+    /// watch face, where the rectangular slot is ~53 pt tall and takes two lines only.
+    var isSmartStack = false
 
     private var snapshot: WatchSnapshot { entry.snapshot }
+    /// The spec's coral, for the untinted faces; `widgetAccentable` hands it to a tinted one.
+    private let coral = Color(red: 0xFF / 255, green: 0x6B / 255, blue: 0x57 / 255)
 
     var body: some View {
         switch family {
@@ -31,7 +43,7 @@ struct ComplicationView: View {
                     .font(.system(size: 13, weight: .semibold).monospacedDigit())
             }
             .progressViewStyle(.circular)
-            .tint(.orange)
+            .tint(coral)
             .widgetAccentable()
             .accessibilityLabel(inlineText)
         } else {
@@ -44,7 +56,7 @@ struct ComplicationView: View {
                 }
             }
             .gaugeStyle(.accessoryCircularCapacity)
-            .tint(.orange)
+            .tint(coral)
             .widgetAccentable()
             .accessibilityLabel(inlineText)
         }
@@ -54,8 +66,12 @@ struct ComplicationView: View {
 
     @ViewBuilder private var corner: some View {
         if let rest = snapshot.rest {
+            // The corner's inner area is ~30 pt on the 40 mm: "1:32" must shrink rather than
+            // truncate to "1:…".
             Text(timerInterval: Date.now...rest.endDate, countsDown: true)
-                .font(.system(size: 20, weight: .semibold).monospacedDigit())
+                .font(.system(size: 17, weight: .semibold).monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
                 .widgetCurvesContent()
                 .widgetLabel { Text("Rest · \(rest.nextLabel)") }
                 .widgetAccentable()
@@ -79,13 +95,20 @@ struct ComplicationView: View {
     private var rectangular: some View {
         VStack(alignment: .leading, spacing: 2) {
             if let rest = snapshot.rest {
-                Text("DaGym · resting").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+                if isSmartStack {
+                    Text("DaGym · resting")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                // 26 pt on the 80 pt card; 22 on a face's ~47–56 pt rectangular slot.
                 Text(timerInterval: Date.now...rest.endDate, countsDown: true)
-                    .font(.system(size: 26, weight: .bold).monospacedDigit())
-                    .foregroundStyle(.orange)
+                    .font(.system(size: isSmartStack ? 26 : 22, weight: .bold).monospacedDigit())
+                    .foregroundStyle(coral)
                 Text("next \(rest.nextLabel)").font(.system(size: 12)).lineLimit(1)
             } else {
-                Text("DaGym").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+                if isSmartStack {
+                    Text("DaGym").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+                }
                 Text(headline).font(.system(size: 17, weight: .semibold)).lineLimit(1)
                 Text("Idle · \(snapshot.streakWeeks)-week streak")
                     .font(.system(size: 12))
@@ -103,8 +126,9 @@ struct ComplicationView: View {
         return "\(name) \(date.formatted(.dateTime.weekday(.abbreviated)))"
     }
 
+    /// One short line: the inline slot on a face is ~140 pt.
     private var inlineText: String {
         if let rest = snapshot.rest { return "Rest · next \(rest.nextLabel)" }
-        return "\(snapshot.streakWeeks)-week streak · \(headline)"
+        return "\(snapshot.nextRoutineName ?? "No session") · \(snapshot.streakWeeks) wk"
     }
 }

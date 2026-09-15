@@ -63,7 +63,7 @@ struct ScheduledHomeView: View {
             }
             .padding(.horizontal, WatchMetric.gutter)
         }
-        .safeAreaInset(edge: .bottom) { HomeFooter(primary: primaryTitle, action: startAction) }
+        .pinnedFooter { HomeFooter(primary: primaryTitle, action: startAction) }
     }
 
     private var primaryTitle: String { store.home.resumableWorkoutID == nil ? "Start" : "Resume" }
@@ -100,7 +100,7 @@ struct RestDayHomeView: View {
             }
             .padding(.horizontal, WatchMetric.gutter)
         }
-        .safeAreaInset(edge: .bottom) {
+        .pinnedFooter {
             HomeFooter(primary: store.home.resumableWorkoutID == nil ? "Freestyle" : "Resume") {
                 if let workoutID = store.home.resumableWorkoutID {
                     store.resume(workoutID: workoutID)
@@ -109,6 +109,19 @@ struct RestDayHomeView: View {
                 }
             }
         }
+    }
+}
+
+private extension View {
+    /// The list above, the footer below, never overlapping: `safeAreaInset` left the page's
+    /// bottom safe area showing the scrolled rows under the streak line.
+    func pinnedFooter<Footer: View>(@ViewBuilder _ footer: () -> Footer) -> some View {
+        VStack(spacing: 0) {
+            self
+            footer()
+        }
+        // The streak line lives in the bottom safe band (spec 1A), not above it.
+        .ignoresSafeArea(edges: .bottom)
     }
 }
 
@@ -123,9 +136,9 @@ private struct HomeFooter: View {
             CapsuleButton(title: primary, action: action)
                 .padding(.horizontal, WatchMetric.gutter)
             SafeBandText(text: footerLine)
-                .frame(height: WatchMetric.isSmall ? 18 : WatchMetric.safeBand)
         }
-        .background(WatchColor.background.opacity(0.92))
+        .padding(.bottom, 6)
+        .background(WatchColor.background)
     }
 
     private var footerLine: String {

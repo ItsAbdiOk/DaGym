@@ -11,6 +11,8 @@ struct ProgramsView: View {
     @Environment(Preferences.self) private var preferences
     @State private var programs: [ProgramInfo] = []
     @State private var showingNew = false
+    @State private var showingGenerator = false
+    @State private var undoAction: UndoAction?
 
     var body: some View {
         ZStack {
@@ -27,9 +29,20 @@ struct ProgramsView: View {
         }
         .task { refresh() }
         .onChange(of: store.changeToken) { refresh() }
+        .dgUndoToast($undoAction)
         .confirmationDialog("New Program", isPresented: $showingNew, titleVisibility: .visible) {
+            Button("Build one for me") { showingGenerator = true }
             ForEach(StarterProgramKind.allCases) { kind in
                 Button(kind.rawValue) { create(kind) }
+            }
+        }
+        .sheet(isPresented: $showingGenerator) {
+            ProgramGeneratorSheet { application in
+                undoAction = UndoAction(message: "Created \(application.name)") {
+                    store.undoProgramApplication(application)
+                    refresh()
+                }
+                refresh()
             }
         }
     }

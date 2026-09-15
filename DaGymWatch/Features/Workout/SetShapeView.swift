@@ -11,6 +11,7 @@ struct SetShapeView: View {
     @Binding var focus: CrownField?
     var unit: WeightUnit
     var onFocus: (CrownField) -> Void
+    var onAdjust: (CrownField, AccessibilityAdjustmentDirection) -> Void
     var onEffortTap: () -> Void
 
     var body: some View {
@@ -24,7 +25,8 @@ struct SetShapeView: View {
             case .perSide: perSideRow
             case .timedHold, .cardio:
                 TimedSetView(
-                    entry: entry, set: set, shape: shape, focus: $focus, unit: unit, onFocus: onFocus
+                    entry: entry, set: set, shape: shape, focus: $focus, unit: unit, onFocus: onFocus,
+                    onAdjust: onAdjust
                 )
             }
             noteLine
@@ -50,16 +52,18 @@ struct SetShapeView: View {
         VStack(spacing: 6) {
             StepperCard(
                 value: "\(set.reps)", label: "reps", field: .reps, focus: focus, tall: true, valueSize: 50,
-                accessibilityName: "Reps", accessibilityValue: "\(set.reps) reps, adjustable"
-            ) { onFocus(.reps) }
+                accessibilityName: "Reps", accessibilityValue: spoken(.reps, Double(set.reps)),
+                onTap: { onFocus(.reps) }, onAdjust: { onAdjust(.reps, $0) }
+            )
             Button("Add weight") {
                 let step = SetFormat.weightStep(for: entry.exercise, unit: unit)
                 store.updateSet(exerciseID: entry.id) { $0.weightKg = unit.toKg(step) }
                 onFocus(.weight)
             }
-            .font(WatchFont.body)
+            .font(WatchMetric.isSmall ? WatchFont.secondary : WatchFont.body)
             .foregroundStyle(WatchColor.accent)
             .buttonStyle(.plain)
+            .frame(height: WatchMetric.isSmall ? 16 : 20)
         }
     }
 
@@ -72,9 +76,9 @@ struct SetShapeView: View {
                 let assistance = SetFormat.weight(assistanceKg, unit: unit)
                 StepperCard(
                     value: "−\(assistance)", label: "assist \(unit.symbol)", field: .assistance, focus: focus,
-                    accessibilityName: "Assistance",
-                    accessibilityValue: "\(assistance) \(unit.symbol), adjustable"
-                ) { onFocus(.assistance) }
+                    accessibilityName: "Assistance", accessibilityValue: spoken(.assistance, assistanceKg),
+                    onTap: { onFocus(.assistance) }, onAdjust: { onAdjust(.assistance, $0) }
+                )
                 repsCard(hollow: false, label: "reps").frame(maxWidth: 70)
             }
             effortRow
@@ -88,8 +92,10 @@ struct SetShapeView: View {
                 weightCard(hollow: false)
                 StepperCard(
                     value: "\(set.reps / 2)", label: "per side", field: .reps, focus: focus,
-                    accessibilityName: "Reps per side", accessibilityValue: "\(set.reps / 2) reps, adjustable"
-                ) { onFocus(.reps) }
+                    accessibilityName: "Reps",
+                    accessibilityValue: spoken(.reps, Double(set.reps / 2), perSide: true),
+                    onTap: { onFocus(.reps) }, onAdjust: { onAdjust(.reps, $0) }
+                )
                 .frame(maxWidth: 74)
             }
         }
@@ -99,15 +105,22 @@ struct SetShapeView: View {
         StepperCard(
             value: SetFormat.weight(set.weightKg, unit: unit), label: unit.symbol, field: .weight,
             focus: focus, hollow: hollow, accessibilityName: "Weight",
-            accessibilityValue: "\(SetFormat.weight(set.weightKg, unit: unit)) \(unit.symbol), adjustable"
-        ) { onFocus(.weight) }
+            accessibilityValue: spoken(.weight, set.weightKg),
+            onTap: { onFocus(.weight) }, onAdjust: { onAdjust(.weight, $0) }
+        )
     }
 
     private func repsCard(hollow: Bool, label: String) -> some View {
         StepperCard(
             value: "\(set.reps)", label: label, field: .reps, focus: focus, hollow: hollow,
-            accessibilityName: "Reps", accessibilityValue: "\(set.reps) reps, adjustable"
-        ) { onFocus(.reps) }
+            accessibilityName: "Reps", accessibilityValue: spoken(.reps, Double(set.reps)),
+            onTap: { onFocus(.reps) }, onAdjust: { onAdjust(.reps, $0) }
+        )
+    }
+
+    /// "100 kilograms" — kg in, the lifter's unit out.
+    private func spoken(_ field: CrownField, _ value: Double, perSide: Bool = false) -> String {
+        WatchAccessibility.stepperValue(field: field, value: value, unit: unit, perSide: perSide)
     }
 
     /// The RPE row. Crown-focusable on the 45 mm; on 41 mm / 40 mm it drops to a plain
@@ -159,7 +172,7 @@ struct SetShapeView: View {
                 .font(WatchFont.secondary)
                 .foregroundStyle(WatchColor.inkSecondary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.85)
+                .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
         }
     }
@@ -175,6 +188,8 @@ struct SetShapeView: View {
             return over > 0 ? "\(over) over target\(e1rm)" : "At target\(e1rm)"
         case .assisted: return "Less assistance is progress"
         case .perSide:
+            // The capsule already says "Log left" / "Log right"; the 40 mm has no row to spare.
+            guard !WatchMetric.isSmall else { return nil }
             return store.hasLoggedLeft(exerciseID: entry.id)
                 ? "Left logged · now right" : "Logs left, then asks for right"
         case .standard, .bodyweight, .timedHold, .cardio: return nil
@@ -192,7 +207,7 @@ struct SidePill: View {
             side("R", live: !isLeft)
         }
         .background(Capsule().fill(WatchColor.card))
-        .frame(width: 84, height: 24)
+        .frame(width: 84, height: WatchMetric.isSmall ? 20 : 24)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(isLeft ? "Left side" : "Right side")
     }
@@ -201,7 +216,7 @@ struct SidePill: View {
         Text(letter)
             .font(WatchFont.bodyMedium)
             .foregroundStyle(live ? Color.black : WatchColor.inkSecondary)
-            .frame(width: 42, height: 24)
+            .frame(width: 42, height: WatchMetric.isSmall ? 20 : 24)
             .background(Capsule().fill(live ? WatchColor.accent : .clear))
     }
 }

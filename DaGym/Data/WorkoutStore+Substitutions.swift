@@ -16,20 +16,30 @@ extension WorkoutStore {
     /// then hands them to `GymCore.Substitutions`. Empty when `exerciseID` isn't found or nothing
     /// in the library qualifies.
     func substitutes(for exerciseID: UUID, reason: SwapReason) -> [SubstitutionSuggestion] {
+        let scored = scoredSubstitutes(for: exerciseID, reason: reason)
+        let ordered = SubstitutionRankingValidator.ruleOrder(scored)
+        return suggestions(from: ordered)
+    }
+
+    /// The rule engine's scored candidates themselves — the closed list the on-device coach
+    /// may reorder (`CoachLanguageModel.rankSubstitutes`) but never add to.
+    func scoredSubstitutes(for exerciseID: UUID, reason: SwapReason) -> [ScoredSubstitute] {
         guard let subjectModel = fetchExerciseModel(id: exerciseID) else { return [] }
         let libraryModels = fetch(Self.liveExercises()).filter(Self.isLive)
         let equipment = Set(activeProfile()?.availableEquipment ?? [])
-
-        let scored = Substitutions.candidates(
+        return Substitutions.candidates(
             for: substitutionCandidate(for: subjectModel), reason: reason,
             library: libraryModels.map(substitutionCandidate(for:)), available: equipment,
             recoveryMap: recoverySnapshot().map
         )
+    }
 
-        let modelsByID = Dictionary(uniqueKeysWithValues: libraryModels.map { ($0.id, $0) })
-        return scored.compactMap { result in
-            guard let model = modelsByID[result.candidate.id] else { return nil }
-            return SubstitutionSuggestion(exercise: exerciseInfo(for: model), why: result.reason)
+    /// Resolves a (validated) ranking back to library rows for `SwapExerciseSheet`.
+    func suggestions(from ranked: [RankedSubstitute]) -> [SubstitutionSuggestion] {
+        let models = fetchExerciseModels(ids: Set(ranked.map(\.candidateID)))
+        return ranked.compactMap { pick in
+            guard let model = models[pick.candidateID] else { return nil }
+            return SubstitutionSuggestion(exercise: exerciseInfo(for: model), why: pick.why)
         }
     }
 

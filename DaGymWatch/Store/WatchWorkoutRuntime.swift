@@ -15,13 +15,18 @@ final class WatchWorkoutRuntime: NSObject {
     private let healthStore = HKHealthStore()
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
+    /// Off for the sample store, the test host and any test that builds its own `WatchStore`:
+    /// `requestAuthorization` would otherwise block on a permission sheet nobody can answer.
+    private let isEnabled: Bool
 
     var isRunning: Bool { session != nil }
 
+    init(isEnabled: Bool = !WatchLaunchFlags.isSample && !WatchLaunchFlags.isTestHost) {
+        self.isEnabled = isEnabled
+    }
+
     func start(isFreestyle: Bool, startedAt: Date) {
-        guard !WatchLaunchFlags.isSample, HKHealthStore.isHealthDataAvailable(), session == nil else {
-            return
-        }
+        guard isEnabled, HKHealthStore.isHealthDataAvailable(), session == nil else { return }
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = isFreestyle ? .functionalStrengthTraining : .traditionalStrengthTraining
         configuration.locationType = .indoor

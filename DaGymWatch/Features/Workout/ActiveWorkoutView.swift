@@ -8,26 +8,36 @@ import SwiftUI
 struct ActiveWorkoutView: View {
     @Environment(WatchStore.self) private var store
     @Environment(\.isLuminanceReduced) private var isLuminanceReduced
+    /// Where VoiceOver focus goes back to once the record card has had its say.
+    @AccessibilityFocusState private var contentFocused: Bool
 
     private var alwaysOn: Bool { isLuminanceReduced || WatchLaunchFlags.forcesAlwaysOn }
 
     var body: some View {
         @Bindable var store = store
         ZStack {
-            if alwaysOn {
-                AlwaysOnView()
-            } else if let session = store.session, session.isResting,
-                      session.restTotal > InlineRestView.maxInlineSeconds {
-                FullScreenRestView()
-            } else {
-                pages
+            Group {
+                if alwaysOn {
+                    AlwaysOnView()
+                } else if let session = store.session, session.isResting,
+                          session.restTotal > InlineRestView.maxInlineSeconds {
+                    FullScreenRestView()
+                } else {
+                    pages
+                }
             }
+            .accessibilityFocused($contentFocused)
+            .accessibilityHidden(store.recordCard != nil)
             if let card = store.recordCard {
                 RecordCardView(card: card)
                     .transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: store.recordCard?.id)
+        .onChange(of: store.recordCard?.id) { previous, current in
+            // The card took focus and announced once; hand focus back where it was.
+            if previous != nil, current == nil { contentFocused = true }
+        }
     }
 
     private var pages: some View {

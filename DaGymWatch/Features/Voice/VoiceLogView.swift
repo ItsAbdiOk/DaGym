@@ -61,16 +61,18 @@ struct VoiceLogView: View {
             Text("“\(parsed.phrase)”")
                 .font(WatchFont.secondary)
                 .foregroundStyle(WatchColor.inkSecondary)
-                .lineLimit(3)
+                .lineLimit(WatchMetric.isSmall ? 2 : 3)
                 .multilineTextAlignment(.center)
+                // Claims its lines: without this the stack hands the quote one line and an ellipsis.
+                .fixedSize(horizontal: false, vertical: true)
             Text("\(parsed.exerciseName) · set \(parsed.setNumber)")
                 .font(WatchFont.body)
                 .foregroundStyle(WatchColor.ink)
                 .lineLimit(1)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(unit.format(kg: parsed.weightKg ?? 0)).font(WatchFont.value(30))
+                Text(unit.format(kg: parsed.weightKg ?? 0)).font(WatchFont.value(valueSize))
                 Text("\(unit.symbol) ×").font(WatchFont.unit).foregroundStyle(WatchColor.inkSecondary)
-                Text("\(parsed.reps ?? 0)").font(WatchFont.value(30))
+                Text("\(parsed.reps ?? 0)").font(WatchFont.value(valueSize))
                 if let effort = parsed.effort {
                     Text("RPE \(effort.displayValue(scale: .rpe))")
                         .font(WatchFont.unit).foregroundStyle(WatchColor.inkSecondary)
@@ -85,6 +87,8 @@ struct VoiceLogView: View {
             }
         }
     }
+
+    private var valueSize: CGFloat { WatchMetric.isSmall ? 24 : 30 }
 
     private func handle(_ phrase: String) {
         guard let session = store.session,

@@ -80,11 +80,12 @@ extension RoutineSeeder {
     ]
 
     /// Seeds one table-driven routine; skipped entirely if any of its exercises can't be found.
-    static func seed(_ spec: Spec, store: WorkoutStore) {
+    static func seed(_ spec: Spec, store: WorkoutStore, catalogue: WorkoutStore.ExerciseCatalogue) {
         var exercises: [RoutineExerciseDraft] = []
         for slot in spec.slots {
             let lift = slot.lift
-            guard let exercise = lookup(store, lift.name, fallback: lift.fallback, muscle: lift.muscle) else {
+            guard let exercise = lookup(catalogue, lift.name, fallback: lift.fallback, muscle: lift.muscle)
+            else {
                 return
             }
             exercises.append(RoutineExerciseDraft(

@@ -26,6 +26,36 @@ extension WorkoutStore {
     /// children (`ExerciseSeeder.dedupe`).
     static func isLive(_ model: ExerciseModel) -> Bool { model.mergedIntoID == nil }
 
+    /// The live library read once, with each row's search text folded on first use, for a caller
+    /// that runs many lookups back to back. `RoutineSeeder` runs ~50 on first launch, and each
+    /// one used to re-fetch the ~1 500-row catalogue and re-fold every row's name: 2.9 s on the
+    /// main thread of a fresh install (iPhone 16 Pro, Low Power Mode, Debug).
+    @MainActor
+    final class ExerciseCatalogue {
+        /// The store the rows came from — a snapshot never outlives the store that read it.
+        unowned let store: WorkoutStore
+        fileprivate let models: [ExerciseModel]
+        fileprivate let bestByExercise: [UUID: PersonalRecordModel]
+        fileprivate lazy var haystacks: [String] = models.map { WorkoutStore.searchHaystack($0) }
+
+        fileprivate init(
+            store: WorkoutStore, models: [ExerciseModel], bestByExercise: [UUID: PersonalRecordModel]
+        ) {
+            self.store = store
+            self.models = models
+            self.bestByExercise = bestByExercise
+        }
+    }
+
+    /// Two fetches — the library and the PR cache — however many `exercises(in:matching:)` calls
+    /// follow.
+    func exerciseCatalogue() -> ExerciseCatalogue {
+        ExerciseCatalogue(
+            store: self, models: fetch(Self.liveExercises()).filter(Self.isLive),
+            bestByExercise: bestE1RMRecordsByExercise()
+        )
+    }
+
     /// Filtered, sorted (favorites first, then name) exercise list for the library screen. Best
     /// e1RM comes from one fetch of the PR cache shared by every row; `sessions` is left at 0 —
     /// the detail screen fills it in via `exerciseInfo(for:)`, which is the only place it's shown.
@@ -33,17 +63,34 @@ extension WorkoutStore {
         matching query: String = "", muscle: Muscle? = nil, equipment: String? = nil,
         favoritesOnly: Bool = false, customOnly: Bool = false
     ) -> [ExerciseInfo] {
-        let all = fetch(Self.liveExercises()).filter(Self.isLive)
+        exercises(
+            in: exerciseCatalogue(), matching: query, muscle: muscle, equipment: equipment,
+            favoritesOnly: favoritesOnly, customOnly: customOnly
+        )
+    }
+
+    /// `exercises(matching:)` over a catalogue already read — no store round trip.
+    func exercises(
+        in catalogue: ExerciseCatalogue, matching query: String = "", muscle: Muscle? = nil,
+        equipment: String? = nil, favoritesOnly: Bool = false, customOnly: Bool = false
+    ) -> [ExerciseInfo] {
         let tokens = Self.searchTokens(query)
-        let bestByExercise = bestE1RMRecordsByExercise()
-        return all
-            .filter { matches($0, tokens: tokens, muscle: muscle, equipment: equipment) }
-            .filter { !favoritesOnly || $0.isFavorite }
-            .filter { !customOnly || $0.isCustom }
+        // Folding every row's search text is the expensive part; skip it for an empty query.
+        let haystacks = tokens.isEmpty ? nil : catalogue.haystacks
+        var matched: [ExerciseModel] = []
+        for (index, model) in catalogue.models.enumerated() {
+            let haystack = haystacks?[index] ?? ""
+            guard matches(model, haystack: haystack, tokens: tokens, muscle: muscle, equipment: equipment)
+            else { continue }
+            if favoritesOnly, !model.isFavorite { continue }
+            if customOnly, !model.isCustom { continue }
+            matched.append(model)
+        }
+        return matched
             .sorted(by: sortsBeforeInLibrary)
             .map { model in
                 var info = ExerciseInfo(model: model)
-                if let best = bestByExercise[model.id] {
+                if let best = catalogue.bestByExercise[model.id] {
                     info.bestE1RM = best.value
                     info.bestSet = Self.bestSetLine(best)
                 }
@@ -55,12 +102,9 @@ extension WorkoutStore {
     /// logging style — "chest dumbbell" finds Dumbbell Bench Press, "pullover" finds
     /// "Dumbbell Pull-Over". Accents and case are ignored; "db"/"bb"/"kb" expand first.
     private func matches(
-        _ model: ExerciseModel, tokens: [String], muscle: Muscle?, equipment: String?
+        _ model: ExerciseModel, haystack: String, tokens: [String], muscle: Muscle?, equipment: String?
     ) -> Bool {
-        let nameMatches = tokens.isEmpty || {
-            let haystack = Self.searchHaystack(model)
-            return tokens.allSatisfy { haystack.contains($0) }
-        }()
+        let nameMatches = tokens.isEmpty || tokens.allSatisfy { haystack.contains($0) }
         let muscleMatches = muscle.map { model.primary.contains($0) || model.secondary.contains($0) } ?? true
         let equipmentMatches = equipment.map { model.equipment == $0 } ?? true
         return nameMatches && muscleMatches && equipmentMatches

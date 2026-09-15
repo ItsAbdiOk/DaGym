@@ -24,7 +24,10 @@ try:
 except Exception:
     sys.exit(0)
 for d in devices:
-    if d.get('hardwareProperties', {}).get('deviceType') == 'iPhone':
+    # Xcode 27's devicectl lists simulators too, with platform 'iOS' like a real phone. A
+    # physical device's udid is the 0000XXXX-... hardware form; a simulator's is a plain UUID.
+    hw = d.get('hardwareProperties', {})
+    if hw.get('deviceType') == 'iPhone' and hw.get('udid', '').startswith('0000'):
         print(d['identifier'])
         break
 " 2>/dev/null)

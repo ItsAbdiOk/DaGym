@@ -25,7 +25,7 @@ struct ExercisePage: View {
             SafeBandText(
                 text: entry.exercise.name, font: WatchFont.title, color: WatchColor.ink, maxWidth: 120
             )
-            .padding(.top, 24)
+            .padding(.top, WatchMetric.pageTop)
             if let set = currentSet {
                 setBody(set)
             } else {
@@ -49,23 +49,38 @@ struct ExercisePage: View {
     @ViewBuilder private func setBody(_ set: SetEntry) -> some View {
         let shape = SetShape.shape(for: entry, set: set)
         let position = SetFormat.position(of: set, in: entry)
-        SetHeader(
-            shape: shape, set: set, position: position,
-            dotsDone: entry.sets.filter { $0.isDone && $0.kind.countsTowardStats }.count,
-            dotsTotal: entry.sets.filter { $0.kind.countsTowardStats }.count,
-            amrapTarget: store.amrapTargets[set.id]
-        )
-        if let session, session.isResting, store.pageIndex == pageIndex,
-           session.restTotal <= InlineRestView.maxInlineSeconds {
-            InlineRestView(entry: entry)
-        } else {
-            SetShapeView(
-                entry: entry, set: set, shape: shape, focus: $focus, unit: preferences.weightUnit,
-                onFocus: give(focus:), onEffortTap: effortTap
+        let resting = session.map { $0.isResting && $0.restTotal <= InlineRestView.maxInlineSeconds } ?? false
+        // The header and steppers are one VoiceOver container, so the row reads as one element
+        // ("Set 2 of 4, 100 kilograms by 5 reps") before its children.
+        VStack(spacing: 0) {
+            SetHeader(
+                shape: shape, set: set, position: position,
+                dotsDone: entry.sets.filter { $0.isDone && $0.kind.countsTowardStats }.count,
+                dotsTotal: entry.sets.filter { $0.kind.countsTowardStats }.count,
+                amrapTarget: store.amrapTargets[set.id]
             )
+            if resting, store.pageIndex == pageIndex {
+                InlineRestView(entry: entry)
+            } else {
+                SetShapeView(
+                    entry: entry, set: set, shape: shape, focus: $focus, unit: preferences.weightUnit,
+                    onFocus: give(focus:), onAdjust: adjust(field:direction:), onEffortTap: effortTap
+                )
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(setRowLabel(shape: shape, set: set, position: position))
+        if !(resting && store.pageIndex == pageIndex) {
             Spacer(minLength: 4)
             footer(shape: shape, set: set)
         }
+    }
+
+    private func setRowLabel(shape: SetShape, set: SetEntry, position: (index: Int, count: Int)) -> String {
+        WatchAccessibility.setRow(
+            shape: shape, position: position, weightKg: set.weightKg, reps: set.reps,
+            targetSeconds: set.cardioSeconds, unit: preferences.weightUnit
+        )
     }
 
     private var pageIndex: Int { session?.exercises.firstIndex { $0.id == entry.id } ?? -1 }
@@ -161,29 +176,33 @@ struct ExercisePage: View {
     }
 
     private var crownStep: Double {
-        switch focus {
-        case .weight: SetFormat.weightStep(for: entry.exercise, unit: preferences.weightUnit)
-        case .reps, .none: 1
-        case .effort: 0.5
-        case .assistance: preferences.weightUnit == .kg ? 5 : 10
-        case .distance: 0.1
-        }
+        CrownDetents.step(for: focus ?? .reps, exercise: entry.exercise, unit: preferences.weightUnit)
     }
 
-    private var crownRange: ClosedRange<Double> {
-        switch focus {
-        case .effort: 5...10
-        case .reps, .none: 0...100
-        case .distance: 0...200
-        case .weight, .assistance: 0...1000
-        }
-    }
+    private var crownRange: ClosedRange<Double> { CrownDetents.range(for: focus ?? .reps) }
 
     private func applyCrown(_ value: Double) {
         guard let focus else { return }
+        write(field: focus, value: value)
+    }
+
+    /// VoiceOver's swipe up / down on a stepper: one crown detent either way, clamped to the
+    /// crown's own range, without moving crown focus.
+    private func adjust(field: CrownField, direction: AccessibilityAdjustmentDirection) {
+        guard let set = currentSet else { return }
+        let step = CrownDetents.step(for: field, exercise: entry.exercise, unit: preferences.weightUnit)
+        let range = CrownDetents.range(for: field)
+        let current = crownValue(for: field, set: set)
+        let next = direction == .increment ? current + step : current - step
+        write(field: field, value: min(range.upperBound, max(range.lowerBound, next)))
+        if focus == field { crown = next }
+        Haptics.step()
+    }
+
+    private func write(field: CrownField, value: Double) {
         let unit = preferences.weightUnit
         store.updateSet(exerciseID: entry.id) { set in
-            switch focus {
+            switch field {
             case .weight: set.weightKg = unit.toKg(value)
             case .reps: set.reps = Int(value.rounded()) * (entry.exercise.isPerSide ? 2 : 1)
             case .effort: set.effort = Effort(rpe: value)

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<!--
+	 DaGym has no backend and no analytics SDK. Workout data is stored in SwiftData and
+	 mirrored to the user's own private CloudKit database
+	 (iCloud.dev.abdirahmanmohamed.dagym). Per Apple's Privacy Manifest definition,
+	 "collection" means transmission off the device to the developer or a third party.
+	 CloudKit private-database sync moves data only between the user's own devices via
+	 their iCloud account; the developer has no access to it. It is therefore not
+	 "collected" and this array is intentionally empty.
+	-->
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<!--
+		 UserDefaults.standard — the watch app's own preferences, mirroring the phone's key
+		 names where one exists (e.g. weightUnit). Reason CA92.1: reading/writing data only
+		 accessible to this app.
+		 DaGymWatch/Store/WatchPreferences.swift:38
+		 DaGym/Data/WorkoutStore+Equipment.swift:120 (compiled into this target)
+		 DaGym/Data/WorkoutStore+Cardio.swift:153 (compiled into this target)
+		-->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+		<!--
+		 UserDefaults(suiteName: "group.dev.abdirahmanmohamed.dagym") — App Group suite
+		 shared with the DaGymWatchWidgets extension so it can read the WatchSnapshot this
+		 app writes. Reason 1C8F.1: reading/writing data accessible only to this app and
+		 its own App Group extensions.
+		 DaGymWatch/Shared/WatchSnapshot.swift:31
+		 DaGymWatch/Shared/WatchSnapshot.swift:34
+		-->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>1C8F.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

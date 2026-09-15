@@ -19,10 +19,12 @@ struct InlineRestView: View {
                     .font(WatchFont.secondary)
                     .foregroundStyle(WatchColor.inkSecondary)
             }
+            // A fixed label: the countdown is announced by `WatchStore` at 30 s and zero only,
+            // so VoiceOver never reads the ticking number.
             Text(WorkoutSession.clock(session?.restRemaining ?? 0))
-                .font(WatchFont.value(44, weight: .bold))
+                .font(WatchFont.value(WatchMetric.isSmall ? 36 : 44, weight: .bold))
                 .foregroundStyle(WatchColor.accent)
-                .accessibilityLabel(restAccessibility(session?.restRemaining ?? 0))
+                .accessibilityLabel("Rest timer")
             if let session {
                 Text(RestLine.next(session: session, unit: preferences.weightUnit))
                     .font(WatchFont.body)
@@ -33,18 +35,13 @@ struct InlineRestView: View {
             RestButtonRow()
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 4)
+        .padding(.top, WatchMetric.isSmall ? 0 : 4)
     }
 
     private func loggedLine(_ set: SetEntry) -> String {
         if entry.isTimed { return WorkoutSession.clock(set.durationSeconds ?? 0) }
         if entry.exercise.loggingStyle == .bodyweightReps, set.weightKg == 0 { return "\(set.reps) reps" }
         return SetFormat.weightByReps(set.weightKg, reps: set.reps, unit: preferences.weightUnit)
-    }
-
-    /// VoiceOver announces at 30 seconds and zero, never every second.
-    private func restAccessibility(_ remaining: Int) -> String {
-        remaining == 30 || remaining == 0 ? "\(remaining) seconds rest" : "Resting"
     }
 }
 

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<!--
+	 This extension has no backend and no analytics SDK. It only reads the WidgetSnapshot
+	 the DaGym app writes to the shared App Group; nothing is transmitted off-device to
+	 the developer or a third party, so nothing is "collected" per Apple's definition.
+	-->
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<!--
+		 UserDefaults(suiteName: "group.dev.abdirahmanmohamed.dagym") — App Group suite
+		 shared with the DaGym app, used to read the WidgetSnapshot the app writes.
+		 Reason 1C8F.1: reading/writing data accessible only to this app and its App Group.
+		 DaGym/Features/Widgets/WidgetSnapshot.swift:198 (compiled into this target)
+		 DaGym/Features/Widgets/WidgetSnapshot.swift:199
+		-->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>1C8F.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

@@ -45,6 +45,14 @@ final class SmokeTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    /// A root tab's bar button. iOS 26 exposed the `accessibilityIdentifier` set on the tab's
+    /// label; iOS 27's tab bar drops it and exposes only the title, so fall back to that.
+    private func tabButton(_ app: XCUIApplication, id: String, title: String) -> XCUIElement {
+        let byID = app.buttons[id]
+        if byID.waitForExistence(timeout: 3) { return byID }
+        return app.tabBars.buttons[title]
+    }
+
     private func launchApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-dgUITest"]
@@ -93,7 +101,7 @@ final class SmokeTests: XCTestCase {
         )
         summaryDone.tap()
 
-        let progressTab = app.buttons[A11yID.tabProgress]
+        let progressTab = tabButton(app, id: A11yID.tabProgress, title: "Progress")
         XCTAssertTrue(
             progressTab.waitForExistence(timeout: defaultTimeout), "tab.progress never appeared"
         )
@@ -116,7 +124,7 @@ final class SmokeTests: XCTestCase {
     func testLibrarySearchFindsSeededExercise() {
         let app = launchApp()
 
-        let libraryTab = app.buttons[A11yID.tabLibrary]
+        let libraryTab = tabButton(app, id: A11yID.tabLibrary, title: "Library")
         XCTAssertTrue(libraryTab.waitForExistence(timeout: defaultTimeout), "tab.library never appeared")
         libraryTab.tap()
 
@@ -139,7 +147,7 @@ final class SmokeTests: XCTestCase {
     func testRoutinesTabShowsStarterRoutines() {
         let app = launchApp()
 
-        let routinesTab = app.buttons[A11yID.tabRoutines]
+        let routinesTab = tabButton(app, id: A11yID.tabRoutines, title: "Routines")
         XCTAssertTrue(
             routinesTab.waitForExistence(timeout: defaultTimeout), "tab.routines never appeared"
         )

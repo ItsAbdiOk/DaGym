@@ -249,6 +249,12 @@ final class Preferences {
     var voiceAutoLogEnabled: Bool {
         didSet { defaults.set(voiceAutoLogEnabled, forKey: Key.voiceAutoLogEnabled) }
     }
+    /// Lets the coach use Apple's on-device language model (Foundation Models) where the system
+    /// says it's available. On by default: it runs entirely on the phone and nothing leaves it.
+    /// Off, every coach feature falls back to `RuleCoachModel` — same cards, rule wording.
+    var onDeviceCoachEnabled: Bool {
+        didSet { defaults.set(onDeviceCoachEnabled, forKey: Key.onDeviceCoachEnabled) }
+    }
 
     enum Appearance: String, CaseIterable, Codable {
         case system, light, dark
@@ -280,6 +286,7 @@ final class Preferences {
         sampleDataMode = Self.boolValue(suite, Key.sampleDataMode, default: false)
         voiceSpeakBackOnHeadphones = Self.boolValue(suite, Key.voiceSpeakBackOnHeadphones, default: true)
         voiceAutoLogEnabled = Self.boolValue(suite, Key.voiceAutoLogEnabled, default: false)
+        onDeviceCoachEnabled = Self.boolValue(suite, Key.onDeviceCoachEnabled, default: true)
         let unit = WeightUnit(rawValue: suite.string(forKey: Key.weightUnit) ?? "") ?? .kg
         weightUnit = unit
         if let stored = DistanceUnit(rawValue: suite.string(forKey: Key.distanceUnit) ?? "") {

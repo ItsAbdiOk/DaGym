@@ -31,6 +31,7 @@ struct SettingsView: View {
                     trainingCard
                     RemindersSettingsSection()
                     VoiceSettingsSection()
+                    CoachSettingsSection()
                     DisplaySettingsSection()
                     calendarCard
                     ICloudSettingsSection()

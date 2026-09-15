@@ -407,6 +407,7 @@ extension WorkoutSession: Identifiable {
         RootView()
             .environment(WorkoutStore(context: container.mainContext))
             .environment(Preferences())
+            .environment(CoachServices.make(preferences: Preferences()))
             .modelContainer(container)
     } else {
         Text("Preview unavailable")

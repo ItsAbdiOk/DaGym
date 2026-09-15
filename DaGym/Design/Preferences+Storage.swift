@@ -48,6 +48,7 @@ extension Preferences {
         static let sampleDataMode = "sampleDataMode"
         static let voiceSpeakBackOnHeadphones = "voiceSpeakBackOnHeadphones"
         static let voiceAutoLogEnabled = "voiceAutoLogEnabled"
+        static let onDeviceCoachEnabled = "onDeviceCoachEnabled"
     }
 
     static func intValue(_ suite: UserDefaults, _ key: String, default value: Int) -> Int {

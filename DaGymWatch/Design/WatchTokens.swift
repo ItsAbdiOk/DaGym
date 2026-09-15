@@ -31,8 +31,11 @@ enum WatchMetric {
     @MainActor static var gutter: CGFloat { isSmall ? 10 : 12 }
     static let top: CGFloat = 12
     static let bottom: CGFloat = 14
-    /// First and last 24 pt: content there is centred and capped at 150 pt wide.
-    static let safeBand: CGFloat = 24
+    /// First and last 24 pt: content there is centred and capped at 150 pt wide. The 40 mm is
+    /// 27 pt shorter than the 41 mm, so its bands give up 4 pt each.
+    @MainActor static var safeBand: CGFloat { isSmall ? 20 : 24 }
+    /// Room for the status-bar clock above a page's title band.
+    @MainActor static var pageTop: CGFloat { isSmall ? 20 : 24 }
     static let safeBandMaxWidth: CGFloat = 150
 
     static let capsule: CGFloat = 50
@@ -40,7 +43,8 @@ enum WatchMetric {
     /// 64 pt on the 45 mm; the 44 mm SE is 18 pt shorter and the 40 mm 45 pt shorter, so the
     /// cards give up 4 and 8 pt rather than pushing the capsule off the bottom.
     @MainActor static var stepperCard: CGFloat { isSmall ? 56 : (screenWidth < 198 ? 60 : 64) }
-    static let singleValueCard: CGFloat = 88
+    /// 88 pt on the 45 mm, like the stepper card giving up height on the smaller cases.
+    @MainActor static var singleValueCard: CGFloat { isSmall ? 64 : (screenWidth < 198 ? 80 : 88) }
     static let stepperRadius: CGFloat = 16
     static let cardRadius: CGFloat = 14
     static let crownFocusBorder: CGFloat = 2

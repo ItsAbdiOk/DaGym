@@ -39,6 +39,14 @@ struct DaGymShortcuts: AppShortcutsProvider {
             shortTitle: "Last Session", systemImageName: "clock.arrow.circlepath"
         )
         AppShortcut(
+            intent: AskDaGymIntent(),
+            phrases: [
+                "Ask \(.applicationName) about my training",
+                "Ask \(.applicationName) a question"
+            ],
+            shortTitle: "Ask About Training", systemImageName: "bubble.left.and.text.bubble.right"
+        )
+        AppShortcut(
             intent: ShowGymCardIntent(),
             phrases: [
                 "Show my gym card in \(.applicationName)",

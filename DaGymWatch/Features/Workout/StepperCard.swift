@@ -10,6 +10,9 @@ enum CrownField: Hashable {
 /// A 64 pt stepper card (16 pt radius): the number, its unit label, and the crown-focus border.
 /// `hollow` is the warm-up look — an outline instead of a fill says "doesn't count" while the
 /// target stays the same size. `tall` is the 88 pt single-value card (bodyweight).
+///
+/// To VoiceOver it is an adjustable value — "Weight, 100 kilograms, adjustable" — and a swipe
+/// up or down moves it one crown detent through `onAdjust`.
 struct StepperCard: View {
     var value: String
     var label: String
@@ -17,10 +20,13 @@ struct StepperCard: View {
     var focus: CrownField?
     var hollow = false
     var tall = false
+    /// Overrides the card height (the cardio distance card is a short one).
+    var height: CGFloat?
     var valueSize: CGFloat = 28
     var accessibilityName: String
     var accessibilityValue: String
     var onTap: () -> Void
+    var onAdjust: (AccessibilityAdjustmentDirection) -> Void = { _ in }
 
     private var isFocused: Bool { focus == field }
 
@@ -37,7 +43,7 @@ struct StepperCard: View {
                     .foregroundStyle(WatchColor.inkSecondary)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: tall ? WatchMetric.singleValueCard : WatchMetric.stepperCard)
+            .frame(height: height ?? (tall ? WatchMetric.singleValueCard : WatchMetric.stepperCard))
             .background(
                 RoundedRectangle(cornerRadius: WatchMetric.stepperRadius)
                     .fill(hollow ? Color.clear : WatchColor.card)
@@ -54,7 +60,7 @@ struct StepperCard: View {
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityName)
         .accessibilityValue(accessibilityValue)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAdjustableAction(onAdjust)
         .accessibilityHint(isFocused ? "Turn the crown to adjust" : "Tap to give the crown")
     }
 }

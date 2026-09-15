@@ -28,7 +28,8 @@ struct FullScreenRestView: View {
         .background(WatchColor.background)
         .focusable(!isFinalThree)
         .digitalCrownRotation(
-            $crown, from: 0, through: 600, by: 15, sensitivity: .low, isContinuous: false,
+            $crown, from: 0, through: 600, by: Double(CrownDetents.restSeconds), sensitivity: .low,
+            isContinuous: false,
             isHapticFeedbackEnabled: true
         )
         .onAppear { crown = Double(remaining) }
@@ -56,10 +57,11 @@ struct FullScreenRestView: View {
                         .foregroundStyle(WatchColor.inkSecondary)
                 }
             }
-            .frame(width: 104, height: 104)
+            .frame(width: ringSize, height: ringSize)
             .padding(.vertical, 2)
+            // Announced by `WatchStore` at 30 s and zero only; the label itself never ticks.
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(remaining == 30 || remaining == 0 ? "\(remaining) seconds" : "Resting")
+            .accessibilityLabel("Rest timer, of \(WorkoutSession.clock(session?.restTotal ?? 0))")
             if let session {
                 Text(RestLine.next(session: session, unit: preferences.weightUnit, withUnit: true))
                     .font(WatchFont.body)
@@ -92,6 +94,9 @@ struct FullScreenRestView: View {
         }
         .animation(.default, value: remaining)
     }
+
+    /// 104 pt, or 88 on the 40 mm where the full stack would otherwise push under the clock.
+    private var ringSize: CGFloat { WatchMetric.isSmall ? 88 : 104 }
 
     private var progress: Double {
         guard let session, session.restTotal > 0 else { return 0 }

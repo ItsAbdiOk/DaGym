@@ -24,7 +24,9 @@ struct WorkoutSummaryView: View {
                         MilestoneUnlockedCard(achievements: summary.achievements)
                     }
                     MusclesHitCard(musclesHit: summary.musclesHit)
-                    NotesCard()
+                    if let facts = summary.debriefFacts {
+                        DebriefCard(facts: facts)
+                    }
                     actionRow
                 }
                 .padding(.horizontal, DGSpace.s4)
@@ -218,26 +220,6 @@ private struct MusclesHitCard: View {
     }
 }
 
-/// Neutral placeholder where the coach debrief will live once Phase 6 lands.
-private struct NotesCard: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s2) {
-            Text("Notes").dgLabel()
-            Text("Debrief arrives with the coach.")
-                .font(DGFont.body)
-                .foregroundStyle(DGColor.ink2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(DGSpace.s4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
-                .strokeBorder(DGColor.hairline, lineWidth: 1)
-        }
-    }
-}
-
 #Preview {
     WorkoutSummaryView(
         summary: WorkoutSummary(
@@ -254,4 +236,5 @@ private struct NotesCard: View {
         title: "Push A Done", onShare: {}, onDone: {}
     )
     .environment(Preferences())
+    .environment(CoachServices.make(preferences: Preferences()))
 }

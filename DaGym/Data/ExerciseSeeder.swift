@@ -41,6 +41,18 @@ enum ExerciseSeeder {
         case resourceNotFound
     }
 
+    /// Every store read `dedupe(in:)` has issued, for `SeedDedupePerformanceTests`. The pass
+    /// runs after every remote change, so its query count must stay flat in the number of
+    /// tombstones — the same discipline `WorkoutStore.queryCount` enforces on session builds.
+    static var dedupeQueryCount = 0
+
+    private static func fetch<T: PersistentModel>(
+        _ descriptor: FetchDescriptor<T>, in context: ModelContext
+    ) -> [T] {
+        dedupeQueryCount += 1
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
     /// Inserts every seeded exercise not already present, keyed by `seedID`.
     /// Refreshes existing rows' provenance fields when the seed version bumped.
     static func seedIfNeeded(context: ModelContext, bundle: Bundle = .main) {
@@ -89,16 +101,27 @@ enum ExerciseSeeder {
     /// repeated passes are no-ops.
     @discardableResult
     static func dedupe(in context: ModelContext) -> Int {
-        let models = (try? context.fetch(FetchDescriptor<ExerciseModel>())) ?? []
+        let models = fetch(FetchDescriptor<ExerciseModel>(), in: context)
         var bySeedID: [String: [ExerciseModel]] = [:]
         for model in models {
             if let seedID = model.seedID { bySeedID[seedID, default: []].append(model) }
         }
+        let groups = bySeedID.filter { $0.value.count > 1 }
+        // Nothing shares a seedID and nothing is tombstoned: the common case on a single
+        // device, and the pass must cost one query — it runs after every remote change.
+        guard !groups.isEmpty || models.contains(where: \.isMergedAway) else { return 0 }
+        // Every child that a fold might have to re-point, read once for the whole pass.
+        // Before this, each duplicate cost its own three predicate fetches plus two
+        // relationship faults, and a settled tombstone paid that again on every pass: the
+        // owner's store (one tombstone per seeded exercise after an iCloud double-seed) spent
+        // ~3 s on the main thread per pass — twice at launch and once more after every
+        // CloudKit transaction, which is what froze scrolling while a sync was running.
+        let children = FoldChildren(context: context)
         let seeded = try? loadSeed()
         var seedByID: [String: SeedExercise] = [:]
         for item in seeded?.exercises ?? [] { seedByID[item.id] = item }
         var folded = 0
-        for (seedID, group) in bySeedID where group.count > 1 {
+        for (seedID, group) in groups {
             let ordered = group.sorted(by: survivesFirst)
             let survivor = ordered[0]
             if survivor.isMergedAway {
@@ -107,12 +130,12 @@ enum ExerciseSeeder {
             }
             for duplicate in ordered.dropFirst() {
                 let changed = fold(
-                    duplicate, into: survivor, seed: seedByID[seedID], context: context
+                    duplicate, into: survivor, seed: seedByID[seedID], children: children
                 )
                 if changed { folded += 1 }
             }
         }
-        let swept = sweepTombstones(models, context: context)
+        let swept = sweepTombstones(models, children: children, context: context)
         if folded + swept > 0 {
             seedLogger.info(
                 "Seed fold: \(folded, privacy: .public) folded, \(swept, privacy: .public) swept"
@@ -128,21 +151,24 @@ enum ExerciseSeeder {
 
     /// Re-points everything that named `duplicate` at `survivor` and tombstones it. Returns
     /// whether anything actually changed, so an already-settled tombstone doesn't keep counting
-    /// as work and re-triggering `rebuildPersonalRecords()` on every remote change.
+    /// as work and re-triggering `rebuildPersonalRecords()` on every remote change. Every write
+    /// is guarded on the value differing: SwiftData marks a row dirty even when the new value
+    /// equals the old, and a pass that "re-wrote" ~1 500 settled tombstones then paid a full
+    /// save for nothing.
     @discardableResult
     private static func fold(
         _ duplicate: ExerciseModel, into survivor: ExerciseModel, seed: SeedExercise?,
-        context: ModelContext
+        children: FoldChildren
     ) -> Bool {
         var changed = duplicate.mergedIntoID != survivor.id
-        let slots = duplicate.routineExercises ?? []
-        let entries = duplicate.workoutExercises ?? []
+        let slots = children.slots(of: duplicate)
+        let entries = children.entries(of: duplicate)
         changed = changed || !slots.isEmpty || !entries.isEmpty
         for slot in slots { slot.exercise = survivor }
         for entry in entries { entry.exercise = survivor }
-        changed = repointBareIDs(from: duplicate, to: survivor, context: context) || changed
+        changed = repointBareIDs(from: duplicate, to: survivor, children: children) || changed
         mergeFields(from: duplicate, into: survivor, seed: seed)
-        duplicate.mergedIntoID = survivor.id
+        if duplicate.mergedIntoID != survivor.id { duplicate.mergedIntoID = survivor.id }
         if duplicate.mergedAt == nil { duplicate.mergedAt = Date() }
         return changed
     }
@@ -152,24 +178,16 @@ enum ExerciseSeeder {
     /// re-point them for us: the PR cache, the PR *event* log, and exercise notes. A PR event
     /// left dangling is a record History and the weekly recap silently stop counting.
     private static func repointBareIDs(
-        from duplicate: ExerciseModel, to survivor: ExerciseModel, context: ModelContext
+        from duplicate: ExerciseModel, to survivor: ExerciseModel, children: FoldChildren
     ) -> Bool {
         let duplicateID = duplicate.id
         let survivorID = survivor.id
         guard duplicateID != survivorID else { return false }
-        let records = (try? context.fetch(
-            FetchDescriptor<PersonalRecordModel>(predicate: #Predicate { $0.exerciseID == duplicateID })
-        )) ?? []
+        let records = children.records[duplicateID] ?? []
         for record in records { record.exerciseID = survivorID }
-        let events = (try? context.fetch(
-            FetchDescriptor<PersonalRecordEventModel>(
-                predicate: #Predicate { $0.exerciseID == duplicateID }
-            )
-        )) ?? []
+        let events = children.events[duplicateID] ?? []
         for event in events { event.exerciseID = survivorID }
-        let notes = (try? context.fetch(
-            FetchDescriptor<ExerciseNoteModel>(predicate: #Predicate { $0.exerciseID == duplicateID })
-        )) ?? []
+        let notes = children.notes[duplicateID] ?? []
         for note in notes { note.exerciseID = survivorID }
         return !records.isEmpty || !events.isEmpty || !notes.isEmpty
     }
@@ -181,8 +199,8 @@ enum ExerciseSeeder {
     private static func mergeFields(
         from duplicate: ExerciseModel, into survivor: ExerciseModel, seed: SeedExercise?
     ) {
-        survivor.isFavorite = survivor.isFavorite || duplicate.isFavorite
-        if survivor.notes.isEmpty { survivor.notes = duplicate.notes }
+        if !survivor.isFavorite, duplicate.isFavorite { survivor.isFavorite = true }
+        if survivor.notes.isEmpty, !duplicate.notes.isEmpty { survivor.notes = duplicate.notes }
         if survivor.restSeconds == 0, duplicate.restSeconds != 0 {
             survivor.restSeconds = duplicate.restSeconds
         }
@@ -198,31 +216,19 @@ enum ExerciseSeeder {
     /// Deletes tombstones that have been merged for longer than `tombstoneGracePeriod` and
     /// still have nothing pointing at them. Anything that acquired a child in the meantime is
     /// left alone — the next `dedupe` pass re-points it and restarts the clock at `mergedAt`.
-    private static func sweepTombstones(_ models: [ExerciseModel], context: ModelContext) -> Int {
+    private static func sweepTombstones(
+        _ models: [ExerciseModel], children: FoldChildren, context: ModelContext
+    ) -> Int {
         let cutoff = Date().addingTimeInterval(-tombstoneGracePeriod)
         var swept = 0
         for model in models {
             guard model.isMergedAway, let mergedAt = model.mergedAt, mergedAt < cutoff,
-                  (model.routineExercises ?? []).isEmpty, (model.workoutExercises ?? []).isEmpty,
-                  !hasBareIDReferences(model, context: context) else { continue }
+                  children.slots(of: model).isEmpty, children.entries(of: model).isEmpty,
+                  !children.hasBareIDReferences(model) else { continue }
             context.delete(model)
             swept += 1
         }
         return swept
-    }
-
-    private static func hasBareIDReferences(_ model: ExerciseModel, context: ModelContext) -> Bool {
-        let id = model.id
-        let records = (try? context.fetchCount(
-            FetchDescriptor<PersonalRecordModel>(predicate: #Predicate { $0.exerciseID == id })
-        )) ?? 0
-        let events = (try? context.fetchCount(
-            FetchDescriptor<PersonalRecordEventModel>(predicate: #Predicate { $0.exerciseID == id })
-        )) ?? 0
-        let notes = (try? context.fetchCount(
-            FetchDescriptor<ExerciseNoteModel>(predicate: #Predicate { $0.exerciseID == id })
-        )) ?? 0
-        return records + events + notes > 0
     }
 
     private static func insertMissing(_ items: [SeedExercise], into context: ModelContext) throws {
@@ -310,5 +316,59 @@ enum ExerciseSeeder {
     nonisolated private static func seedURL(in bundle: Bundle) -> URL? {
         bundle.url(forResource: "exercises", withExtension: "json", subdirectory: "Seed")
             ?? bundle.url(forResource: "exercises", withExtension: "json")
+    }
+}
+
+extension ExerciseSeeder {
+    /// The rows a fold re-points, indexed by the exercise they name — five fetches for the
+    /// whole pass instead of five per duplicate. The relationship children are only prefetched
+    /// for exercises already tombstoned (the settled case that repeats every pass); a fresh
+    /// duplicate reads its own relationships once, as before.
+    @MainActor
+    struct FoldChildren {
+        private(set) var records: [UUID: [PersonalRecordModel]] = [:]
+        private(set) var events: [UUID: [PersonalRecordEventModel]] = [:]
+        private(set) var notes: [UUID: [ExerciseNoteModel]] = [:]
+        private var slots: [PersistentIdentifier: [RoutineExerciseModel]] = [:]
+        private var entries: [PersistentIdentifier: [WorkoutExerciseModel]] = [:]
+
+        init(context: ModelContext) {
+            for record in fetch(FetchDescriptor<PersonalRecordModel>(), in: context) {
+                if let id = record.exerciseID { records[id, default: []].append(record) }
+            }
+            for event in fetch(FetchDescriptor<PersonalRecordEventModel>(), in: context) {
+                if let id = event.exerciseID { events[id, default: []].append(event) }
+            }
+            for note in fetch(FetchDescriptor<ExerciseNoteModel>(), in: context) {
+                if let id = note.exerciseID { notes[id, default: []].append(note) }
+            }
+            let tombstoneSlots = FetchDescriptor<RoutineExerciseModel>(
+                predicate: #Predicate { $0.exercise?.mergedIntoID != nil }
+            )
+            for slot in fetch(tombstoneSlots, in: context) {
+                if let owner = slot.exercise { slots[owner.persistentModelID, default: []].append(slot) }
+            }
+            let tombstoneEntries = FetchDescriptor<WorkoutExerciseModel>(
+                predicate: #Predicate { $0.exercise?.mergedIntoID != nil }
+            )
+            for entry in fetch(tombstoneEntries, in: context) {
+                if let owner = entry.exercise { entries[owner.persistentModelID, default: []].append(entry) }
+            }
+        }
+
+        func slots(of exercise: ExerciseModel) -> [RoutineExerciseModel] {
+            exercise.isMergedAway
+                ? slots[exercise.persistentModelID] ?? [] : exercise.routineExercises ?? []
+        }
+
+        func entries(of exercise: ExerciseModel) -> [WorkoutExerciseModel] {
+            exercise.isMergedAway
+                ? entries[exercise.persistentModelID] ?? [] : exercise.workoutExercises ?? []
+        }
+
+        func hasBareIDReferences(_ exercise: ExerciseModel) -> Bool {
+            let id = exercise.id
+            return !(records[id] ?? []).isEmpty || !(events[id] ?? []).isEmpty || !(notes[id] ?? []).isEmpty
+        }
     }
 }

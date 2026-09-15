@@ -50,6 +50,8 @@ targets:
           - Resources/ExercisePhotos
       - path: DaGym/Resources/ExercisePhotos
         type: folder
+    resources:
+      - path: DaGym/PrivacyInfo.xcprivacy
     dependencies:
       - package: GymCore
         product: GymCore
@@ -251,6 +253,7 @@ targets:
     resources:
       - path: DaGym/Resources/Fonts/BarlowCondensed-Bold.ttf
       - path: DaGym/Resources/Fonts/BarlowCondensed-ExtraBold.ttf
+      - path: DaGymWidgets/PrivacyInfo.xcprivacy
     # App Group only: the widgets extension needs it to read `WidgetSnapshot` from shared
     # UserDefaults (see DaGym/Features/Widgets/WidgetSnapshotWriter.swift). No CloudKit
     # entitlement here — the widget never opens the SwiftData store directly.
@@ -281,6 +284,9 @@ targets:
       - path: DaGymWatch
         excludes:
           - Widgets
+      # The complication view is compiled into the app as well, for the debug-only
+      # `-dgWatchScreen complications` harness that renders every family at its real size.
+      - path: DaGymWatch/Widgets/ComplicationView.swift
       - path: DaGym/Data/Models
       - path: DaGym/Data/Mapping.swift
       - path: DaGym/Data/ModelContainer+DaGym.swift
@@ -304,6 +310,8 @@ targets:
       - path: DaGym/Features/Routines/RoutineGlyphInfo.swift
       - path: DaGym/Design/Components/BodyMapMuscleMapping.swift
       - path: DaGym/Vendor/MuscleMap
+    resources:
+      - path: DaGymWatch/PrivacyInfo.xcprivacy
     dependencies:
       - package: GymCore
         product: GymCore
@@ -348,6 +356,22 @@ targets:
         TARGETED_DEVICE_FAMILY: "4"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
+  # Swift Testing bundle hosted by the watch app: parity with the phone's prescriptions, what a
+  # wrist-finished workout persists, and the pure tables (haptics, crown detents, VoiceOver
+  # strings). Runs on a watch simulator via the DaGymWatch scheme's test action.
+  DaGymWatchTests:
+    type: bundle.unit-test
+    platform: watchOS
+    sources:
+      - path: DaGymWatchTests
+    dependencies:
+      - target: DaGymWatch
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.dagym.watchkitapp.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "4"
+
   # Watch complications + Smart Stack card. Reads the `WatchSnapshot` the watch app writes to
   # the App Group; never opens the store.
   DaGymWatchWidgets:
@@ -356,6 +380,8 @@ targets:
     sources:
       - path: DaGymWatch/Widgets
       - path: DaGymWatch/Shared/WatchSnapshot.swift
+    resources:
+      - path: DaGymWatch/Widgets/PrivacyInfo.xcprivacy
     dependencies:
       - package: GymCore
         product: GymCore
@@ -407,5 +433,13 @@ schemes:
         DaGymWatch: all
     run:
       config: Debug
+    test:
+      config: Debug
+      # `-dgWatchTestHost`: the host app opens no CloudKit store and seeds nothing, so the runner
+      # attaches at once and every suite builds its own in-memory container.
+      commandLineArguments:
+        "-dgWatchTestHost": true
+      targets:
+        - DaGymWatchTests
     archive:
       config: Release

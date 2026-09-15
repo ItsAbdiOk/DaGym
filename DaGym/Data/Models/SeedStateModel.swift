@@ -77,23 +77,48 @@ extension WorkoutStore {
         return folded
     }
 
-    /// Re-runs `dedupeSeededRows()` after each batch of remote (CloudKit) changes lands, coalesced
-    /// to one pass per second so a large first import doesn't trigger a pass per transaction.
-    /// The caller keeps the returned observer alive for as long as it wants the passes to run.
-    func startRemoteChangeDedupe(center: NotificationCenter = .default) -> RemoteChangeDeduper {
-        RemoteChangeDeduper(store: self, center: center)
+    /// Re-runs `dedupeSeededRows()` after remote (CloudKit) changes land, once the stream has
+    /// been quiet for `RemoteChangeDeduper.quietPeriod` (and at least every `maxDelay` while it
+    /// never is). The caller keeps the returned observer alive for as long as it wants the
+    /// passes to run.
+    func startRemoteChangeDedupe(
+        center: NotificationCenter = .default, quietPeriod: Duration = RemoteChangeDeduper.quietPeriod,
+        maxDelay: Duration = RemoteChangeDeduper.maxDelay
+    ) -> RemoteChangeDeduper {
+        RemoteChangeDeduper(store: self, center: center, quietPeriod: quietPeriod, maxDelay: maxDelay)
     }
 }
 
 /// Owns the `NSPersistentStoreRemoteChange` subscription for `WorkoutStore.dedupeSeededRows()`.
+///
+/// A pass reads every exercise row (~100 ms on the main thread with a full catalogue, measured
+/// on an iPhone 16 Pro), and CloudKit posts a remote change per mirroring transaction — dozens
+/// a minute while it exports or imports. The old one-second coalescing therefore ran a pass
+/// nearly every second for the whole sync, a visible hitch on every screen. Now a pass waits
+/// for the stream to go quiet, with a ceiling so a long import still gets folded partway.
 @MainActor
 final class RemoteChangeDeduper {
+    static let quietPeriod: Duration = .seconds(3)
+    static let maxDelay: Duration = .seconds(30)
+
     private let center: NotificationCenter
+    private let quietPeriod: Duration
+    private let maxDelay: Duration
     private var token: (any NSObjectProtocol)?
     private var pending: Task<Void, Never>?
+    /// When the oldest not-yet-folded change arrived, so a continuous stream can't starve the pass.
+    private var firstPendingChange: ContinuousClock.Instant?
+    /// Passes run so far — for tests, which count them rather than wait on wall-clock.
+    private(set) var passCount = 0
 
-    init(store: WorkoutStore, center: NotificationCenter) {
+    init(
+        store: WorkoutStore, center: NotificationCenter,
+        quietPeriod: Duration = RemoteChangeDeduper.quietPeriod,
+        maxDelay: Duration = RemoteChangeDeduper.maxDelay
+    ) {
         self.center = center
+        self.quietPeriod = quietPeriod
+        self.maxDelay = maxDelay
         token = center.addObserver(
             forName: .NSPersistentStoreRemoteChange, object: nil, queue: .main
         ) { [weak self, weak store] _ in
@@ -110,11 +135,19 @@ final class RemoteChangeDeduper {
     }
 
     private func schedule(store: WorkoutStore) {
-        guard pending == nil else { return }
+        let now = ContinuousClock.now
+        let first = firstPendingChange ?? now
+        firstPendingChange = first
+        // Trailing-edge debounce: every new change pushes the pass back by `quietPeriod`,
+        // but never past `first + maxDelay`.
+        let delay = min(quietPeriod, max(.zero, (first + maxDelay) - now))
+        pending?.cancel()
         pending = Task { [weak self, weak store] in
-            try? await Task.sleep(for: .seconds(1))
+            try? await Task.sleep(for: delay)
             guard let self, let store, !Task.isCancelled else { return }
             self.pending = nil
+            self.firstPendingChange = nil
+            self.passCount += 1
             store.dedupeSeededRows()
         }
     }

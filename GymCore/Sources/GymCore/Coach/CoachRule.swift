@@ -26,6 +26,10 @@ public enum CoachRule: String, CaseIterable, Codable, Hashable, Sendable {
     /// The lifter is returning after a long layoff — ease back in rather than picking up where
     /// they left off.
     case returnFromLayoff = "coach.returnFromLayoff"
+    /// A change proposed by "Review my training" (on-device model or `TrainingReviewRules`),
+    /// validated by `TrainingReviewValidator`. Not one of the ten periodic checks: it only fires
+    /// when the lifter asks, and its cards share the same approve/dismiss/cooldown plumbing.
+    case trainingReview = "coach.trainingReview"
 
     /// How long a dismissal or approval of this rule silences it, even if the same evidence
     /// (same fingerprint) would otherwise fire again.
@@ -41,6 +45,7 @@ public enum CoachRule: String, CaseIterable, Codable, Hashable, Sendable {
         case .recoveryDebt: TrainingConstants.coachRecoveryDebtCooldownDays
         case .prMilestone: TrainingConstants.coachHighlightCooldownDays
         case .returnFromLayoff: TrainingConstants.coachLayoffCooldownDays
+        case .trainingReview: TrainingConstants.coachReviewCooldownDays
         }
     }
 }

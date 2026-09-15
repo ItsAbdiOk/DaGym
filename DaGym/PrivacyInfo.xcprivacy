@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<!--
+	 DaGym has no backend and no analytics SDK. Workout/routine/body data is stored in
+	 SwiftData and mirrored to the user's own private CloudKit database
+	 (iCloud.dev.abdirahmanmohamed.dagym). Per Apple's Privacy Manifest definition,
+	 "collection" means transmission off the device to the developer or a third party.
+	 CloudKit private-database sync moves data only between the user's own devices via
+	 their iCloud account; the developer has no access to it and it is never sent to
+	 DaGym's servers (there are none). It is therefore not "collected" and this array is
+	 intentionally empty.
+	-->
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<!--
+		 UserDefaults.standard — app's own preferences (units, onboarding step, cached
+		 unit/equipment choices). Reason CA92.1: reading/writing data only accessible to
+		 this app.
+		 DaGym/Design/UnitEnvironment.swift:268
+		 DaGym/Design/Preferences+Storage.swift:53
+		 DaGym/Design/Preferences+Storage.swift:57
+		 DaGym/Data/WorkoutStore+Cardio.swift:153
+		 DaGym/Data/WorkoutStore+Equipment.swift:120
+		 DaGym/Features/Onboarding/OnboardingFlow.swift:34
+		 DaGym/Features/Onboarding/OnboardingFlow.swift:39
+		 DaGym/Features/Onboarding/OnboardingFlow.swift:45
+		-->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+		<!--
+		 UserDefaults(suiteName: "group.dev.abdirahmanmohamed.dagym") — App Group suite
+		 shared with the DaGymWidgets extension so it can read the WidgetSnapshot the app
+		 writes. Reason 1C8F.1: reading/writing data accessible only to this app and its
+		 own App Group extensions.
+		 DaGym/Features/Widgets/WidgetSnapshot.swift:198
+		 DaGym/Features/Widgets/WidgetSnapshot.swift:199
+		 DaGym/Features/Widgets/WidgetSnapshotWriter.swift:24 (consumer of the suite above)
+		-->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>1C8F.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

@@ -43,7 +43,13 @@ struct LibraryView: View {
                     Button("New exercise", systemImage: "plus") { showingNewExercise = true }
                 }
             }
-            .searchable(text: $searchText, prompt: "Search \(totalCount) exercises")
+            // Explicit placement: on iOS 27 a `.searchable` inside a plain `Tab` without a
+            // placement no longer shows a field at all (the system reserves search for a
+            // `role: .search` tab), which made the library unsearchable.
+            .searchable(
+                text: $searchText, placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search \(totalCount) exercises"
+            )
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .sheet(isPresented: $showingNewExercise) {

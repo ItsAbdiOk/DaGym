@@ -1,0 +1,38 @@
+name: CI
+
+# Fast, code-level gate: lint, GymCore's pure-logic unit tests, and a build-only pass to
+# catch compile errors. Deliberately does NOT run DaGymTests/DaGymUITests (the app + UI
+# suites) — those need a booted simulator, seed data and CloudKit stubbing, which is slow
+# and flaky on shared GitHub-hosted runners. Run the full suite locally with
+# `scripts/verify.sh` (also enforced by the pre-push hook) before merging.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: brew install swiftlint xcodegen
+
+      - name: Lint (strict)
+        run: swiftlint lint --strict
+
+      - name: GymCore unit tests
+        run: cd GymCore && swift test
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build DaGym (iOS Simulator, unsigned)
+        run: |
+          xcodebuild build \
+            -project DaGym.xcodeproj \
+            -scheme DaGym \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO

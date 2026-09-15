@@ -41,6 +41,9 @@ struct AppRootContainer: View {
     // The container itself is not stored here for the same reason: `ContainerProvider.shared`
     // resolves it once, so a re-init never opens a second container on the same store files.
     @State private var hasCompletedOnboarding: Bool
+    /// Which coach model the app talks to (on-device Foundation Models or the rules), decided
+    /// once from preferences and device state; Settings re-checks it on toggle.
+    @State private var coachServices: CoachServices
 
     /// `preferences` is the app delegate's instance — the one process-wide `Preferences`, so the
     /// HealthKit background observer and the scenes read and write the same object.
@@ -54,6 +57,7 @@ struct AppRootContainer: View {
         }
         self.preferences = preferences
         _hasCompletedOnboarding = State(initialValue: preferences.hasCompletedOnboarding)
+        _coachServices = State(initialValue: CoachServices.make(preferences: preferences))
     }
 
     private var container: ModelContainer? {
@@ -136,6 +140,7 @@ struct AppRootContainer: View {
             .environment(preferences)
             .environment(healthSync)
             .environment(healthInsights)
+            .environment(coachServices)
             .modelContainer(container)
             .preferredColorScheme(preferences.appearance.colorScheme)
         }
@@ -194,6 +199,7 @@ struct DebugRootView: View {
                 DebugScreenView(route: route)
                     .environment(store)
                     .environment(preferences)
+                    .environment(CoachServices.make(preferences: preferences))
                     .modelContainer(container)
             } else {
                 AmbientWash()

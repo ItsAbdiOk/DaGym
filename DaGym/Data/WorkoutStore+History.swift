@@ -93,13 +93,15 @@ extension WorkoutStore {
         let setsDone = session.exercises.flatMap(\.sets)
             .filter { $0.isDone && $0.kind.countsTowardStats }.count
         let previous = previousWorkout(before: workout)
-        return WorkoutSummary(
+        var summary = WorkoutSummary(
             durationSeconds: max(0, Int(endedAt.timeIntervalSince(workout.startedAt))),
             volumeKg: session.volumeKg, setsDone: setsDone, prs: prs, musclesHit: session.musclesHit,
             achievements: achievements, previous: previous.map(previousWorkoutSummary),
             e1rmChanges: e1rmChanges(session: session, previous: previous),
             distanceMeters: session.distanceMeters
         )
+        summary.debriefFacts = debriefFacts(session: session, summary: summary)
+        return summary
     }
 
     /// The latest finished workout on the same routine — same title when neither has a routine

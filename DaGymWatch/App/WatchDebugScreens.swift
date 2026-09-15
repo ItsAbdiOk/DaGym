@@ -9,6 +9,8 @@ enum WatchDebugScreens {
     static func apply(_ name: String?, store: WatchStore) {
         guard let name, WatchLaunchFlags.isSample else { return }
         switch name {
+        case "home":
+            break
         case "home-rest":
             // Today off the schedule, the other days kept, so Home shows the routine list.
             var schedule = store.store.schedule()
@@ -18,6 +20,10 @@ enum WatchDebugScreens {
             store.refreshHome()
         case "settings":
             store.debugOpensSettings = true
+        case "complications":
+            store.debugComplicationsPage = 0
+        case _ where name.hasPrefix("complications-"):
+            store.debugComplicationsPage = Int(name.dropFirst("complications-".count)) ?? 0
         case "voice":
             openVoice(store: store)
         default:

@@ -21,6 +21,9 @@ struct WorkoutSummary {
     var e1rmChanges: [ExerciseE1RMChange] = []
     /// Σ metres over completed cardio sets — shown beside the volume when non-zero.
     var distanceMeters: Double = 0
+    /// The pre-summarised facts the coach debrief reads (`WorkoutStore+CoachFacts.swift`). Nil
+    /// for a summary built without a session (a re-finish, the debug screen) — no card then.
+    var debriefFacts: SessionSummaryFacts?
 }
 
 /// The headline numbers of the workout `WorkoutSummary.previous` compares against.

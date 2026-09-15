@@ -40,15 +40,15 @@ struct SettingsView: View {
         return Button(unit.symbol) { preferences.weightUnit = unit }
             .font(WatchFont.bodyMedium)
             .foregroundStyle(selected ? Color.black : WatchColor.inkSecondary)
-            .frame(width: 40, height: 28)
+            .frame(width: WatchMetric.isSmall ? 34 : 40, height: 28)
             .background(Capsule().fill(selected ? WatchColor.accent : .clear))
             .buttonStyle(.plain)
     }
 
     private func row<Trailing: View>(_ title: String, @ViewBuilder trailing: () -> Trailing) -> some View {
         HStack {
-            Text(title).font(WatchFont.bodyMedium).foregroundStyle(WatchColor.ink)
-            Spacer()
+            Text(title).font(WatchFont.bodyMedium).foregroundStyle(WatchColor.ink).lineLimit(1)
+            Spacer(minLength: 4)
             trailing()
         }
         .padding(.horizontal, 12)

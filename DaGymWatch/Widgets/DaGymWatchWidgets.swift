@@ -16,8 +16,7 @@ struct DaGymComplication: Widget {
         StaticConfiguration(
             kind: "dev.abdirahmanmohamed.dagym.watch", provider: WatchSnapshotProvider()
         ) { entry in
-            ComplicationView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+            ComplicationEntryView(entry: entry)
         }
         .configurationDisplayName("DaGym")
         .description("Streak, next session and the rest timer.")
@@ -25,9 +24,17 @@ struct DaGymComplication: Widget {
     }
 }
 
-struct WatchSnapshotEntry: TimelineEntry {
-    var date: Date
-    var snapshot: WatchSnapshot
+/// Reads the family WidgetKit renders for and hands it to the one shared view.
+struct ComplicationEntryView: View {
+    @Environment(\.widgetFamily) private var family
+    /// The Smart Stack draws the container background; a face complication does not.
+    @Environment(\.showsWidgetContainerBackground) private var inSmartStack
+    var entry: WatchSnapshotEntry
+
+    var body: some View {
+        ComplicationView(entry: entry, family: family, isSmartStack: inSmartStack)
+            .containerBackground(.fill.tertiary, for: .widget)
+    }
 }
 
 /// One entry now; when resting, another at the rest's end so the timer hands back to the idle

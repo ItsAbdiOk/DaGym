@@ -2,12 +2,14 @@ import GymCore
 import SwiftUI
 
 /// The Coach tab (plan.md phase 6): lists `CoachEngine`'s current cards, most severe first, with
-/// Approve/Dismiss on every one — replaces `CoachPlaceholderView`. Rule-based only, never AI (see
-/// `header`'s disclaimer): the on-device AI coach is a separate, later feature and this screen
-/// must not imply it.
+/// Approve/Dismiss on every one — replaces `CoachPlaceholderView`. The ten rule checks are always
+/// rule-based; below them sit the two on-device coach features (`CoachReviewSection`,
+/// `CoachAskSection`), which fall back to the same rules when the model isn't available. The
+/// header says which is running, so the screen never implies AI it isn't using.
 struct CoachView: View {
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
+    @Environment(CoachServices.self) private var coach
     @Environment(\.scenePhase) private var scenePhase
     @State private var cards: [CoachCard] = []
     @State private var expanded: Set<String> = []
@@ -34,6 +36,10 @@ struct CoachView: View {
                                 onDismiss: { dismiss(card) }
                             )
                         }
+                    }
+                    if hasTrained {
+                        CoachReviewSection(undoAction: $undoAction)
+                        CoachAskSection()
                     }
                 }
                 .padding(.horizontal, DGSpace.s4)
@@ -77,8 +83,11 @@ struct CoachView: View {
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Text(
-                "Rule-based, not AI — ten fixed checks read your training history and flag "
-                    + "patterns. Nothing is sent anywhere."
+                coach.isUsingLanguageModel
+                    ? "Ten fixed checks read your training history and flag patterns. Review and Ask "
+                        + "use Apple's on-device model — it runs on your iPhone; nothing is sent anywhere."
+                    : "Rule-based, not AI — ten fixed checks read your training history and flag "
+                        + "patterns. Nothing is sent anywhere."
             )
             .font(DGFont.footnote)
             .foregroundStyle(DGColor.ink4)
@@ -149,6 +158,7 @@ struct CoachView: View {
         CoachView()
             .environment(store)
             .environment(Preferences())
+            .environment(CoachServices.make(preferences: Preferences()))
     } else {
         Text("Preview unavailable")
     }

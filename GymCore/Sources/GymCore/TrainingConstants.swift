@@ -271,6 +271,9 @@ extension TrainingConstants {
     /// after — the same PR is not new evidence.
     public static let coachHighlightLookbackDays = 3.0
     public static let coachHighlightCooldownDays = 4
+    /// A dismissed or approved review proposal stays quiet for two weeks — the review is
+    /// on-demand, and re-proposing the same change every tap would make "Dismiss" meaningless.
+    public static let coachReviewCooldownDays = 14
 
     /// Long layoff: days since the last logged workout before a "return to training" card fires.
     public static let coachLayoffMinDays = 10.0

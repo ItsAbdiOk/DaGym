@@ -36,7 +36,7 @@ final class WatchRoot {
     private var container: ModelContainer?
 
     func open() {
-        guard store == nil else { return }
+        guard store == nil, !WatchLaunchFlags.isTestHost else { return }
         let container = Self.makeContainer()
         guard let container else { return }
         self.container = container

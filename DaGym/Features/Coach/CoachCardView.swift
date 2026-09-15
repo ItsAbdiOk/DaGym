@@ -181,7 +181,32 @@ struct CoachCardView: View {
             let percent = Int((loadFraction * 100).rounded())
             return "Approve just records your decision — start your next session around "
                 + "\(percent)% of your usual weight."
+        case .addExercise, .replaceExercise, .changeRepRange, .changeProgressionRule, .moveRestDay:
+            return reviewActionNoteText(for: action)
         case .none:
+            return nil
+        }
+    }
+
+    /// The training-review actions (`CoachReviewSection`): each one is applied for real by
+    /// `WorkoutStore.applyReviewChange`, and each is undoable from the toast.
+    private func reviewActionNoteText(for action: CoachSuggestedAction) -> String? {
+        switch action {
+        case .addExercise(_, let exerciseName):
+            return "Approve adds \(exerciseName) (3 × 8) to the routine that already trains its "
+                + "muscles most. You can undo it."
+        case .replaceExercise(_, let exerciseName, _, let withName):
+            return "Approve swaps \(exerciseName) for \(withName) in every routine that programmes "
+                + "it. Progress on \(exerciseName) is kept. You can undo it."
+        case .changeRepRange(_, let exerciseName, let low, let high):
+            return "Approve sets \(exerciseName)'s working sets to \(low)–\(high) reps in your plan. "
+                + "You can undo it."
+        case .changeProgressionRule(_, let exerciseName, let rule):
+            return "Approve puts \(exerciseName) on \(rule.displayName) progression. You can undo it."
+        case .moveRestDay(let from, let to):
+            return "Approve moves \(from.displayName)'s session to \(to.displayName) in your "
+                + "schedule. You can undo it."
+        case .deloadExercise, .substituteExercise, .addSession, .restMuscle, .easeBackIn, .none:
             return nil
         }
     }
