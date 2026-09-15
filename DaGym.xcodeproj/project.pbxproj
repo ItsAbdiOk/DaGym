@@ -117,6 +117,7 @@
 		3530874FB347EB6AC5EBD9C5 /* VoiceLogControllerLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E28D0DA1EBA850327E6FDDF /* VoiceLogControllerLifecycleTests.swift */; };
 		355C8BA2B1510B1637AD4E3A /* CoachModelBoundaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6195EAEAA77AE8303DC454C /* CoachModelBoundaryTests.swift */; };
 		35D19CD161CA7426769D0D10 /* ExerciseCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55AD0BA13E3978993D93CC7 /* ExerciseCard.swift */; };
+		3601EBF1EDC05F40269B5A07 /* CoachChatDriveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796CD508B1321B8047533146 /* CoachChatDriveTests.swift */; };
 		361159218E3BDE82A90B155B /* WorkoutSession+TimedHold.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92AF0F1F5C910BD0D8A49B9F /* WorkoutSession+TimedHold.swift */; };
 		36EF661426F2A798F92F10F9 /* DebugRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C0F778F4649F7FCE0C2C113 /* DebugRoute.swift */; };
 		3748D0DDB1D8108F992880B2 /* BodyMeasurementModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82C3027AF2B0D036A6C8B457 /* BodyMeasurementModel.swift */; };
@@ -1074,6 +1075,7 @@
 		774F39E9321BE80941AD4404 /* EquipmentProfileModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EquipmentProfileModel.swift; sourceTree = "<group>"; };
 		77B9B35D2CBA751AD1C5F104 /* UndoToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UndoToast.swift; sourceTree = "<group>"; };
 		7960B0689EC8B27FE09576BC /* StoreHistoryFixTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreHistoryFixTests.swift; sourceTree = "<group>"; };
+		796CD508B1321B8047533146 /* CoachChatDriveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachChatDriveTests.swift; sourceTree = "<group>"; };
 		7986792AAA427C867EC824F5 /* CalendarSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarSyncService.swift; sourceTree = "<group>"; };
 		79E3F90C1ED45D5E1AA6E8CA /* IntentStoreAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntentStoreAccess.swift; sourceTree = "<group>"; };
 		79E997E1A74B6C03FB4434A7 /* VoiceLogController+Errors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceLogController+Errors.swift"; sourceTree = "<group>"; };
@@ -1833,6 +1835,7 @@
 		82378D3E13E3F5E93D7B21B0 /* DaGymUITests */ = {
 			isa = PBXGroup;
 			children = (
+				796CD508B1321B8047533146 /* CoachChatDriveTests.swift */,
 				AD5D205548020568C1212B3D /* OnboardingWalkthroughTests.swift */,
 				A122A52F35F2EEEFE8E78CA6 /* SmokeTests.swift */,
 			);
@@ -2794,6 +2797,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3FDDAC6E922D8F7407E2EDA1 /* AccessibilityIDs.swift in Sources */,
+				3601EBF1EDC05F40269B5A07 /* CoachChatDriveTests.swift in Sources */,
 				8240F36195913A4FE33C4AE8 /* OnboardingWalkthroughTests.swift in Sources */,
 				A317327221C24168E5A4DF28 /* SmokeTests.swift in Sources */,
 			);

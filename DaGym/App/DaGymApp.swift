@@ -184,6 +184,7 @@ struct AppRootContainer: View {
             return store.loadGrid(for: exercise, equipment: store.activeEquipment())
         }
         purgeHealthDerivedRowsOnce(store: store)
+        CoachChatSettings.adoptLaunchArgumentKey(preferences: preferences)
         store.backfillWorkoutTotalsIfNeeded()
         // A second iCloud device imports the first one's seeded rows after launch; fold those
         // as they land. Kept in `phase` so the observer lives as long as the store does.

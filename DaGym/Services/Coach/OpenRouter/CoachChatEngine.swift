@@ -227,6 +227,7 @@ final class CoachChatEngine {
             let name = call.function.name
             let reason = error.localizedDescription
             Self.logger.notice("Tool \(name, privacy: .public) failed: \(reason, privacy: .public)")
+            Self.trace("failed arguments head: \(call.function.arguments.prefix(300))")
             return Self.errorJSON(error.localizedDescription)
         }
     }

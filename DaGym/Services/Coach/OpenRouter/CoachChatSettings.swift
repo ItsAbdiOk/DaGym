@@ -16,6 +16,21 @@ enum CoachChatSettings {
     static var hasAPIKey: Bool { apiKey() != nil }
 
     /// Saves a pasted key; an empty paste removes it instead of storing a blank.
+    /// Debug builds only: `-dgOpenRouterKey <key>` seeds the Keychain and grants consent so a
+    /// simulator run can be driven from the command line. The value lives in the simulator's
+    /// process arguments and its Keychain, nowhere else; a Release build ignores the flag.
+    @MainActor
+    static func adoptLaunchArgumentKey(preferences: Preferences) {
+        #if DEBUG
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "-dgOpenRouterKey"), index + 1 < arguments.count else {
+            return
+        }
+        saveAPIKey(arguments[index + 1])
+        preferences.coachChatConsentGiven = true
+        #endif
+    }
+
     static func saveAPIKey(_ key: String) {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {

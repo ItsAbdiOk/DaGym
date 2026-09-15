@@ -19,13 +19,20 @@ enum OpenRouterWire {
         var streamOptions: StreamOptions? = StreamOptions(includeUsage: true)
         var maxTokens: Int?
         var temperature: Double?
+        /// OpenRouter's unified reasoning control. A chat turn that reads three tools and
+        /// answers does not need deep thinking; `low` cut each round from ~18 s to a few.
+        var reasoning: Reasoning? = Reasoning(effort: "low")
 
         enum CodingKeys: String, CodingKey {
-            case model, messages, tools, stream, temperature
+            case model, messages, tools, stream, temperature, reasoning
             case toolChoice = "tool_choice"
             case streamOptions = "stream_options"
             case maxTokens = "max_tokens"
         }
+    }
+
+    struct Reasoning: Codable, Equatable, Sendable {
+        var effort: String
     }
 
     struct StreamOptions: Codable, Equatable, Sendable {

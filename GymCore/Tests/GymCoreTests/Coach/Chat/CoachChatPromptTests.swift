@@ -49,7 +49,7 @@ struct CoachChatPromptTests {
         #expect(rules.contains("propose_* tools"))
         #expect(rules.contains("equipment"))
         #expect(rules.contains("No headings"))
-        #expect(rules.contains("one clarifying question"))
+        #expect(rules.contains("state the assumption"))
     }
 
     @Test("an unrestricted gym and a gym with no stations read differently")
