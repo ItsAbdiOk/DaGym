@@ -34,6 +34,41 @@ struct DemoBackupTests {
             "DEMO wrote \(data.count / 1024) KB: \(document.workouts.count) workouts, "
             + "\(document.routines.count) routines, \(document.bodyMeasurements.count) bodyweights"))
     }
+
+    /// The same fourteen months, restored the way Settings restores them — through
+    /// `ImportActor` on a first-launch store — and then put through a cold launch. Every
+    /// workout and routine lands with its totals stamped and its records rebuilt, and the
+    /// launch's fold, prune and backfill leave all of it alone: the restored routines are
+    /// the lifter's own (workouts point at them), so the starter prune has nothing to take.
+    @Test("the demo backup restores through the actor and survives the next launch intact")
+    func demoBackupRestoresAndSurvivesLaunch() async throws {
+        let builder = try CoachEvalStoreBuilder()
+        var story = DemoLifter(builder: builder)
+        try story.build()
+        builder.finish()
+        let exported = BackupService.export(context: builder.store.context)
+        let document = try BackupCodec.decode(BackupCodec.encode(exported))
+        #expect(document.workouts.count > 200)
+
+        let fresh = try makeStore(seed: .firstLaunch)
+        let preferences = Preferences(suite: UserDefaults(suiteName: "demo-restore-\(UUID())") ?? .standard)
+        let report = try await BackupService.import(
+            document: document, store: fresh, preferences: preferences
+        )
+        #expect(report.workoutsImported == document.workouts.count)
+        #expect(report.routinesImported == document.routines.count)
+        #expect(report.problems.isEmpty, Comment(rawValue: report.problems.joined(separator: " | ")))
+        let restored = fresh.finishedWorkoutModelsNewestFirst()
+        #expect(restored.count == document.workouts.count)
+        #expect(restored.allSatisfy { $0.hasStampedTotals })
+        #expect(!fresh.personalRecords().isEmpty)
+
+        await LaunchSeeding.run(store: fresh, preferences: preferences)
+        #expect(preferences.starterRoutinesPruned)
+        #expect(fresh.routines().count == document.routines.count)
+        #expect(fresh.finishedWorkoutModelsNewestFirst().count == document.workouts.count)
+        #expect(fresh.restampWorkoutTotalsAfterRemoteChange() == 0)
+    }
 }
 
 /// Three phases: a beginner full-body year opener, an upper/lower block with deloads, and a

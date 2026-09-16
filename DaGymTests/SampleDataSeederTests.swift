@@ -60,6 +60,27 @@ struct SampleDataSeederTests {
         #expect(daysAgo == 1)
     }
 
+    /// `RoutineSeeder.seedStarters` counts a renamed starter as present (by its starter id), so
+    /// the seeder must find it the same way — matching by name only made "Explore with sample
+    /// data" a silent no-op for a lifter who had renamed one of the trio.
+    @Test("a renamed starter still gets the sample history, matched by its starter id")
+    func renamedStarterStillSeeds() throws {
+        let store = try makeStore(seed: .firstLaunch)
+        let preferences = Preferences(suite: makeSuite(#function))
+        RoutineSeeder.seedStarters(RoutineSeeder.pushPullLegsNames, store: store)
+        let pushID = try #require(store.routines().first { $0.name == "Push A" }?.id)
+        let drafts = try #require(store.routineDrafts(id: pushID)?.drafts)
+        store.saveRoutine(id: pushID, name: "Push Day", exercises: drafts)
+
+        SampleDataSeeder.seed(store: store, preferences: preferences)
+
+        #expect(preferences.sampleDataMode)
+        #expect(store.routines().count == 3)
+        let workouts = store.finishedWorkoutModelsNewestFirst()
+        #expect(workouts.count == 24)
+        #expect(workouts.filter { $0.routineID == pushID }.count == 8)
+    }
+
     @Test("the onboarding row says it is building while the seed runs")
     func welcomeRowShowsBusyState() {
         #expect(OnboardingWelcomeStep.sampleDataTitle(isSeeding: false) == "Explore with sample data")

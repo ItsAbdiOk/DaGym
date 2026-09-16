@@ -14,6 +14,8 @@ struct ResetSideEffects {
     var clearWidgetSnapshot: @MainActor () -> Void
     var removeSecrets: @MainActor () -> Void
     var deleteCalendarEvents: @MainActor ([String]) -> Void
+    /// The cloud coach's local files: remembered facts, the usage ledger and the chat archive.
+    var clearCoachData: @MainActor () -> Void
 
     /// Inert in a test process, like `WidgetSnapshotWriter.live`: unit tests must not clear the
     /// developer's real notifications, calendar events, widget snapshot or Keychain.
@@ -29,20 +31,42 @@ struct ResetSideEffects {
                 guard let suite = WidgetSnapshotStore.appGroupSuite else { return }
                 WidgetSnapshotStore.write(.empty, to: suite)
             },
-            removeSecrets: { KeychainStore.remove(account: HevyAPIClient.keychainAccount) },
+            removeSecrets: {
+                KeychainStore.remove(account: HevyAPIClient.keychainAccount)
+                KeychainStore.remove(account: CoachChatSettings.keychainAccount)
+            },
             deleteCalendarEvents: { ids in
                 guard !ids.isEmpty else { return }
                 let store = EventKitStore()
                 for id in ids { try? store.deleteEvent(id: id) }
+            },
+            clearCoachData: {
+                Self.clearCoachData(
+                    memory: CoachMemoryFile.standard(), ledger: .standard,
+                    archive: CoachChatArchive.standard()
+                )
             }
         )
+    }
+
+    /// Everything the coach chat keeps outside the store and `Preferences`: the memory file
+    /// (facts about the lifter), the token ledger in `UserDefaults` and every thread on disk.
+    /// A wipe that left these behind kept the coach's knowledge of a lifter who asked for
+    /// everything to be erased. Static and injectable so a test can run it over temp copies.
+    static func clearCoachData(
+        memory: CoachMemoryFile?, ledger: CoachChatUsageLedgerStore, archive: CoachChatArchive?
+    ) {
+        try? memory?.forgetEverything()
+        ledger.defaults.removeObject(forKey: CoachChatUsageLedgerStore.key)
+        guard let archive else { return }
+        for thread in archive.list() { try? archive.delete(id: thread.id) }
     }
 
     /// Does nothing — the default for tests and previews.
     static var inert: ResetSideEffects {
         ResetSideEffects(
             cancelNotifications: {}, clearWidgetSnapshot: {}, removeSecrets: {},
-            deleteCalendarEvents: { _ in }
+            deleteCalendarEvents: { _ in }, clearCoachData: {}
         )
     }
 }
@@ -75,6 +99,7 @@ extension WorkoutStore {
         Self.resetToDefaults(preferences)
         effects.clearWidgetSnapshot()
         effects.removeSecrets()
+        effects.clearCoachData()
         reseedAfterWipe()
     }
 
@@ -150,6 +175,7 @@ extension WorkoutStore {
     /// "Reset everything".
     private static func resetToDefaults(_ preferences: Preferences) {
         preferences.weightUnit = .kg
+        preferences.distanceUnit = .km
         preferences.effortScale = .rpe
         preferences.defaultRestSeconds = 150
         preferences.weeklyGoal = 4
@@ -177,6 +203,7 @@ extension WorkoutStore {
         preferences.trainingGoal = .general
         preferences.deloadSnoozedUntil = nil
         preferences.accent = .coral
+        preferences.colorBlindHeatmaps = false
         preferences.workoutLayout = .cards
         preferences.showSetSteppers = false
         preferences.restPauseSeconds = 20
@@ -195,5 +222,7 @@ extension WorkoutStore {
         preferences.coachModelID = CoachChatConfiguration.defaultModelID
         preferences.coachReviewerModelID = CoachChatConfiguration.defaultReviewerModelID
         preferences.coachChatConsentGiven = false
+        preferences.coachWeekReviewLastKey = nil
+        preferences.coachWeekReviewDismissedKey = nil
     }
 }
