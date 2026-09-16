@@ -193,7 +193,9 @@ enum CoachEvalScenarios {
         prompt: "I'm cutting and I've lost about 4 kg so far. "
             + "How do I keep my strength while I keep losing weight?",
         goal: .strength, experience: .intermediate, weeklyGoal: 4, sessionsPerWeek: 4,
-        volumeExpectation: .atMostRecent,
+        // A question, not a request: "keep doing what you're doing" is a legitimate answer when
+        // adherence is perfect and the lifts are holding, so a card is welcome but not required.
+        volumeExpectation: .atMostRecent, expectsProposal: false,
         evidenceKeywords: [
             ["bodyweight", "body weight", "4 kg", "lost", "cut", "deficit", "86", "90"],
             ["strength", "intensity", "heavy", "top set"]
