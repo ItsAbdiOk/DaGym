@@ -254,7 +254,8 @@ struct ParityStoreImportTests {
         ExerciseSeeder.seedIfNeeded(context: store.context)
         let barbellID = store.exerciseID(seedID: "Barbell_Squat")
         #expect(barbellID != nil)
-        #expect(WorkoutImportService.seededExerciseID(for: "Squat (Bodyweight)", store: store) == nil)
-        #expect(WorkoutImportService.seededExerciseID(for: "Squat", store: store) == barbellID)
+        let library = ImportExerciseLibrary(context: store.context)
+        #expect(WorkoutImportService.seededExerciseID(for: "Squat (Bodyweight)", library: library) == nil)
+        #expect(WorkoutImportService.seededExerciseID(for: "Squat", library: library) == barbellID)
     }
 }
