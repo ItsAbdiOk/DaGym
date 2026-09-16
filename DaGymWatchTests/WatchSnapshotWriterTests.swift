@@ -11,21 +11,15 @@ import Testing
 @MainActor
 @Suite("Watch snapshot writer")
 struct WatchSnapshotWriterTests {
-    private func makeWatch() throws -> (WatchStore, ModelContainer, UserDefaults) {
-        let suite = WatchTestDefaults.fresh()
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: container.mainContext, photoContext: nil)
-        WatchSampleSeeder.seed(store: store)
-        let watch = WatchStore(
-            store: store, preferences: WatchPreferences(defaults: WatchTestDefaults.fresh()),
-            runtime: WatchWorkoutRuntime(isEnabled: false), snapshotSuite: suite
-        )
-        return (watch, container, suite)
-    }
+    /// The most `logCurrentSet` may read from the store: `sync(session:)` alone. The
+    /// finished-workout fetch (1) and the routine walk (2+) the old rebuild did per set are gone,
+    /// and the snapshot path adds none.
+    private static let logSetQueryCeiling = 4
 
     @Test("refreshHome builds the idle snapshot from the same fetches and writes it once")
     func refreshHomeWritesIdle() throws {
-        let (watch, container, suite) = try makeWatch()
+        let fixture = try makeWatchFixture()
+        let (watch, suite) = (fixture.watch, fixture.snapshotSuite)
 
         watch.refreshHome()
 
@@ -35,12 +29,13 @@ struct WatchSnapshotWriterTests {
         #expect(written.nextRoutineName == watch.home.todaysRoutine?.name)
         #expect(watch.snapshots.idle == written)
         #expect(watch.snapshots.reloadCount == 1)
-        withExtendedLifetime(container) {}
+        withExtendedLifetime(fixture) {}
     }
 
     @Test("a rest change splices into the cache without touching the store")
     func restSpliceDoesNotFetch() throws {
-        let (watch, container, suite) = try makeWatch()
+        let fixture = try makeWatchFixture()
+        let (watch, suite) = (fixture.watch, fixture.snapshotSuite)
         watch.refreshHome()
         let idle = watch.snapshots.idle
         // Whole seconds: the App Group round-trips dates through JSON.
@@ -58,12 +53,13 @@ struct WatchSnapshotWriterTests {
         #expect(written.rest == rest)
         #expect(written.streakWeeks == idle?.streakWeeks)
         #expect(written.nextRoutineName == idle?.nextRoutineName)
-        withExtendedLifetime(container) {}
+        withExtendedLifetime(fixture) {}
     }
 
     @Test("a rest that ran to its end is written without a timeline reload; an early skip reloads")
     func restEndReloadThrottle() throws {
-        let (watch, container, _) = try makeWatch()
+        let fixture = try makeWatchFixture()
+        let watch = fixture.watch
         watch.refreshHome()
         let start = watch.snapshots.reloadCount
         let now = Date()
@@ -82,7 +78,7 @@ struct WatchSnapshotWriterTests {
         // Skipped with 40 s left: the face would count down to nothing without a reload.
         watch.snapshots.refresh(rest: nil, now: now.addingTimeInterval(20))
         #expect(watch.snapshots.reloadCount == start + 3)
-        withExtendedLifetime(container) {}
+        withExtendedLifetime(fixture) {}
     }
 
     @Test("shouldReload keeps the natural rest end and every other change")
@@ -101,7 +97,8 @@ struct WatchSnapshotWriterTests {
 
     @Test("logging a set on a real session reaches the App Group as a rest with no history fetch")
     func logSetWritesRest() throws {
-        let (watch, container, suite) = try makeWatch()
+        let fixture = try makeWatchFixture()
+        let (watch, suite) = (fixture.watch, fixture.snapshotSuite)
         watch.refreshHome()
         let routine = try #require(watch.store.todaysRoutine())
         watch.start(routineID: routine.id)
@@ -116,16 +113,18 @@ struct WatchSnapshotWriterTests {
 
         #expect(session.isResting)
         #expect(WatchSnapshotStore.read(from: suite).rest != nil)
-        // `sync(session:)` alone: the finished-workout fetch (1) and the routine walk (2+) the
-        // old rebuild did per set are gone.
-        #expect(syncQueries <= 4)
+        #expect(
+            syncQueries <= Self.logSetQueryCeiling,
+            "logging a set read the store \(syncQueries) times, ceiling \(Self.logSetQueryCeiling)"
+        )
         watch.discard()
-        withExtendedLifetime(container) {}
+        withExtendedLifetime(fixture) {}
     }
 
     @Test("the store's own post-finish refresh rebuilds this watch's cache, not a fresh one")
     func storeRefreshFindsWriter() throws {
-        let (watch, container, suite) = try makeWatch()
+        let fixture = try makeWatchFixture()
+        let (watch, suite) = (fixture.watch, fixture.snapshotSuite)
         watch.refreshHome()
         let before = try #require(watch.snapshots.idle)
 
@@ -135,15 +134,16 @@ struct WatchSnapshotWriterTests {
         #expect(WatchSnapshotWriter.writer(for: watch.store) === watch.snapshots)
         #expect(watch.snapshots.idle == before)
         #expect(WatchSnapshotStore.read(from: suite) == before)
-        withExtendedLifetime(container) {}
+        withExtendedLifetime(fixture) {}
     }
 
     @Test("finishedWorkoutStartDates matches the models' dates, newest first")
     func startDates() throws {
-        let (watch, container, _) = try makeWatch()
+        let fixture = try makeWatchFixture()
+        let watch = fixture.watch
         let expected = watch.store.finishedWorkoutModelsNewestFirst().map(\.startedAt)
         #expect(!expected.isEmpty)
         #expect(watch.store.finishedWorkoutStartDates() == expected)
-        withExtendedLifetime(container) {}
+        withExtendedLifetime(fixture) {}
     }
 }

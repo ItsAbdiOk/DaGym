@@ -12,9 +12,12 @@ import Testing
 struct DataOptimisationMoreTests {
     private let fx = DataOptimisationFixtures()
 
+    /// `LastSessionIntent.lastSession`: one query whether or not the exercise was ever trained.
+    private static let lastSessionQueries = 1
+
     @Test("the last-session lookup is one query, and an exercise never trained answers nil")
     func lastSessionIsOneQuery() throws {
-        let store = try fx.makeStore()
+        let store = try makeStore()
         let bench = fx.makeBench(store)
         let never = store.createCustomExercise(
             name: "Never", primary: [.calves], equipment: "Machine", style: .weightReps
@@ -25,12 +28,12 @@ struct DataOptimisationMoreTests {
         let trained = fx.queries(store) {
             last = LastSessionIntent.lastSession(exerciseID: bench.id, store: store)
         }
-        #expect(trained == 1)
+        #expect(trained == Self.lastSessionQueries)
         #expect(last?.weightKg == 75)
         let untrained = fx.queries(store) {
             last = LastSessionIntent.lastSession(exerciseID: never.id, store: store)
         }
-        #expect(untrained == 1)
+        #expect(untrained == Self.lastSessionQueries)
         #expect(last == nil)
     }
 
@@ -38,10 +41,10 @@ struct DataOptimisationMoreTests {
 
     @Test("the store reads its units from the injected provider, not UserDefaults.standard")
     func unitsAreInjected() throws {
-        let store = try fx.makeStore(units: .fixed(weight: .lb))
+        let store = try makeStore(units: .fixed(weight: .lb))
         #expect(store.preferredWeightUnit == .lb)
         #expect(store.preferredDistanceUnit == .mi)
-        let metric = try fx.makeStore(units: .fixed(weight: .kg, distance: .mi))
+        let metric = try makeStore(units: .fixed(weight: .kg, distance: .mi))
         #expect(metric.preferredWeightUnit == .kg)
         #expect(metric.preferredDistanceUnit == .mi)
     }
