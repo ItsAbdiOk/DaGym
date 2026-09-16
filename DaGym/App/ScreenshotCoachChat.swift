@@ -22,8 +22,8 @@ enum ScreenshotCoachChat {
     static let reviewerModelID = CoachChatConfiguration.defaultReviewerModelID
 
     /// The weight the lifter says they are stuck at, and the reset the coach proposes.
-    static let stalledKg = 80.0
-    static let resetKg = 72.5
+    static let stalledKg = 100.0
+    static let resetKg = 90.0
     static let question = "Bench has been stuck at \(Int(stalledKg)) kg for three weeks, what do I change?"
 
     /// Push A sessions are logged 5, 12 and 19 days before the history anchor
