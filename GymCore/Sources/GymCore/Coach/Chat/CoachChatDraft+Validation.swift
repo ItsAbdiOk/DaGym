@@ -52,6 +52,7 @@ extension CoachChatDraft {
             ) else { return spec }
             spec.exerciseID = exercise.id
             spec.exerciseName = exercise.name
+            spec.reason = trimmedReason(spec.reason)
             if !seen.insert(exercise.id).inserted {
                 reasons.append("'\(exercise.name)' appears twice; list each exercise once.")
             }
@@ -178,6 +179,13 @@ extension CoachChatDraft {
             reasons.append("'\(from.name)' cannot be swapped for itself.")
         }
         return result
+    }
+
+    /// A reason capped to the card's line; a blank one drops to nil so the card shows no row.
+    static func trimmedReason(_ reason: String?) -> String? {
+        guard let reason else { return nil }
+        let text = trimmed(reason, max: Limits.maxReasonLength)
+        return text.isEmpty ? nil : text
     }
 
     static func trimmed(_ text: String, max: Int) -> String {

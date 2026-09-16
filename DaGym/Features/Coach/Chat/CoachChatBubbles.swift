@@ -9,6 +9,10 @@ import SwiftUI
 struct CoachChatMessageRow: View {
     var message: CoachChatMessage
     var review: CoachChatReview?
+    /// False for the turn still in flight, so a reply never folds while it is being read.
+    var canFold = false
+    @Binding var isExpanded: Bool
+    var onCopy: () -> Void = {}
 
     var body: some View {
         switch message.role {
@@ -17,11 +21,17 @@ struct CoachChatMessageRow: View {
             if message.isNote == true {
                 CoachNoteRow(text: message.text)
             } else {
-                CoachAssistantBubble(text: message.text, isStopped: message.isStopped)
+                CoachAssistantBubble(
+                    text: message.text, isStopped: message.isStopped, canFold: canFold,
+                    isExpanded: $isExpanded, onCopy: onCopy
+                )
             }
         case .tool: CoachToolChip(label: message.text, failed: message.isToolError)
         case .draft: EmptyView()
-        case .review: CoachReviewRow(text: message.text, review: review)
+        case .review:
+            CoachReviewRow(
+                text: message.text, review: review, canFold: canFold, isExpanded: $isExpanded, onCopy: onCopy
+            )
         }
     }
 }
@@ -33,6 +43,9 @@ struct CoachChatMessageRow: View {
 struct CoachReviewRow: View {
     var text: String
     var review: CoachChatReview?
+    var canFold = false
+    @Binding var isExpanded: Bool
+    var onCopy: () -> Void = {}
 
     var body: some View {
         HStack(alignment: .top, spacing: DGSpace.s2) {
@@ -48,17 +61,23 @@ struct CoachReviewRow: View {
                         .textCase(.uppercase)
                 }
                 if !text.isEmpty {
-                    Text(text)
-                        .font(DGFont.footnote)
-                        .fixedSize(horizontal: false, vertical: true)
+                    CoachFoldedText(
+                        text: text, canFold: canFold, isExpanded: $isExpanded,
+                        font: DGFont.footnote, color: tint
+                    )
                 }
             }
         }
         .foregroundStyle(tint)
         .padding(.horizontal, DGSpace.s3)
         .frame(minHeight: 28)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(review.map { CoachReviewCopy.transcriptLine(for: $0) + ". " + text } ?? text)
+        .contextMenu {
+            if !text.isEmpty {
+                Button("Copy", systemImage: "doc.on.doc", action: onCopy)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(review.map { CoachReviewCopy.transcriptLine(for: $0) } ?? "Review")
         .accessibilityIdentifier(A11yID.coachChatReviewRow)
     }
 
@@ -102,16 +121,21 @@ struct CoachUserBubble: View {
     }
 }
 
+/// The coach's words. Markdown-lite rendered by `CoachFoldedText`, which also folds a long
+/// reply; long-press offers Copy (plain text, markers stripped). The bubble is one VoiceOver
+/// container: the text's own elements (a paragraph, each list item) read in order, then the
+/// "stopped" marker and the Show more button.
 struct CoachAssistantBubble: View {
     var text: String
     var isStopped: Bool
+    var canFold = false
+    @Binding var isExpanded: Bool
+    var onCopy: () -> Void = {}
 
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: DGSpace.s2) {
-                ForEach(Array(CoachChatTextBlocks.parse(text).enumerated()), id: \.offset) { _, block in
-                    blockView(block)
-                }
+                CoachFoldedText(text: text, canFold: canFold, isExpanded: $isExpanded)
                 if text.isEmpty, !isStopped {
                     // The reply hasn't started arriving yet; three dots rather than an empty card.
                     Text("…")
@@ -129,34 +153,16 @@ struct CoachAssistantBubble: View {
             }
             .padding(DGSpace.s4)
             .dgCard(padding: 0)
-            Spacer(minLength: DGSpace.s8)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Coach: \(text)\(isStopped ? ". Stopped." : "")")
-        .accessibilityIdentifier(A11yID.coachChatAssistantBubble)
-    }
-
-    @ViewBuilder
-    private func blockView(_ block: CoachChatTextBlocks.Block) -> some View {
-        switch block {
-        case .paragraph(let paragraph):
-            Text(paragraph)
-                .font(DGFont.body)
-                .foregroundStyle(DGColor.ink1)
-                .fixedSize(horizontal: false, vertical: true)
-        case .bullets(let items):
-            VStack(alignment: .leading, spacing: DGSpace.s1) {
-                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                    HStack(alignment: .top, spacing: DGSpace.s2) {
-                        Text("•").font(DGFont.body).foregroundStyle(DGColor.ink3)
-                        Text(item)
-                            .font(DGFont.body)
-                            .foregroundStyle(DGColor.ink1)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+            .contextMenu {
+                if !text.isEmpty {
+                    Button("Copy", systemImage: "doc.on.doc", action: onCopy)
                 }
             }
+            Spacer(minLength: DGSpace.s8)
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Coach")
+        .accessibilityIdentifier(A11yID.coachChatAssistantBubble)
     }
 }
 
@@ -194,8 +200,8 @@ struct CoachToolChip: View {
         CoachUserBubble(text: "When will I bench 100 kg?")
         CoachToolChip(label: "Reading exercise history", failed: false)
         CoachAssistantBubble(
-            text: "At your current pace, around late November.\n\n- 12 sessions read\n- +1.2 kg a week",
-            isStopped: false
+            text: "At your current pace, around **late November**.\n\n- 12 sessions read\n- +1.2 kg a week",
+            isStopped: false, isExpanded: .constant(false)
         )
     }
     .padding()

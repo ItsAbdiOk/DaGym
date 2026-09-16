@@ -41,25 +41,6 @@ struct CoachChatSupportTests {
         #expect(!CoachChatErrorCopy.banner(for: .badRequest("")).message.isEmpty)
     }
 
-    // MARK: - Markdown-lite
-
-    @Test("Paragraphs and bullets split; blank lines separate paragraphs")
-    func textBlocks() {
-        let text = "First line\ncontinues here.\n\n- one\n* two\n• three\n1. four\n\nLast."
-        let blocks = CoachChatTextBlocks.parse(text)
-        #expect(blocks == [
-            .paragraph("First line continues here."),
-            .bullets(["one", "two", "three", "four"]),
-            .paragraph("Last.")
-        ])
-    }
-
-    @Test("Empty and whitespace text yields no blocks")
-    func emptyText() {
-        #expect(CoachChatTextBlocks.parse("").isEmpty)
-        #expect(CoachChatTextBlocks.parse("  \n\n ").isEmpty)
-    }
-
     // MARK: - Draft detail
 
     private func kg(_ value: Double) -> String { "\(Int(value)) kg" }
@@ -71,7 +52,8 @@ struct CoachChatSupportTests {
             exercises: [
                 CoachChatExerciseSpec(
                     exerciseName: "Bench Press",
-                    sets: Array(repeating: CoachChatSetSpec(targetReps: 8, targetWeightKg: 60), count: 3)
+                    sets: Array(repeating: CoachChatSetSpec(targetReps: 8, targetWeightKg: 60), count: 3),
+                    reason: "Your best lift; keep it first"
                 ),
                 CoachChatExerciseSpec(
                     exerciseName: "Row",
@@ -80,12 +62,23 @@ struct CoachChatSupportTests {
                         CoachChatSetSpec(kind: .amrap, targetReps: 12, rpe: 9)
                     ]
                 )
-            ]
+            ],
+            notes: "Rest two minutes."
         )
         let rows = CoachDraftDetail.rows(for: .routine(proposal), formatWeight: kg)
         #expect(rows.map(\.title) == ["Bench Press", "Row"])
         #expect(rows[0].detail == "3 × 8 @ 60 kg")
+        #expect(rows[0].reason == "Your best lift; keep it first")
         #expect(rows[1].detail == "10, 12 RPE 9 (A+)")
+        #expect(rows[1].reason == nil)
+        #expect(CoachDraftDetail.copyText(for: .routine(proposal), formatWeight: kg) == """
+        Upper — 2 exercises, 5 sets
+        - Bench Press: 3 × 8 @ 60 kg
+          Your best lift; keep it first
+        - Row: 10, 12 RPE 9 (A+)
+
+        Rest two minutes.
+        """)
     }
 
     @Test("Schedule rows list every weekday, rest days included")
@@ -168,5 +161,18 @@ struct CoachChatSupportTests {
         #expect(CoachChatTranscript.isWaitingForText(messages))
         messages[messages.count - 1].text = "Here's a plan."
         #expect(!CoachChatTranscript.isWaitingForText(messages))
+    }
+
+    @Test("the latest turn is the last question and everything after it; no question means every message")
+    func latestTurn() {
+        let now = Date()
+        let first = CoachChatMessage.user("One", at: now)
+        let reply = CoachChatMessage.assistant("A", at: now)
+        let second = CoachChatMessage.user("Two", at: now)
+        let tool = CoachChatMessage.tool("get_profile", at: now)
+        let latest = CoachChatTranscript.latestTurnIDs([first, reply, second, tool])
+        #expect(latest == [second.id, tool.id])
+        #expect(CoachChatTranscript.latestTurnIDs([reply]) == [reply.id])
+        #expect(CoachChatTranscript.latestTurnIDs([]).isEmpty)
     }
 }

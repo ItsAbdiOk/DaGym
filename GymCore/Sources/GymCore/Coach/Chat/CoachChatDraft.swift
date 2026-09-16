@@ -34,6 +34,7 @@ public enum CoachChatDraft: Codable, Hashable, Sendable {
         public static let deloadPercentRange = 1.0...50.0
         public static let maxNameLength = ProgramDraft.maxNameLength
         public static let maxNotesLength = 500
+        public static let maxReasonLength = 120
     }
 }
 
@@ -91,16 +92,19 @@ public struct CoachChatExerciseSpec: Codable, Hashable, Sendable {
     public var restSeconds: Int?
     /// Exercises sharing a group number are performed as a superset.
     public var supersetGroup: Int?
+    /// One clause on why this exercise for this lifter, shown under the row on the card.
+    public var reason: String?
 
     public init(
         exerciseID: UUID? = nil, exerciseName: String? = nil, sets: [CoachChatSetSpec],
-        restSeconds: Int? = nil, supersetGroup: Int? = nil
+        restSeconds: Int? = nil, supersetGroup: Int? = nil, reason: String? = nil
     ) {
         self.exerciseID = exerciseID
         self.exerciseName = exerciseName
         self.sets = sets
         self.restSeconds = restSeconds
         self.supersetGroup = supersetGroup
+        self.reason = reason
     }
 
     enum CodingKeys: String, CodingKey {
@@ -109,6 +113,10 @@ public struct CoachChatExerciseSpec: Codable, Hashable, Sendable {
         case sets
         case restSeconds = "rest_seconds"
         case supersetGroup = "superset_group"
+        case reason
+        // The model's other spellings of `reason`; read, never written.
+        case why
+        case note
         // Shorthand the model may send instead of `sets`: one line per exercise instead of one
         // object per set. A four-routine program went from 3.7 KB of arguments to under 1 KB,
         // which is most of the time the model spent writing a proposal.
@@ -126,6 +134,9 @@ public struct CoachChatExerciseSpec: Codable, Hashable, Sendable {
         exerciseName = try container.decodeIfPresent(String.self, forKey: .exerciseName)
         restSeconds = try container.decodeIfPresent(Int.self, forKey: .restSeconds)
         supersetGroup = try container.decodeIfPresent(Int.self, forKey: .supersetGroup)
+        reason = try container.decodeIfPresent(String.self, forKey: .reason)
+            ?? container.decodeIfPresent(String.self, forKey: .why)
+            ?? container.decodeIfPresent(String.self, forKey: .note)
         let explicit = try container.decodeIfPresent([CoachChatSetSpec].self, forKey: .sets) ?? []
         if !explicit.isEmpty {
             sets = explicit
@@ -166,6 +177,7 @@ public struct CoachChatExerciseSpec: Codable, Hashable, Sendable {
         try container.encode(sets, forKey: .sets)
         try container.encodeIfPresent(restSeconds, forKey: .restSeconds)
         try container.encodeIfPresent(supersetGroup, forKey: .supersetGroup)
+        try container.encodeIfPresent(reason, forKey: .reason)
     }
 
     /// What the card and a rejection call this exercise.

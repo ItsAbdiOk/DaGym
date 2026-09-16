@@ -2,9 +2,9 @@ import Foundation
 import GymCore
 
 /// The chat screen's pure state and copy: what the error banner says per `OpenRouterError`,
-/// the prompts an empty thread suggests, how a bubble's text splits into paragraphs and
-/// bullets, what a draft card lists when expanded, and where each card sits between proposed
-/// and applied. No SwiftUI here, so `CoachChatSupportTests` covers all of it.
+/// the prompts an empty thread suggests, what a draft card lists when expanded (and what Copy
+/// writes for it), and where each card sits between proposed and applied. Bubble text is
+/// `CoachMarkdown` in GymCore. No SwiftUI here, so `CoachChatSupportTests` covers all of it.
 enum CoachChatErrorCopy {
     /// What the banner offers besides dismissing: open Settings for the key, open OpenRouter
     /// for credit, or send the last message again.
@@ -93,56 +93,6 @@ enum CoachChatSuggestedPrompts {
     ]
 }
 
-/// Markdown-lite for assistant bubbles: paragraphs and bullet lists only, which is all the
-/// house rules let the model write. Anything else (headers, tables) is shown as plain text
-/// rather than half-rendered.
-enum CoachChatTextBlocks {
-    enum Block: Equatable, Sendable {
-        case paragraph(String)
-        case bullets([String])
-    }
-
-    static func parse(_ text: String) -> [Block] {
-        var blocks: [Block] = []
-        var paragraph: [String] = []
-        var bullets: [String] = []
-        func flushParagraph() {
-            if !paragraph.isEmpty { blocks.append(.paragraph(paragraph.joined(separator: " "))) }
-            paragraph = []
-        }
-        func flushBullets() {
-            if !bullets.isEmpty { blocks.append(.bullets(bullets)) }
-            bullets = []
-        }
-        for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-            if line.isEmpty {
-                flushParagraph()
-                flushBullets()
-            } else if let item = bulletText(line) {
-                flushParagraph()
-                bullets.append(item)
-            } else {
-                flushBullets()
-                paragraph.append(line)
-            }
-        }
-        flushParagraph()
-        flushBullets()
-        return blocks
-    }
-
-    /// "- item", "* item", "• item" and "1. item" all count as a bullet.
-    private static func bulletText(_ line: String) -> String? {
-        for marker in ["- ", "* ", "• "] where line.hasPrefix(marker) {
-            return String(line.dropFirst(marker.count))
-        }
-        let digits = line.prefix { $0.isNumber }
-        guard !digits.isEmpty, line.dropFirst(digits.count).hasPrefix(". ") else { return nil }
-        return String(line.dropFirst(digits.count + 2))
-    }
-}
-
 /// The lines a draft card lists when expanded — one per exercise, day or change — so the
 /// lifter can read what Apply will do before tapping it.
 enum CoachDraftDetail {
@@ -150,6 +100,8 @@ enum CoachDraftDetail {
         var id: Int
         var title: String
         var detail: String?
+        /// The drafter's one clause on why this exercise, under the row on routine cards.
+        var reason: String?
     }
 
     static func rows(for draft: CoachChatDraft, formatWeight: (Double) -> String) -> [Row] {
@@ -184,8 +136,26 @@ enum CoachDraftDetail {
         _ exercises: [CoachChatExerciseSpec], formatWeight: (Double) -> String
     ) -> [Row] {
         exercises.enumerated().map { index, exercise in
-            Row(id: index, title: exercise.label, detail: setLine(exercise.sets, formatWeight: formatWeight))
+            Row(
+                id: index, title: exercise.label, detail: setLine(exercise.sets, formatWeight: formatWeight),
+                reason: exercise.reason
+            )
         }
+    }
+
+    /// The card as plain text for the clipboard: the summary, one line per row with its reason
+    /// indented under it, and the routine's notes.
+    static func copyText(for draft: CoachChatDraft, formatWeight: (Double) -> String) -> String {
+        var lines = [draft.summary]
+        for row in rows(for: draft, formatWeight: formatWeight) {
+            lines.append(row.detail.map { "- \(row.title): \($0)" } ?? "- \(row.title)")
+            if let reason = row.reason { lines.append("  \(reason)") }
+        }
+        if case .routine(let proposal) = draft, let notes = proposal.notes, !notes.isEmpty {
+            lines.append("")
+            lines.append(notes)
+        }
+        return lines.joined(separator: "\n")
     }
 
     /// "3 × 8 @ 60 kg" when every set matches, else each set spelt out.
@@ -285,6 +255,15 @@ enum CoachChatTranscript {
             }
         }
         return entries
+    }
+
+    /// The messages of the turn in progress or just finished — the last question and everything
+    /// after it. These never fold behind "Show more": the lifter is reading them now.
+    static func latestTurnIDs(_ messages: [CoachChatMessage]) -> Set<UUID> {
+        guard let start = messages.lastIndex(where: { $0.role == .user }) else {
+            return Set(messages.map(\.id))
+        }
+        return Set(messages[start...].map(\.id))
     }
 
     /// True while the last thing on screen is the lifter's question or a tool chip — i.e. the

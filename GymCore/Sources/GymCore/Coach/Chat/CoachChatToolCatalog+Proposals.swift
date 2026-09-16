@@ -46,7 +46,11 @@ extension CoachChatToolCatalog {
                 of: setSchema
             ),
             "rest_seconds": .integer("Rest between sets.", in: CoachChatDraft.Limits.restSecondsRange),
-            "superset_group": .integer("Exercises sharing a number are a superset.", in: 1...10)
+            "superset_group": .integer("Exercises sharing a number are a superset.", in: 1...10),
+            "reason": .string(
+                "One short clause on why this exercise for this lifter, tied to their data "
+                    + "(≤ \(CoachChatDraft.Limits.maxReasonLength) characters)."
+            )
         ]
     )
 
