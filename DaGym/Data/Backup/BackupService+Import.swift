@@ -71,19 +71,39 @@ extension BackupService {
         return report
     }
 
-    /// The Settings entry point: progress-photo decode/resize off the main actor first, then
-    /// the import itself on the live store. The store work stays on the main actor — it is the
-    /// context every open screen is reading — but the photo work was the part that beachballed
-    /// Settings, and it needs nothing from the store.
+    /// The Settings entry point: progress-photo decode/resize off the main actor first, then the
+    /// main store's rows through `ImportActor` on its own context (batched saves, `progress`
+    /// called as each batch lands, cancellable between batches), and finally the two local-only
+    /// stores and the preferences here on the main actor. Ends by telling `store` about the
+    /// external writes the way a CloudKit merge would (`absorbExternalImport`), so totals, PRs and
+    /// the cached catalogue are right — on a cancel too, for whatever batches had landed.
+    ///
+    /// Throws `CancellationError` when the calling task is cancelled mid-restore; saved batches
+    /// stay and re-running the same file skips them by id.
     static func `import`(
-        document: BackupDocument, store: WorkoutStore, preferences: Preferences
-    ) async -> ImportReport {
+        document: BackupDocument, store: WorkoutStore, preferences: Preferences,
+        progress: @escaping ImportActor.ProgressHandler = { _ in }
+    ) async throws -> ImportReport {
         let photos = document.progressPhotos ?? []
         let thumbnails = await Task.detached(priority: .userInitiated) { thumbnails(for: photos) }.value
-        return `import`(
-            document: document, context: store.context, mode: .merge, photoContext: store.photoContext,
-            healthContext: store.healthContext, preferences: preferences, store: store, thumbnails: thumbnails
-        )
+        // Seeding needs the main actor; saved before the actor's context reads the library.
+        seedLibraryIfTheFileNeedsIt(document, context: store.context)
+        store.save()
+        let baseline = SeedBaseline()
+        let actor = ImportActor(modelContainer: store.context.container)
+        var report: ImportReport
+        do {
+            report = try await actor.restore(document, baseline: baseline, progress: progress)
+        } catch {
+            store.absorbExternalImport(rebuildRecords: true)
+            throw error
+        }
+        importPhotos(photos, context: store.photoContext, thumbnails: thumbnails, report: &report)
+        importHealth(document.healthImports, context: store.healthContext, report: &report)
+        applyPreferences(document.preferences, to: preferences)
+        report.preferencesRestored = true
+        store.absorbExternalImport(rebuildRecords: report.workoutsImported > 0)
+        return report
     }
 
     /// Seeds the bundled exercise library when the store has none.
@@ -140,7 +160,7 @@ extension BackupService {
         }
     }
 
-    private static func importExercises(
+    nonisolated static func importExercises(
         _ items: [BackupExercise], index: ExerciseIndex, baseline: SeedBaseline, context: ModelContext,
         report: inout ImportReport
     ) {
@@ -171,7 +191,7 @@ extension BackupService {
     /// Applies favourite/rest/increment/bar/notes overrides onto an already-known exercise
     /// (seeded or custom) — only where the backup differs from the seeded value, so a row the
     /// user never touched on the exporting device can't undo an edit made on this one.
-    private static func applyOverride(
+    nonisolated static func applyOverride(
         _ item: BackupExercise, to model: ExerciseModel, baseline: SeedBaseline
     ) {
         let seeded = baseline.values(for: item.seedID)
@@ -185,7 +205,7 @@ extension BackupService {
         if model.notes.isEmpty { model.notes = item.notes }
     }
 
-    private static func importRoutines(
+    nonisolated static func importRoutines(
         _ items: [BackupRoutine], index: ExerciseIndex, context: ModelContext, report: inout ImportReport
     ) {
         // Tombstones included on purpose: an older file can carry both halves of a fold, and a
@@ -221,7 +241,7 @@ extension BackupService {
         }
     }
 
-    private static func makeRoutineExercise(
+    nonisolated static func makeRoutineExercise(
         _ draft: BackupRoutineExercise, index: ExerciseIndex, routine: RoutineModel,
         context: ModelContext, report: inout ImportReport
     ) -> RoutineExerciseModel? {
@@ -254,48 +274,62 @@ extension BackupService {
     }
 
     /// Returns how many workouts were inserted, so the caller knows whether a PR rebuild is due.
-    private static func importWorkouts(
+    nonisolated static func importWorkouts(
         _ items: [BackupWorkout], index: ExerciseIndex, context: ModelContext, report: inout ImportReport
     ) -> Int {
-        var existingIDs = Set(
-            ((try? context.fetch(FetchDescriptor<WorkoutModel>())) ?? []).map(\.id)
-        )
+        var existingIDs = existingWorkoutIDs(context: context)
         var inserted = 0
-        for item in items {
-            // `insert` rather than a one-off check: the same workout twice in one file imports once.
-            guard existingIDs.insert(item.id).inserted else {
-                report.workoutsSkipped += 1
-                continue
-            }
-            let workout = WorkoutModel(
-                id: item.id, title: item.title, startedAt: item.startedAt, endedAt: item.endedAt,
-                notes: item.notes, isBackfilled: item.isBackfilled, routineID: item.routineID,
-                routineName: item.routineName, bodyweightKg: item.bodyweightKg,
-                sourceDevice: item.sourceDevice, healthKitID: item.healthKitID
-            )
-            context.insert(workout)
-            // Linked through `WorkoutExerciseModel.workout` only — see `importRoutines`. Entry ids
-            // are re-keyed when a file repeats one: `WorkoutStore.sync(session:)` indexes a
-            // workout's entries (and each entry's sets) by id with `uniqueKeysWithValues`, so a
-            // duplicate imported verbatim trapped the first time the workout was resumed or edited.
-            var entryIDs = Set<UUID>()
-            for var draft in item.exercises {
-                if !entryIDs.insert(draft.id).inserted { draft.id = UUID() }
-                _ = makeWorkoutExercise(
-                    draft, index: index, workout: workout, context: context, report: &report
-                )
-            }
-            report.workoutsImported += 1
+        for item in items where insertWorkout(
+            item, existingIDs: &existingIDs, index: index, context: context, report: &report
+        ) != nil {
             inserted += 1
         }
         return inserted
+    }
+
+    nonisolated static func existingWorkoutIDs(context: ModelContext) -> Set<UUID> {
+        Set(((try? context.fetch(FetchDescriptor<WorkoutModel>())) ?? []).map(\.id))
+    }
+
+    /// One workout of `importWorkouts`, shared with `ImportActor`'s batched restore. `existingIDs`
+    /// grows as the loop goes — `insert` rather than a one-off check — so the same workout twice
+    /// in one file imports once. Returns the inserted model, or nil for a skip.
+    @discardableResult
+    nonisolated static func insertWorkout(
+        _ item: BackupWorkout, existingIDs: inout Set<UUID>, index: ExerciseIndex, context: ModelContext,
+        report: inout ImportReport
+    ) -> WorkoutModel? {
+        guard existingIDs.insert(item.id).inserted else {
+            report.workoutsSkipped += 1
+            return nil
+        }
+        let workout = WorkoutModel(
+            id: item.id, title: item.title, startedAt: item.startedAt, endedAt: item.endedAt,
+            notes: item.notes, isBackfilled: item.isBackfilled, routineID: item.routineID,
+            routineName: item.routineName, bodyweightKg: item.bodyweightKg,
+            sourceDevice: item.sourceDevice, healthKitID: item.healthKitID
+        )
+        context.insert(workout)
+        // Linked through `WorkoutExerciseModel.workout` only — see `importRoutines`. Entry ids
+        // are re-keyed when a file repeats one: `WorkoutStore.sync(session:)` indexes a
+        // workout's entries (and each entry's sets) by id with `uniqueKeysWithValues`, so a
+        // duplicate imported verbatim trapped the first time the workout was resumed or edited.
+        var entryIDs = Set<UUID>()
+        for var draft in item.exercises {
+            if !entryIDs.insert(draft.id).inserted { draft.id = UUID() }
+            _ = makeWorkoutExercise(
+                draft, index: index, workout: workout, context: context, report: &report
+            )
+        }
+        report.workoutsImported += 1
+        return workout
     }
 
     /// Logged history is irreplaceable, so an unresolvable exercise is *recreated* as a custom
     /// one rather than taking the sets down with it — including the placeholder rows an export
     /// writes for history whose custom exercise had already been deleted. Dropping the row (what
     /// this used to do) silently deleted real training data during a restore.
-    private static func makeWorkoutExercise(
+    nonisolated static func makeWorkoutExercise(
         _ draft: BackupWorkoutExercise, index: ExerciseIndex, workout: WorkoutModel,
         context: ModelContext, report: inout ImportReport
     ) -> WorkoutExerciseModel? {
@@ -330,14 +364,14 @@ extension BackupService {
     }
 
     /// `value` when it is a real number, `nil` for NaN or an infinity (see `makeWorkoutExercise`).
-    private static func finite(_ value: Double?) -> Double? {
+    nonisolated static func finite(_ value: Double?) -> Double? {
         guard let value, value.isFinite else { return nil }
         return value
     }
 
     /// Recreates a missing exercise as a custom one so its sets survive. `nil` only for a draft
     /// with no usable name at all, which has nothing to recreate from.
-    private static func recreate(
+    nonisolated static func recreate(
         _ draft: BackupWorkoutExercise, workout: WorkoutModel, index: ExerciseIndex,
         context: ModelContext, report: inout ImportReport
     ) -> ExerciseModel? {
@@ -359,12 +393,12 @@ extension BackupService {
 
     /// The stall memory as the model stores it — the nested format-2 value or the format-1
     /// string, whichever `resolvedStall` found — re-encoded through the app's DTO.
-    private static func stallJSON(_ state: StallState) -> String {
+    nonisolated static func stallJSON(_ state: StallState) -> String {
         guard let data = try? JSONEncoder().encode(StallStateDTO(state)) else { return "{}" }
         return String(data: data, encoding: .utf8) ?? "{}"
     }
 
-    private static func importBodyMeasurements(
+    nonisolated static func importBodyMeasurements(
         _ items: [BackupBodyMeasurement], context: ModelContext, report: inout ImportReport
     ) {
         let existingIDs = Set(
@@ -379,7 +413,7 @@ extension BackupService {
         }
     }
 
-    private static func importEquipmentProfiles(
+    nonisolated static func importEquipmentProfiles(
         _ items: [BackupEquipmentProfile], context: ModelContext, report: inout ImportReport
     ) {
         let existing = (try? context.fetch(FetchDescriptor<EquipmentProfileModel>())) ?? []
@@ -405,7 +439,7 @@ extension BackupService {
         }
     }
 
-    private static func importPrograms(_ items: [BackupProgram], context: ModelContext) {
+    nonisolated static func importPrograms(_ items: [BackupProgram], context: ModelContext) {
         let existingIDs = Set(((try? context.fetch(FetchDescriptor<ProgramModel>())) ?? []).map(\.id))
         let existing = (try? context.fetch(FetchDescriptor<ProgramModel>())) ?? []
         let hasActive = existing.contains(where: \.isActive)
@@ -428,7 +462,7 @@ extension BackupService {
         }
     }
 
-    private static func importAchievements(_ items: [BackupAchievement], context: ModelContext) {
+    nonisolated static func importAchievements(_ items: [BackupAchievement], context: ModelContext) {
         let existing = (try? context.fetch(FetchDescriptor<AchievementModel>())) ?? []
         let existingIDs = Set(existing.map(\.id))
         let existingKeys = Set(existing.map { "\($0.milestoneID)|\($0.tier)" })
@@ -448,7 +482,7 @@ extension BackupService {
     /// "Empty" means *no rows or no content*, not just no rows: `ScheduleModel` is created lazily
     /// the first time anything reads the schedule, so merely opening the schedule screen before
     /// restoring used to leave a blank row behind that silently swallowed the backup's schedule.
-    private static func importSchedule(_ item: BackupSchedule?, context: ModelContext) {
+    nonisolated static func importSchedule(_ item: BackupSchedule?, context: ModelContext) {
         guard let item else { return }
         // Format 2 nests the schedule; format 1 carried the app's own JSON string. Either way
         // the row stores the string the app writes, so a nested value is re-encoded here.
@@ -469,7 +503,7 @@ extension BackupService {
     /// JSON with no day entries. An empty `WeeklySchedule` encodes as
     /// `{"dayRoutines":[],"dateOverrides":{}}` — the overrides map is a dictionary, so an
     /// empty dictionary value counts as blank too.
-    static func isBlank(_ model: ScheduleModel) -> Bool {
+    nonisolated static func isBlank(_ model: ScheduleModel) -> Bool {
         let trimmed = model.scheduleJSON.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty || trimmed == "{}" || trimmed == "[]" { return true }
         guard let data = trimmed.data(using: .utf8),
@@ -480,7 +514,7 @@ extension BackupService {
         return (object as? [Any])?.isEmpty ?? false
     }
 
-    private static func isEmptyCollection(_ value: Any) -> Bool {
+    nonisolated static func isEmptyCollection(_ value: Any) -> Bool {
         if let array = value as? [Any] { return array.isEmpty }
         if let dictionary = value as? [String: Any] { return dictionary.isEmpty }
         return false

@@ -20,6 +20,10 @@ struct ImportSettingsSection: View {
     /// Read in `.task`, not here: a `@State` initial value is evaluated on every `SettingsView`
     /// render, which made every stepper tap up there a Keychain round-trip.
     @State private var hevyAPIKey = ""
+    /// Non-nil while `ImportActor` is writing: what the progress line shows.
+    @State private var importProgress: ImportProgress?
+    /// The import in flight, so Cancel can stop it between batches.
+    @State private var importTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
@@ -122,7 +126,9 @@ struct ImportSettingsSection: View {
 
     @ViewBuilder
     private var footnote: some View {
-        if let confirmationMessage {
+        if let importProgress {
+            ImportProgressRow(title: "Importing", progress: importProgress) { importTask?.cancel() }
+        } else if let confirmationMessage {
             Text(confirmationMessage).font(DGFont.footnote).foregroundStyle(DGColor.success)
         } else {
             Text("Unmatched exercises are added as custom exercises. Nothing is dropped.")
@@ -200,16 +206,33 @@ struct ImportSettingsSection: View {
         }.value
     }
 
-    /// `WorkoutImportService.apply` writes every workout in one main-actor call; the sheet comes
-    /// down and the row spins first, and the yield gets that spinner on screen before it starts.
+    /// The sheet comes down first; the rows are written by `ImportActor` off the main actor, with
+    /// each landed batch reported through the relay to the progress line. A cancel keeps the
+    /// workouts that had landed (re-importing the file skips them) and says so.
     private func confirmImport(_ preview: ImportPreview) {
         pendingImport = nil
         isBusy = true
-        Task {
-            defer { isBusy = false }
-            await Task.yield()
-            let report = WorkoutImportService.apply(preview: preview, store: store)
-            confirmationMessage = report.summary
+        importProgress = ImportProgress(done: 0, total: preview.workouts.count)
+        let relay = ImportProgressRelay()
+        let observer = relay.observe { importProgress = $0 }
+        importTask = Task {
+            defer {
+                relay.finish()
+                observer.cancel()
+                importProgress = nil
+                importTask = nil
+                isBusy = false
+            }
+            do {
+                let report = try await WorkoutImportService.apply(
+                    preview: preview, store: store, progress: relay.handler
+                )
+                confirmationMessage = report.summary
+            } catch is CancellationError {
+                confirmationMessage = "Import cancelled — what had already been imported was kept"
+            } catch {
+                errorMessage = "Couldn't import that file: \(error.localizedDescription)"
+            }
         }
     }
 

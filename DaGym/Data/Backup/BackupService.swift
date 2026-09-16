@@ -61,8 +61,8 @@ enum BackupService {
     /// row's unedited rest is 0 ("use Settings → Default rest"), so any non-zero value is an
     /// override — except the seed's own number, which is what every backup written before seed
     /// v4 carries for an unedited row (`legacyRestSeconds`).
-    struct SeedBaseline {
-        struct Values {
+    struct SeedBaseline: Sendable {
+        struct Values: Sendable {
             /// The seed item's `restSeconds`: the value an unedited seeded row held before seed
             /// v4 moved unedited rest to 0, and so the value a pre-v4 backup or a pre-v4 device's
             /// copy carries for a row the lifter never touched.

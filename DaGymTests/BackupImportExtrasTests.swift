@@ -119,7 +119,7 @@ struct BackupImportExtrasTests {
         let store = WorkoutStore(context: try makeContext())
         let id = UUID()
         let photo = BackupProgressPhoto(id: id, date: Date(), imageBase64: Self.jpegBase64)
-        let report = await BackupService.import(
+        let report = try await BackupService.import(
             document: document(photos: [photo]), store: store, preferences: Preferences()
         )
         #expect(report.photosImported == 1)

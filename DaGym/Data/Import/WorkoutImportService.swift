@@ -4,7 +4,7 @@ import SwiftData
 
 /// What a parsed CSV would add, shown by `ImportSettingsSection` before the user confirms
 /// (plan.md §6.8: "show a preview + problems before confirming").
-struct ImportPreview {
+struct ImportPreview: Sendable {
     var source: ImportSource
     var workouts: [ImportedWorkout]
     var setsCount: Int
@@ -28,14 +28,14 @@ struct ImportPreview {
 }
 
 /// One source name and the library exercise it resolved to, for the preview list.
-struct MatchedExercise: Hashable {
+struct MatchedExercise: Hashable, Sendable {
     var sourceName: String
     var libraryName: String
 }
 
 /// Counts from `WorkoutImportService.apply`, named distinctly from `Data/Backup`'s
 /// `ImportReport` (same module, different feature) so the two never collide.
-struct WorkoutImportReport: Equatable {
+struct WorkoutImportReport: Equatable, Sendable {
     var workoutsImported = 0
     var workoutsSkipped = 0
     var setsImported = 0
@@ -69,7 +69,7 @@ struct WorkoutImportReport: Equatable {
 enum WorkoutImportService {
     /// The score a match must clear to be used automatically; below this, the exercise is
     /// reported as unmatched (preview) and created as custom (apply).
-    static let matchThreshold = 0.85
+    nonisolated static let matchThreshold = 0.85
 
     static func preview(
         csv: String, store: WorkoutStore, assumedWeightUnit: WeightUnit? = nil
@@ -86,23 +86,23 @@ enum WorkoutImportService {
     static func preview(
         result: ImportResult, store: WorkoutStore, assumedWeightUnit: WeightUnit? = nil
     ) -> ImportPreview {
-        let context = matchContext(store: store)
+        let library = ImportExerciseLibrary(context: store.context)
         let names = Set(result.workouts.flatMap { $0.exercises.map(\.name) }).sorted()
         var unmatched: [String] = []
         var matched: [MatchedExercise] = []
         for name in names {
-            guard let id = seededExerciseID(for: name, store: store)
-                ?? matchedExerciseID(name, context: context) else {
+            guard let id = seededExerciseID(for: name, library: library)
+                ?? matchedExerciseID(name, context: library.matchContext) else {
                 unmatched.append(name)
                 continue
             }
-            let libraryName = store.fetchExerciseModel(id: id)?.name ?? name
+            let libraryName = library.model(id: id)?.name ?? name
             matched.append(MatchedExercise(sourceName: name, libraryName: libraryName))
         }
         let setsCount = result.workouts.reduce(0) { total, workout in
             total + workout.exercises.reduce(0) { $0 + $1.sets.count }
         }
-        let existingKeys = existingWorkoutKeys(store: store)
+        let existingKeys = existingWorkoutKeys(context: store.context)
         let alreadyImported = result.workouts.filter { existingKeys.contains(workoutKey($0)) }.count
         return ImportPreview(
             source: result.source, workouts: result.workouts, setsCount: setsCount,
@@ -112,114 +112,67 @@ enum WorkoutImportService {
         )
     }
 
-    /// Imports `preview.workouts`, then rebuilds the PR cache from history so records land
-    /// exactly as they would have if the user had logged these sessions live. Re-running on the
-    /// same file is a no-op:
-    /// a workout already present (same `startedAt` + `title`) is skipped, never duplicated.
+    /// Imports `preview.workouts` on the main actor in one go, then rebuilds the PR cache from
+    /// history so records land exactly as they would have if the user had logged these sessions
+    /// live. Re-running on the same file is a no-op: a workout already present (same start
+    /// minute) is skipped, never duplicated. The Settings row goes through `ImportActor` instead,
+    /// which drives the same `WorkoutImportWriter` off the main actor in saved batches; this
+    /// one-shot form is what tests and small programmatic imports use.
     static func apply(preview: ImportPreview, store: WorkoutStore) -> WorkoutImportReport {
-        var report = WorkoutImportReport()
-        report.problems = preview.problems.map { "Line \($0.line): \($0.message)" }
-        var exerciseCache: [String: UUID] = [:]
-        let environment = ImportEnvironment(
-            store: store, context: matchContext(store: store), source: preview.source
+        let writer = WorkoutImportWriter(
+            context: store.context, source: preview.source, problems: preview.problems
         )
-        var seenKeys = existingWorkoutKeys(store: store)
-        var seenExternalIDs: Set<String> = []
-
         for imported in preview.workouts.sorted(by: { $0.startedAt < $1.startedAt }) {
-            let key = workoutKey(imported)
-            let isDuplicate = seenKeys.contains(key)
-                || imported.externalID.map { seenExternalIDs.contains($0) } ?? false
-            guard !isDuplicate else {
-                report.workoutsSkipped += 1
-                continue
-            }
-            seenKeys.insert(key)
-            if let externalID = imported.externalID { seenExternalIDs.insert(externalID) }
-            _ = insertWorkout(
-                imported, environment: environment, exerciseCache: &exerciseCache, report: &report
-            )
-            report.workoutsImported += 1
+            writer.insert(imported)
         }
         store.save()
-        if report.workoutsImported > 0 {
+        if writer.report.workoutsImported > 0 {
             // After the save, once the inverses have linked the rows — see `BackupService`.
             store.restampWorkoutTotalsAfterRemoteChange()
             store.rebuildPersonalRecords()
         }
-        return report
+        return writer.report
+    }
+
+    /// The Settings entry point: the same import through `ImportActor`, off the main actor in
+    /// saved batches, with `progress` called as each batch lands. Ends by telling `store` about
+    /// the external writes (`absorbExternalImport`) — on a cancel too, for the batches that had
+    /// landed. Throws `CancellationError` when the calling task is cancelled mid-import.
+    static func apply(
+        preview: ImportPreview, store: WorkoutStore, progress: @escaping ImportActor.ProgressHandler
+    ) async throws -> WorkoutImportReport {
+        // Anything pending on the main context is saved first so the actor's context sees it.
+        store.save()
+        let actor = ImportActor(modelContainer: store.context.container)
+        do {
+            let report = try await actor.importWorkouts(preview, progress: progress)
+            store.absorbExternalImport(rebuildRecords: report.workoutsImported > 0)
+            return report
+        } catch {
+            store.absorbExternalImport(rebuildRecords: true)
+            throw error
+        }
     }
 
     // MARK: - Matching
 
-    private static func matchContext(store: WorkoutStore) -> ParseContext {
-        let candidates = store.exercises(matching: "").map {
-            ParseContext.ExerciseCandidate(id: $0.id, name: $0.name, equipment: $0.equipment)
-        }
-        return ParseContext(unit: .kg, library: candidates)
-    }
-
     /// The curated alias table (`GymCore.ImportAliases`) first: an export's "Bench Press
     /// (Barbell)" or bare "Squat" names a specific seed exercise, and fuzzy matching on a
     /// 1,466-row library can't be trusted to pick it over a near-namesake.
-    static func seededExerciseID(for name: String, store: WorkoutStore) -> UUID? {
+    nonisolated static func seededExerciseID(for name: String, library: ImportExerciseLibrary) -> UUID? {
         guard let seedID = ImportAliases.seedID(for: name) else { return nil }
-        return store.exerciseID(seedID: seedID)
+        return library.model(seedID: seedID)?.id
     }
 
     /// A match has to clear the floor *and* stand clear of the runner-up
     /// (`ExerciseMatcher.isConfident`): "Incline Bench Press" against both an incline barbell
     /// and an incline dumbbell press is a coin toss, so it's left unmatched rather than guessed.
-    static func matchedExerciseID(_ name: String, context: ParseContext) -> UUID? {
+    nonisolated static func matchedExerciseID(_ name: String, context: ParseContext) -> UUID? {
         let matches = ExerciseMatcher.match(name, in: context)
         guard let best = matches.first, best.score >= matchThreshold else { return nil }
         let runnerUp = matches.dropFirst().first?.score ?? 0
         guard ExerciseMatcher.isConfident(best: best.score, runnerUp: runnerUp) else { return nil }
         return best.id
-    }
-
-    /// Resolves an imported exercise to an id, creating a custom exercise the first time an
-    /// import batch sees an unmatched name (subsequent rows with the same name reuse it). The
-    /// new exercise's muscles come from the source's category or the name; its logging style
-    /// from what the file's rows measured.
-    static func resolveExercise(
-        _ exercise: ImportedExercise, store: WorkoutStore, context: ParseContext,
-        exerciseCache: inout [String: UUID], report: inout WorkoutImportReport
-    ) -> UUID {
-        let key = exercise.name.lowercased()
-        if let cached = exerciseCache[key] { return cached }
-        if let seeded = seededExerciseID(for: exercise.name, store: store) {
-            exerciseCache[key] = seeded
-            return seeded
-        }
-        if let matched = matchedExerciseID(exercise.name, context: context) {
-            exerciseCache[key] = matched
-            return matched
-        }
-        let created = store.createCustomExercise(
-            name: exercise.name,
-            primary: ExerciseHints.primaryMuscles(name: exercise.name, category: exercise.category),
-            equipment: "other", style: inventedStyle(for: exercise)
-        )
-        exerciseCache[key] = created.id
-        report.exercisesCreated += 1
-        return created.id
-    }
-
-    private static func inventedStyle(for exercise: ImportedExercise) -> ExerciseInfo.LoggingStyle {
-        let hint = ExerciseHints.loggingStyle(
-            hasReps: exercise.sets.contains { $0.reps > 0 },
-            hasTime: exercise.sets.contains { ($0.durationSeconds ?? 0) > 0 },
-            hasDistance: exercise.sets.contains { ($0.distanceMeters ?? 0) > 0 }
-        )
-        switch hint {
-        case .weightReps: return .weightReps
-        case .bodyweightReps: return .bodyweightReps
-        case .assisted: return .assisted
-        case .weightedBodyweight: return .weightedBodyweight
-        case .timedHold: return .timedHold
-        case .cardio: return .cardio
-        }
     }
 
     // MARK: - Dedupe
@@ -232,16 +185,16 @@ enum WorkoutImportService {
     /// API agree about the same session: the CSV writes "11 Mar 2024, 18:24" with no seconds while
     /// the API returns the real timestamp, so a second-precision key would import both. Two
     /// genuinely different sessions starting in the same minute is not a thing.
-    private static func workoutKey(_ workout: ImportedWorkout) -> String {
+    nonisolated static func workoutKey(_ workout: ImportedWorkout) -> String {
         key(for: workout.startedAt)
     }
 
-    private static func key(for date: Date) -> String {
+    nonisolated private static func key(for date: Date) -> String {
         String(Int((date.timeIntervalSinceReferenceDate / 60).rounded(.down)))
     }
 
-    private static func existingWorkoutKeys(store: WorkoutStore) -> Set<String> {
-        let models = (try? store.context.fetch(FetchDescriptor<WorkoutModel>())) ?? []
+    nonisolated static func existingWorkoutKeys(context: ModelContext) -> Set<String> {
+        let models = (try? context.fetch(FetchDescriptor<WorkoutModel>())) ?? []
         return Set(models.map { key(for: $0.startedAt) })
     }
 }
