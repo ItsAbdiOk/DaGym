@@ -28,7 +28,16 @@ enum SampleDataSeeder {
     static func seed(store: WorkoutStore, preferences: Preferences, now: Date = Date()) {
         RoutineSeeder.seedStarters(routineNames, store: store)
         let routines = store.routines()
-        let ordered = routineNames.compactMap { name in routines.first { $0.name == name } }
+        // By starter id first, as `seedStarters` counts presence: a renamed "Push A" is still
+        // the trio's push day, and matching by name alone made this a silent no-op for it.
+        let live = store.fetch(FetchDescriptor<RoutineModel>()).filter { !$0.isMergedAway }
+        let ordered = routineNames.compactMap { name -> RoutineInfo? in
+            let byStarterID = RoutineSeeder.starterIDs[name].flatMap { id in
+                live.first { $0.importedFromID == id }
+            }
+            let model = byStarterID ?? live.first { $0.name == name }
+            return model.flatMap { model in routines.first { $0.id == model.id } }
+        }
         guard ordered.count == routineNames.count else { return }
 
         let calendar = Calendar.current
