@@ -300,12 +300,12 @@ struct StimulusAttributionTests {
         }
     }
 
-    @Test("a rated hard set (RIR <= 1) is never scored below a rated easier one")
+    @Test("a rated hard set (RIR <= 3) is never scored below a rated easier one")
     func ratedHardSetsOutrankEasyOnes() {
         for rpe in stride(from: 5.0, through: 10.0, by: 0.5) {
             let set = PerformedSet(kind: .working, weightKg: 60, reps: 8, date: Date(), rpe: rpe)
             let effort = StimulusAttribution.effort(kind: .working, rpe: rpe)
-            if set.isHard { #expect(effort >= 0.875) } else { #expect(effort < 0.875) }
+            if set.isHard { #expect(effort >= 0.625) } else { #expect(effort < 0.625) }
         }
     }
 }

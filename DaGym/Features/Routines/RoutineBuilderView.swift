@@ -31,6 +31,8 @@ struct RoutineBuilderView: View {
     @State private var items: [EditableExercise] = []
     @State private var showingPicker = false
     @State private var showingReorder = false
+    /// The card being dragged by its handle; `DraftDropDelegate` reorders as it crosses others.
+    @State private var draggingID: UUID?
     @State private var symbolName = "dumbbell"
     @State private var tint = RoutineTint.coral.rawValue
     @State private var ruleState = RuleState()
@@ -63,7 +65,16 @@ struct RoutineBuilderView: View {
                             onToggleSuperset: { toggleSuperset(id: item.id) },
                             onRemove: { remove(id: item.id) },
                             onMoveUp: { move(id: item.id, up: true) },
-                            onMoveDown: { move(id: item.id, up: false) }
+                            onMoveDown: { move(id: item.id, up: false) },
+                            dragProvider: items.count > 1 ? { beginDrag(id: item.id) } : nil
+                        )
+                        .opacity(draggingID == item.id ? 0.4 : 1)
+                        .onDrop(
+                            of: [.text],
+                            delegate: DraftDropDelegate(
+                                targetID: item.id, items: $items, draggingID: $draggingID,
+                                reduceMotion: reduceMotion
+                            )
                         )
                     }
                     AddExerciseButton { showingPicker = true }
@@ -74,6 +85,11 @@ struct RoutineBuilderView: View {
                 .padding(.horizontal, DGSpace.s4)
                 .padding(.top, DGSpace.s3)
                 .padding(.bottom, 100)
+            }
+            // A card let go between cards, or over the header, still ends its lift.
+            .onDrop(of: [.text], isTargeted: nil) { _ in
+                draggingID = nil
+                return true
             }
         }
         .task { load() }
@@ -176,9 +192,14 @@ struct RoutineBuilderView: View {
 
     private func move(id: UUID, up: Bool) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
-        let target = up ? index - 1 : index + 1
-        guard items.indices.contains(target) else { return }
-        items.swapAt(index, target)
+        items = RoutineReorder.step(items, groups: items.map(\.supersetGroup), index: index, up: up)
+    }
+
+    /// The handle's long-press lift: remembers which card is moving (the drop delegate reads
+    /// it — the item provider's payload is never round-tripped) and hands SwiftUI a provider.
+    private func beginDrag(id: UUID) -> NSItemProvider {
+        draggingID = id
+        return NSItemProvider(object: id.uuidString as NSString)
     }
 
     /// Assigns this exercise and the one before it the same superset group

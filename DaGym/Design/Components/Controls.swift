@@ -58,31 +58,46 @@ struct DGIconButton: View {
 struct DGChip: View {
     var title: String
     var selected = false
+    /// A filter that would find nothing: dimmed, still legible, and not a button any more.
+    /// A *selected* chip is never disabled — its tap is the way to clear it — so an empty
+    /// selection shows the clear glyph instead.
+    var isEmpty = false
+    var emptyHint = "No exercises with the current filters"
     var selectedFill: Color = DGColor.coral
     var selectedInk: Color = DGColor.inkOnCoral
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(DGFont.condensedLabel(12))
-                .tracking(1.2)
-                .textCase(.uppercase)
-                .foregroundStyle(selected ? selectedInk : DGColor.ink2)
-                .padding(.horizontal, 14)
-                .frame(minHeight: 36)
-                .background {
-                    if selected {
-                        Capsule().fill(selectedFill)
-                    } else {
-                        Capsule().fill(DGColor.surface2)
-                            .overlay(Capsule().strokeBorder(DGColor.hairline))
-                    }
+            HStack(spacing: 6) {
+                Text(title)
+                if selected, isEmpty {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .accessibilityHidden(true)
                 }
+            }
+            .font(DGFont.condensedLabel(12))
+            .tracking(1.2)
+            .textCase(.uppercase)
+            .foregroundStyle(selected ? selectedInk : DGColor.ink2)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 36)
+            .background {
+                if selected {
+                    Capsule().fill(selectedFill)
+                } else {
+                    Capsule().fill(DGColor.surface2)
+                        .overlay(Capsule().strokeBorder(DGColor.hairline))
+                }
+            }
         }
         .buttonStyle(DGPressStyle())
+        .disabled(isEmpty && !selected)
+        .opacity(isEmpty && !selected ? 0.45 : 1)
         // Selection is otherwise the fill colour alone; VoiceOver hears it as a trait.
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityHint(isEmpty ? (selected ? "Nothing matches. Double-tap to clear." : emptyHint) : "")
     }
 }
 

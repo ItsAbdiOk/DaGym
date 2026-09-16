@@ -84,6 +84,13 @@ enum A11yID {
     static let historyList = "history.list"
     static let historyRow0 = "history.row.0"
 
+    static let libraryByMuscle = "library.byMuscle"
+    static let libraryMuscleMapCaption = "library.muscleMap.caption"
+    static let libraryIncludeSecondary = "library.includeSecondary"
+    static let recoveryMode = "recovery.mode"
+    static let recoveryHardSets = "recovery.hardSets"
+    static let recoveryWindow = "recovery.window"
+
     static let onboardingNext = "onboarding.next"
     static let onboardingSkip = "onboarding.skip"
     /// The Welcome step's "Skip and start lifting" — distinct from `onboardingSkip` (which

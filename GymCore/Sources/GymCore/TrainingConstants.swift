@@ -171,9 +171,9 @@ extension TrainingConstants {
     /// …down to this floor, which is also where a never-trained muscle sits.
     public static let retentionFloor = 0.5
 
-    /// Balance map "hard sets only": a set counts as hard at this RIR or fewer (or when its kind
-    /// is `.failure`/`.amrap`).
-    public static let hardSetMaxRIR = 1
+    /// Balance map "hard sets only": a set counts as hard at this RIR or fewer — RPE 7 and up,
+    /// the usual "effective set" line — or when its kind is `.failure`/`.amrap`.
+    public static let hardSetMaxRIR = 3
 }
 
 // MARK: - Coach (rule-based, deterministic coaching cards)

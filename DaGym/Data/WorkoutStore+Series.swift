@@ -48,6 +48,9 @@ extension WorkoutStore {
         var weeklyVolume: [(weekStart: Date, volumeKg: Double)]
         /// Sets per muscle over the requested `balanceWindow` (default: trailing 7 days).
         var setsPerMuscle: [Muscle: Double]
+        /// Counting sets in `balanceWindow` with a rating (or a failure/AMRAP kind): 0 means a
+        /// "hard sets only" map has nothing to draw from.
+        var ratedSetsInWindow = 0
         var sessionDurations: [(date: Date, durationSeconds: Int)]
         var thisWeek: WeekStats
         var lastWeek: WeekStats
@@ -119,6 +122,9 @@ extension WorkoutStore {
         return BodySeriesBundle(
             weeklyVolume: BodySeries.weeklyVolume(workouts: workouts, calendar: calendar),
             setsPerMuscle: perMuscle,
+            ratedSetsInWindow: BodySeries.ratedSetCount(
+                workouts: workouts, window: balanceWindow, now: now, calendar: calendar
+            ),
             sessionDurations: BodySeries.sessionDurations(workouts: workouts),
             thisWeek: weekStats(workouts: workouts, weekStart: thisWeekStart, calendar: calendar),
             lastWeek: weekStats(workouts: workouts, weekStart: lastStart, calendar: calendar)

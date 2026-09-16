@@ -247,10 +247,10 @@ struct BalanceWindowTests {
         #expect(sundayTotals[.chest] == 2)
     }
 
-    @Test("hardOnly counts the RIR 0 set, not the four RIR 3 sets")
+    @Test("hardOnly counts the RIR 0 set, not the four RIR 4 sets")
     func hardOnlyFilter() {
         let day = date("2024-01-10T10:00:00Z")
-        let sets = (0..<4).map { _ in set(rpe: 7, date: day) } + [set(rpe: 10, date: day)]
+        let sets = (0..<4).map { _ in set(rpe: 6, date: day) } + [set(rpe: 10, date: day)]
         let workouts = [workout(at: day, sets: sets)]
         let calendar = calendar(firstWeekday: 2)
         let hard = BodySeries.setsPerMuscle(
@@ -261,12 +261,29 @@ struct BalanceWindowTests {
         #expect(all[.chest] == 5)
     }
 
+    @Test("ratedSetCount counts rated, failure and AMRAP sets inside the window only")
+    func ratedSetsInWindow() {
+        let day = date("2024-01-10T10:00:00Z")
+        let old = date("2023-11-10T10:00:00Z")
+        let workouts = [
+            workout(at: day, sets: [set(rpe: 8, date: day), set(date: day), set(kind: .amrap, date: day)]),
+            workout(at: old, sets: [set(rpe: 9, date: old)])
+        ]
+        let calendar = calendar(firstWeekday: 2)
+        let rated = { (workouts: [BodyWorkout], window: BalanceWindow) in
+            BodySeries.ratedSetCount(workouts: workouts, window: window, now: day, calendar: calendar)
+        }
+        #expect(rated(workouts, .days(7)) == 2)
+        #expect(rated(workouts, .allTime) == 3)
+        #expect(rated([workout(at: day, sets: [set(date: day), set(date: day)])], .allTime) == 0)
+    }
+
     @Test("failure and AMRAP sets are hard even without a rating; warm-ups never are")
     func hardKinds() {
         let day = date("2024-01-10T10:00:00Z")
         let sets = [
             set(kind: .failure, date: day), set(kind: .amrap, date: day),
-            set(rpe: 10, kind: .warmup, date: day), set(rpe: 8.5, date: day)
+            set(rpe: 10, kind: .warmup, date: day), set(rpe: 5, date: day)
         ]
         let hard = BodySeries.setsPerMuscle(
             workouts: [workout(at: day, sets: sets)], window: .allTime, now: day,

@@ -169,6 +169,39 @@ struct FeatureLibraryRoutinesTests {
         #expect(moved == ["Bench", "Row", "Squat", "Curl"])
     }
 
+    @Test("dragging a superset member onto a single moves the whole pair; onto its partner is a no-op")
+    func dragMovesWholeUnit() {
+        let names = ["Squat", "Bench", "Row", "Curl"]
+        let groups: [Int?] = [nil, 1, 1, nil]
+        // Row (in the pair) dragged over Curl: the pair lands after Curl.
+        #expect(
+            RoutineReorder.moveUnit(names, groups: groups, containing: 2, toUnitContaining: 3)
+                == ["Squat", "Curl", "Bench", "Row"]
+        )
+        // Bench dragged over Row — same unit, nothing moves.
+        #expect(RoutineReorder.moveUnit(names, groups: groups, containing: 1, toUnitContaining: 2) == names)
+        // Curl dragged over Bench: lands before the pair, never between its members.
+        #expect(
+            RoutineReorder.moveUnit(names, groups: groups, containing: 3, toUnitContaining: 1)
+                == ["Squat", "Curl", "Bench", "Row"]
+        )
+        #expect(RoutineReorder.moveUnit(names, groups: groups, containing: 9, toUnitContaining: 0) == names)
+    }
+
+    @Test("menu Move Up/Down swaps inside a pair and steps a whole unit past a neighbour")
+    func stepKeepsSupersetsWhole() {
+        let names = ["Squat", "Bench", "Row", "Curl"]
+        let groups: [Int?] = [nil, 1, 1, nil]
+        let step = { (index: Int, up: Bool) in
+            RoutineReorder.step(names, groups: groups, index: index, up: up)
+        }
+        #expect(step(2, true) == ["Squat", "Row", "Bench", "Curl"])
+        #expect(step(1, true) == ["Bench", "Row", "Squat", "Curl"])
+        #expect(step(3, true) == ["Squat", "Curl", "Bench", "Row"])
+        #expect(RoutineReorder.step(names, groups: groups, index: 0, up: true) == names)
+        #expect(RoutineReorder.step(names, groups: groups, index: 3, up: false) == names)
+    }
+
     // MARK: - 28. Loading note + every-set kind
 
     @Test("a loading note saves with the routine and comes back in the draft")

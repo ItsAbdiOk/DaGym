@@ -45,6 +45,8 @@ struct BuilderExerciseCard: View {
     var onRemove: () -> Void
     var onMoveUp: () -> Void
     var onMoveDown: () -> Void
+    /// Nil hides the drag handle (a one-exercise routine has nothing to reorder).
+    var dragProvider: (() -> NSItemProvider)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
@@ -80,6 +82,17 @@ struct BuilderExerciseCard: View {
 
     private var header: some View {
         HStack(spacing: DGSpace.s3) {
+            if let dragProvider {
+                // Touch-and-hold lifts the card; the menu's Move Up / Move Down is the VoiceOver
+                // and Switch Control route, so the handle itself is not an element.
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(DGColor.ink4)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+                    .onDrag(dragProvider)
+                    .accessibilityHidden(true)
+            }
             Text(item.exercise.name)
                 .font(DGFont.title3)
                 .textCase(.uppercase)
