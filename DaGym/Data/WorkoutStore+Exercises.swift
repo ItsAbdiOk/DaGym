@@ -97,24 +97,17 @@ extension WorkoutStore {
         )
     }
 
-    /// `exercises(matching:)` over a catalogue already read — no store round trip.
+    /// `exercises(matching:)` over a catalogue already read — no store round trip. With
+    /// `includeSecondary` off a muscle filter matches primary movers only.
     func exercises(
         in catalogue: ExerciseCatalogue, matching query: String = "", muscle: Muscle? = nil,
-        equipment: String? = nil, favoritesOnly: Bool = false, customOnly: Bool = false
+        equipment: String? = nil, favoritesOnly: Bool = false, customOnly: Bool = false,
+        includeSecondary: Bool = true
     ) -> [ExerciseInfo] {
-        let tokens = Self.searchTokens(query)
-        // Folding every row's search text is the expensive part; skip it for an empty query.
-        let haystacks = tokens.isEmpty ? nil : catalogue.haystacks
-        var matched: [ExerciseModel] = []
-        for (index, model) in catalogue.models.enumerated() {
-            let haystack = haystacks?[index] ?? ""
-            guard matches(model, haystack: haystack, tokens: tokens, muscle: muscle, equipment: equipment)
-            else { continue }
-            if favoritesOnly, !model.isFavorite { continue }
-            if customOnly, !model.isCustom { continue }
-            matched.append(model)
-        }
-        return matched
+        exerciseModels(
+            in: catalogue, matching: query, muscle: muscle, equipment: equipment,
+            favoritesOnly: favoritesOnly, customOnly: customOnly, includeSecondary: includeSecondary
+        )
             .sorted(by: sortsBeforeInLibrary)
             .map { model in
                 var info = ExerciseInfo(model: model)
@@ -126,14 +119,41 @@ extension WorkoutStore {
             }
     }
 
+    /// The unsorted matches behind `exercises(in:matching:)` — one pass, no `ExerciseInfo`
+    /// mapping — for the library's chip facets as well as its rows.
+    func exerciseModels(
+        in catalogue: ExerciseCatalogue, matching query: String = "", muscle: Muscle? = nil,
+        equipment: String? = nil, favoritesOnly: Bool = false, customOnly: Bool = false,
+        includeSecondary: Bool = true
+    ) -> [ExerciseModel] {
+        let tokens = Self.searchTokens(query)
+        // Folding every row's search text is the expensive part; skip it for an empty query.
+        let haystacks = tokens.isEmpty ? nil : catalogue.haystacks
+        var matched: [ExerciseModel] = []
+        for (index, model) in catalogue.models.enumerated() {
+            let haystack = haystacks?[index] ?? ""
+            guard matches(
+                model, haystack: haystack, tokens: tokens, muscle: muscle, equipment: equipment,
+                includeSecondary: includeSecondary
+            ) else { continue }
+            if favoritesOnly, !model.isFavorite { continue }
+            if customOnly, !model.isCustom { continue }
+            matched.append(model)
+        }
+        return matched
+    }
+
     /// Every query token must appear somewhere in the exercise's name, muscles, equipment or
     /// logging style — "chest dumbbell" finds Dumbbell Bench Press, "pullover" finds
     /// "Dumbbell Pull-Over". Accents and case are ignored; "db"/"bb"/"kb" expand first.
     private func matches(
-        _ model: ExerciseModel, haystack: String, tokens: [String], muscle: Muscle?, equipment: String?
+        _ model: ExerciseModel, haystack: String, tokens: [String], muscle: Muscle?, equipment: String?,
+        includeSecondary: Bool = true
     ) -> Bool {
         let nameMatches = tokens.isEmpty || tokens.allSatisfy { haystack.contains($0) }
-        let muscleMatches = muscle.map { model.primary.contains($0) || model.secondary.contains($0) } ?? true
+        let muscleMatches = muscle.map {
+            model.primary.contains($0) || (includeSecondary && model.secondary.contains($0))
+        } ?? true
         let equipmentMatches = equipment.map { model.equipment == $0 } ?? true
         return nameMatches && muscleMatches && equipmentMatches
     }

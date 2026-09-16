@@ -25,26 +25,46 @@ struct LibraryView: View {
     @State private var profile: EquipmentProfileInfo?
     @State private var showAllEquipment = false
     @State private var hidden = HiddenCounts()
+    /// Which chips still find a row, recomputed with every `refresh()` (so debounced with the
+    /// search text) from the same catalogue pass — never a fetch per chip.
+    @State private var facets = LibraryFacets.Remaining()
+    @State private var showingMuscleMap = false
+    /// On (the default, and the chips' long-standing behaviour) a muscle filter matches rows
+    /// that work the muscle as a secondary mover too; the "by muscle" card exposes the switch.
+    @State private var includeSecondary = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The results label's scroll anchor for a body-map tap.
+    private static let resultsAnchor = "library.results"
 
     var body: some View {
         NavigationStack {
             ZStack {
                 AmbientWash()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: DGSpace.s5) {
-                        if let profile, profile.restrictsLibrary {
-                            EquipmentFilterBanner(
-                                profileName: profile.name, hidden: hidden, showingAll: $showAllEquipment
-                            )
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: DGSpace.s5) {
+                            if let profile, profile.restrictsLibrary {
+                                EquipmentFilterBanner(
+                                    profileName: profile.name, hidden: hidden, showingAll: $showAllEquipment
+                                )
+                            }
+                            byMuscleButton
+                            if showingMuscleMap {
+                                LibraryMuscleMapCard(
+                                    counts: facets.muscleCounts, selected: selectedMuscle,
+                                    includeSecondary: $includeSecondary
+                                ) { muscle in select(muscle, scrolling: proxy) }
+                            }
+                            muscleChipRow
+                            equipmentChipRow
+                            sectionLabel.id(Self.resultsAnchor)
+                            rows
                         }
-                        muscleChipRow
-                        equipmentChipRow
-                        sectionLabel
-                        rows
+                        .padding(.horizontal, DGSpace.s4)
+                        .padding(.top, DGSpace.s3)
+                        .padding(.bottom, DGSpace.s6)
                     }
-                    .padding(.horizontal, DGSpace.s4)
-                    .padding(.top, DGSpace.s3)
-                    .padding(.bottom, DGSpace.s6)
                 }
             }
             .navigationTitle("Library")
@@ -74,16 +94,64 @@ struct LibraryView: View {
             .onChange(of: selectedEquipment) { _, _ in refresh() }
             .onChange(of: favoritesOnly) { _, _ in refresh() }
             .onChange(of: customOnly) { _, _ in refresh() }
+            .onChange(of: includeSecondary) { _, _ in refresh() }
         }
         .dgWarmHaptics()
     }
 
+    /// A body-map tap is the muscle chip's tap plus a scroll to the results, so the list the
+    /// tap just filtered is on screen; the card stays open for the next region.
+    private func select(_ muscle: Muscle, scrolling proxy: ScrollViewProxy) {
+        selectedMuscle = muscle
+        withAnimation(DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion)) {
+            proxy.scrollTo(Self.resultsAnchor, anchor: .top)
+        }
+    }
+
+    /// Opens the body-map card; the same glass strip as the profile banner so it reads as a
+    /// filter control, not a row.
+    private var byMuscleButton: some View {
+        Button {
+            withAnimation(DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion)) {
+                showingMuscleMap.toggle()
+            }
+        } label: {
+            HStack(spacing: DGSpace.s2) {
+                Image(systemName: "figure.arms.open")
+                    .font(.system(size: 13, weight: .semibold))
+                    .accessibilityHidden(true)
+                Text("Explore by muscle")
+                    .font(DGFont.condensedLabel(14))
+                    .tracking(1.2)
+                    .textCase(.uppercase)
+                Spacer()
+                Image(systemName: showingMuscleMap ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(DGColor.ink4)
+                    .accessibilityHidden(true)
+            }
+            .foregroundStyle(DGColor.ink2)
+            .padding(.horizontal, DGSpace.s3)
+            .frame(minHeight: 44)
+            .dgGlass(.thin, radius: 12)
+        }
+        .buttonStyle(.dgCard)
+        .accessibilityIdentifier(A11yID.libraryByMuscle)
+        .accessibilityAddTraits(showingMuscleMap ? .isSelected : [])
+        .accessibilityHint(showingMuscleMap ? "Hides the body map" : "Shows a body map to pick a muscle from")
+    }
+
+    /// A chip that would find nothing under every *other* filter is dimmed and disabled; the
+    /// selected one stays live so one tap clears it (`facets` is refreshed with the rows).
     private var muscleChipRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DGSpace.s2) {
                 DGChip(title: "All", selected: selectedMuscle == nil) { selectedMuscle = nil }
                 ForEach(Muscle.allCases) { muscle in
-                    DGChip(title: muscle.displayName, selected: selectedMuscle == muscle) {
+                    DGChip(
+                        title: muscle.displayName, selected: selectedMuscle == muscle,
+                        isEmpty: !facets.muscles.contains(muscle)
+                    ) {
                         selectedMuscle = selectedMuscle == muscle ? nil : muscle
                     }
                 }
@@ -95,7 +163,10 @@ struct LibraryView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DGSpace.s2) {
                 ForEach(EquipmentOption.allCases) { option in
-                    DGChip(title: option.title, selected: selectedEquipment == option) {
+                    DGChip(
+                        title: option.title, selected: selectedEquipment == option,
+                        isEmpty: !facets.equipment.contains(option.rawValue)
+                    ) {
                         selectedEquipment = selectedEquipment == option ? nil : option
                     }
                 }
@@ -161,7 +232,14 @@ struct LibraryView: View {
         defer { signposter.endInterval("LibraryView.refresh", interval) }
         let all = store.exercises(
             in: catalogue, matching: searchText, muscle: selectedMuscle,
-            equipment: selectedEquipment?.rawValue, favoritesOnly: favoritesOnly, customOnly: customOnly
+            equipment: selectedEquipment?.rawValue, favoritesOnly: favoritesOnly, customOnly: customOnly,
+            includeSecondary: includeSecondary
+        )
+        // The chips answer "what would still match": the profile applies unless "show all".
+        facets = store.libraryFacets(
+            in: catalogue, matching: searchText, favoritesOnly: favoritesOnly, customOnly: customOnly,
+            availability: showAllEquipment ? nil : availability, selectedMuscle: selectedMuscle,
+            selectedEquipment: selectedEquipment?.rawValue, includeSecondary: includeSecondary
         )
         guard let availability else {
             hidden = HiddenCounts()
@@ -182,123 +260,6 @@ struct LibraryView: View {
     /// The save bumps `changeToken`, and this tab is showing, so `reload()` follows on its own.
     private func toggleFavorite(_ id: UUID) {
         store.toggleFavorite(id: id)
-    }
-}
-
-/// "Showing what's in Home · 212 hidden by equipment, 14 by machine · Show all" — the
-/// equipment-profile filter's banner, shared by the library and the exercise picker. Tapping the
-/// trailing word flips the filter.
-struct EquipmentFilterBanner: View {
-    var profileName: String
-    var hidden = HiddenCounts()
-    @Binding var showingAll: Bool
-
-    /// "Showing what's in Home" plus how many rows the profile hides, split by the reason.
-    static func title(profileName: String, hidden: HiddenCounts, showingAll: Bool) -> String {
-        if showingAll { return "Showing all equipment" }
-        var parts: [String] = []
-        if hidden.byType > 0 { parts.append("\(hidden.byType) by equipment") }
-        if hidden.byMachine > 0 { parts.append("\(hidden.byMachine) by machine") }
-        guard !parts.isEmpty else { return "Showing what's in \(profileName)" }
-        return "Showing what's in \(profileName) · hiding \(parts.joined(separator: ", "))"
-    }
-
-    var body: some View {
-        HStack(spacing: DGSpace.s2) {
-            Image(systemName: "line.3.horizontal.decrease.circle")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(DGColor.ink3)
-                .accessibilityHidden(true)
-            Text(Self.title(profileName: profileName, hidden: hidden, showingAll: showingAll))
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink2)
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
-            Text("·").font(DGFont.footnote).foregroundStyle(DGColor.ink4).accessibilityHidden(true)
-            Button(showingAll ? "Only \(profileName)" : "Show all") { showingAll.toggle() }
-                .buttonStyle(.dgControl)
-                .font(DGFont.footnote.weight(.semibold))
-                .foregroundStyle(DGColor.coralText)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, DGSpace.s3)
-        .frame(minHeight: 36)
-        .dgGlass(.thin, radius: 12)
-    }
-}
-
-/// One 72 pt row in the library list.
-private struct LibraryRow: View {
-    var exercise: ExerciseInfo
-    var onToggleFavorite: () -> Void
-
-    @Environment(Preferences.self) private var preferences
-
-    var body: some View {
-        HStack(spacing: DGSpace.s3) {
-            HStack(spacing: DGSpace.s3) {
-                thumbnail
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(exercise.name)
-                        .font(DGFont.title3)
-                        .textCase(.uppercase)
-                        .foregroundStyle(DGColor.ink1)
-                        .lineLimit(1)
-                    Text(exercise.muscleLine)
-                        .font(DGFont.footnote)
-                        .foregroundStyle(DGColor.ink3)
-                        .lineLimit(1)
-                }
-                Spacer()
-                accessory
-            }
-            .accessibilityElement(children: .combine)
-            favoriteButton
-        }
-        .frame(minHeight: 72)
-        .dgCard(radius: 14, padding: 12)
-    }
-
-    private var thumbnail: some View {
-        BodyMapView(
-            side: BodyMapMuscleMapping.thumbnailSide(forPrimary: exercise.primary),
-            intensity: exercise.hitMap
-        )
-            .padding(6)
-            .frame(width: 44, height: 44)
-            .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .accessibilityHidden(true)
-    }
-
-    /// Every row can be (un)favourited from the list, whether or not it has a lift on record.
-    private var favoriteButton: some View {
-        Button(action: onToggleFavorite) {
-            Image(systemName: exercise.isFavorite ? "star.fill" : "star")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(exercise.isFavorite ? DGColor.prGoldText : DGColor.ink4)
-                .frame(width: 28, height: 28)
-                .background(
-                    exercise.isFavorite ? DGColor.prGold.opacity(0.18) : DGColor.surface2, in: Circle()
-                )
-        }
-        .buttonStyle(.dgControl)
-        .accessibilityLabel(exercise.isFavorite ? "Remove from favourites" : "Add to favourites")
-    }
-
-    @ViewBuilder
-    private var accessory: some View {
-        if let best = exercise.bestE1RM {
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(preferences.formatWeight(kg: best))
-                    .dgMetric(DGFont.metricM, tracking: -0.5)
-                    .foregroundStyle(DGColor.prGoldText)
-                Text("E1RM").dgLabel()
-            }
-        } else if exercise.loggingStyle == .weightedBodyweight {
-            DGTag(text: "BW+", tint: DGColor.infoText, wash: DGColor.info.opacity(0.16))
-        } else if exercise.isCustom {
-            DGTag(text: "Mine", tint: DGColor.coralText, wash: DGColor.coralWash)
-        }
     }
 }
 
