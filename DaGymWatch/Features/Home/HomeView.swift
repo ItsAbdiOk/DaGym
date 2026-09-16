@@ -44,6 +44,7 @@ struct ScheduledHomeView: View {
                 Text("\(routine.exercises.count) exercises · \(routine.estimatedMinutes) min")
                     .font(WatchFont.body)
                     .foregroundStyle(WatchColor.inkSecondary)
+                CoachSaysLine(line: store.home.coachLine)
                 VStack(spacing: 0) {
                     ForEach(Array(store.home.todaysLines.enumerated()), id: \.offset) { index, line in
                         HStack {
@@ -85,6 +86,12 @@ struct RestDayHomeView: View {
         ScrollView {
             VStack(spacing: 6) {
                 SafeBandText(text: "Rest day", font: WatchFont.title, color: WatchColor.ink)
+                if let next = store.home.nextSession {
+                    NextSessionCard(session: next) {
+                        store.start(routineID: store.home.nextSessionRoutineID)
+                    }
+                    CoachSaysLine(line: store.home.coachLine).padding(.horizontal, 4)
+                }
                 ForEach(store.home.routines) { routine in
                     ListRow(title: routine.name, trailing: "\(routine.exercises.count) ex") {
                         store.start(routineID: routine.id)
@@ -108,6 +115,49 @@ struct RestDayHomeView: View {
                     store.start(routineID: nil)
                 }
             }
+        }
+    }
+}
+
+/// The next planned session on a rest day: "Pull B" over "Tomorrow · 48 min", accented so it
+/// reads as the plan rather than one more routine row. Tapping starts that routine now.
+struct NextSessionCard: View {
+    var session: NextPlannedSession
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Next up").font(WatchFont.secondary).foregroundStyle(WatchColor.accent)
+                Text(session.routineName)
+                    .font(WatchFont.bodyMedium)
+                    .foregroundStyle(WatchColor.ink)
+                    .lineLimit(1)
+                Text(session.detailLine).font(WatchFont.body).foregroundStyle(WatchColor.inkSecondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: WatchMetric.cardRadius).fill(WatchColor.card))
+            .contentShape(RoundedRectangle(cornerRadius: WatchMetric.cardRadius))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Next up: \(session.routineName), \(session.detailLine). Starts it now.")
+    }
+}
+
+/// "Coach: Bench Press has stalled" in secondary text under the session; nothing when the
+/// rules coach has no card, so a quiet week leaves no empty line behind.
+struct CoachSaysLine: View {
+    var line: String?
+
+    var body: some View {
+        if let line {
+            Text("Coach: \(line)")
+                .font(WatchFont.secondary)
+                .foregroundStyle(WatchColor.inkSecondary)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

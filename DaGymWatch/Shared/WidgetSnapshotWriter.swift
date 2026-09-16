@@ -54,6 +54,10 @@ final class WatchSnapshotWriter {
     private(set) var writtenRest: WatchSnapshot.Rest?
     /// Timelines reloaded so far — for tests, which count them rather than read WidgetKit.
     private(set) var reloadCount = 0
+    /// The "Coach says" line the next rebuild writes. `WatchStore.refreshHome` sets it from the
+    /// rules coach before asking for a rebuild; a store-driven rebuild (finish, a routine save)
+    /// keeps the last one rather than running the ten rules again on the logging path.
+    var coachLine: String?
 
     init(
         store: WorkoutStore, suite: UserDefaults? = WatchSnapshotStore.appGroupSuite,
@@ -74,7 +78,9 @@ final class WatchSnapshotWriter {
         guard let suite else { return }
         if rebuild, let store {
             let state = Self.signposter.beginInterval("watchSnapshot")
-            idle = Self.snapshot(store: store, now: now, calendar: calendar(), workoutDates: workoutDates)
+            idle = Self.snapshot(
+                store: store, now: now, calendar: calendar(), workoutDates: workoutDates, coachLine: coachLine
+            )
             Self.signposter.endInterval("watchSnapshot", state)
         }
         var next = idle ?? .empty
@@ -103,7 +109,8 @@ final class WatchSnapshotWriter {
 
     static func snapshot(
         store: WorkoutStore, now: Date = Date(),
-        calendar: Calendar = WatchPreferences.shared.trainingCalendar, workoutDates: [Date]? = nil
+        calendar: Calendar = WatchPreferences.shared.trainingCalendar, workoutDates: [Date]? = nil,
+        coachLine: String? = nil
     ) -> WatchSnapshot {
         let dates = workoutDates ?? store.finishedWorkoutStartDates()
         let streak = Streaks.weekly(
@@ -111,19 +118,37 @@ final class WatchSnapshotWriter {
         )
         var snapshot = WatchSnapshot(streakWeeks: streak.current)
         snapshot.trainedThisWeek = trainedDays(dates, calendar: calendar, now: now)
+        snapshot.coachLine = coachLine
         if let today = store.todaysRoutine(calendar: calendar, now: now) {
             snapshot.nextRoutineName = today.name
-            snapshot.nextSessionDate = calendar.date(
-                bySettingHour: WatchPreferences.scheduledStartHour, minute: 0, second: 0, of: now
-            )
+            snapshot.nextSessionDate = scheduledStart(of: now, calendar: calendar)
             snapshot.isNextToday = true
+            snapshot.nextSession = nextPlannedSession(today, on: now, now: now, calendar: calendar)
         } else if let next = store.nextSession(calendar: calendar, now: now) {
             snapshot.nextRoutineName = next.routine.name
-            snapshot.nextSessionDate = calendar.date(
-                bySettingHour: WatchPreferences.scheduledStartHour, minute: 0, second: 0, of: next.date
+            snapshot.nextSessionDate = scheduledStart(of: next.date, calendar: calendar)
+            snapshot.nextSession = nextPlannedSession(
+                next.routine, on: next.date, now: now, calendar: calendar
             )
         }
         return snapshot
+    }
+
+    /// `day` at the lifter's scheduled start hour — what the corner complication shows.
+    private static func scheduledStart(of day: Date, calendar: Calendar) -> Date? {
+        calendar.date(bySettingHour: WatchPreferences.scheduledStartHour, minute: 0, second: 0, of: day)
+    }
+
+    /// The glance-sized view of `routine` planned on `day`, labelled relative to `now`.
+    static func nextPlannedSession(
+        _ routine: RoutineInfo, on day: Date, now: Date, calendar: Calendar
+    ) -> NextPlannedSession {
+        NextPlannedSession(
+            routineName: routine.name,
+            dayLabel: NextPlannedSession.dayLabel(for: day, now: now, calendar: calendar),
+            date: scheduledStart(of: day, calendar: calendar) ?? day,
+            exerciseCount: routine.exercises.count, estimatedMinutes: routine.estimatedMinutes
+        )
     }
 
     /// Seven flags, first weekday first, true on each day this week that had a session.
