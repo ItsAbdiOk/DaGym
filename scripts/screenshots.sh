@@ -59,6 +59,8 @@ IPHONE_SHOTS=(
     15-body:body
     16-library:library
     17-coach:coach
+    18-coach-chat:coachChat
+    19-coach-review:coachReview
 )
 WATCH_SHOTS=(
     01-home:home
@@ -70,6 +72,7 @@ WATCH_SHOTS=(
     07-complications:complications
     08-home-rest:home-rest
     09-settings:settings
+    10-coach-says:complications-4
 )
 
 build() {

@@ -19,7 +19,9 @@ struct CoachDraftCard: View {
     var onDiscard: () -> Void
     var onCopy: () -> Void = {}
 
-    @State private var isExpanded = false
+    @Environment(\.coachDraftCardsExpanded) private var expandsByDefault
+    /// nil until the lifter taps Details; until then the environment says how the card starts.
+    @State private var isExpanded: Bool?
     /// Rows whose reason is shown in full rather than clipped to two lines.
     @State private var openReasons: Set<Int> = []
 
@@ -101,14 +103,16 @@ struct CoachDraftCard: View {
         return originLabel.map { "\($0). \(base)" } ?? base
     }
 
+    private var showsDetails: Bool { isExpanded ?? expandsByDefault }
+
     private var rows: [CoachDraftDetail.Row] { CoachDraftDetail.rows(for: draft, formatWeight: formatWeight) }
 
     @ViewBuilder
     private var disclosure: some View {
-        Button { isExpanded.toggle() } label: {
+        Button { isExpanded = !showsDetails } label: {
             HStack(spacing: DGSpace.s1) {
-                Text(isExpanded ? "Hide details" : "Details")
-                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                Text(showsDetails ? "Hide details" : "Details")
+                Image(systemName: showsDetails ? "chevron.up" : "chevron.down")
                     .font(.system(size: 10, weight: .semibold))
             }
             .font(DGFont.condensedLabel(12))
@@ -117,9 +121,9 @@ struct CoachDraftCard: View {
             .foregroundStyle(DGColor.ink3)
         }
         .buttonStyle(.dgControl)
-        .accessibilityLabel(isExpanded ? "Hide details" : "Show details")
+        .accessibilityLabel(showsDetails ? "Hide details" : "Show details")
 
-        if isExpanded {
+        if showsDetails {
             VStack(alignment: .leading, spacing: DGSpace.s1) {
                 ForEach(rows) { row in
                     detailRow(row)
@@ -258,4 +262,11 @@ struct CoachDraftCard: View {
     }
     .padding()
     .background(AmbientWash())
+}
+
+extension EnvironmentValues {
+    /// Whether draft cards open with their rows showing. Off in the app — the card leads with
+    /// its summary and Apply — and on for the screenshot build, whose shot is the rows and
+    /// their reasons.
+    @Entry var coachDraftCardsExpanded = false
 }

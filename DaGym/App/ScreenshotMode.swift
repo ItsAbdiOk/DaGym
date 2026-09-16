@@ -15,6 +15,9 @@ import UIKit
 enum ScreenshotScreen: String, CaseIterable {
     case home, workout, rest, progress, chart, records, consistency, recovery, routines, builder
     case library, exerciseDetail, settings, settingsData, milestones, body, coach, summary
+    /// The cloud coach over the Coach tab, on a canned thread (`ScreenshotCoachChat`): the
+    /// answer with its routine card, and the two-card second-opinion moment.
+    case coachChat, coachReview
 
     static var fromLaunchArguments: ScreenshotScreen? {
         let args = ProcessInfo.processInfo.arguments
@@ -25,6 +28,15 @@ enum ScreenshotScreen: String, CaseIterable {
     /// Screens that show the workout that is mid-set. Every other screen leaves it out, since an
     /// unfinished workout makes `RootView` open with a "Resume Workout?" dialog on top.
     var needsInProgressWorkout: Bool { self == .workout || self == .rest }
+
+    /// The canned chat thread the screen opens on, if it opens the chat at all.
+    var coachChatThread: ((Date) -> CoachChatThread)? {
+        switch self {
+        case .coachChat: ScreenshotCoachChat.chatThread
+        case .coachReview: ScreenshotCoachChat.reviewThread
+        default: nil
+        }
+    }
 }
 
 /// Fills the screenshot store. Everything is dated relative to `now` — 09:41 today — so the
@@ -57,6 +69,9 @@ enum ScreenshotMode {
         preferences.iCloudSyncEnabled = false
         // Eight hard weeks trip the deload suggestion; it would sit under the hero card on Home.
         preferences.deloadSnoozedUntil = now.addingTimeInterval(14 * 24 * 60 * 60)
+        // The chat's key check is short-circuited by the flag (`CoachChatSettings.hasAPIKey`);
+        // consent is the other half of "ready", so the Coach tab's entry card reads as live.
+        preferences.coachChatConsentGiven = true
         SampleDataSeeder.seed(store: store, preferences: preferences, now: historyAnchor)
         // Marketing shots are the trained-in app, not a trial: no "Sample data · Clear" banner.
         preferences.sampleDataMode = false
@@ -163,6 +178,17 @@ enum ScreenshotMode {
         session.restEndDate = Date().addingTimeInterval(92)
     }
 
+    /// The chat archive holds exactly the thread the screen wants — or nothing, so every other
+    /// screen's Home shows "Week review ready" rather than a review thread. The archive is the
+    /// screenshot build's own temp directory (`CoachChatArchive.standard()` redirects there),
+    /// never the app's.
+    static func seedCoachChat(for screen: ScreenshotScreen?) {
+        guard let archive = CoachChatArchive.standard() else { return }
+        try? FileManager.default.removeItem(at: archive.directory)
+        guard let thread = screen?.coachChatThread?(historyAnchor) else { return }
+        try? archive.save(thread)
+    }
+
     static func benchPress(in store: WorkoutStore) -> ExerciseInfo? {
         store.routines().first { $0.name == "Push A" }?.exercises.first
     }
@@ -246,6 +272,7 @@ struct ScreenshotRootView: View {
             return newStore.loadGrid(for: exercise, equipment: newStore.activeEquipment())
         }
         ScreenshotMode.seed(store: newStore, preferences: preferences)
+        ScreenshotMode.seedCoachChat(for: screen)
         if screen?.needsInProgressWorkout == true || screen == .summary {
             let live = ScreenshotMode.inProgressSession(store: newStore, preferences: preferences)
             if screen == .rest { ScreenshotMode.startRest(in: live) }
@@ -321,6 +348,12 @@ private struct ScreenshotScreenView: View {
             RootView().sheet(isPresented: .constant(true)) { ScreenshotDataSettingsView() }
         case .coach:
             tabbed(.coach) { CoachView() }
+        case .coachChat, .coachReview:
+            // The chat shot is the card's rows and reasons; the review shot is two cards side
+            // by side, which only fit closed.
+            tabbed(.coach) { CoachView() }
+                .fullScreenCover(isPresented: .constant(true)) { CoachChatView() }
+                .environment(\.coachDraftCardsExpanded, screen == .coachChat)
         }
     }
 
