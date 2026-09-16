@@ -3,7 +3,8 @@ import SwiftUI
 
 /// The cloud-coach half of Settings → Coach: the OpenRouter key row (add / change / remove),
 /// the two model rows (the coach that drafts, the second opinion that reviews — each opens
-/// the live picker), a cost hint with both prices, the consent state, and a "What's sent"
+/// the live picker), a cost hint with both prices, the "Coach usage" row (tokens and dollars
+/// spent, `CoachUsageSheet`), the consent state, and a "What's sent"
 /// disclosure listing every tool the coach can call. The first key save presents the consent
 /// screen; declining keeps the key but leaves `coachChatConsentGiven` false, so nothing is
 /// ever sent.
@@ -14,6 +15,7 @@ struct CoachChatSettingsCard: View {
     @State private var pickerRole: CoachModelRole?
     @State private var showingConsent = false
     @State private var showingWhatIsSent = false
+    @State private var showingUsage = false
     /// Prices by model id from one GET /models, for the cost hint; empty until it lands.
     @State private var pricing: [String: OpenRouterWire.Pricing] = [:]
 
@@ -40,6 +42,9 @@ struct CoachChatSettingsCard: View {
             .accessibilityIdentifier(A11yID.coachReviewerRow)
             CoachChatSettingsDivider()
             caption(costHint).accessibilityIdentifier(A11yID.coachCostHint)
+            CoachChatSettingsDivider()
+            navigationRow(label: "Coach usage", value: "Tokens and cost", action: { showingUsage = true })
+                .accessibilityIdentifier(A11yID.coachUsageRow)
             if hasKey {
                 CoachChatSettingsDivider()
                 consentRow
@@ -52,6 +57,7 @@ struct CoachChatSettingsCard: View {
             OpenRouterKeySheet(hasKey: hasKey, onSave: saveKey, onRemove: removeKey)
         }
         .sheet(item: $pickerRole) { role in CoachModelPickerSheet(role: role) }
+        .sheet(isPresented: $showingUsage) { CoachUsageSheet() }
         .sheet(isPresented: $showingConsent) {
             CoachChatConsentSheet(
                 onAgree: { preferences.coachChatConsentGiven = true; showingConsent = false },

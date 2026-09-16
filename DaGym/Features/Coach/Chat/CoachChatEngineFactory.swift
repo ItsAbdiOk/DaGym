@@ -28,7 +28,7 @@ enum CoachChatEngineFactory {
         return CoachChatEngine(
             client: client, executor: executor, configuration: configuration(preferences),
             systemPrompt: prompt, tools: (try? OpenRouterWire.toolDefinitions()) ?? [],
-            thread: thread, archive: CoachChatArchive.standard()
+            thread: thread, archive: CoachChatArchive.standard(), ledger: .standard
         )
     }
 

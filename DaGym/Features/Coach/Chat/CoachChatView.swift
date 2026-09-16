@@ -47,6 +47,7 @@ struct CoachChatView: View {
                 }
             }
             .navigationTitle("Coach")
+            .navigationSubtitle(engine.flatMap { CoachUsageText.threadLine($0.usage) } ?? "")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

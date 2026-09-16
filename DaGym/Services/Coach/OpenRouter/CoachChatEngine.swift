@@ -38,6 +38,8 @@ final class CoachChatEngine {
     let reviewerTools: [OpenRouterWire.ToolDefinition]
     let clock: @Sendable () -> Date
     private let archive: CoachChatArchive?
+    /// The cross-thread counters for Settings › Coach usage; nil in tests that do not care.
+    private let ledger: CoachChatUsageLedgerStore?
     private let createdAt: Date
     /// What the model sees: system prompt is prepended per request; tool calls and results stay
     /// so later turns can build on earlier lookups. Rebuilt from text only on restore.
@@ -57,6 +59,7 @@ final class CoachChatEngine {
         reviewerTools: [OpenRouterWire.ToolDefinition]? = nil,
         thread: CoachChatThread? = nil,
         archive: CoachChatArchive? = nil,
+        ledger: CoachChatUsageLedgerStore? = nil,
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.client = client
@@ -67,6 +70,7 @@ final class CoachChatEngine {
         self.reviewerTools = reviewerTools
             ?? (try? OpenRouterWire.toolDefinitions(CoachChatToolCatalog.reviewerTools)) ?? []
         self.archive = archive
+        self.ledger = ledger
         self.clock = clock
         threadID = thread?.id ?? UUID()
         createdAt = thread?.createdAt ?? clock()
@@ -220,7 +224,10 @@ final class CoachChatEngine {
                 call.function.arguments += chunk
                 calls[index] = call
             case .finished(let reason, let turnUsage):
-                if let turnUsage { usage.add(turnUsage, model: request.model) }
+                if let turnUsage {
+                    usage.add(turnUsage, model: request.model)
+                    ledger?.record(turnUsage, model: request.model, at: clock())
+                }
                 reply.finishReason = reason
                 if reason == "length", let bubbleIndex { messages[bubbleIndex].isStopped = true }
             }

@@ -124,6 +124,19 @@ struct CoachChatUsage: Codable, Equatable, Sendable {
         if let cost = usage.cost { costUSD = (costUSD ?? 0) + cost }
         byModel[model, default: CoachChatModelUsage()].add(usage)
     }
+
+    var totalTokens: Int { promptTokens + completionTokens }
+
+    /// The thread's cost from the list-price table: OpenRouter's own figure when it reported
+    /// one, else `CoachModelPricing` over `byModel`; nil when a model used has no known price.
+    func estimatedUSD(
+        pricing: (String) -> CoachModelPricing? = CoachModelPricing.price(forModelID:)
+    ) -> Double? {
+        if let costUSD { return costUSD }
+        return CoachModelPricing.estimatedUSD(
+            tokensByModel: byModel.mapValues(\.tokenCount), pricing: pricing
+        )
+    }
 }
 
 /// One model's share of a thread's usage.
@@ -136,6 +149,18 @@ struct CoachChatModelUsage: Codable, Equatable, Sendable {
         promptTokens += usage.promptTokens
         completionTokens += usage.completionTokens
         if let cost = usage.cost { costUSD = (costUSD ?? 0) + cost }
+    }
+
+    var tokenCount: CoachTokenCount {
+        CoachTokenCount(promptTokens: promptTokens, completionTokens: completionTokens)
+    }
+
+    /// OpenRouter's reported cost, else the list-price estimate for `model`; nil when unknown.
+    func estimatedUSD(
+        model: String, pricing: (String) -> CoachModelPricing? = CoachModelPricing.price(forModelID:)
+    ) -> Double? {
+        if let costUSD { return costUSD }
+        return pricing(model)?.cost(promptTokens: promptTokens, completionTokens: completionTokens)
     }
 }
 
