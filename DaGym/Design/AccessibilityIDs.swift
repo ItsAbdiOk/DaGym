@@ -69,6 +69,9 @@ enum A11yID {
     static let coachUsageRow = "coach.settings.usage"
     static let coachUsageTotal = "coach.usage.total"
     static let coachUsageReset = "coach.usage.reset"
+    static let coachMemoryRow = "coach.settings.memory"
+    static let coachMemoryList = "coach.memory.list"
+    static let coachMemoryForgetAll = "coach.memory.forgetAll"
 
     static let walletAdd = "gymcard.wallet.add"
     static let walletOpen = "gymcard.wallet.open"

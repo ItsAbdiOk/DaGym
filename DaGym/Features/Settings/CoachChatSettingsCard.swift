@@ -16,6 +16,7 @@ struct CoachChatSettingsCard: View {
     @State private var showingConsent = false
     @State private var showingWhatIsSent = false
     @State private var showingUsage = false
+    @State private var showingMemory = false
     /// Prices by model id from one GET /models, for the cost hint; empty until it lands.
     @State private var pricing: [String: OpenRouterWire.Pricing] = [:]
 
@@ -45,6 +46,9 @@ struct CoachChatSettingsCard: View {
             CoachChatSettingsDivider()
             navigationRow(label: "Coach usage", value: "Tokens and cost", action: { showingUsage = true })
                 .accessibilityIdentifier(A11yID.coachUsageRow)
+            CoachChatSettingsDivider()
+            navigationRow(label: "Coach memory", value: "What it remembers", action: { showingMemory = true })
+                .accessibilityIdentifier(A11yID.coachMemoryRow)
             if hasKey {
                 CoachChatSettingsDivider()
                 consentRow
@@ -58,6 +62,7 @@ struct CoachChatSettingsCard: View {
         }
         .sheet(item: $pickerRole) { role in CoachModelPickerSheet(role: role) }
         .sheet(isPresented: $showingUsage) { CoachUsageSheet() }
+        .sheet(isPresented: $showingMemory) { CoachMemorySheet() }
         .sheet(isPresented: $showingConsent) {
             CoachChatConsentSheet(
                 onAgree: { preferences.coachChatConsentGiven = true; showingConsent = false },
@@ -134,9 +139,9 @@ struct CoachChatSettingsCard: View {
         if showingWhatIsSent {
             VStack(alignment: .leading, spacing: DGSpace.s2) {
                 Text(
-                    "Every question goes with a short profile (units, goal, bodyweight, equipment) and "
-                        + "the conversation so far. The coach then reads only what it asks for, "
-                        + "through these tools:"
+                    "Every question goes with a short profile (units, goal, bodyweight, equipment), "
+                        + "the facts in Coach memory and the conversation so far. The coach then reads "
+                        + "only what it asks for, through these tools:"
                 )
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)

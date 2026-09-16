@@ -138,6 +138,8 @@ public enum CoachChatToolName: String, CaseIterable, Codable, Hashable, Sendable
     case getRecovery = "get_recovery"
     case getBodyMeasurements = "get_body_measurements"
     case searchExercises = "search_exercises"
+    case remember
+    case recall
     case proposeRoutine = "propose_routine"
     case proposeProgram = "propose_program"
     case proposeSchedule = "propose_schedule"
@@ -170,6 +172,8 @@ public enum CoachChatToolName: String, CaseIterable, Codable, Hashable, Sendable
         case .getRecovery: "Reading recovery"
         case .getBodyMeasurements: "Reading body measurements"
         case .searchExercises: "Searching exercises"
+        case .remember: "Remembering that"
+        case .recall: "Recalling earlier chats"
         case .proposeRoutine: "Drafting a routine"
         case .proposeProgram: "Drafting a program"
         case .proposeSchedule: "Drafting a schedule"
