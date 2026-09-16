@@ -11,7 +11,7 @@ extension BackupService {
     /// `photoContext`/`healthContext` are the two local-only stores; nil means "this caller has no
     /// such store", and those sections are skipped rather than silently lost — `import` reports
     /// how many rows it couldn't place.
-    static func importExtras(
+    nonisolated static func importExtras(
         _ document: BackupDocument, index: ExerciseIndex, context: ModelContext,
         photoContext: ModelContext? = nil, healthContext: ModelContext? = nil,
         thumbnails: [UUID: Data]? = nil, report: inout ImportReport
@@ -25,7 +25,7 @@ extension BackupService {
         importHealth(document.healthImports, context: healthContext, report: &report)
     }
 
-    private static func importExerciseNotes(
+    nonisolated static func importExerciseNotes(
         _ items: [BackupExerciseNote], index: ExerciseIndex, context: ModelContext,
         report: inout ImportReport
     ) {
@@ -42,7 +42,7 @@ extension BackupService {
         }
     }
 
-    private static func importGymCards(_ items: [BackupGymCard], context: ModelContext) {
+    nonisolated static func importGymCards(_ items: [BackupGymCard], context: ModelContext) {
         let existingIDs = Set(((try? context.fetch(FetchDescriptor<GymCardModel>())) ?? []).map(\.id))
         for item in items where !existingIDs.contains(item.id) {
             context.insert(
@@ -54,7 +54,7 @@ extension BackupService {
         }
     }
 
-    private static func importCoachInteractions(
+    nonisolated static func importCoachInteractions(
         _ items: [BackupCoachInteraction], context: ModelContext
     ) {
         let existing = (try? context.fetch(FetchDescriptor<CoachInteractionModel>())) ?? []
@@ -71,7 +71,7 @@ extension BackupService {
 
     /// Photos live in their own local-only store, so they need their own context and their own
     /// save. A row whose image didn't fit in the backup still restores its date, pose and notes.
-    private static func importPhotos(
+    nonisolated static func importPhotos(
         _ items: [BackupProgressPhoto], context: ModelContext?, thumbnails: [UUID: Data]?,
         report: inout ImportReport
     ) {
@@ -124,7 +124,7 @@ extension BackupService {
 
     /// The tombstones matter as much as the imported rows: without them a restore re-imports every
     /// Apple Health session the user has already deleted from History.
-    private static func importHealth(
+    nonisolated static func importHealth(
         _ item: BackupHealthImport?, context: ModelContext?, report: inout ImportReport
     ) {
         guard let item, !item.imported.isEmpty || !item.ignoredHealthKitIDs.isEmpty else { return }

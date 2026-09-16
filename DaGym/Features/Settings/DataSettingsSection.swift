@@ -6,9 +6,9 @@ import SwiftUI
 /// The Settings "DATA" section: export a full JSON backup via `.fileExporter`,
 /// or import one back in via `.fileImporter` — preview counts, then confirm
 /// to merge (plan.md §6.3). The file read, JSON decode/encode and document build run
-/// off the main thread; `BackupService` itself is main-actor bound (it walks the store's
-/// `ModelContext`), so the model walk on export and the row writes on import still run
-/// here — after a yield, so the row's spinner is on screen while they do.
+/// off the main thread, and so do the row writes on import (`ImportActor`, batched, with the
+/// progress line and Cancel below the row); only the export's model walk is main-actor bound
+/// (it walks the store's `ModelContext`) and runs here after a yield so the spinner paints.
 struct DataSettingsSection: View {
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
@@ -34,6 +34,10 @@ struct DataSettingsSection: View {
     @State private var exportWarning: String?
     /// The finished import's report, so its problems stay readable after the sheet is dismissed.
     @State private var completedReport: ImportReport?
+    /// Non-nil while `ImportActor` is restoring: what the progress line shows.
+    @State private var importProgress: ImportProgress?
+    /// The restore in flight, so Cancel can stop it between batches.
+    @State private var importTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
@@ -126,7 +130,9 @@ struct DataSettingsSection: View {
     @ViewBuilder
     private var footnote: some View {
         VStack(alignment: .leading, spacing: DGSpace.s2) {
-            if let confirmationMessage {
+            if let importProgress {
+                ImportProgressRow(title: "Importing", progress: importProgress) { importTask?.cancel() }
+            } else if let confirmationMessage {
                 Text(confirmationMessage)
                     .font(DGFont.footnote)
                     .foregroundStyle(DGColor.success)
@@ -247,21 +253,37 @@ struct DataSettingsSection: View {
     /// "Imported", so a restore that dropped hundreds of rows (every workout on a seeded exercise,
     /// after a reset) read exactly like a clean one.
     ///
-    /// The sheet comes down first and the row spins while `BackupService.import` writes every
-    /// row on the main actor; the yield is what gets that spinner on screen before it starts.
+    /// The sheet comes down first; the rows are written by `ImportActor` off the main actor, with
+    /// each landed batch reported through the relay to the progress line. A cancel keeps the
+    /// batches that had landed (re-importing the file skips them) and says so.
     private func confirmImport(_ document: BackupDocument) {
         pendingImport = nil
         isBusy = true
-        Task {
-            defer { isBusy = false }
-            await Task.yield()
+        importProgress = ImportProgress(done: 0, total: 0)
+        let relay = ImportProgressRelay()
+        let observer = relay.observe { importProgress = $0 }
+        importTask = Task {
+            defer {
+                relay.finish()
+                observer.cancel()
+                importProgress = nil
+                importTask = nil
+                isBusy = false
+            }
             let interval = Self.signposter.beginInterval("backup.import")
-            let report = await BackupService.import(
-                document: document, store: store, preferences: preferences
-            )
-            Self.signposter.endInterval("backup.import", interval)
-            completedReport = report
-            confirmationMessage = report.summary
+            defer { Self.signposter.endInterval("backup.import", interval) }
+            do {
+                let report = try await BackupService.import(
+                    document: document, store: store, preferences: preferences, progress: relay.handler
+                )
+                completedReport = report
+                confirmationMessage = report.summary
+            } catch is CancellationError {
+                completedReport = nil
+                confirmationMessage = "Import cancelled — what had already been imported was kept"
+            } catch {
+                errorMessage = "Couldn't import the backup: \(error.localizedDescription)"
+            }
         }
     }
 }
