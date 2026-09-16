@@ -1,3 +1,4 @@
+import GymCore
 import SwiftUI
 import WidgetKit
 
@@ -154,5 +155,53 @@ struct ComplicationView: View {
     private var inlineText: String {
         if let rest = snapshot.rest { return "Rest · next \(rest.nextLabel)" }
         return "\(snapshot.nextRoutineName ?? "No session") · \(snapshot.streakWeeks) wk"
+    }
+}
+
+// MARK: - Coach says
+
+/// The second complication: the next planned session over the coach's one-line tip. The
+/// rectangular slot reads "Pull B · Tomorrow · 48 min" / "Coach: Bench Press has stalled";
+/// the inline one packs the same into ~140 pt. Resting hands over to the timer like the
+/// other families — a glance mid-set wants the countdown, not advice. Without a coach line
+/// the second row falls back to the streak, so the slot is never half empty.
+struct CoachSaysView: View {
+    var entry: WatchSnapshotEntry
+    var family: WidgetFamily
+
+    private var snapshot: WatchSnapshot { entry.snapshot }
+
+    var body: some View {
+        if snapshot.rest != nil {
+            ComplicationView(entry: entry, family: family)
+        } else if family == .accessoryInline {
+            Text(inlineText)
+        } else {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(headline).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                Text(secondLine)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .widgetAccentable()
+        }
+    }
+
+    private var headline: String {
+        guard let next = snapshot.nextSession else { return "Nothing planned" }
+        return "\(next.routineName) · \(next.detailLine)"
+    }
+
+    private var secondLine: String {
+        if let line = snapshot.coachLine { return "Coach: \(line)" }
+        return "\(snapshot.streakWeeks)-week streak"
+    }
+
+    private var inlineText: String {
+        let session = snapshot.nextSession.map { "\($0.routineName) \($0.dayLabel)" } ?? "No session"
+        guard let line = snapshot.coachLine else { return "\(session) · \(snapshot.streakWeeks) wk" }
+        return "\(session) · \(line)"
     }
 }

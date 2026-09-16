@@ -1,4 +1,5 @@
 import Foundation
+import GymCore
 import Testing
 import WidgetKit
 
@@ -20,6 +21,54 @@ struct WatchSnapshotTests {
         WatchSnapshotStore.write(snapshot, to: suite)
 
         #expect(WatchSnapshotStore.read(from: suite) == snapshot)
+    }
+
+    @Test("a version-1 payload without the coach fields still decodes, and version 2 carries them")
+    func versionCompatibility() throws {
+        let suite = WatchTestDefaults.fresh()
+        let old = """
+            {"streakWeeks":5,"trainedThisWeek":[true,false,false,false,false,false,false],\
+            "nextRoutineName":"Push A","isNextToday":true}
+            """
+        suite.set(Data(old.utf8), forKey: WatchSnapshotStore.key)
+
+        let decoded = WatchSnapshotStore.read(from: suite)
+        #expect(decoded.version == nil)
+        #expect(decoded.streakWeeks == 5)
+        #expect(decoded.nextRoutineName == "Push A")
+        #expect(decoded.nextSession == nil)
+        #expect(decoded.coachLine == nil)
+
+        var snapshot = WatchSnapshot(streakWeeks: 5, nextRoutineName: "Push A", isNextToday: true)
+        snapshot.nextSession = NextPlannedSession(
+            routineName: "Push A", dayLabel: "Today", date: Date(timeIntervalSince1970: 1_800_000_000),
+            exerciseCount: 5, estimatedMinutes: 52
+        )
+        snapshot.coachLine = "A deload looks due"
+        WatchSnapshotStore.write(snapshot, to: suite)
+        let reread = WatchSnapshotStore.read(from: suite)
+        #expect(reread == snapshot)
+        #expect(reread.version == WatchSnapshot.currentVersion)
+        #expect(reread.nextSession?.detailLine == "Today · 52 min")
+    }
+
+    @Test("the next planned session expires with the day it names")
+    func nextSessionExpiring() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.firstWeekday = 2
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 9, day: 16, hour: 22)))
+        var snapshot = WatchSnapshot(streakWeeks: 3)
+        snapshot.coachLine = "Sessions are trending shorter"
+        snapshot.nextSession = NextPlannedSession(
+            routineName: "Push A", dayLabel: "Today", date: now, exerciseCount: 5, estimatedMinutes: 52
+        )
+        #expect(snapshot.expiring(at: now, calendar: calendar).nextSession != nil)
+
+        let midnight = calendar.startOfDay(for: now)
+        let tomorrow = try #require(calendar.date(byAdding: .day, value: 1, to: midnight))
+        let morning = snapshot.expiring(at: tomorrow, calendar: calendar)
+        #expect(morning.nextSession == nil)
+        #expect(morning.coachLine == "Sessions are trending shorter")
     }
 
     @Test("an empty or corrupt suite reads as the empty snapshot")

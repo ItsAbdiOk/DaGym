@@ -12,6 +12,13 @@ struct WatchHomeState {
     var routines: [RoutineInfo] = []
     var streakWeeks = 0
     var nextLabel: String?
+    /// The next planned session as a glance — today's routine when there is one, else the next
+    /// scheduled day — with its "Tomorrow"/"Wed" label and duration. Nil when nothing is planned.
+    var nextSession: NextPlannedSession?
+    /// The routine `nextSession` names, so the rest-day card can start it.
+    var nextSessionRoutineID: UUID?
+    /// The rules coach's top tip, one line (`CoachGlance.line`). Nil when it has nothing to say.
+    var coachLine: String?
     /// An unfinished workout this wrist may pick up (see `WatchStore.resumeGate`).
     var resumableWorkoutID: UUID?
     /// Where the resumable workout was started — `WatchStore.sourceDevice` for one of ours.
@@ -130,10 +137,23 @@ final class WatchStore {
         state.streakWeeks = Streaks.weekly(
             workoutDates: dates, weeklyGoal: WatchPreferences.weeklyGoal, calendar: calendar, now: now
         ).current
-        if let next = store.nextSession(calendar: calendar, now: now) {
+        let next = store.nextSession(calendar: calendar, now: now)
+        if let next {
             let day = next.date.formatted(.dateTime.weekday(.abbreviated))
             state.nextLabel = "\(next.routine.name) \(day)"
         }
+        if let routine = state.todaysRoutine {
+            state.nextSession = WatchSnapshotWriter.nextPlannedSession(
+                routine, on: now, now: now, calendar: calendar
+            )
+            state.nextSessionRoutineID = routine.id
+        } else if let next {
+            state.nextSession = WatchSnapshotWriter.nextPlannedSession(
+                next.routine, on: next.date, now: now, calendar: calendar
+            )
+            state.nextSessionRoutineID = next.routine.id
+        }
+        state.coachLine = coachLine(now: now, calendar: calendar)
         let unfinished = store.unfinishedWorkouts()
         state.unfinishedCount = unfinished.count
         if let unfinished = unfinished.first {
@@ -153,7 +173,18 @@ final class WatchStore {
         }
         home = state
         hasRefreshedHome = true
+        snapshots.coachLine = state.coachLine
         snapshots.refresh(rest: currentRest, rebuild: true, now: now, workoutDates: dates)
+    }
+
+    /// The "Coach says" line: the rules coach's top card, run over the synced history with the
+    /// same goal and calendar the streak uses. Ten rules over sixteen workouts is a few tens of
+    /// milliseconds on the wrist — once per Home refresh, never on the logging path.
+    private func coachLine(now: Date, calendar: Calendar) -> String? {
+        let interval = Self.signposter.beginInterval("coachLine")
+        defer { Self.signposter.endInterval("coachLine", interval) }
+        let cards = store.coachCards(weeklyGoal: WatchPreferences.weeklyGoal, now: now, calendar: calendar)
+        return CoachGlance.line(from: cards)
     }
 
     enum ResumeVerdict: Equatable {
