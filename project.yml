@@ -213,6 +213,13 @@ targets:
     platform: iOS
     sources:
       - path: DaGymTests
+        excludes:
+          - Fixtures
+      # Real stores written by past TestFlight builds (`UpgradePathTests`), copied into the test
+      # bundle verbatim as one folder reference so `Fixtures/Stores/<sha>/DaGym.store` is
+      # loadable by path.
+      - path: DaGymTests/Fixtures
+        type: folder
     dependencies:
       - target: DaGym
     settings:
