@@ -113,6 +113,7 @@ struct OpenRouterWireTests {
         let json = try #require(String(data: try encoder.encode(request), encoding: .utf8))
         #expect(json.contains(#""stream":true"#))
         #expect(json.contains(#""stream_options":{"include_usage":true}"#))
+        #expect(json.contains(#""usage":{"include":true}"#))
         #expect(json.contains(#""tool_choice":"none""#))
         #expect(json.contains(#""max_tokens":512"#))
         #expect(json.contains(#""role":"tool","tool_call_id":"call_1""#))

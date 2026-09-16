@@ -17,6 +17,9 @@ enum OpenRouterWire {
         var toolChoice: String?
         var stream = true
         var streamOptions: StreamOptions? = StreamOptions(includeUsage: true)
+        /// OpenRouter-specific: `{"include": true}` makes the final usage chunk carry `cost`
+        /// in credits, which the Settings usage panel shows instead of a list-price estimate.
+        var usage: UsageOptions? = UsageOptions(include: true)
         var maxTokens: Int?
         var temperature: Double?
         /// OpenRouter's unified reasoning control. `high`: choosing lifts for a two-day week
@@ -25,7 +28,7 @@ enum OpenRouterWire {
         var reasoning: Reasoning? = Reasoning(effort: "high")
 
         enum CodingKeys: String, CodingKey {
-            case model, messages, tools, stream, temperature, reasoning
+            case model, messages, tools, stream, temperature, reasoning, usage
             case toolChoice = "tool_choice"
             case streamOptions = "stream_options"
             case maxTokens = "max_tokens"
@@ -34,6 +37,10 @@ enum OpenRouterWire {
 
     struct Reasoning: Codable, Equatable, Sendable {
         var effort: String
+    }
+
+    struct UsageOptions: Codable, Equatable, Sendable {
+        var include: Bool
     }
 
     struct StreamOptions: Codable, Equatable, Sendable {
