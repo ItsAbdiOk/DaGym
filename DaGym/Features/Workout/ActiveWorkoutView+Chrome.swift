@@ -1,3 +1,4 @@
+import GymCore
 import SwiftUI
 
 /// "Chrome sheds on scroll" (mockups 02_00/02_01): scrolling down past a threshold condenses
@@ -17,14 +18,17 @@ extension ActiveWorkoutView {
     }
 
     /// The "…" next to FINISH: layout and session-level additions that don't belong on any one
-    /// exercise. Both layout toggles are remembered in `Preferences`.
+    /// exercise. The layout picker is a per-session override of `Preferences.workoutLayout`
+    /// (the saved default lives in Settings › Workout); the steppers toggle is remembered.
     var headerMenu: some View {
         @Bindable var prefs = preferences
         return Menu {
-            Toggle(
-                "Compact layout", systemImage: "rectangle.compress.vertical",
-                isOn: $prefs.compactWorkoutLayout
-            )
+            Picker("Layout", selection: layoutBinding) {
+                ForEach(WorkoutLayout.allCases) { layout in
+                    Label(layout.title, systemImage: layout.symbolName).tag(layout)
+                }
+            }
+            .pickerStyle(.menu)
             // `SetRow` has always read `showSetSteppers`, but nothing wrote it — the ± buttons
             // were unreachable. This is its home, next to the other layout switch.
             Toggle(
@@ -43,6 +47,11 @@ extension ActiveWorkoutView {
                 .dgGlass(.regular, in: Circle())
         }
         .accessibilityLabel("Workout options")
+    }
+
+    /// Reads the effective layout; writes only the session override.
+    private var layoutBinding: Binding<WorkoutLayout> {
+        Binding(get: { layout }, set: { layoutOverride = $0 })
     }
 
     // MARK: Expanded header

@@ -190,7 +190,7 @@ struct BackupCoverageTests {
         value.trainingGoal = "strength"
         value.deloadSnoozedUntil = Self.date
         value.accent = "teal"
-        (value.compactWorkoutLayout, value.showSetSteppers) = (true, true)
+        (value.compactWorkoutLayout, value.showSetSteppers, value.workoutLayout) = (true, true, "list")
         value.restPauseSeconds = 25
         value.workoutDayReminderEnabled = true
         value.workoutDayReminderHour = 9

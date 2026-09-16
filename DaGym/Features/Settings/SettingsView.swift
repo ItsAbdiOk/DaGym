@@ -19,6 +19,7 @@ struct SettingsView: View {
                     UnitsSettingsSection()
                     EffortSettingsSection()
                     RestTimerSettingsSection()
+                    WorkoutSettingsSection()
                     TrainingSettingsSection()
                     RemindersSettingsSection()
                     VoiceSettingsSection()

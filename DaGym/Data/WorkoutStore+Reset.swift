@@ -177,7 +177,7 @@ extension WorkoutStore {
         preferences.trainingGoal = .general
         preferences.deloadSnoozedUntil = nil
         preferences.accent = .coral
-        preferences.compactWorkoutLayout = false
+        preferences.workoutLayout = .cards
         preferences.showSetSteppers = false
         preferences.restPauseSeconds = 20
         preferences.workoutDayReminderEnabled = false

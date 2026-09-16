@@ -17,6 +17,7 @@ enum A11yID {
     static let tabCoach = "tab.coach"
 
     static let workoutFinish = "workout.finish"
+    static let settingsWorkoutLayout = "settings.workout.layout"
 
     /// `index` is the set's position within its exercise (0-based).
     static func setRowDone(_ index: Int) -> String { "setrow.done.\(index)" }

@@ -46,7 +46,10 @@ public struct BackupPreferences: Codable, Sendable {
     public var trainingGoal: String?
     public var deloadSnoozedUntil: Date?
     public var accent: String?
+    /// The pre-three-way "Compact layout" toggle; still written so older apps can restore it.
     public var compactWorkoutLayout: Bool?
+    /// `WorkoutLayout` raw value ("cards"/"list"/"compact"); nil in older backups.
+    public var workoutLayout: String?
     public var showSetSteppers: Bool?
     public var restPauseSeconds: Int?
     public var workoutDayReminderEnabled: Bool?

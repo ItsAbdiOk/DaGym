@@ -1,14 +1,16 @@
 import GymCore
 import SwiftUI
 
-/// One exercise in the active workout list. Renders one of three layouts:
-/// on-deck (full card with sets — `OnDeckExerciseCard`), collapsed incomplete row, or a
-/// completed one-liner (both in `ExerciseCardRows.swift`). See mockups 02_00 / 02_01 and
-/// design sheet 01_04.
+/// One exercise in the active workout list. In the Cards and Compact layouts it renders one of
+/// three states: on-deck (full card with sets — `OnDeckExerciseCard`), collapsed incomplete
+/// row, or a completed one-liner (both in `ExerciseCardRows.swift`). The List layout shows
+/// every exercise as a header row over all of its set rows (`ListExerciseSection`). See
+/// mockups 02_00 / 02_01 and design sheet 01_04.
 struct ExerciseCard: View {
     var entry: WorkoutExerciseEntry
     var isOnDeck: Bool
     var effortScale: Effort.Scale
+    var layout: WorkoutLayout = .cards
     var onTapWeight: (UUID) -> Void
     var onTapReps: (UUID) -> Void
     var onTapEffort: (UUID) -> Void
@@ -29,20 +31,77 @@ struct ExerciseCard: View {
     var inventory: ProgressionEquipment?
 
     var body: some View {
-        if entry.isComplete {
+        if layout == .list {
+            ListExerciseSection(
+                entry: entry, isOnDeck: isOnDeck, rows: rows(highlightsCurrent: isOnDeck),
+                onMore: onMore, onNote: onNote
+            )
+        } else if entry.isComplete {
             CompletedExerciseRow(entry: entry)
         } else if isOnDeck {
             OnDeckExerciseCard(
-                entry: entry, effortScale: effortScale, inventory: inventory,
-                onTapWeight: onTapWeight, onTapReps: onTapReps, onTapEffort: onTapEffort,
-                onToggleDone: onToggleDone, onMore: onMore, onStartTimed: onStartTimed,
-                onTapCardioField: onTapCardioField, onNote: onNote, onDeleteSet: onDeleteSet,
-                onChangeSetKind: onChangeSetKind, onInsertSet: onInsertSet,
-                onAdjustWeight: onAdjustWeight, onAdjustReps: onAdjustReps
+                entry: entry, layout: layout, inventory: inventory, rows: rows(highlightsCurrent: true),
+                onTapWeight: onTapWeight, onMore: onMore, onNote: onNote
             )
         } else {
             CollapsedExerciseRow(entry: entry, onStartTimed: onStartTimed)
         }
+    }
+
+    /// The one set-row stack every layout logs through.
+    private func rows(highlightsCurrent: Bool) -> ExerciseSetRows {
+        ExerciseSetRows(
+            entry: entry, effortScale: effortScale, highlightsCurrent: highlightsCurrent,
+            onTapWeight: onTapWeight, onTapReps: onTapReps, onTapEffort: onTapEffort,
+            onToggleDone: onToggleDone, onStartTimed: onStartTimed, onTapCardioField: onTapCardioField,
+            onDeleteSet: onDeleteSet, onChangeSetKind: onChangeSetKind, onInsertSet: onInsertSet,
+            onAdjustWeight: onAdjustWeight, onAdjustReps: onAdjustReps
+        )
+    }
+}
+
+/// The List layout's block for one exercise: a dense header row (name, done count, notes and
+/// more buttons) over every set row, with a hairline instead of card chrome — so a superset's
+/// members read as one continuous list.
+struct ListExerciseSection: View {
+    var entry: WorkoutExerciseEntry
+    var isOnDeck: Bool
+    var rows: ExerciseSetRows
+    var onMore: () -> Void
+    var onNote: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            rows.padding(.top, DGSpace.s2)
+        }
+        .padding(.bottom, DGSpace.s3)
+        .overlay(alignment: .bottom) { Divider().overlay(DGColor.hairline) }
+    }
+
+    private var header: some View {
+        HStack(spacing: DGSpace.s2) {
+            Text(entry.exercise.name)
+                .font(DGFont.title3)
+                .textCase(.uppercase)
+                .foregroundStyle(isOnDeck ? DGColor.coralText : DGColor.ink1)
+                .lineLimit(2)
+            if isOnDeck {
+                Text("On deck").dgLabel(DGColor.coralText)
+            }
+            Spacer(minLength: DGSpace.s2)
+            Text("\(entry.doneCount)/\(entry.sets.count)")
+                .dgMetric(DGFont.subhead)
+                .foregroundStyle(entry.isComplete ? DGColor.success : DGColor.ink3)
+                .accessibilityLabel("\(entry.doneCount) of \(entry.sets.count) sets done")
+            DGIconButton(
+                symbol: "text.bubble", size: 36, tint: DGColor.ink2, accessibilityLabel: "Notes",
+                action: onNote
+            )
+            DGIconButton(symbol: "ellipsis", size: 36, accessibilityLabel: "More options", action: onMore)
+        }
+        .frame(minHeight: DGTap.min)
+        .dgDenseType()
     }
 }
 

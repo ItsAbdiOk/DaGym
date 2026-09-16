@@ -1,4 +1,5 @@
 import Foundation
+import GymCore
 import SwiftUI
 
 /// `UserDefaults` key names and the small typed-read helpers `Preferences.init` uses to pull each
@@ -36,7 +37,9 @@ extension Preferences {
         static let deloadSnoozedUntil = "deloadSnoozedUntil"
         static let accent = "accent"
         static let colorBlindHeatmaps = "colorBlindHeatmaps"
+        /// The pre-three-way "Compact layout" toggle, read only to migrate into `workoutLayout`.
         static let compactWorkoutLayout = "compactWorkoutLayout"
+        static let workoutLayout = "workoutLayout"
         static let showSetSteppers = "showSetSteppers"
         static let restPauseSeconds = "restPauseSeconds"
         static let workoutDayReminderEnabled = "workoutDayReminderEnabled"
@@ -88,6 +91,14 @@ extension Preferences {
 
     static func boolValue(_ suite: UserDefaults, _ key: String, default value: Bool) -> Bool {
         suite.object(forKey: key) as? Bool ?? value
+    }
+
+    /// The saved layout, or the pre-three-way "Compact layout" toggle migrated when there is none.
+    static func workoutLayoutValue(_ suite: UserDefaults) -> WorkoutLayout {
+        WorkoutLayout(
+            stored: suite.string(forKey: Key.workoutLayout),
+            legacyCompact: boolValue(suite, Key.compactWorkoutLayout, default: false)
+        )
     }
 
     /// The stored second-opinion model: nil (never set) means the default, "" means off.
