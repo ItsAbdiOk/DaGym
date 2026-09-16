@@ -37,7 +37,7 @@ struct RoutinePruneTests {
         #expect(store.routines().count == 3)
     }
 
-    @Test("renamed, run, programmed, scheduled and date-overridden starters survive; the rest go")
+    @Test("renamed, edited, run, programmed, scheduled and date-overridden starters survive; the rest go")
     func keepsTouchedStarters() throws {
         let store = try makeStore(seed: .stocked)
         let preferences = Preferences(suite: makeSuite(#function))
@@ -53,16 +53,22 @@ struct RoutinePruneTests {
         ))
         let programmed = try #require(store.createProgram(from: .fiveByFive))
         let mine = store.saveRoutine(id: nil, name: "Arms", exercises: [])
+        // Edited days later under the same name: the lifter made it theirs.
+        let edited = try routine(store, named: "Lower A")
+        let editedModel = try #require(store.fetchRoutineModel(id: edited.id))
+        editedModel.updatedAt = editedModel.createdAt.addingTimeInterval(3 * 86_400)
         store.save()
 
         let pruned = RoutineSeeder.pruneUntouchedStartersOnce(store: store, preferences: preferences)
 
-        // 13 starters − Push A, Pull B, Legs, Upper A, 5×5 A/B/C = 6 pruned.
-        #expect(pruned == 6)
+        // 13 starters − Push A, Pull B, Legs, Upper A, Lower A, 5×5 A/B/C = 5 pruned.
+        #expect(pruned == 5)
         let survivors = Set(store.routines().map(\.id))
-        let expected = Set([renamed.id, run.id, scheduled.id, overridden.id, mine.id] + programmed.routineIDs)
+        let expected = Set(
+            [renamed.id, run.id, scheduled.id, overridden.id, mine.id, edited.id] + programmed.routineIDs
+        )
         #expect(survivors == expected)
-        let gone = ["Lower A", "Upper B", "Lower B", "Full Body A"]
+        let gone = ["Upper B", "Lower B", "Full Body A"]
         #expect(!store.routines().contains { gone.contains($0.name) })
     }
 

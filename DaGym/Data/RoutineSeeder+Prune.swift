@@ -47,7 +47,10 @@ extension RoutineSeeder {
         let candidates = store.fetch(FetchDescriptor<RoutineModel>()).filter { model in
             guard !model.isMergedAway, let importedFromID = model.importedFromID,
                   let starterName = nameByID[importedFromID] else { return false }
-            return model.name == starterName
+            // An edit stamps `updatedAt` (`WorkoutStore+Routines`); a seeded row keeps both
+            // dates within the same launch. Five minutes leaves room for a slow first seed.
+            let edited = model.updatedAt.timeIntervalSince(model.createdAt) > 5 * 60
+            return model.name == starterName && !edited
         }
         guard !candidates.isEmpty else { return [] }
         let referenced = referencedRoutineIDs(store: store)
