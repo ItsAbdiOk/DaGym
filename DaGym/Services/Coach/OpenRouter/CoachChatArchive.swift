@@ -54,6 +54,11 @@ struct CoachChatArchive: Sendable {
         decode(at: fileURL(for: id))
     }
 
+    /// The week-review thread filed under `weekKey` (`CoachWeekReview.weekKey`), if any.
+    func weekReviewThread(weekKey: String) -> CoachChatThread? {
+        threads().first { $0.kind == .weekReview && $0.weekReviewKey == weekKey }
+    }
+
     private func decode(at url: URL) -> CoachChatThread? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         do {

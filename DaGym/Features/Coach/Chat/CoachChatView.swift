@@ -6,6 +6,9 @@ import SwiftUI
 /// threads. `CoachChatEngine` owns the conversation; this screen owns what it alone knows —
 /// which draft cards were applied or discarded, the undo toast, and the error banner.
 struct CoachChatView: View {
+    /// nil opens the newest thread; a week review opens (or starts) that week's review thread.
+    var launch: CoachChatLaunch?
+
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
     @Environment(\.dismiss) private var dismiss
@@ -58,7 +61,7 @@ struct CoachChatView: View {
         }
         .dgUndoToast($undoAction)
         .sheet(isPresented: $showingSettings) { SettingsView() }
-        .task { openNewest() }
+        .task { openLaunch() }
         .onDisappear { engine?.cancel() }
     }
 
@@ -158,11 +161,24 @@ struct CoachChatView: View {
         .accessibilityIdentifier(A11yID.coachChatThreadMenu)
     }
 
-    /// Opens the newest saved thread, or a fresh one when there is none.
-    private func openNewest() {
+    /// Opens what the screen was launched for: the newest saved thread (or a fresh one), or the
+    /// week's review thread — started with the canned turn when it does not exist yet.
+    private func openLaunch() {
         threads = archive?.list() ?? []
-        let newest = threads.first.flatMap { archive?.load(id: $0.id) }
-        open(thread: newest)
+        switch launch {
+        case nil:
+            open(thread: threads.first.flatMap { archive?.load(id: $0.id) })
+        case .weekReview(let weekEnding, let threadID):
+            open(thread: threadID.flatMap { archive?.load(id: $0) })
+            guard threadID == nil, isReady, let engine else { return }
+            let calendar = preferences.trainingCalendar
+            preferences.coachWeekReviewLastKey = CoachWeekReview.weekKey(now: weekEnding, calendar: calendar)
+            lastSent = CoachWeekReviewPrompt.userTurn(weekEnding: weekEnding, calendar: calendar)
+            Task {
+                await engine.startWeekReview(weekEnding: weekEnding, calendar: calendar)
+                threads = archive?.list() ?? []
+            }
+        }
     }
 
     private func open(thread: CoachChatThread?) {

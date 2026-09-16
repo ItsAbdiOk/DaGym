@@ -28,6 +28,8 @@ final class CoachChatEngine {
     private(set) var isStreaming = false
     private(set) var lastError: OpenRouterError?
     private(set) var usage: CoachChatUsage
+    private(set) var kind: CoachChatThreadKind
+    private(set) var weekReviewKey: String?
 
     let client: OpenRouterClient
     let executor: any CoachChatToolExecutor
@@ -81,6 +83,8 @@ final class CoachChatEngine {
         draftOrigins = restoredDrafts.indices.map { origins.indices.contains($0) ? origins[$0] : .drafter }
         reviews = thread?.reviews ?? []
         usage = thread?.usage ?? CoachChatUsage()
+        kind = thread?.kind ?? .chat
+        weekReviewKey = thread?.weekReviewKey
         wire = Self.wireTranscript(from: messages)
     }
 
@@ -88,7 +92,8 @@ final class CoachChatEngine {
     func snapshot() -> CoachChatThread {
         CoachChatThread(
             id: threadID, createdAt: createdAt, updatedAt: messages.last?.sentAt ?? createdAt,
-            messages: messages, drafts: drafts, draftOrigins: draftOrigins, reviews: reviews, usage: usage
+            messages: messages, drafts: drafts, draftOrigins: draftOrigins, reviews: reviews, usage: usage,
+            kind: kind, weekReviewKey: weekReviewKey
         )
     }
 
@@ -307,6 +312,22 @@ final class CoachChatEngine {
             case .tool, .draft, .review: nil
             }
         }
+    }
+}
+
+// MARK: - Week review
+
+extension CoachChatEngine {
+    /// Turns a fresh thread into the Sunday check-in and sends the canned turn
+    /// (`CoachWeekReviewPrompt.userTurn`), which runs through the ordinary loop — tools,
+    /// proposals, second opinion. The thread is filed at once so Home sees it as started even
+    /// if the reply never lands. A thread that already has messages is left alone.
+    func startWeekReview(weekEnding: Date, calendar: Calendar) async {
+        guard messages.isEmpty, !isStreaming else { return }
+        kind = .weekReview
+        weekReviewKey = DateKey.string(for: weekEnding, calendar: calendar)
+        persist()
+        await send(CoachWeekReviewPrompt.userTurn(weekEnding: weekEnding, calendar: calendar))
     }
 }
 

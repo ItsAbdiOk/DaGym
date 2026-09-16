@@ -170,6 +170,13 @@ enum CoachChatDraftOrigin: String, Codable, Equatable, Sendable {
     case drafter, reviewer
 }
 
+/// What a thread is: a conversation the lifter started, or the Sunday check-in Home offers.
+enum CoachChatThreadKind: String, Codable, Equatable, Sendable {
+    case chat
+    /// The canned week review; `weekReviewKey` says which week.
+    case weekReview = "week_review"
+}
+
 /// One conversation, as persisted by `CoachChatArchive` and restored into a `CoachChatEngine`.
 struct CoachChatThread: Identifiable, Codable, Equatable, Sendable {
     var id: UUID
@@ -181,11 +188,15 @@ struct CoachChatThread: Identifiable, Codable, Equatable, Sendable {
     var draftOrigins: [CoachChatDraftOrigin] = []
     var reviews: [CoachChatReview] = []
     var usage = CoachChatUsage()
+    var kind: CoachChatThreadKind = .chat
+    /// `CoachWeekReview.weekKey` for a `.weekReview` thread; nil otherwise.
+    var weekReviewKey: String?
 
     init(
         id: UUID, createdAt: Date, updatedAt: Date, messages: [CoachChatMessage] = [],
         drafts: [CoachChatDraft] = [], draftOrigins: [CoachChatDraftOrigin] = [],
-        reviews: [CoachChatReview] = [], usage: CoachChatUsage = CoachChatUsage()
+        reviews: [CoachChatReview] = [], usage: CoachChatUsage = CoachChatUsage(),
+        kind: CoachChatThreadKind = .chat, weekReviewKey: String? = nil
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -195,10 +206,12 @@ struct CoachChatThread: Identifiable, Codable, Equatable, Sendable {
         self.draftOrigins = draftOrigins
         self.reviews = reviews
         self.usage = usage
+        self.kind = kind
+        self.weekReviewKey = weekReviewKey
     }
 
-    /// `draftOrigins` and `reviews` are missing from threads archived before the second
-    /// opinion existed; everything else was always written.
+    /// `draftOrigins`, `reviews` and `kind` are missing from threads archived before the second
+    /// opinion and the week review existed; everything else was always written.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -209,6 +222,8 @@ struct CoachChatThread: Identifiable, Codable, Equatable, Sendable {
         draftOrigins = try container.decodeIfPresent([CoachChatDraftOrigin].self, forKey: .draftOrigins) ?? []
         reviews = try container.decodeIfPresent([CoachChatReview].self, forKey: .reviews) ?? []
         usage = try container.decodeIfPresent(CoachChatUsage.self, forKey: .usage) ?? CoachChatUsage()
+        kind = try container.decodeIfPresent(CoachChatThreadKind.self, forKey: .kind) ?? .chat
+        weekReviewKey = try container.decodeIfPresent(String.self, forKey: .weekReviewKey)
     }
 
     /// Who wrote `drafts[index]`.
@@ -216,8 +231,15 @@ struct CoachChatThread: Identifiable, Codable, Equatable, Sendable {
         draftOrigins.indices.contains(index) ? draftOrigins[index] : .drafter
     }
 
-    /// The first user message, trimmed to a line, for the thread list.
+    /// The coach's first real reply (not a note), for the week-review card's headline.
+    var firstReply: String? {
+        messages.first { $0.role == .assistant && $0.isNote != true && !$0.text.isEmpty }?.text
+    }
+
+    /// The first user message, trimmed to a line, for the thread list; a week review is named
+    /// by its week instead of by the canned turn.
     var title: String {
+        if kind == .weekReview { return "Week review · \(weekReviewKey ?? "")" }
         guard let first = messages.first(where: { $0.role == .user })?.text else { return "New chat" }
         let line = first.split(whereSeparator: \.isNewline).first.map(String.init) ?? first
         return line.count > 60 ? String(line.prefix(57)) + "…" : line

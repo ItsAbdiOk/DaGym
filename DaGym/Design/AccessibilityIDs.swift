@@ -8,6 +8,7 @@ import Foundation
 enum A11yID {
     static let homeStart = "home.start"
     static let homeFreestyle = "home.freestyle"
+    static let homeWeekReview = "home.weekReview"
 
     static let tabToday = "tab.today"
     static let tabRoutines = "tab.routines"
