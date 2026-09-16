@@ -48,9 +48,12 @@ enum CoachChatEngineFactory {
         return configuration
     }
 
-    /// Applies a draft; nil when the store refused it (its target routine is gone).
-    static func apply(_ draft: CoachChatDraft, store: WorkoutStore) -> CoachChatApplication? {
-        try? store.apply(draft)
+    /// Applies a draft; nil when the store refused it (its target routine is gone). `reasoning`
+    /// is the reply kept as the routine note, when the card's switch is on.
+    static func apply(
+        _ draft: CoachChatDraft, reasoning: String? = nil, store: WorkoutStore
+    ) -> CoachChatApplication? {
+        try? store.apply(draft, reasoning: reasoning)
     }
 
     static func undo(_ application: CoachChatApplication, store: WorkoutStore) {

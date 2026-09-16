@@ -26,10 +26,15 @@ struct CoachChatView: View {
     @State private var notice: CoachChatErrorCopy.Banner?
     /// Long replies the lifter opened out; everything else past the latest turn stays folded.
     @State private var expandedMessageIDs: Set<UUID> = []
-    /// "Copied" after a long-press Copy.
+    /// "Copied", "Saved to Bench Press notes" or "Remembered" after a long-press action.
     @State private var toast: String?
+    /// The lifter's library, read once per open so each bubble can say which exercises it names.
+    @State private var library: [SubstitutionCandidate] = []
+    /// Draft cards whose "Keep the coach's reasoning" switch the lifter turned off.
+    @State private var reasoningOff: Set<Int> = []
 
     private let archive = CoachChatArchive.standard()
+    private let memory = CoachMemoryFile.standard()
 
     var body: some View {
         NavigationStack {
@@ -128,15 +133,25 @@ struct CoachChatView: View {
                 onApply: { apply(draft, at: index) }, onDiscard: { discard(at: index) },
                 onCopy: {
                     copy(CoachDraftDetail.copyText(for: draft, formatWeight: preferences.formatWeight))
-                }
+                },
+                saveTargets: CoachChatSaveTargets.forDraft(draft), onSave: save,
+                keepsReasoning: draft.createsRoutine ? keepsReasoningBinding(for: index) : nil
             )
         } else {
             CoachChatMessageRow(
                 message: message, review: review(for: message), canFold: canFold,
                 isExpanded: isExpandedBinding(for: message.id),
-                onCopy: { copy(CoachMarkdown.plainText(message.text)) }
+                onCopy: { copy(CoachMarkdown.plainText(message.text)) },
+                saveTargets: CoachChatSaveTargets.forReply(message.text, library: library), onSave: save
             )
         }
+    }
+
+    private func keepsReasoningBinding(for index: Int) -> Binding<Bool> {
+        Binding(
+            get: { !reasoningOff.contains(index) },
+            set: { if $0 { reasoningOff.remove(index) } else { reasoningOff.insert(index) } }
+        )
     }
 
     private func isExpandedBinding(for id: UUID) -> Binding<Bool> {
@@ -152,6 +167,13 @@ struct CoachChatView: View {
         toast = "Copied"
     }
 
+    private func save(_ target: CoachChatSaveTarget) {
+        let threadID = engine?.threadID
+        guard CoachChatSaver.save(target, store: store, memory: memory, threadID: threadID) else { return }
+        Haptics.confirm()
+        toast = target.toast
+    }
+
     private func review(for message: CoachChatMessage) -> CoachChatReview? {
         message.reviewIndex.flatMap { engine?.reviews[safe: $0] }
     }
@@ -159,33 +181,11 @@ struct CoachChatView: View {
     // MARK: - Threads
 
     private var threadMenu: some View {
-        Menu {
-            Button { open(thread: nil) } label: { Label("New chat", systemImage: "plus") }
-            if !threads.isEmpty {
-                Section("Recent") {
-                    ForEach(threads.prefix(10)) { summary in
-                        Button {
-                            open(thread: archive?.load(id: summary.id))
-                        } label: {
-                            if summary.id == engine?.threadID {
-                                Label(summary.title, systemImage: "checkmark")
-                            } else {
-                                Text(summary.title)
-                            }
-                        }
-                    }
-                }
-            }
-            if let engine, !engine.messages.isEmpty {
-                Button(role: .destructive, action: deleteCurrent) {
-                    Label("Delete this chat", systemImage: "trash")
-                }
-            }
-        } label: {
-            Image(systemName: "ellipsis.circle")
-                .accessibilityLabel("Chats")
-        }
-        .accessibilityIdentifier(A11yID.coachChatThreadMenu)
+        CoachChatThreadMenu(
+            threads: threads, currentID: engine?.threadID, canDelete: engine?.messages.isEmpty == false,
+            onNew: { open(thread: nil) }, onOpen: { open(thread: archive?.load(id: $0)) },
+            onDelete: deleteCurrent
+        )
     }
 
     /// Opens what the screen was launched for: the newest saved thread (or a fresh one), or the
@@ -211,7 +211,9 @@ struct CoachChatView: View {
     private func open(thread: CoachChatThread?) {
         engine?.cancel()
         engine = CoachChatEngineFactory.make(thread: thread, store: store, preferences: preferences)
+        library = store.substitutionCandidates()
         cardStates = [:]
+        reasoningOff = []
         expandedMessageIDs = []
         dismissedError = nil
         lastSent = nil
@@ -256,9 +258,12 @@ struct CoachChatView: View {
     /// Applies through the store and offers Undo, like Approve on the rule cards. A refusal
     /// (the routine it targets is gone) leaves the card proposed and says so in the toast.
     /// The card's linked pair (the drafter's or the reviewer's version of the same proposal)
-    /// settles as "Not chosen"; Undo brings both back.
+    /// settles as "Not chosen"; Undo brings both back. A routine or program card with "Keep
+    /// the coach's reasoning" on carries the reply that came with it into the routine note.
     private func apply(_ draft: CoachChatDraft, at index: Int) {
-        guard let application = CoachChatEngineFactory.apply(draft, store: store) else {
+        let reasoning = draft.createsRoutine && !reasoningOff.contains(index)
+            ? CoachChatTranscript.reasoning(forDraftAt: index, in: engine?.messages ?? []) : nil
+        guard let application = CoachChatEngineFactory.apply(draft, reasoning: reasoning, store: store) else {
             notice = CoachChatErrorCopy.applyRefused
             return
         }

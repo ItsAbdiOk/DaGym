@@ -101,14 +101,17 @@ extension WorkoutStore {
 
     /// Saves a validated draft through the same paths the routine builder, the program
     /// generator, the schedule screen and the review cards use. Throws when the draft's target
-    /// routine or exercise has gone since it was proposed.
-    func apply(_ draft: CoachChatDraft) throws -> CoachChatApplication {
+    /// routine or exercise has gone since it was proposed. `reasoning` is the coach's reply
+    /// that accompanied a routine or program card; when given it is kept as the routine's note
+    /// (after the proposal's own notes) and each exercise's `reason` becomes that slot's note,
+    /// so the why travels with the routine. Undo deletes the routine, notes and all.
+    func apply(_ draft: CoachChatDraft, reasoning: String? = nil) throws -> CoachChatApplication {
         switch draft {
         case .routine(let proposal):
-            let routine = try saveRoutine(from: proposal)
+            let routine = try saveRoutine(from: proposal, reasoning: reasoning)
             return .routine(id: routine.id, name: routine.name)
         case .program(let proposal):
-            return .program(try applyProgram(proposal))
+            return .program(try applyProgram(proposal, reasoning: reasoning))
         case .schedule(let proposal):
             return .schedule(try applySchedule(proposal))
         case .deload(let proposal):
@@ -129,23 +132,39 @@ extension WorkoutStore {
 
     // MARK: - Routine
 
-    private func saveRoutine(from proposal: RoutineProposal) throws -> RoutineInfo {
-        let drafts = try proposal.exercises.map(Self.exerciseDraft)
+    /// The most of a reply a routine note keeps; a routine note is read on a card, not a page.
+    static let maxReasoningLength = 1_000
+
+    private func saveRoutine(from proposal: RoutineProposal, reasoning: String? = nil) throws -> RoutineInfo {
+        let keepsReasons = reasoning != nil
+        let drafts = try proposal.exercises.map { try Self.exerciseDraft($0, keepsReason: keepsReasons) }
         let reps = proposal.exercises.flatMap(\.sets).filter { $0.kind.countsTowardStats }.map(\.targetReps)
         let low = reps.min() ?? 6
         let high = reps.max() ?? max(8, low)
         let rule = proposal.rule.map { $0.progressionRule() }
         return saveRoutine(
-            id: nil, name: proposal.name, notes: proposal.notes ?? "",
+            id: nil, name: proposal.name, notes: Self.routineNotes(proposal.notes, reasoning: reasoning),
             progressionRule: rule.map(Self.ruleKey) ?? "doubleProgression",
             repRangeLow: low, repRangeHigh: high, rule: rule, exercises: drafts
         )
     }
 
-    private static func exerciseDraft(_ spec: CoachChatExerciseSpec) throws -> RoutineExerciseDraft {
+    /// The proposal's own notes, then the coach's reasoning (trimmed, cut to
+    /// `maxReasoningLength`), a blank line between when both are there.
+    static func routineNotes(_ notes: String?, reasoning: String?) -> String {
+        let trimmedReasoning = reasoning?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let kept = trimmedReasoning.count > maxReasoningLength
+            ? String(trimmedReasoning.prefix(maxReasoningLength - 1)) + "…" : trimmedReasoning
+        return [notes ?? "", kept].filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
+
+    private static func exerciseDraft(
+        _ spec: CoachChatExerciseSpec, keepsReason: Bool = false
+    ) throws -> RoutineExerciseDraft {
         guard let exerciseID = spec.exerciseID else { throw CoachChatApplyError.notValidated }
         return RoutineExerciseDraft(
             exerciseID: exerciseID, supersetGroup: spec.supersetGroup, restOverrideSeconds: spec.restSeconds,
+            note: keepsReason ? spec.reason ?? "" : "",
             sets: spec.sets.map { set in
                 PlannedSetDraft(
                     kind: set.kind, targetReps: set.targetReps, targetWeightKg: set.targetWeightKg,
@@ -159,8 +178,11 @@ extension WorkoutStore {
 
     /// A template program goes through the generator's own picker and `applyProgramDraft`; one
     /// with routines spelled out saves each routine and wraps them in a `ProgramModel` the way
-    /// `applyProgramDraft` does (one deload week closing the cycle).
-    private func applyProgram(_ proposal: ProgramProposal) throws -> GeneratedProgramApplication {
+    /// `applyProgramDraft` does (one deload week closing the cycle). `reasoning` lands on each
+    /// spelled-out routine (a program has no note of its own); a template program keeps none.
+    private func applyProgram(
+        _ proposal: ProgramProposal, reasoning: String? = nil
+    ) throws -> GeneratedProgramApplication {
         if proposal.usesTemplate {
             let request = ProgramRequest(
                 goal: proposal.goal, daysPerWeek: proposal.daysPerWeek,
@@ -182,7 +204,7 @@ extension WorkoutStore {
         var routineIDs: [UUID] = []
         do {
             for routine in proposal.routines {
-                routineIDs.append(try saveRoutine(from: routine).id)
+                routineIDs.append(try saveRoutine(from: routine, reasoning: reasoning).id)
             }
         } catch {
             routineIDs.forEach(deleteRoutine)

@@ -13,6 +13,9 @@ struct CoachChatMessageRow: View {
     var canFold = false
     @Binding var isExpanded: Bool
     var onCopy: () -> Void = {}
+    /// Where the words can be kept besides the clipboard; the screen works these out per bubble.
+    var saveTargets: [CoachChatSaveTarget] = []
+    var onSave: (CoachChatSaveTarget) -> Void = { _ in }
 
     var body: some View {
         switch message.role {
@@ -23,15 +26,33 @@ struct CoachChatMessageRow: View {
             } else {
                 CoachAssistantBubble(
                     text: message.text, isStopped: message.isStopped, canFold: canFold,
-                    isExpanded: $isExpanded, onCopy: onCopy
+                    isExpanded: $isExpanded, onCopy: onCopy, saveTargets: saveTargets, onSave: onSave
                 )
             }
         case .tool: CoachToolChip(label: message.text, failed: message.isToolError)
         case .draft: EmptyView()
         case .review:
             CoachReviewRow(
-                text: message.text, review: review, canFold: canFold, isExpanded: $isExpanded, onCopy: onCopy
+                text: message.text, review: review, canFold: canFold, isExpanded: $isExpanded, onCopy: onCopy,
+                saveTargets: saveTargets, onSave: onSave
             )
+        }
+    }
+}
+
+/// The long-press menu every coach bubble and card shares: Copy, then one "Save as note for
+/// <Exercise>" per exercise the text names, then "Remember this". Each item says where the
+/// text ends up for VoiceOver.
+struct CoachChatSaveMenu: View {
+    var targets: [CoachChatSaveTarget]
+    var onCopy: () -> Void
+    var onSave: (CoachChatSaveTarget) -> Void
+
+    var body: some View {
+        Button("Copy", systemImage: "doc.on.doc", action: onCopy)
+        ForEach(targets) { target in
+            Button(target.menuLabel, systemImage: target.symbol) { onSave(target) }
+                .accessibilityLabel(target.accessibilityLabel)
         }
     }
 }
@@ -46,6 +67,8 @@ struct CoachReviewRow: View {
     var canFold = false
     @Binding var isExpanded: Bool
     var onCopy: () -> Void = {}
+    var saveTargets: [CoachChatSaveTarget] = []
+    var onSave: (CoachChatSaveTarget) -> Void = { _ in }
 
     var body: some View {
         HStack(alignment: .top, spacing: DGSpace.s2) {
@@ -73,7 +96,7 @@ struct CoachReviewRow: View {
         .frame(minHeight: 28)
         .contextMenu {
             if !text.isEmpty {
-                Button("Copy", systemImage: "doc.on.doc", action: onCopy)
+                CoachChatSaveMenu(targets: saveTargets, onCopy: onCopy, onSave: onSave)
             }
         }
         .accessibilityElement(children: .contain)
@@ -122,7 +145,8 @@ struct CoachUserBubble: View {
 }
 
 /// The coach's words. Markdown-lite rendered by `CoachFoldedText`, which also folds a long
-/// reply; long-press offers Copy (plain text, markers stripped). The bubble is one VoiceOver
+/// reply; long-press offers Copy (plain text, markers stripped), a note on each exercise the
+/// reply names, and "Remember this" (`CoachChatSaveMenu`). The bubble is one VoiceOver
 /// container: the text's own elements (a paragraph, each list item) read in order, then the
 /// "stopped" marker and the Show more button.
 struct CoachAssistantBubble: View {
@@ -131,6 +155,8 @@ struct CoachAssistantBubble: View {
     var canFold = false
     @Binding var isExpanded: Bool
     var onCopy: () -> Void = {}
+    var saveTargets: [CoachChatSaveTarget] = []
+    var onSave: (CoachChatSaveTarget) -> Void = { _ in }
 
     var body: some View {
         HStack {
@@ -155,7 +181,7 @@ struct CoachAssistantBubble: View {
             .dgCard(padding: 0)
             .contextMenu {
                 if !text.isEmpty {
-                    Button("Copy", systemImage: "doc.on.doc", action: onCopy)
+                    CoachChatSaveMenu(targets: saveTargets, onCopy: onCopy, onSave: onSave)
                 }
             }
             Spacer(minLength: DGSpace.s8)
