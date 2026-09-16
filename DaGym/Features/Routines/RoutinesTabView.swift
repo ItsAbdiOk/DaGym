@@ -12,6 +12,8 @@ struct RoutinesTabView: View {
     @State private var activeProfile: EquipmentProfileInfo?
     @State private var path = NavigationPath()
     @State private var askingCoach = false
+    /// The "Load a starter plan" sheet — the same `StarterPlanList` Home's empty-state card shows.
+    @State private var pickingStarterPlan = false
 
     private enum Destination: Hashable {
         case edit(UUID)
@@ -56,6 +58,9 @@ struct RoutinesTabView: View {
             .refreshOnStoreChange(refresh)
         }
         .askCoach(on: $askingCoach)
+        .sheet(isPresented: $pickingStarterPlan) {
+            StarterPlanPickerSheet(onPick: adoptStarterPlan)
+        }
         .dgWarmHaptics()
     }
 
@@ -99,13 +104,16 @@ struct RoutinesTabView: View {
     private var list: some View {
         if routines.isEmpty {
             // The app ships no routines. The two real paths: the coach builds one from a
-            // sentence, or Programs seeds a starter plan; "+" above builds one by hand.
+            // sentence, or a starter plan seeds its routines and starts the program (the same
+            // picker Home's empty card shows); "+" above builds one by hand.
             EmptyState(
                 symbol: "dumbbell", title: "No Routines Yet",
-                message: "Ask the coach to build one for you, pick a starter plan under Programs, "
+                message: "Ask the coach to build one for you, load a starter plan, "
                     + "or tap + to build your own.",
-                action: "Ask the Coach", onAction: { askingCoach = true }
+                action: "Ask the Coach", onAction: { askingCoach = true },
+                secondaryAction: "Load a starter plan", onSecondaryAction: { pickingStarterPlan = true }
             )
+            .accessibilityIdentifier(A11yID.routinesStarterPlan)
         } else {
             ForEach(routines) { routine in
                 // Share and Start sit *over* the card button, never inside its label: a button
@@ -148,6 +156,13 @@ struct RoutinesTabView: View {
     private func missingEquipment(for routine: RoutineInfo) -> [String] {
         guard let activeProfile, activeProfile.restrictsLibrary else { return [] }
         return routine.needs(outside: activeProfile.availability).displayNames
+    }
+
+    /// Seeds the plan's routines and starts its program, exactly as Home's card does
+    /// (`WorkoutStore.adoptStarterPlan`); `refresh` fills this tab with the new routines.
+    private func adoptStarterPlan(_ kind: StarterProgramKind) {
+        store.adoptStarterPlan(kind)
+        refresh()
     }
 
     private func duplicate(_ routine: RoutineInfo) {

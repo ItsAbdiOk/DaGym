@@ -101,14 +101,7 @@ extension WorkoutStore {
     @discardableResult
     func createProgram(from kind: StarterProgramKind) -> ProgramInfo? {
         RoutineSeeder.seedStarters(kind.routineNames, store: self)
-        let live = fetch(FetchDescriptor<RoutineModel>()).filter { !$0.isMergedAway }
-        let routineIDs = kind.routineNames.compactMap { name -> UUID? in
-            let byStarterID = RoutineSeeder.starterIDs[name].flatMap { id in
-                live.first { $0.importedFromID == id }
-            }
-            return (byStarterID ?? live.first { $0.name == name })?.id
-        }
-        guard routineIDs.count == kind.routineNames.count else { return nil }
+        guard let routineIDs = starterRoutineIDs(for: kind) else { return nil }
         let model = ProgramModel(name: kind.rawValue, weeks: kind.weeks)
         model.routineIDs = routineIDs
         context.insert(model)
@@ -119,6 +112,44 @@ extension WorkoutStore {
         }
         save()
         return programInfo(model)
+    }
+
+    /// The one-tap "pick a starter plan" both empty states run (Home's card, the Routines tab):
+    /// `kind`'s program, created and started. Picking the same plan twice — from Home, then
+    /// from Routines — reuses the program that first pick made rather than stacking a second
+    /// "Push/Pull/Legs" in Programs: an unfinished program named for the kind, cycling exactly
+    /// the routines `createProgram(from:)` would resolve now, is started again instead. Nil when
+    /// the plan can't be built (see `createProgram(from:)`).
+    @discardableResult
+    func adoptStarterPlan(_ kind: StarterProgramKind, now: Date = Date()) -> ProgramInfo? {
+        if let existing = existingStarterProgram(kind) {
+            return startProgram(id: existing.id, now: now)
+        }
+        guard let program = createProgram(from: kind) else { return nil }
+        return startProgram(id: program.id, now: now)
+    }
+
+    /// The live routine each of `kind`'s days resolves to, in day order — by starter id first
+    /// (a renamed or edited copy still counts), then by name; nil when any day is missing.
+    private func starterRoutineIDs(for kind: StarterProgramKind) -> [UUID]? {
+        let live = fetch(FetchDescriptor<RoutineModel>()).filter { !$0.isMergedAway }
+        let routineIDs = kind.routineNames.compactMap { name -> UUID? in
+            let byStarterID = RoutineSeeder.starterIDs[name].flatMap { id in
+                live.first { $0.importedFromID == id }
+            }
+            return (byStarterID ?? live.first { $0.name == name })?.id
+        }
+        return routineIDs.count == kind.routineNames.count ? routineIDs : nil
+    }
+
+    private func existingStarterProgram(_ kind: StarterProgramKind) -> ProgramModel? {
+        guard let routineIDs = starterRoutineIDs(for: kind) else { return nil }
+        let name = kind.rawValue
+        let descriptor = FetchDescriptor<ProgramModel>(
+            predicate: #Predicate { $0.name == name && $0.completedAt == nil },
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        return fetch(descriptor).first { $0.routineIDs == routineIDs }
     }
 
     /// Starts a program, deactivating every other one — only one can be active at a time.

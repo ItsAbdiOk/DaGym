@@ -84,6 +84,9 @@ enum A11yID {
     static let historyList = "history.list"
     static let historyRow0 = "history.row.0"
     static let historyNote = "history.note"
+    static let routinesStarterPlan = "routines.starterPlan"
+    /// `name` is the `StarterProgramKind` raw value ("Push/Pull/Legs").
+    static func starterPlan(_ name: String) -> String { "starterPlan.\(name)" }
 
     static let onboardingNext = "onboarding.next"
     static let onboardingSkip = "onboarding.skip"

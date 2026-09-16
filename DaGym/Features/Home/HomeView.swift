@@ -98,8 +98,7 @@ struct HomeView: View {
     /// Builds and starts `kind`'s starter program in one tap (Home's empty-state card) —
     /// `store.changeToken` refreshes this view, `RootView` and the widget once it lands.
     private func pickStarterPlan(_ kind: StarterProgramKind) {
-        guard let program = store.createProgram(from: kind) else { return }
-        store.startProgram(id: program.id)
+        store.adoptStarterPlan(kind)
     }
 
     private func clearSampleData() {

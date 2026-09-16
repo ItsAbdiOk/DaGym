@@ -226,13 +226,16 @@ struct WhyCard: View {
     }
 }
 
-/// Names the missing thing, says what unlocks it, offers exactly one action.
+/// Names the missing thing, says what unlocks it, offers one action — and at most one quieter
+/// alternative (`secondaryAction`), a glass pill under the coral one.
 struct EmptyState: View {
     var symbol: String?
     var title: String
     var message: String
     var action: String?
     var onAction: (() -> Void)?
+    var secondaryAction: String?
+    var onSecondaryAction: (() -> Void)?
 
     var body: some View {
         VStack(spacing: DGSpace.s3) {
@@ -260,6 +263,19 @@ struct EmptyState: View {
             if let action {
                 DGPrimaryButton(title: action) { onAction?() }
                     .padding(.top, DGSpace.s2)
+            }
+            if let secondaryAction {
+                Button { onSecondaryAction?() } label: {
+                    Text(secondaryAction)
+                        .font(DGFont.condensedLabel(13))
+                        .tracking(1.2)
+                        .textCase(.uppercase)
+                        .foregroundStyle(DGColor.ink1)
+                        .padding(.horizontal, DGSpace.s4)
+                        .frame(minHeight: 40)
+                        .dgGlass(.regular, in: Capsule())
+                }
+                .buttonStyle(.dgControl)
             }
         }
         .frame(maxWidth: .infinity)

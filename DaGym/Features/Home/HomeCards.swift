@@ -23,26 +23,7 @@ struct StarterPlanCard: View {
             DGPrimaryButton(
                 title: "Ask the Coach", symbol: "bubble.left.and.text.bubble.right", action: onAskCoach
             )
-            VStack(spacing: DGSpace.s2) {
-                ForEach(StarterProgramKind.allCases) { kind in
-                    Button { onPick(kind) } label: {
-                        HStack {
-                            Text(kind.rawValue).font(DGFont.body).foregroundStyle(DGColor.ink1)
-                            Spacer()
-                            Image(systemName: "chevron.right").accessibilityHidden(true)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(DGColor.ink4)
-                        }
-                        .padding(.horizontal, DGSpace.s4)
-                        .frame(minHeight: 48)
-                        .background(
-                            DGColor.surface1,
-                            in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
-                        )
-                    }
-                    .buttonStyle(.dgRow)
-                }
-            }
+            StarterPlanList(onPick: onPick)
         }
         .padding(DGSpace.s5)
         .background(DGColor.coralWash, in: RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous))
