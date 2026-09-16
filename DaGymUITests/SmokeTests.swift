@@ -110,7 +110,7 @@ final class SmokeTests: XCTestCase {
         XCTAssertTrue(benchCell.waitForExistence(timeout: 5), "No cell containing \"Bench\" appeared")
     }
 
-    /// The Routines tab lists the seeded starter routines.
+    /// The Routines tab lists the Push/Pull/Legs trio the UI-test store seeds (a real install ships none).
     func testRoutinesTabShowsStarterRoutines() {
         let app = launchApp()
 

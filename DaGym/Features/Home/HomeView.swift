@@ -39,7 +39,10 @@ struct HomeView: View {
                         SampleDataBanner(onClear: clearSampleData)
                     }
                     if !hasAnyRoutines {
-                        StarterPlanCard(onPick: pickStarterPlan, onAskCoach: { askingCoach = true })
+                        StarterPlanCard(
+                            onPick: pickStarterPlan, onAskCoach: { askingCoach = true },
+                            onFreestyle: onFreestyle
+                        )
                     } else if let routine {
                         ScheduledCard(
                             routine: routine, isScheduled: hasSchedule, onStart: onStart,

@@ -175,6 +175,11 @@ struct AppRootContainer: View {
         // a fresh install. The one fold pass for everything is `dedupeSeededRows()` below.
         await ExerciseSeeder.seedIfNeededAsync(context: store.context)
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        if LaunchFlags.isUITesting {
+            // The smoke tests log a routine-backed workout from Home; the in-memory UI-test store
+            // gets the Push/Pull/Legs trio a real install no longer ships.
+            _ = RoutineSeeder.seedStarters(RoutineSeeder.pushPullLegsNames, store: store)
+        }
         EquipmentSeeder.seedIfNeeded(store: store, unit: preferences.weightUnit)
         store.dedupeSeededRows()
         // Installs that predate "no shipped routines" still carry the 13 starters; the ones the

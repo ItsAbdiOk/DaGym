@@ -8,6 +8,9 @@ import SwiftUI
 struct StarterPlanCard: View {
     var onPick: (StarterProgramKind) -> Void
     var onAskCoach: () -> Void
+    /// A lifter with no routines can still train: the freestyle start keeps `home.start` on the
+    /// screen so the first workout never waits on a plan.
+    var onFreestyle: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
@@ -20,9 +23,13 @@ struct StarterPlanCard: View {
                 + "schedules the rest.")
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
-            DGPrimaryButton(
-                title: "Ask the Coach", symbol: "bubble.left.and.text.bubble.right", action: onAskCoach
-            )
+            DGAdaptiveStack(spacing: DGSpace.s3) {
+                DGPrimaryButton(title: "Start a Freestyle Workout", symbol: "plus", action: onFreestyle)
+                    .accessibilityIdentifier(A11yID.homeStart)
+                DGPrimaryButton(
+                    title: "Ask the Coach", symbol: "bubble.left.and.text.bubble.right", action: onAskCoach
+                )
+            }
             VStack(spacing: DGSpace.s2) {
                 ForEach(StarterProgramKind.allCases) { kind in
                     Button { onPick(kind) } label: {
