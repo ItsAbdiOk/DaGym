@@ -29,6 +29,8 @@ struct CoachEvalResult: Codable {
     var reviewerDrafts = 0
     var rejectedProposals = 0
     var failureNotes = 0
+    var failureNoteTexts: [String] = []
+    var toolErrorTexts: [String] = []
     /// (b) Proposed weights against recent bests.
     var weightChecks: [WeightRecord] = []
     var weightScore: Double?

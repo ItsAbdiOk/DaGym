@@ -14,7 +14,13 @@ import os
 @MainActor
 @Observable
 final class CoachChatEngine {
-    static let maxToolRounds = 8
+    /// Twelve, not eight: a routine for a lifter with no history is four or five muscle-group
+    /// searches plus the reads, and the eval showed the drafter still searching when the cap
+    /// forced it to answer with nothing. Rounds are cheap next to a bad answer.
+    static let maxToolRounds = 12
+    /// One silent retry when a reply comes back completely empty — a provider hiccup more often
+    /// than a real failure, and cheaper for the lifter than a "try again" note.
+    static let emptyReplyRetries = 1
 
     static let logger = Logger(subsystem: "dev.abdirahmanmohamed.dagym", category: "coachChat")
 
@@ -130,7 +136,10 @@ final class CoachChatEngine {
     /// which case nothing the drafter proposed goes for review.
     private func runTurn() async -> Bool {
         let wireBase = wire.count
-        for round in 0...Self.maxToolRounds {
+        var round = 0
+        var emptyRetries = 0
+        while round <= Self.maxToolRounds {
+            defer { round += 1 }
             // Past the round cap the model must answer in words.
             let forceText = round == Self.maxToolRounds
             let request = OpenRouterWire.ChatRequest(
@@ -157,14 +166,15 @@ final class CoachChatEngine {
                 return false
             }
             if reply.text.isEmpty, reply.calls.isEmpty {
-                // Nothing came back at all — usually the generation cap swallowed by reasoning, or a
-                // provider hiccup. Say so in the transcript rather than end the turn in silence.
-                let why = reply.finishReason == "length"
-                    ? "The model ran out of room before answering (it spent its budget thinking). Try again."
-                    : "The model returned an empty reply. Try again."
-                Self.trace("empty reply, finish \(reply.finishReason ?? "nil")")
-                abandonTurn(from: wireBase, stopped: false)
-                messages.append(.note(why, at: clock()))
+                // Nothing came back at all. Retry once (provider hiccup), then say so in the
+                // transcript rather than end the turn in silence.
+                if emptyRetries < Self.emptyReplyRetries {
+                    emptyRetries += 1
+                    round -= 1
+                    Self.trace("empty reply, retrying once")
+                    continue
+                }
+                noteEmptyReply(reply, from: wireBase)
                 return false
             }
             wire.append(.assistant(
@@ -180,17 +190,8 @@ final class CoachChatEngine {
                 wire.append(.tool(callID: call.id, content: content))
             }
         }
-        return true
-    }
-
-    /// A failed round: the banner gets the typed error, and the transcript gets a line saying so
-    /// in place — a turn that ends in nothing after a row of tool chips reads as "it broke", and
-    /// the banner alone was easy to scroll past.
-    private func fail(_ error: OpenRouterError, from wireBase: Int) {
-        lastError = error
-        Self.logger.error("Coach turn failed: \(error.logDescription, privacy: .public)")
-        abandonTurn(from: wireBase, stopped: false)
-        messages.append(.note(Self.failureLine(for: error), at: clock()))
+        noteRoundCap(from: wireBase)
+        return false
     }
 
     /// The streamed part of one model reply, with tool-call fragments already concatenated.
@@ -279,7 +280,7 @@ final class CoachChatEngine {
 
     /// Rolls the wire transcript back to the user message so no assistant tool call is left
     /// without its result (the API rejects that), keeping any text that did stream as context.
-    private func abandonTurn(from wireBase: Int, stopped: Bool) {
+    func abandonTurn(from wireBase: Int, stopped: Bool) {
         let partial = messages.last.flatMap { $0.role == .assistant ? $0.text : nil } ?? ""
         wire.removeSubrange(wireBase...)
         if !partial.isEmpty { wire.append(.assistant(partial)) }
@@ -375,5 +376,40 @@ extension CoachChatEngine {
 
     func recordReview(_ review: CoachChatReview) {
         reviews.append(review)
+    }
+}
+
+// MARK: - Turn endings
+
+extension CoachChatEngine {
+    /// A failed round: the banner gets the typed error, and the transcript gets a line saying so
+    /// in place — a turn that ends in nothing after a row of tool chips reads as "it broke", and
+    /// the banner alone was easy to scroll past.
+    func fail(_ error: OpenRouterError, from wireBase: Int) {
+        lastError = error
+        Self.logger.error("Coach turn failed: \(error.logDescription, privacy: .public)")
+        abandonTurn(from: wireBase, stopped: false)
+        messages.append(.note(Self.failureLine(for: error), at: clock()))
+    }
+
+    /// Nothing came back at all, even after the retry — usually the generation cap swallowed
+    /// by reasoning, or a provider hiccup.
+    func noteEmptyReply(_ reply: Reply, from wireBase: Int) {
+        let why = reply.finishReason == "length"
+            ? "The model ran out of room before answering (it spent its budget thinking). Try again."
+            : "The model returned an empty reply. Try again."
+        Self.trace("empty reply, finish \(reply.finishReason ?? "nil")")
+        abandonTurn(from: wireBase, stopped: false)
+        messages.append(.note(why, at: clock()))
+    }
+
+    /// The model kept calling tools through the forced-text round: nothing to show, so say so.
+    func noteRoundCap(from wireBase: Int) {
+        Self.trace("round cap reached without a text reply")
+        abandonTurn(from: wireBase, stopped: false)
+        messages.append(.note(
+            "The coach ran out of steps before answering (it kept reading data). Ask again, "
+                + "or narrow the question.", at: clock()
+        ))
     }
 }

@@ -197,7 +197,9 @@ public enum CoachChatPrompt {
         "Propose changes only through the propose_* tools, never as prose or a list the lifter must type in. "
             + "The lifter reviews and applies every proposal; nothing you propose is saved on its own. "
             + "Advice like 'drop a set' or 'take 5% off' that is not inside a propose_* call is a failed "
-            + "turn: if you recommend a change, make the call in the same turn.",
+            + "turn: if you recommend a change, make the call in the same turn. Never end with "
+            + "'would you like me to update…?' — the card is the question, and it has a Discard "
+            + "button.",
         "Build routines from your own knowledge and propose them straight away by exercise name — the "
             + "app resolves names against its library and tells you if one is missing or not allowed. Do "
             + "not search for exercises one at a time; if you want to see options, call search_exercises "

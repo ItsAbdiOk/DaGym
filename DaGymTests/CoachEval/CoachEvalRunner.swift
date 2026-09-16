@@ -113,9 +113,11 @@ enum CoachEvalRunner {
     ) throws -> Engine {
         let transport = CoachEvalCountingTransport()
         let client = OpenRouterClient(apiKey: { key }, transport: transport)
+        let memoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("coach-eval-\(scenario.id)-\(UUID().uuidString).json")
         let executor = StoreCoachChatToolExecutor(
             store: builder.store, unit: .kg, weeklyGoal: scenario.weeklyGoal, calendar: builder.calendar,
-            now: { builder.now }
+            memory: CoachMemoryFile(fileURL: memoryURL, now: { builder.now }), now: { builder.now }
         )
         var facts = builder.store.lifterProfileFacts(
             unit: .kg, weeklyGoal: scenario.weeklyGoal, trainingGoal: scenario.goal, now: builder.now,
@@ -148,6 +150,10 @@ enum CoachEvalRunner {
         result.rejectedProposals = tools
             .filter { $0.isToolError && ($0.toolName ?? "").hasPrefix("propose_") }.count
         result.failureNotes = engine.messages.filter { $0.role == .assistant && $0.isNote == true }.count
+        result.failureNoteTexts = engine.messages.filter { $0.role == .assistant && $0.isNote == true }
+            .map { String($0.text.prefix(200)) }
+        result.toolErrorTexts = tools.filter(\.isToolError)
+            .map { ($0.toolName ?? "?") + ": " + String($0.text.prefix(200)) }
         result.rounds = rounds
         result.promptTokens = engine.usage.promptTokens
         result.completionTokens = engine.usage.completionTokens
@@ -174,7 +180,13 @@ enum CoachEvalRunner {
         if result.rejectedProposals > 0 {
             notes.append("\(result.rejectedProposals) proposal(s) rejected by validation before one passed")
         }
-        if result.failureNotes > 0 { notes.append("\(result.failureNotes) app-written failure note(s)") }
+        if result.failureNotes > 0 {
+            notes.append("\(result.failureNotes) app-written failure note(s): "
+                + result.failureNoteTexts.joined(separator: " | "))
+        }
+        if !result.toolErrorTexts.isEmpty {
+            notes.append("tool errors: " + result.toolErrorTexts.joined(separator: " | "))
+        }
         if scenario.expectsProposal, drafts.isEmpty { notes.append("no proposal card was produced") }
         if !scenario.expectsProposal, !drafts.isEmpty {
             notes.append("proposed although the request was a question (not penalised)")
