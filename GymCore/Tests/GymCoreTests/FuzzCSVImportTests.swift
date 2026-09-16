@@ -13,7 +13,7 @@ import Testing
 /// checks the parse stays linear and never traps on volume.
 @Suite("Fuzz: CSV importers", .serialized)
 struct FuzzCSVImportTests {
-    static let iterations = 200
+    static let iterations = FuzzIterations.count
     static let seed: UInt64 = 0xC5F0_0003
 
     struct Fixture {

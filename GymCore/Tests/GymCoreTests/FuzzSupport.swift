@@ -7,6 +7,22 @@ import Foundation
 // Shared plumbing for the `Fuzz*` suites: a seeded xorshift generator (so a failing iteration is
 // reproducible from its seed and index), a tiny JSON tree that can render tokens `JSONSerialization`
 // refuses (NaN, `-0`, `1e999`), and the mutation vocabulary each suite draws from.
+//
+// Iteration count: every property test runs `FuzzIterations.count` mutations, 50 by default so
+// the suites stay quick on an ordinary `swift test`. The gate sets the environment variable
+// `DAGYM_TEST_FUZZ_ITERATIONS` (a positive integer) to run more; the generator is seeded, so a
+// failure at any count is reproducible from the seed and the iteration index it reports.
+
+/// The per-test mutation count, from `DAGYM_TEST_FUZZ_ITERATIONS` or the quick default.
+enum FuzzIterations {
+    static let quick = 50
+
+    static let count: Int = {
+        let raw = ProcessInfo.processInfo.environment["DAGYM_TEST_FUZZ_ITERATIONS"] ?? ""
+        guard let value = Int(raw), value > 0 else { return quick }
+        return value
+    }()
+}
 
 /// xorshift64*: deterministic, no Foundation randomness. Seed 0 is mapped to a fixed non-zero
 /// state since xorshift is stuck at 0.

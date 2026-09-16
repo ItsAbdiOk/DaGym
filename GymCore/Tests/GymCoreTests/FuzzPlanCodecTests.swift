@@ -9,7 +9,7 @@ import Testing
 /// the ones JSON can't carry (NaN, infinities) fed straight into the value types.
 @Suite("Fuzz: PlanCodec + PlanSanitizing", .serialized)
 struct FuzzPlanCodecTests {
-    static let iterations = 200
+    static let iterations = FuzzIterations.count
     static let seed: UInt64 = 0x91A4_0002
     static let date = Date(timeIntervalSince1970: 1_700_000_000)
 
