@@ -36,8 +36,7 @@ struct WorkoutStoreScheduleTests {
 
     @Test("an unsaved schedule is empty and round-trips through save")
     func saveAndLoadRoundTrip() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: ModelContext(container))
+        let store = try makeStore()
 
         #expect(store.schedule() == WeeklySchedule())
 
@@ -51,8 +50,7 @@ struct WorkoutStoreScheduleTests {
 
     @Test("todaysRoutine falls back to the first routine only when nothing has ever been scheduled")
     func todaysRoutineFallback() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: ModelContext(container))
+        let store = try makeStore()
 
         let pushA = makeRoutine(store, name: "Push A")
         _ = makeRoutine(store, name: "Pull B")
@@ -63,8 +61,7 @@ struct WorkoutStoreScheduleTests {
 
     @Test("todaysRoutine follows the saved weekly plan, including a rest day")
     func todaysRoutineFollowsSchedule() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: ModelContext(container))
+        let store = try makeStore()
 
         let pushA = makeRoutine(store, name: "Push A")
         let monday = Self.monday()
@@ -81,8 +78,7 @@ struct WorkoutStoreScheduleTests {
 
     @Test("nextSession finds the next planned routine and skips rest days")
     func nextSessionSkipsRest() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: ModelContext(container))
+        let store = try makeStore()
 
         let pushA = makeRoutine(store, name: "Push A")
         let legs = makeRoutine(store, name: "Legs")
@@ -105,8 +101,7 @@ struct WorkoutStoreScheduleTests {
 
     @Test("event ID map round-trips through save/load")
     func eventIDsRoundTrip() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: ModelContext(container))
+        let store = try makeStore()
 
         #expect(store.scheduleEventIDs().isEmpty)
         store.saveScheduleEventIDs(["2026-01-05": "event-1"])
@@ -118,8 +113,7 @@ struct WorkoutStoreScheduleTests {
     /// of showing the session after it.
     @Test("a planned day whose routines are all gone is skipped, not fatal")
     func nextSessionSkipsDeletedRoutines() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: ModelContext(container))
+        let store = try makeStore()
         let doomed = makeRoutine(store, name: "Doomed")
         let legs = makeRoutine(store, name: "Legs")
         var schedule = WeeklySchedule()
@@ -137,8 +131,7 @@ struct WorkoutStoreScheduleTests {
     /// A day that still has a second, surviving routine reports that one.
     @Test("a day whose first routine is gone reports its second")
     func nextSessionFallsBackToSecondRoutine() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: ModelContext(container))
+        let store = try makeStore()
         let doomed = makeRoutine(store, name: "Doomed")
         let arms = makeRoutine(store, name: "Arms")
         var schedule = WeeklySchedule()
@@ -156,10 +149,7 @@ struct WorkoutStoreScheduleTests {
     /// that can ever remove them.
     @Test("deleting a routine scrubs it from the schedule, overrides and programs")
     func deletingARoutineScrubsEveryPlan() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        ExerciseSeeder.seedIfNeeded(context: context)
-        let store = WorkoutStore(context: context)
+        let store = try makeStore(seed: .exercises)
         let doomed = makeRoutine(store, name: "Doomed")
         let legs = makeRoutine(store, name: "Legs")
         let calendar = Self.calendar()
@@ -187,8 +177,7 @@ struct WorkoutStoreScheduleTests {
 
     @Test("scheduleUpdatedAt tracks the last save")
     func scheduleUpdatedAtTracksSaves() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: ModelContext(container))
+        let store = try makeStore()
         #expect(store.scheduleUpdatedAt() == nil)
         store.saveSchedule(WeeklySchedule(dayRoutines: [.monday: [UUID()]]))
         #expect(store.scheduleUpdatedAt() != nil)

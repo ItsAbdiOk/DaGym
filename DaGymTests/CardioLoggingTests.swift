@@ -13,12 +13,6 @@ import Testing
 @MainActor
 @Suite("Cardio logging")
 struct CardioLoggingTests {
-    private func makeStore() throws -> (store: WorkoutStore, context: ModelContext) {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        return (WorkoutStore(context: context), context)
-    }
-
     private func treadmill(_ store: WorkoutStore) -> ExerciseInfo {
         store.createCustomExercise(
             name: "Treadmill Run", primary: [.quads], equipment: "treadmill", style: .cardio
@@ -79,7 +73,7 @@ struct CardioLoggingTests {
 
     @Test("time, distance and incline round-trip through SetLogModel, split into target vs done")
     func storeMapsBothWays() throws {
-        let (store, context) = try makeStore()
+        let (store, context) = try makeStoreAndContext()
         let exercise = treadmill(store)
         let routine = cardioRoutine(store, exercise: exercise)
         let session = store.startWorkout(routineID: routine.id)
@@ -115,7 +109,7 @@ struct CardioLoggingTests {
 
     @Test("the next session pre-fills last session's time and distance and the why card says so")
     func prescriptionRepeatsLastRun() throws {
-        let (store, _) = try makeStore()
+        let (store, _) = try makeStoreAndContext()
         let exercise = treadmill(store)
         let routine = cardioRoutine(store, exercise: exercise)
         let first = store.startWorkout(routineID: routine.id)
@@ -146,7 +140,7 @@ struct CardioLoggingTests {
 
     @Test("the history line for a cardio set and the workout's distance total")
     func historyLineAndTotals() throws {
-        let (store, _) = try makeStore()
+        let (store, _) = try makeStoreAndContext()
         let exercise = treadmill(store)
         let routine = cardioRoutine(store, exercise: exercise)
         let session = store.startWorkout(routineID: routine.id)
@@ -172,7 +166,7 @@ struct CardioLoggingTests {
         #expect(initial.targetSeconds == 20 * 60)
         #expect(PlannedSetDraft.initial(for: .weightReps).targetReps == 8)
 
-        let (store, _) = try makeStore()
+        let (store, _) = try makeStoreAndContext()
         let exercise = treadmill(store)
         let routine = cardioRoutine(store, exercise: exercise)
         let drafts = try #require(store.routineDrafts(id: routine.id)).drafts
@@ -182,7 +176,7 @@ struct CardioLoggingTests {
 
     @Test("a backup carries the planned distance, the logged distance and the incline")
     func backupRoundTrip() throws {
-        let (source, sourceContext) = try makeStore()
+        let (source, sourceContext) = try makeStoreAndContext()
         let exercise = treadmill(source)
         let routine = cardioRoutine(source, exercise: exercise)
         let session = source.startWorkout(routineID: routine.id)
@@ -199,7 +193,7 @@ struct CardioLoggingTests {
         #expect(log.inclinePercent == 3)
         #expect(log.distanceMeters == 5000)
 
-        let (destination, destinationContext) = try makeStore()
+        let (destination, destinationContext) = try makeStoreAndContext()
         _ = BackupService.import(document: document, context: destinationContext)
         let planned = try destinationContext.fetch(FetchDescriptor<PlannedSetModel>())
         #expect(planned.first?.targetDistanceMeters == 5000)
@@ -210,14 +204,14 @@ struct CardioLoggingTests {
 
     @Test("a shared plan carries the planned distance")
     func planShareRoundTrip() throws {
-        let (source, sourceContext) = try makeStore()
+        let (source, sourceContext) = try makeStoreAndContext()
         let exercise = treadmill(source)
         let routine = cardioRoutine(source, exercise: exercise)
         let document = try #require(PlanShareService.exportRoutine(id: routine.id, context: sourceContext))
         let decoded = try PlanCodec.decode(PlanCodec.encode(document))
         #expect(decoded.routines.first?.exercises.first?.sets.first?.targetDistanceMeters == 5000)
 
-        let (_, destinationContext) = try makeStore()
+        let (_, destinationContext) = try makeStoreAndContext()
         _ = PlanShareService.importPlan(document: decoded, context: destinationContext)
         let planned = try destinationContext.fetch(FetchDescriptor<PlannedSetModel>())
         #expect(planned.first?.targetDistanceMeters == 5000)

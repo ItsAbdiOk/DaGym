@@ -10,10 +10,6 @@ import Testing
 @MainActor
 @Suite("Coach facts source")
 struct CoachFactsSourceTests {
-    private func makeStore() throws -> WorkoutStore {
-        WorkoutStore(context: ModelContext(try ModelContainer.dagym(inMemory: true)))
-    }
-
     private func benchRoutine(_ store: WorkoutStore) -> (bench: ExerciseInfo, routine: RoutineInfo) {
         let bench = store.createCustomExercise(
             name: "Bench Press", primary: [.chest], equipment: "barbell", style: .weightReps

@@ -47,14 +47,8 @@ struct WatchResumeGateTests {
 
     @Test("Home shows a phone session in progress instead of offering to resume it")
     func homeShowsInProgressElsewhere() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let phone = WorkoutStore(context: container.mainContext, photoContext: nil)
-        WatchSampleSeeder.seed(store: phone)
-        let watch = WatchStore(
-            store: WorkoutStore(context: container.mainContext, photoContext: nil),
-            preferences: WatchPreferences(defaults: WatchTestDefaults.fresh()),
-            runtime: WatchWorkoutRuntime(isEnabled: false)
-        )
+        let fixture = try makeWatchFixture(separatePhone: true)
+        let (phone, watch) = (fixture.phone, fixture.watch)
         let routine = try #require(phone.todaysRoutine())
         let live = phone.startWorkout(routineIDs: [routine.id])
         live.exercises[0].sets[0].isDone = true
@@ -69,6 +63,6 @@ struct WatchResumeGateTests {
         watch.refreshHome(now: Date().addingTimeInterval(11 * 60))
         #expect(watch.home.resumableWorkoutID == live.workoutID)
         #expect(watch.home.inProgressElsewhereTitle == nil)
-        withExtendedLifetime(container) {}
+        withExtendedLifetime(fixture) {}
     }
 }

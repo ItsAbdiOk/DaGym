@@ -8,11 +8,6 @@ import Testing
 @MainActor
 @Suite("WorkoutStore progression engine wiring")
 struct WorkoutStoreProgressionTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func makeRoutine(
         _ store: WorkoutStore, rule: ProgressionRule, excludeFromProgression: Bool = false
     ) -> (routineID: UUID, exerciseID: UUID) {

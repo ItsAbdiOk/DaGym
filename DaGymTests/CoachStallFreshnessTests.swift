@@ -13,11 +13,6 @@ import Testing
 @MainActor
 @Suite("WorkoutStore coach adapter: stall state freshness")
 struct CoachStallFreshnessTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     /// A one-exercise linear routine at 80 kg × 8, +2.5 kg.
     private func benchRoutine(_ store: WorkoutStore) -> RoutineInfo {
         let exercise = store.createCustomExercise(

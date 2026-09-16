@@ -10,10 +10,6 @@ import Testing
 @MainActor
 @Suite("HealthSyncService: failures, races and estimates")
 struct HealthSyncFailureTests {
-    private func makeStore() throws -> WorkoutStore {
-        WorkoutStore(context: ModelContext(try ModelContainer.dagym(inMemory: true)))
-    }
-
     private func makeSuite(_ name: String) -> UserDefaults {
         let defaults = UserDefaults(suiteName: name) ?? .standard
         defaults.removePersistentDomain(forName: name)

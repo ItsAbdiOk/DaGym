@@ -8,11 +8,6 @@ import Testing
 @MainActor
 @Suite("WorkoutStore.recoverySnapshot")
 struct WorkoutStoreRecoverySnapshotTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func makeRoutine(store: WorkoutStore, exerciseID: UUID) -> UUID {
         let draft = RoutineExerciseDraft(
             exerciseID: exerciseID,
@@ -47,12 +42,13 @@ struct WorkoutStoreRecoverySnapshotTests {
         }
         _ = store.finish(session: session)
 
-        let snapshot = store.recoverySnapshot(now: Date())
+        let now = Date()
+        let snapshot = store.recoverySnapshot(now: now)
 
         #expect(snapshot.perMuscle.first?.muscle == .chest)
         let chest = try #require(snapshot.perMuscle.first { $0.muscle == .chest })
         let recoveredBy = try #require(chest.recoveredBy)
-        #expect(recoveredBy > Date())
+        #expect(recoveredBy > now)
 
         let contributor = try #require(chest.contributors.first)
         #expect(contributor.exerciseName == "Bench Press")

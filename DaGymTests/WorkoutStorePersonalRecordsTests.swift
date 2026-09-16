@@ -8,11 +8,6 @@ import Testing
 @MainActor
 @Suite("WorkoutStore.personalRecords")
 struct WorkoutStorePersonalRecordsTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func makeRoutine(store: WorkoutStore, exerciseIDs: [UUID]) -> UUID {
         let drafts = exerciseIDs.map {
             RoutineExerciseDraft(
@@ -194,11 +189,6 @@ struct WorkoutStorePersonalRecordsTests {
 @MainActor
 @Suite("WorkoutStore.personalRecords — logging styles")
 struct WorkoutStorePersonalRecordStyleTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func makeRoutine(store: WorkoutStore, exerciseIDs: [UUID]) -> UUID {
         let drafts = exerciseIDs.map {
             RoutineExerciseDraft(

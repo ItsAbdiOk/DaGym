@@ -8,11 +8,6 @@ import Testing
 @MainActor
 @Suite("WorkoutStore deload suggestion")
 struct WorkoutStoreDeloadTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     /// A routine with one main-lift exercise, a finished session for history, and a stalled
     /// `RoutineExerciseModel` — the shape `deloadSuggestion` needs.
     ///

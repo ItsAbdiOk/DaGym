@@ -10,9 +10,7 @@ import Testing
 struct WorkoutStoreEquipmentTests {
     @Test("EquipmentSeeder seeds Gym and Home exactly once")
     func seedsOnce() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        let store = WorkoutStore(context: context)
+        let store = try makeStore()
 
         EquipmentSeeder.seedIfNeeded(store: store)
         let firstPass = store.equipmentProfiles()
@@ -27,9 +25,7 @@ struct WorkoutStoreEquipmentTests {
 
     @Test("seeded Gym profile carries the standard kg plate set; Home has none")
     func seededPlateStock() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        let store = WorkoutStore(context: context)
+        let store = try makeStore()
 
         EquipmentSeeder.seedIfNeeded(store: store)
         let profiles = store.equipmentProfiles()
@@ -45,9 +41,7 @@ struct WorkoutStoreEquipmentTests {
 
     @Test("setActive switches which single profile is active")
     func activeSwitching() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        let store = WorkoutStore(context: context)
+        let store = try makeStore()
 
         EquipmentSeeder.seedIfNeeded(store: store)
         let home = try #require(store.equipmentProfiles().first { $0.name == "Home" })
@@ -61,9 +55,7 @@ struct WorkoutStoreEquipmentTests {
 
     @Test("createProfile and updateProfile round trip name, bar, plates and equipment")
     func createAndUpdate() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        let store = WorkoutStore(context: context)
+        let store = try makeStore()
 
         let created = store.createProfile(
             name: "Garage", barKg: 15, availableEquipment: ["dumbbell"],
@@ -85,9 +77,7 @@ struct WorkoutStoreEquipmentTests {
 
     @Test("deleting the active profile promotes another one to active")
     func deleteActivePromotesFallback() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        let store = WorkoutStore(context: context)
+        let store = try makeStore()
 
         EquipmentSeeder.seedIfNeeded(store: store)
         let gym = try #require(store.equipmentProfiles().first { $0.name == "Gym" })
@@ -102,10 +92,7 @@ struct WorkoutStoreEquipmentTests {
 
     @Test("a user-created profile named Gym survives the seed-key backfill and fold")
     func userCreatedGymSurvivesDedupe() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        let store = WorkoutStore(context: context)
-        EquipmentSeeder.seedIfNeeded(store: store)
+        let store = try makeStore(seed: .equipment)
 
         // Their own "Gym": a 15 kg bar and a short plate set, nothing like the seeded one.
         let mine = store.createProfile(
@@ -128,10 +115,7 @@ struct WorkoutStoreEquipmentTests {
 
     @Test("an untouched legacy profile is re-keyed and folds; a renamed one is left alone")
     func renamedLegacyDuplicateIsNeverFoldedAway() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        let store = WorkoutStore(context: context)
-        EquipmentSeeder.seedIfNeeded(store: store)
+        let (store, context) = try makeStoreAndContext(seed: .equipment)
 
         // Two pre-`seedKey` rows synced down later: one still exactly as seeded, one the user
         // renamed. Both are newer than the seeded rows, so neither is the fold's survivor.
@@ -152,10 +136,7 @@ struct WorkoutStoreEquipmentTests {
 
     @Test("a fold that leaves two profiles active is normalised back to one")
     func twoActiveProfilesNormaliseToOne() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        let store = WorkoutStore(context: context)
-        EquipmentSeeder.seedIfNeeded(store: store)
+        let (store, context) = try makeStoreAndContext(seed: .equipment)
 
         let models = try context.fetch(FetchDescriptor<EquipmentProfileModel>())
         for model in models { model.isActive = true }
@@ -190,11 +171,6 @@ struct WorkoutStoreEquipmentTests {
 @MainActor
 @Suite("Equipment: one source of truth")
 struct EquipmentSourceOfTruthTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     @Test("a lb lifter is seeded a lb bar and lb plates, not a 20 kg bar and kg plates")
     func seedsInTheChosenUnit() throws {
         let store = try makeStore()

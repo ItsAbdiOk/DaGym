@@ -8,11 +8,6 @@ import Testing
 @MainActor
 @Suite("WorkoutStore change token")
 struct ChangeTokenTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func makeRoutine(_ store: WorkoutStore) -> RoutineInfo {
         let exercise = store.createCustomExercise(
             name: "Bench Press", primary: [.chest], equipment: "Barbell", style: .weightReps

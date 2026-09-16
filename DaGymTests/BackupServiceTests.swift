@@ -12,9 +12,7 @@ struct BackupServiceTests {
     /// routine using it, a finished workout, a body measurement and an
     /// equipment profile.
     private func seededStore() throws -> (store: WorkoutStore, context: ModelContext) {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        let store = WorkoutStore(context: context)
+        let (store, context) = try makeStoreAndContext()
 
         let bench = store.createCustomExercise(
             name: "Zercher Squat", primary: [.quads], equipment: "barbell", style: .weightReps
@@ -53,8 +51,7 @@ struct BackupServiceTests {
         #expect(document.equipmentProfiles.count == 2)
         _ = sourceStore
 
-        let destinationContainer = try ModelContainer.dagym(inMemory: true)
-        let destinationContext = ModelContext(destinationContainer)
+        let destinationContext = try makeContext()
         let report = BackupService.import(document: document, context: destinationContext)
 
         #expect(report.exercisesImported == 1)
@@ -74,8 +71,7 @@ struct BackupServiceTests {
         let (_, sourceContext) = try seededStore()
         let document = BackupService.export(context: sourceContext)
 
-        let destinationContainer = try ModelContainer.dagym(inMemory: true)
-        let destinationContext = ModelContext(destinationContainer)
+        let destinationContext = try makeContext()
 
         let firstReport = BackupService.import(document: document, context: destinationContext)
         #expect(firstReport.workoutsImported == 1)
@@ -98,8 +94,7 @@ struct BackupServiceTests {
         let (_, sourceContext) = try seededStore()
         let document = BackupService.export(context: sourceContext)
 
-        let destinationContainer = try ModelContainer.dagym(inMemory: true)
-        let destinationContext = ModelContext(destinationContainer)
+        let destinationContext = try makeContext()
 
         let preview = BackupService.preview(document: document, context: destinationContext)
         let workoutCountBeforeImport = try destinationContext.fetchCount(FetchDescriptor<WorkoutModel>())
@@ -122,8 +117,7 @@ struct BackupServiceTests {
             exportedAt: Date(), appVersion: "1.0", routines: [routine], preferences: BackupPreferences()
         )
 
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
+        let context = try makeContext()
         let report = BackupService.import(document: document, context: context)
 
         #expect(report.routinesImported == 1)
@@ -175,10 +169,7 @@ struct BackupServiceTests {
     /// second real row. A routine tombstone still owns its slots, so that one arrived complete.
     @Test("a tombstoned duplicate never reaches the export")
     func tombstonesAreNotExported() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        ExerciseSeeder.seedIfNeeded(context: context)
-        let store = WorkoutStore(context: context)
+        let (store, context) = try makeStoreAndContext(seed: .exercises)
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
         try plantRemoteDuplicates(store, context: context)
         store.dedupeSeededRows()
@@ -200,20 +191,14 @@ struct BackupServiceTests {
     /// hiding in their library: the duplicates fold again on the receiving device.
     @Test("an older file that already contains a duplicate still converges on import")
     func olderFileWithDuplicateConverges() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        ExerciseSeeder.seedIfNeeded(context: context)
-        let store = WorkoutStore(context: context)
+        let (store, context) = try makeStoreAndContext(seed: .exercises)
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
         try plantRemoteDuplicates(store, context: context)
         // Exported *before* the fold: exactly the shape of a file written by an older build.
         let olderFile = BackupService.export(context: context)
         #expect(olderFile.routines.filter { $0.name == "Push A" }.count == 2)
 
-        let freshContainer = try ModelContainer.dagym(inMemory: true)
-        let freshContext = ModelContext(freshContainer)
-        ExerciseSeeder.seedIfNeeded(context: freshContext)
-        let freshStore = WorkoutStore(context: freshContext)
+        let (freshStore, freshContext) = try makeStoreAndContext(seed: .exercises)
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: freshStore)
         BackupService.import(document: olderFile, context: freshContext)
         freshStore.dedupeSeededRows()
@@ -240,8 +225,7 @@ struct BackupServiceTests {
         let (_, sourceContext) = try seededStore()
         let document = BackupService.export(context: sourceContext)
 
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
+        let context = try makeContext()
         BackupService.import(document: document, context: context)
 
         let routine = try #require(
@@ -265,8 +249,7 @@ struct BackupServiceTests {
         let routineID = try #require(store.routines().first { $0.name == "Legs" }?.id)
         let plan = try #require(PlanShareService.exportRoutine(id: routineID, context: sourceContext))
 
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
+        let context = try makeContext()
         let report = PlanShareService.importPlan(document: plan, context: context)
         #expect(report.routinesImported == 1)
 

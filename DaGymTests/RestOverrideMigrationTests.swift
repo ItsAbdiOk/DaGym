@@ -15,12 +15,6 @@ struct RestOverrideMigrationTests {
     private static let benchSeedID = "Barbell_Bench_Press_-_Medium_Grip"
     private static let squatSeedID = "Barbell_Squat"
 
-    private func seededContext() throws -> ModelContext {
-        let context = ModelContext(try ModelContainer.dagym(inMemory: true))
-        ExerciseSeeder.seedIfNeeded(context: context)
-        return context
-    }
-
     private func seeded(_ seedID: String, in context: ModelContext) throws -> ExerciseModel {
         try #require(try context.fetch(FetchDescriptor<ExerciseModel>()).first { $0.seedID == seedID })
     }
@@ -31,7 +25,7 @@ struct RestOverrideMigrationTests {
 
     @Test("restoring a pre-v4 backup keeps the favourite but not the seed's rest as an override")
     func legacyBackupRestIsNotAnOverride() throws {
-        let context = try seededContext()
+        let context = try makeContext(seed: .exercises)
         let bench = try seeded(Self.benchSeedID, in: context)
         let squat = try seeded(Self.squatSeedID, in: context)
         // Written last week: favourited, otherwise untouched — so rest is the seed's number.
@@ -56,7 +50,7 @@ struct RestOverrideMigrationTests {
 
     @Test("a copy seeded by a v3 device folds without carrying the seed's rest onto the survivor")
     func legacyCopyRestIsNotMerged() throws {
-        let context = try seededContext()
+        let context = try makeContext(seed: .exercises)
         let bench = try seeded(Self.benchSeedID, in: context)
         let remote = ExerciseModel(
             seedID: bench.seedID, name: bench.name, primaryMuscles: bench.primaryMuscles,
@@ -72,7 +66,7 @@ struct RestOverrideMigrationTests {
 
     @Test("the rest migration runs for a store coming from v3, not on every later seed bump")
     func restMigrationIsOneShot() throws {
-        let context = try seededContext()
+        let context = try makeContext(seed: .exercises)
         let bench = try seeded(Self.benchSeedID, in: context)
         let seedRest = try seedRest(Self.benchSeedID)
         let items = try ExerciseSeeder.loadSeed().exercises

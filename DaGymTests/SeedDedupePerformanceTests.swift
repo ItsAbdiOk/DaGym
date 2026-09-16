@@ -14,12 +14,13 @@ import Testing
 @MainActor
 @Suite("Seed dedupe query counts")
 struct SeedDedupePerformanceTests {
-    private func seededContext() throws -> ModelContext {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        ExerciseSeeder.seedIfNeeded(context: context)
-        return context
-    }
+    /// A settled pass, exactly: the exercise list, the three bare-id tables (PR cache, PR
+    /// events, notes) and the two relationship tables (routine slots, workout entries) pointing
+    /// at tombstones. The old shape added five per tombstone on top.
+    private static let settledPassQueries = 6
+    /// A store with nothing to fold costs one query (the exercise list) — and the pass runs
+    /// after every remote change, so it must stay at one.
+    private static let cleanStoreQueries = 1
 
     /// Tombstones `count` seeded exercises the way an iCloud double-seed does: a second copy
     /// under a new id, folded once so the loser is already settled.
@@ -39,7 +40,7 @@ struct SeedDedupePerformanceTests {
     }
 
     private func queriesForSettledPass(tombstones: Int) throws -> Int {
-        let context = try seededContext()
+        let context = try makeContext(seed: .exercises)
         try settleTombstones(count: tombstones, in: context)
         let before = ExerciseSeeder.dedupeQueryCount
         #expect(ExerciseSeeder.dedupe(in: context) == 0)
@@ -51,10 +52,10 @@ struct SeedDedupePerformanceTests {
         let small = try queriesForSettledPass(tombstones: 2)
         let big = try queriesForSettledPass(tombstones: 12)
         #expect(small == big, "dedupe query count grew with tombstones — \(small) for 2, \(big) for 12")
-        // Exactly: the exercise list, the three bare-id tables (PR cache, PR events, notes) and
-        // the two relationship tables (routine slots, workout entries) pointing at tombstones.
-        // The old shape added five per tombstone on top.
-        #expect(big == 6, "a settled dedupe pass issued \(big) queries for 12 tombstones")
+        #expect(
+            big == Self.settledPassQueries,
+            "a settled dedupe pass issued \(big) queries for 12 tombstones, budget \(Self.settledPassQueries)"
+        )
     }
 
     /// The two relationship prefetches filter on an optional through a relationship keypath.
@@ -65,7 +66,7 @@ struct SeedDedupePerformanceTests {
     /// children — not none, and not the live rows' as well.
     @Test("the tombstone-child prefetch returns exactly the rows pointing at tombstones")
     func tombstoneChildPrefetchIsExact() throws {
-        let context = try seededContext()
+        let context = try makeContext(seed: .exercises)
         try settleTombstones(count: 3, in: context)
         let all = try context.fetch(FetchDescriptor<ExerciseModel>())
         let tombstone = try #require(all.first { $0.isMergedAway })
@@ -89,15 +90,15 @@ struct SeedDedupePerformanceTests {
 
     @Test("a clean store costs one query — the pass runs after every remote change")
     func cleanStoreIsOneQuery() throws {
-        let context = try seededContext()
+        let context = try makeContext(seed: .exercises)
         let before = ExerciseSeeder.dedupeQueryCount
         #expect(ExerciseSeeder.dedupe(in: context) == 0)
-        #expect(ExerciseSeeder.dedupeQueryCount - before == 1)
+        #expect(ExerciseSeeder.dedupeQueryCount - before == Self.cleanStoreQueries)
     }
 
     @Test("a settled pass leaves nothing to save")
     func settledPassDoesNotDirtyTheContext() throws {
-        let context = try seededContext()
+        let context = try makeContext(seed: .exercises)
         try settleTombstones(count: 5, in: context)
         #expect(!context.hasChanges)
         #expect(ExerciseSeeder.dedupe(in: context) == 0)
@@ -123,7 +124,7 @@ struct SeedDedupePerformanceTests {
     @Test("a burst of remote changes runs one dedupe pass, after the burst goes quiet")
     func remoteChangeBurstIsOnePass() async throws {
         let harness = DeduperHarness(
-            context: try seededContext(), quiet: .milliseconds(80), maxDelay: .seconds(5)
+            context: try makeContext(seed: .exercises), quiet: .milliseconds(80), maxDelay: .seconds(5)
         )
         for _ in 0..<10 {
             harness.postRemoteChange()
@@ -137,7 +138,8 @@ struct SeedDedupePerformanceTests {
     @Test("a stream of remote changes that never goes quiet still gets a pass by maxDelay")
     func continuousRemoteChangesStillFold() async throws {
         let harness = DeduperHarness(
-            context: try seededContext(), quiet: .milliseconds(100), maxDelay: .milliseconds(150)
+            context: try makeContext(seed: .exercises), quiet: .milliseconds(100),
+            maxDelay: .milliseconds(150)
         )
         for _ in 0..<20 {
             harness.postRemoteChange()

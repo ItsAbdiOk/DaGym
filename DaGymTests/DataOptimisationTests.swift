@@ -15,11 +15,26 @@ import Testing
 struct DataOptimisationTests {
     private let fx = DataOptimisationFixtures()
 
+    // MARK: - Query budgets (exact, so a new read on a hot path is a deliberate change)
+
+    /// A first library search: the library and the PR cache; every search until the next save
+    /// reads nothing.
+    private static let firstSearchQueries = 2
+    /// `history()`: the workouts (exercise rows prefetched) and the grouped PR events. It was
+    /// 1 + N `fetchCount`s for the PR badges.
+    private static let historyQueries = 2
+    /// `lifetimeStats()`: one column fetch (plus the Health-store count, which isn't a main-store
+    /// query) — never a walk of every set, and never the seed row: the backfill runs at launch.
+    private static let lifetimeStatsQueries = 1
+    /// `rebuildPersonalRecords()`: the two cache tables to clear, the finished list and the
+    /// weigh-ins. It was a fetch plus a `fetchFirst` per PR kind per exercise per workout.
+    private static let rebuildQueries = 4
+
     @Test("a second library search between saves reads the store zero times")
     func catalogueIsCachedBetweenSaves() throws {
-        let store = try fx.makeStore()
+        let store = try makeStore()
         let bench = fx.makeBench(store)
-        #expect(fx.queries(store) { _ = store.exercises(matching: "ben") } == 2)
+        #expect(fx.queries(store) { _ = store.exercises(matching: "ben") } == Self.firstSearchQueries)
         // Library and PR cache were read for the first search; the next keystroke reads nothing.
         #expect(fx.queries(store) { _ = store.exercises(matching: "bench") } == 0)
         #expect(fx.queries(store) { _ = store.exerciseCount() } == 0)
@@ -34,7 +49,7 @@ struct DataOptimisationTests {
 
     @Test("dedupeSeededRows drops the cached catalogue even when it saves nothing")
     func remoteFoldInvalidatesCatalogue() throws {
-        let store = try fx.makeStore()
+        let store = try makeStore()
         _ = store.exercises()
         // A row inserted and saved behind the store's back, the way a CloudKit import lands.
         store.context.insert(
@@ -52,7 +67,7 @@ struct DataOptimisationTests {
     func historyQueryCountDoesNotScale() throws {
         var counts: [Int] = []
         for workouts in [2, 6] {
-            let store = try fx.makeStore()
+            let store = try makeStore()
             let routineID = fx.makeRoutine(store, exerciseID: fx.makeBench(store).id)
             fx.logSessions(store, routineID: routineID, count: workouts)
             let records = store.history()
@@ -60,14 +75,15 @@ struct DataOptimisationTests {
             #expect(records.allSatisfy { $0.prCount == 1 })
             counts.append(fx.queries(store) { _ = store.history() })
         }
-        // Exactly: the workouts (exercise rows prefetched) and the grouped PR events. It was
-        // 1 + N `fetchCount`s for the PR badges.
-        #expect(counts == [2, 2], "history() issued \(counts) queries for 2 and 6 workouts")
+        #expect(
+            counts == [Self.historyQueries, Self.historyQueries],
+            "history() issued \(counts) queries for 2 and 6 workouts, budget \(Self.historyQueries)"
+        )
     }
 
     @Test("finish() stamps volume and sets on the workout, and lifetimeStats reads the column")
     func finishStampsTotals() throws {
-        let store = try fx.makeStore()
+        let store = try makeStore()
         let bench = fx.makeBench(store)
         let routineID = fx.makeRoutine(store, exerciseID: bench.id)
         let ids = fx.logSessions(store, routineID: routineID, count: 2)
@@ -81,14 +97,12 @@ struct DataOptimisationTests {
         let stats = store.lifetimeStats()
         #expect(stats.workouts == 2)
         #expect(stats.volumeKg == 60 * 8 + 65 * 8)
-        // One column fetch (plus the Health-store count, which isn't a main-store query) —
-        // never a walk of every set, and never the seed row: the backfill runs at launch.
-        #expect(fx.queries(store) { _ = store.lifetimeStats() } == 1)
+        #expect(fx.queries(store) { _ = store.lifetimeStats() } == Self.lifetimeStatsQueries)
     }
 
     @Test("workouts finished before the totals columns existed are stamped once, at launch")
     func totalsBackfillRunsOnce() throws {
-        let store = try fx.makeStore()
+        let store = try makeStore()
         let routineID = fx.makeRoutine(store, exerciseID: fx.makeBench(store).id)
         let ids = fx.logSessions(store, routineID: routineID, count: 3)
         // Simulate rows written by a build without the columns: zero totals, flag down.
@@ -120,7 +134,7 @@ struct DataOptimisationTests {
 
     @Test("a stamp that disagrees with the rows (a partial CloudKit batch) is corrected on the remote pass")
     func remotePassRestampsWrongTotals() throws {
-        let store = try fx.makeStore()
+        let store = try makeStore()
         let routineID = fx.makeRoutine(store, exerciseID: fx.makeBench(store).id)
         let id = try #require(fx.logSessions(store, routineID: routineID, count: 1).first)
         let workout = try #require(store.workout(id: id))
@@ -140,7 +154,7 @@ struct DataOptimisationTests {
     func finishQueryCountDoesNotScaleWithHistory() throws {
         var counts: [Int] = []
         for prior in [1, 5] {
-            let store = try fx.makeStore()
+            let store = try makeStore()
             let routineID = fx.makeRoutine(store, exerciseID: fx.makeBench(store).id)
             fx.logSessions(store, routineID: routineID, count: prior)
             let session = store.startWorkout(routineID: routineID)
@@ -154,7 +168,7 @@ struct DataOptimisationTests {
 
     @Test("finish() compares against the previous session on the same routine and finds its PRs")
     func finishSummaryStillSeesPrevious() throws {
-        let store = try fx.makeStore()
+        let store = try makeStore()
         let routineID = fx.makeRoutine(store, exerciseID: fx.makeBench(store).id)
         fx.logSessions(store, routineID: routineID, count: 2)
         let session = store.startWorkout(routineID: routineID)
@@ -174,7 +188,7 @@ struct DataOptimisationTests {
     func rebuildQueryCountDoesNotScale() throws {
         var counts: [Int] = []
         for workouts in [2, 6] {
-            let store = try fx.makeStore()
+            let store = try makeStore()
             let bench = fx.makeBench(store)
             let routineID = fx.makeRoutine(store, exerciseID: bench.id)
             fx.logSessions(store, routineID: routineID, count: workouts)
@@ -182,14 +196,15 @@ struct DataOptimisationTests {
             #expect(store.bestE1RMRecord(exerciseID: bench.id)?.weightKg == 60 + Double(workouts - 1) * 5)
             #expect(store.personalRecords().first?.records.isEmpty == false)
         }
-        // Exactly: the two cache tables to clear, the finished list and the weigh-ins. It was
-        // a fetch plus a `fetchFirst` per PR kind per exercise per workout.
-        #expect(counts == [4, 4], "rebuild issued \(counts) queries for 2 and 6 workouts")
+        #expect(
+            counts == [Self.rebuildQueries, Self.rebuildQueries],
+            "rebuild issued \(counts) queries for 2 and 6 workouts, budget \(Self.rebuildQueries)"
+        )
     }
 
     @Test("a rebuild keeps one most-reps row per weight and one row for every other kind")
     func rebuildKeepsPerWeightRepRecords() throws {
-        let store = try fx.makeStore()
+        let store = try makeStore()
         let bench = fx.makeBench(store)
         let routineID = fx.makeRoutine(store, exerciseID: bench.id)
         for (weight, reps) in [(60.0, 8), (80.0, 5), (60.0, 10)] {

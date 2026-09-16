@@ -10,11 +10,6 @@ import Testing
 @MainActor
 @Suite("Coach model boundary")
 struct CoachModelBoundaryTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func makePreferences(_ name: String) -> Preferences {
         let defaults = UserDefaults(suiteName: name) ?? .standard
         defaults.removePersistentDomain(forName: name)

@@ -19,10 +19,30 @@ import Testing
 @MainActor
 @Suite("WorkoutStore session-build query counts")
 struct WorkoutStoreStartPerformanceTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
+    // MARK: - Query budgets
+    //
+    // Exact counts, not ceilings: a new constant query on one of these paths should be a
+    // deliberate change, not a silent one. Each is what the path costs for a 12-exercise
+    // routine — and, by the `small == big` assertions below, for a 2-exercise one.
+
+    /// `startWorkout`: the routine, the finished-workout list, the per-exercise session counts
+    /// (one fetch with the exercise prefetched — it used to walk `workout.exercises` and fire a
+    /// SwiftData fault per row, ~1 000 hidden round trips on a real history that this counter
+    /// never saw), the equipment profile, the latest bodyweight, the PR cache, and the active
+    /// program (whose own lookup is two). The old shape added ~10 per exercise on top —
+    /// equipment, bodyweight, two `activeProgramModel` pairs, the PR row, the session count and
+    /// two `ExerciseModel` fetches for the history strip — so an 8-exercise routine cost 80+.
+    private static let startWorkoutQueries = 8
+    /// `appendRoutine`: the session build plus `sync` — the workout, one batched
+    /// library-exercise lookup for the new rows, and the routine their exclusion flags come from.
+    private static let appendRoutineQueries = 12
+    /// `resumeSession`: `startWorkout` and `sync` (3) are setup inside the measured body; the
+    /// resume itself is the remaining 9 — the workout, its session facts, and the routine
+    /// behind the glyph.
+    private static let resumeSessionQueries = 20
+    /// One mid-workout add on top of `startWorkout`: a single session-facts build (5). It was
+    /// 6, four of them repeats of the finished-workout list.
+    private static let autoFilledEntryQueries = 13
 
     /// Builds a routine with `count` exercises, each with a linear-progression rule and a couple
     /// of planned sets, then a few finished sessions of history behind it — the same shape
@@ -112,16 +132,10 @@ struct WorkoutStoreStartPerformanceTests {
         let count = try expectFlat("startWorkout") { store, routineID in
             _ = store.startWorkout(routineID: routineID)
         }
-        // Exactly: the routine, the finished-workout list, the per-exercise session counts (one
-        // fetch with the exercise prefetched — it used to walk `workout.exercises` and fire a
-        // SwiftData fault per row, ~1 000 hidden round trips on a real history that this counter
-        // never saw), the equipment profile, the latest bodyweight, the PR cache, and the active
-        // program (whose own lookup is two). The old
-        // shape added ~10 per exercise on top — equipment, bodyweight, two `activeProgramModel`
-        // pairs, the PR row, the session count and two `ExerciseModel` fetches for the history
-        // strip — so an 8-exercise routine cost 80+. Exact, not a ceiling: a new constant query
-        // on this path should be a deliberate change, not a silent one.
-        #expect(count == 8, "startWorkout issued \(count) queries for a 12-exercise routine")
+        #expect(
+            count == Self.startWorkoutQueries,
+            "startWorkout issued \(count) queries for 12 exercises, budget \(Self.startWorkoutQueries)"
+        )
     }
 
     @Test("an 8-exercise routine starts in a handful of queries, and all 8 exercises are built")
@@ -131,7 +145,7 @@ struct WorkoutStoreStartPerformanceTests {
         let before = store.queryCount
         let session = store.startWorkout(routineID: routineID)
         #expect(session.exercises.count == 8)
-        #expect(store.queryCount - before == 8)
+        #expect(store.queryCount - before == Self.startWorkoutQueries)
     }
 
     @Test("appendRoutine issues the same number of queries for 2 and for 12 exercises")
@@ -140,9 +154,10 @@ struct WorkoutStoreStartPerformanceTests {
             let session = store.startFreestyle()
             store.appendRoutine(id: routineID, to: session)
         }
-        // The build above (8) plus `sync`: the workout, one batched library-exercise
-        // lookup for the new rows, and the routine their exclusion flags come from.
-        #expect(count == 12, "appendRoutine issued \(count) queries for a 12-exercise routine")
+        #expect(
+            count == Self.appendRoutineQueries,
+            "appendRoutine issued \(count) queries for 12 exercises, budget \(Self.appendRoutineQueries)"
+        )
     }
 
     @Test("resumeSession issues the same number of queries for 2 and for 12 exercises")
@@ -154,10 +169,10 @@ struct WorkoutStoreStartPerformanceTests {
             let resumed = store.resumeSession(for: workoutID)
             #expect(resumed?.exercises.count == session.exercises.count)
         }
-        // `startWorkout` (8) and `sync` (3) are setup inside the body; `resumeSession`
-        // itself is the remaining 9 — the workout, its session facts, and the routine
-        // behind the glyph.
-        #expect(count == 20, "resumeSession issued \(count) queries for a 12-exercise routine")
+        #expect(
+            count == Self.resumeSessionQueries,
+            "resumeSession issued \(count) queries for 12 exercises, budget \(Self.resumeSessionQueries)"
+        )
     }
 
     /// Adding one exercise mid-workout is a per-add cost by nature, so what must not scale here
@@ -169,8 +184,9 @@ struct WorkoutStoreStartPerformanceTests {
             guard let existing = session.exercises.first?.exercise else { return }
             session.exercises.append(store.autoFilledEntry(for: existing))
         }
-        // `startWorkout` (8) is setup inside the body; the add itself is 5 — one session
-        // facts build. It was 6, four of them repeats of the finished-workout list.
-        #expect(count == 13, "one mid-workout add issued \(count) queries")
+        #expect(
+            count == Self.autoFilledEntryQueries,
+            "one mid-workout add issued \(count) queries, budget \(Self.autoFilledEntryQueries)"
+        )
     }
 }

@@ -10,11 +10,6 @@ import Testing
 @Suite("RootView launch: resume prompt and intent hand-off", .serialized)
 @MainActor
 struct ResumeSheetTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func makeRoutine(_ store: WorkoutStore, exerciseID: UUID) -> UUID {
         let draft = RoutineExerciseDraft(
             exerciseID: exerciseID,

@@ -10,11 +10,6 @@ import Testing
 @MainActor
 @Suite("Plan share: program export")
 struct PlanShareProgramExportTests {
-    private func makeStore() throws -> (store: WorkoutStore, context: ModelContext) {
-        let context = ModelContext(try ModelContainer.dagym(inMemory: true))
-        return (WorkoutStore(context: context), context)
-    }
-
     private func routine(_ store: WorkoutStore, name: String, exercise: ExerciseInfo) -> RoutineInfo {
         store.saveRoutine(
             id: nil, name: name,
@@ -53,7 +48,7 @@ struct PlanShareProgramExportTests {
 
     @Test("a repeated routine is exported once, but the day cycle keeps every repeat in order")
     func dedupesRoutinesButKeepsCycle() throws {
-        let (store, context) = try makeStore()
+        let (store, context) = try makeStoreAndContext()
         let fixture = try upperLowerProgram(store, context: context)
         let (program, upper, lower) = (fixture.program, fixture.upper, fixture.lower)
         let document = try #require(PlanShareService.exportProgram(id: program.id, context: context))
@@ -71,7 +66,7 @@ struct PlanShareProgramExportTests {
 
     @Test("program weeks travel sorted by index, and the sender's ids never leave the store")
     func weeksSortedAndIDsHashed() throws {
-        let (store, context) = try makeStore()
+        let (store, context) = try makeStoreAndContext()
         let fixture = try upperLowerProgram(store, context: context)
         let (program, upper, lower) = (fixture.program, fixture.upper, fixture.lower)
         let document = try #require(PlanShareService.exportProgram(id: program.id, context: context))
@@ -89,7 +84,7 @@ struct PlanShareProgramExportTests {
 
     @Test("working weights stay home unless the export asks for them")
     func weightsOnlyOnRequest() throws {
-        let (store, context) = try makeStore()
+        let (store, context) = try makeStoreAndContext()
         let program = try upperLowerProgram(store, context: context).program
         let shared = try #require(PlanShareService.exportProgram(id: program.id, context: context))
         let sharedWeights = shared.routines.flatMap(\.exercises).flatMap(\.sets).compactMap(\.targetWeightKg)
@@ -102,7 +97,7 @@ struct PlanShareProgramExportTests {
 
     @Test("a routine the program names but the store no longer has is left out of the cycle")
     func missingRoutineDropsOutOfCycle() throws {
-        let (store, context) = try makeStore()
+        let (store, context) = try makeStoreAndContext()
         let fixture = try upperLowerProgram(store, context: context)
         let (program, upper) = (fixture.program, fixture.upper)
         program.routineIDs = [upper.id, UUID(), upper.id]
@@ -115,18 +110,18 @@ struct PlanShareProgramExportTests {
 
     @Test("an unknown program id exports nothing")
     func unknownProgram() throws {
-        let (_, context) = try makeStore()
+        let (_, context) = try makeStoreAndContext()
         #expect(PlanShareService.exportProgram(id: UUID(), context: context) == nil)
     }
 
     @Test("the exported program imports back as one program over the imported routines")
     func roundTripsThroughImport() throws {
-        let (store, context) = try makeStore()
+        let (store, context) = try makeStoreAndContext()
         let program = try upperLowerProgram(store, context: context).program
         let document = try #require(PlanShareService.exportProgram(id: program.id, context: context))
         let decoded = try PlanCodec.decode(PlanCodec.encode(document))
 
-        let destination = ModelContext(try ModelContainer.dagym(inMemory: true))
+        let destination = try makeContext()
         let report = PlanShareService.importPlan(document: decoded, context: destination)
         #expect(report.routinesImported == 2)
         #expect(report.programImported)

@@ -11,7 +11,7 @@ import Testing
 /// Seeded with a fixed xorshift so a failure reproduces from its iteration number.
 @Suite("Fuzz: BackupCodec", .serialized)
 struct FuzzBackupCodecTests {
-    static let iterations = 200
+    static let iterations = FuzzIterations.count
     static let seed: UInt64 = 0xB4C4_0001
 
     static let date = Date(timeIntervalSince1970: 1_700_000_000)

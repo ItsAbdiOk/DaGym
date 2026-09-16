@@ -12,28 +12,6 @@ import Testing
 @MainActor
 @Suite("WatchStore parity with the phone")
 struct WatchStoreParityTests {
-    /// One seeded in-memory container, both stores on its main context. The container is kept
-    /// too: a `ModelContext` only weakly references it, and a fetch on a context whose container
-    /// has been released traps inside SwiftData.
-    private struct Fixture {
-        let phone: WorkoutStore
-        let watch: WatchStore
-        let container: ModelContainer
-    }
-
-    private func makeStores() throws -> Fixture {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let phone = WorkoutStore(context: container.mainContext, photoContext: nil)
-        WatchSampleSeeder.seed(store: phone)
-        let watch = WatchStore(
-            store: WorkoutStore(context: container.mainContext, photoContext: nil),
-            preferences: WatchPreferences(defaults: WatchTestDefaults.fresh()),
-            runtime: WatchWorkoutRuntime(isEnabled: false)
-        )
-        watch.refreshHome()
-        return Fixture(phone: phone, watch: watch, container: container)
-    }
-
     private func targets(_ session: WorkoutSession) -> [[String]] {
         session.exercises.map { entry in
             entry.sets.map { "\($0.kind.rawValue) \($0.weightKg)×\($0.reps) \($0.targetSeconds ?? 0)" }
@@ -42,7 +20,7 @@ struct WatchStoreParityTests {
 
     @Test("today's entries carry the prescription the phone gives the same store")
     func prescriptionParity() throws {
-        let fixture = try makeStores()
+        let fixture = try makeWatchFixture(separatePhone: true, refreshHome: true)
         let (phone, watch) = (fixture.phone, fixture.watch)
         let routine = try #require(phone.todaysRoutine())
         let phoneSession = phone.startWorkout(routineIDs: [routine.id])
@@ -68,7 +46,7 @@ struct WatchStoreParityTests {
 
     @Test("finishing on the watch persists the workout with the device, progression and PRs")
     func finishPersists() throws {
-        let fixture = try makeStores()
+        let fixture = try makeWatchFixture(separatePhone: true, refreshHome: true)
         let (phone, watch) = (fixture.phone, fixture.watch)
         let routine = try #require(phone.todaysRoutine())
         watch.start(routineID: routine.id)
@@ -110,15 +88,5 @@ struct WatchStoreParityTests {
         #expect(records.contains { $0.weightKg == 100 && $0.reps == 7 })
         #expect(watch.preferences.lastSavedAt != nil)
         withExtendedLifetime(fixture) {}
-    }
-}
-
-/// A throwaway `UserDefaults` suite per test, so preferences never leak between them.
-enum WatchTestDefaults {
-    static func fresh() -> UserDefaults {
-        let name = "watch-tests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: name) ?? .standard
-        defaults.removePersistentDomain(forName: name)
-        return defaults
     }
 }

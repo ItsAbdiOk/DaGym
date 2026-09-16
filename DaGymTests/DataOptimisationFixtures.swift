@@ -9,11 +9,6 @@ import Testing
 /// `DataOptimisationMoreTests`).
 @MainActor
 struct DataOptimisationFixtures {
-    func makeStore(units: StoreUnitProvider = .userDefaults()) throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container), photoContext: nil, units: units)
-    }
-
     func makeBench(_ store: WorkoutStore) -> ExerciseInfo {
         store.createCustomExercise(
             name: "Bench Press", primary: [.chest], equipment: "Barbell", style: .weightReps

@@ -143,8 +143,7 @@ struct WidgetConsistencyTests {
     @Test("the writer fills dailySets from the store's counted sets, 26 weeks ending today")
     @MainActor
     func writerFillsDailySets() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: ModelContext(container))
+        let store = try makeStore()
         let preferences = Preferences(suite: makeSuite(#function + "prefs"))
         preferences.colorBlindHeatmaps = true
         let exercise = store.createCustomExercise(

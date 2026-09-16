@@ -8,11 +8,6 @@ import Testing
 @MainActor
 @Suite("Store parity: insights")
 struct ParityStoreInsightsTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func makeExercise(
         _ store: WorkoutStore, name: String, primary: [Muscle] = [.chest]
     ) -> ExerciseInfo {

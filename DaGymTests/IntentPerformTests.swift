@@ -18,8 +18,7 @@ struct IntentPerformTests {
     }
 
     private func install(_ name: String) throws -> (store: WorkoutStore, preferences: Preferences) {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: ModelContext(container))
+        let store = try makeStore()
         let preferences = Preferences(suite: makeSuite(name + "prefs"))
         IntentStoreAccess.testOverride = (store, preferences)
         return (store, preferences)

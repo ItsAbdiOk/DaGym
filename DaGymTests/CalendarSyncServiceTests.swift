@@ -347,8 +347,7 @@ struct CalendarSyncServiceTests {
     @Test("a refused sync turns the preference back off and says why")
     @MainActor
     func refusedSyncDisablesThePreferenceAndExplains() async throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: ModelContext(container))
+        let store = try makeStore()
         let defaults = UserDefaults(suiteName: "calendar-sync-coordinator") ?? .standard
         defaults.removePersistentDomain(forName: "calendar-sync-coordinator")
         let preferences = Preferences(suite: defaults)
@@ -371,8 +370,7 @@ struct CalendarSyncServiceTests {
     @Test("a successful sync reports no problem for the UI to show")
     @MainActor
     func successfulSyncHasNoProblemMessage() async throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: ModelContext(container))
+        let store = try makeStore()
         let defaults = UserDefaults(suiteName: "calendar-sync-coordinator-ok") ?? .standard
         defaults.removePersistentDomain(forName: "calendar-sync-coordinator-ok")
         let preferences = Preferences(suite: defaults)

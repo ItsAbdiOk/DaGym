@@ -8,11 +8,6 @@ import UIKit
 @MainActor
 @Suite("WorkoutStore progress photos")
 struct WorkoutStorePhotoTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     /// A tiny solid-color JPEG, standing in for a captured photo.
     private func makeImageData() throws -> Data {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 200, height: 200))
@@ -25,8 +20,7 @@ struct WorkoutStorePhotoTests {
 
     @Test("both the main container and the separate local-only photo container build and accept inserts")
     func containerBuildsWithBothConfigurations() throws {
-        let mainContainer = try ModelContainer.dagym(inMemory: true)
-        let mainContext = ModelContext(mainContainer)
+        let mainContext = try makeContext()
         mainContext.insert(ExerciseModel(name: "Bench Press", primaryMuscles: ["chest"]))
         try mainContext.save()
         #expect(try mainContext.fetchCount(FetchDescriptor<ExerciseModel>()) == 1)

@@ -8,6 +8,12 @@ import Testing
 @MainActor
 @Suite("Home snapshot")
 struct HomeSnapshotTests {
+    /// The snapshot's own reads on top of what it delegates to the store unchanged: exactly
+    /// `schedule()` and `routines()`. Going through `todaysRoutine()` and `nextSession()`
+    /// re-fetched both (4 extra) plus a second `schedule()` for `hasSchedule` and a
+    /// `routines()` for `hasAnyRoutines` (2 more).
+    private static let snapshotOwnQueries = 2
+
     private static func calendar() -> Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
@@ -29,11 +35,6 @@ struct HomeSnapshotTests {
         let defaults = UserDefaults(suiteName: name) ?? .standard
         defaults.removePersistentDomain(forName: name)
         return defaults
-    }
-
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
     }
 
     private func makeRoutine(_ store: WorkoutStore, name: String) -> RoutineInfo {
@@ -127,10 +128,7 @@ struct HomeSnapshotTests {
         let now = Self.wednesday()
         let calendar = preferences.trainingCalendar
 
-        // What the pass delegates to the store unchanged; the snapshot's own reads on top of
-        // these must be exactly two — `schedule()` and `routines()` — where going through
-        // `todaysRoutine()` and `nextSession()` re-fetched both (4 extra) plus a second
-        // `schedule()` for `hasSchedule` and a `routines()` for `hasAnyRoutines` (2 more).
+        // What the pass delegates to the store unchanged; `snapshotOwnQueries` come on top.
         var before = store.queryCount
         _ = store.workoutDates()
         _ = store.latestBodyMeasurement() // nil here, so no 30-day comparison read follows
@@ -142,6 +140,10 @@ struct HomeSnapshotTests {
 
         before = store.queryCount
         _ = HomeSnapshot.make(store: store, preferences: preferences, now: now)
-        #expect(store.queryCount - before == delegated + 2)
+        let own = store.queryCount - before - delegated
+        #expect(
+            own == Self.snapshotOwnQueries,
+            "the snapshot read \(own) times on its own, budget \(Self.snapshotOwnQueries)"
+        )
     }
 }

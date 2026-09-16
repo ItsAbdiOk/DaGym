@@ -15,7 +15,7 @@ import Testing
 @MainActor
 @Suite("Fuzz: import apply paths", .serialized)
 struct FuzzImportApplyTests {
-    nonisolated static let iterations = 60
+    nonisolated static let iterations = FuzzIterations.count
     nonisolated static let date = Date(timeIntervalSince1970: 1_700_000_000)
 
     /// xorshift64*, duplicated from `GymCoreTests` (test targets don't share sources).
@@ -41,12 +41,6 @@ struct FuzzImportApplyTests {
         "", " ", "\n", "\u{0}", "sprint", "not-a-kind", "🏋️", String(repeating: "x", count: 130),
         String(repeating: "y", count: 100_000), "Squat", "working", "warmup"
     ]
-
-    private func makeStore() throws -> (store: WorkoutStore, context: ModelContext) {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        return (WorkoutStore(context: context), context)
-    }
 
     // MARK: - Invariants
 
@@ -88,7 +82,7 @@ struct FuzzImportApplyTests {
     @Test("mutated backups import, re-import, export and resume without trapping or breaking invariants")
     func backupApply() throws {
         var rng = RNG(seed: 0xA991_0001)
-        let (store, context) = try makeStore()
+        let (store, context) = try makeStoreAndContext()
         for iteration in 0..<Self.iterations {
             var document = backupFixture(rng: &rng, custom: "Custom \(iteration)")
             mutate(&document, rng: &rng)
@@ -110,7 +104,7 @@ struct FuzzImportApplyTests {
     /// the first `sync(session:)` on that workout trapped in `Dictionary(uniqueKeysWithValues:)`.
     @Test("duplicate set and entry ids inside one backup workout are re-keyed, so resume + sync can't trap")
     func duplicateSetIDsRegression() throws {
-        let (store, context) = try makeStore()
+        let (store, context) = try makeStoreAndContext()
         var rng = RNG(seed: 1)
         var document = backupFixture(rng: &rng, custom: "Dup")
         document.workouts[0].endedAt = nil
@@ -129,7 +123,7 @@ struct FuzzImportApplyTests {
     /// import trapped building its routine index with `Dictionary(uniqueKeysWithValues:)`.
     @Test("duplicate routine ids in a backup import once, and a second import doesn't trap")
     func duplicateRoutineIDsRegression() throws {
-        let (_, context) = try makeStore()
+        let (_, context) = try makeStoreAndContext()
         var rng = RNG(seed: 2)
         var document = backupFixture(rng: &rng, custom: "Dup routine")
         document.routines.append(document.routines[0])
@@ -147,7 +141,7 @@ struct FuzzImportApplyTests {
     @Test("mutated plans sanitise and import without trapping or breaking invariants")
     func planApply() throws {
         var rng = RNG(seed: 0xA991_0002)
-        let (_, context) = try makeStore()
+        let (_, context) = try makeStoreAndContext()
         for iteration in 0..<Self.iterations {
             let routineID = UUID()
             let custom = "Plan custom \(iteration)"
@@ -178,7 +172,7 @@ struct FuzzImportApplyTests {
     @Test("mutated CSV previews apply twice without trapping or breaking invariants")
     func csvApply() throws {
         var rng = RNG(seed: 0xA991_0003)
-        let (store, context) = try makeStore()
+        let (store, context) = try makeStoreAndContext()
         let header = "Date,Workout Name,Duration,Exercise Name,Set Order,Weight (kg),Reps,Distance,Seconds,"
             + "Notes,Workout Notes,RPE"
         let cells = Self.strings.map { $0.replacingOccurrences(of: "\n", with: " ") }

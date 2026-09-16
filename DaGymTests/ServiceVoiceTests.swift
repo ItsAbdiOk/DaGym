@@ -43,11 +43,6 @@ struct ServiceVoiceTests {
 
     // MARK: Speak-back route timing
 
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func autoLogPreferences() -> Preferences {
         let suite = UserDefaults(suiteName: "ServiceVoiceTests-\(UUID().uuidString)") ?? .standard
         let preferences = Preferences(suite: suite)

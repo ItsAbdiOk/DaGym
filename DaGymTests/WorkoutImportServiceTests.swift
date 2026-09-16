@@ -20,12 +20,6 @@ struct WorkoutImportServiceTests {
         ["2024-03-11 18:24:00", "Push Day", "1h 5m", "Bench Press", "2", "65", "6", "", "", "", "", ""]
     ]).map(row).joined(separator: "\n") + "\n"
 
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        return WorkoutStore(context: context)
-    }
-
     @Test("preview parses the fixture and flags the unmatched exercise")
     func previewParses() throws {
         let store = try makeStore()

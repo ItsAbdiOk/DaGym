@@ -111,9 +111,7 @@ struct SharePDFTests {
     @Test("the lifter's own PDF carries target weights only when the export is asked for them")
     @MainActor
     func ownPrintoutIncludesWeightsOnRequest() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        let store = WorkoutStore(context: context)
+        let (store, context) = try makeStoreAndContext()
         let bench = store.createCustomExercise(
             name: "Bench Press", primary: [.chest], equipment: "barbell", style: .weightReps
         )

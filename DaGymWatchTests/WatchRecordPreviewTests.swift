@@ -11,22 +11,6 @@ import Testing
 @MainActor
 @Suite("Watch record preview load")
 struct WatchRecordPreviewTests {
-    private struct Fixture {
-        let store: WorkoutStore
-        let watch: WatchStore
-        let container: ModelContainer
-    }
-
-    private func makeFixture() throws -> Fixture {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: container.mainContext, photoContext: nil)
-        let watch = WatchStore(
-            store: store, preferences: WatchPreferences(defaults: WatchTestDefaults.fresh()),
-            runtime: WatchWorkoutRuntime(isEnabled: false)
-        )
-        return Fixture(store: store, watch: watch, container: container)
-    }
-
     private func entry(_ style: ExerciseInfo.LoggingStyle, bestE1RM: Double? = nil) -> WorkoutExerciseEntry {
         var info = ExerciseInfo(name: "Dip", primary: [.chest], equipment: "bodyweight", loggingStyle: style)
         info.bestE1RM = bestE1RM
@@ -35,9 +19,9 @@ struct WatchRecordPreviewTests {
 
     @Test("a weighted-bodyweight set is estimated from bodyweight plus the added load")
     func weightedBodyweightAddsBodyweight() throws {
-        let fixture = try makeFixture()
+        let fixture = try makeWatchFixture(seeded: false)
         let asOf = Date()
-        _ = fixture.store.logBodyweight(kg: 80, date: asOf.addingTimeInterval(-3_600))
+        _ = fixture.phone.logBodyweight(kg: 80, date: asOf.addingTimeInterval(-3_600))
         let dip = entry(.weightedBodyweight)
 
         let load = fixture.watch.previewLoadKg(entry: dip, set: dip.sets[0], asOf: asOf)
@@ -51,7 +35,7 @@ struct WatchRecordPreviewTests {
 
     @Test("without a weigh-in the added load stands alone, as it does at finish")
     func weightedBodyweightWithoutBodyweight() throws {
-        let fixture = try makeFixture()
+        let fixture = try makeWatchFixture(seeded: false)
         let dip = entry(.weightedBodyweight)
         #expect(fixture.watch.previewLoadKg(entry: dip, set: dip.sets[0], asOf: Date()) == 30)
         withExtendedLifetime(fixture) {}
@@ -59,8 +43,8 @@ struct WatchRecordPreviewTests {
 
     @Test("weight × reps reads the bar; other styles have no preview")
     func otherStyles() throws {
-        let fixture = try makeFixture()
-        _ = fixture.store.logBodyweight(kg: 80)
+        let fixture = try makeWatchFixture(seeded: false)
+        _ = fixture.phone.logBodyweight(kg: 80)
         let bench = entry(.weightReps)
         #expect(fixture.watch.previewLoadKg(entry: bench, set: bench.sets[0], asOf: Date()) == 30)
         let pullUp = entry(.bodyweightReps)
@@ -70,13 +54,13 @@ struct WatchRecordPreviewTests {
 
     @Test("a real weighted-dip record fires the card against the total-load cache, a non-record does not")
     func cardFiresOnTotalLoad() throws {
-        let fixture = try makeFixture()
-        _ = fixture.store.logBodyweight(kg: 80)
-        let dip = fixture.store.createCustomExercise(
+        let fixture = try makeWatchFixture(seeded: false)
+        _ = fixture.phone.logBodyweight(kg: 80)
+        let dip = fixture.phone.createCustomExercise(
             name: "Weighted Dip", primary: [.chest], equipment: "bodyweight", style: .weightedBodyweight
         )
         let sets = (0..<2).map { _ in PlannedSetDraft(kind: .working, targetReps: 5, targetWeightKg: 30) }
-        let routine = fixture.store.saveRoutine(
+        let routine = fixture.phone.saveRoutine(
             id: nil, name: "Dips", exercises: [RoutineExerciseDraft(exerciseID: dip.id, sets: sets)]
         )
         fixture.watch.start(routineID: routine.id)

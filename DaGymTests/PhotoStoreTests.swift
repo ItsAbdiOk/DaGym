@@ -19,8 +19,7 @@ struct PhotoStoreTests {
 
     @Test("the grid list carries thumbnails only; photo(id:) and latestPhoto carry the full image")
     func gridListLeavesImageDataNil() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: ModelContext(container))
+        let store = try makeStore()
         let saved = try #require(store.addPhoto(image: try makeImageData(), pose: .front))
 
         let listed = try #require(store.photos(pose: .front).first)
