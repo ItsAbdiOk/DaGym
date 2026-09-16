@@ -445,11 +445,13 @@ struct WorkoutStoreWipeAllDataTests {
         var clearedWidget = false
         var removedSecrets = false
         var deletedEvents: [String] = []
+        var clearedCoach = false
         let effects = ResetSideEffects(
             cancelNotifications: { cancelled = true },
             clearWidgetSnapshot: { clearedWidget = true },
             removeSecrets: { removedSecrets = true },
-            deleteCalendarEvents: { deletedEvents = $0.sorted() }
+            deleteCalendarEvents: { deletedEvents = $0.sorted() },
+            clearCoachData: { clearedCoach = true }
         )
 
         store.wipeAllData(preferences: Preferences(suite: defaults), effects: effects)
@@ -458,5 +460,54 @@ struct WorkoutStoreWipeAllDataTests {
         #expect(clearedWidget)
         #expect(removedSecrets)
         #expect(deletedEvents == ["event-1", "event-2"])
+        #expect(clearedCoach)
+    }
+
+    /// The coach's memory file, usage ledger and chat archive live outside the store, and a
+    /// wipe used to leave all three behind — the coach still "knew" a lifter who had just
+    /// erased everything.
+    @Test("reset removes the coach memory file, the usage ledger and every chat thread")
+    func resetClearsCoachData() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "reset-coach-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let now = Date()
+        let memory = CoachMemoryFile(fileURL: root.appending(path: "facts.json"), now: { now })
+        try memory.remember(CoachMemoryFact(text: "Knee clicks on squats", topic: .injury, createdAt: now))
+        let defaults = try #require(UserDefaults(suiteName: #function))
+        defaults.removePersistentDomain(forName: #function)
+        let ledger = CoachChatUsageLedgerStore(defaults: defaults)
+        ledger.record(OpenRouterWire.Usage(promptTokens: 10, completionTokens: 5), model: "m", at: now)
+        let archive = CoachChatArchive(directory: root.appending(path: "CoachChat"))
+        try archive.save(CoachChatThread(id: UUID(), createdAt: now, updatedAt: now))
+        #expect(!memory.facts().isEmpty && !ledger.load().isEmpty && archive.list().count == 1)
+
+        ResetSideEffects.clearCoachData(memory: memory, ledger: ledger, archive: archive)
+
+        #expect(memory.facts().isEmpty)
+        #expect(ledger.load().isEmpty)
+        #expect(ledger.load().since == nil)
+        #expect(archive.list().isEmpty)
+    }
+
+    /// The Sunday check-in keys were added after the reset list and never made it in: a wipe
+    /// kept "not this week" and "already reviewed" for the current week.
+    @Test("reset clears the week-review keys")
+    func resetClearsWeekReviewKeys() throws {
+        let store = try makeStore()
+        let defaults = try #require(UserDefaults(suiteName: #function))
+        defaults.removePersistentDomain(forName: #function)
+        let preferences = Preferences(suite: defaults)
+        preferences.coachWeekReviewLastKey = "2026-09-13"
+        preferences.coachWeekReviewDismissedKey = "2026-09-13"
+        preferences.colorBlindHeatmaps = true
+        preferences.distanceUnit = .mi
+
+        store.wipeAllData(preferences: preferences, effects: .inert)
+
+        #expect(preferences.coachWeekReviewLastKey == nil)
+        #expect(preferences.coachWeekReviewDismissedKey == nil)
+        #expect(!preferences.colorBlindHeatmaps)
+        #expect(preferences.distanceUnit == .km)
     }
 }
