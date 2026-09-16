@@ -133,7 +133,8 @@ public enum CoachChatPrompt {
             + "through the propose_* tools, not a rewrite, unless they ask for a new plan or the data "
             + "says the plan is wrong for them.",
         "Explain like a coach: for each exercise or change, one line of why, tied to their data "
-            + "(the lift, the dates, the numbers). No lectures."
+            + "(the lift, the dates, the numbers). No lectures. In a proposed routine, put that line in "
+            + "each exercise's `reason` so it shows on the card."
     ]
 
     /// What each read tool is for, so the model reaches for the right one first.

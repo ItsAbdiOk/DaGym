@@ -24,6 +24,10 @@ struct CoachChatView: View {
     @State private var dismissedError: OpenRouterError.Kind?
     /// A screen-side notice (a draft the store refused), shown in the same banner as errors.
     @State private var notice: CoachChatErrorCopy.Banner?
+    /// Long replies the lifter opened out; everything else past the latest turn stays folded.
+    @State private var expandedMessageIDs: Set<UUID> = []
+    /// "Copied" after a long-press Copy.
+    @State private var toast: String?
 
     private let archive = CoachChatArchive.standard()
 
@@ -60,6 +64,7 @@ struct CoachChatView: View {
             }
         }
         .dgUndoToast($undoAction)
+        .dgNoticeToast($toast)
         .sheet(isPresented: $showingSettings) { SettingsView() }
         .task { openLaunch() }
         .onDisappear { engine?.cancel() }
@@ -80,10 +85,12 @@ struct CoachChatView: View {
         } else if let engine {
             ScrollViewReader { proxy in
                 ScrollView {
+                    let latestTurn = CoachChatTranscript.latestTurnIDs(engine.messages)
                     LazyVStack(alignment: .leading, spacing: DGSpace.s3) {
                         ForEach(CoachChatTranscript.collapse(engine.messages)) { entry in
                             switch entry {
-                            case .message(let message): row(message)
+                            case .message(let message):
+                                row(message, canFold: !latestTurn.contains(message.id))
                             case .toolGroup(let label, let count, let failed):
                                 CoachToolChip(label: label, failed: failed, count: count)
                             }
@@ -108,7 +115,7 @@ struct CoachChatView: View {
     }
 
     @ViewBuilder
-    private func row(_ message: CoachChatMessage) -> some View {
+    private func row(_ message: CoachChatMessage, canFold: Bool) -> some View {
         if message.role == .draft, let index = message.draftIndex, let draft = engine?.drafts[safe: index] {
             let reviews = engine?.reviews ?? []
             let drafter = preferences.coachModelID
@@ -118,11 +125,31 @@ struct CoachChatView: View {
                     ? nil : CoachReviewCopy.originLabel(for: index, in: reviews, drafterModelID: drafter),
                 reviewStrip: CoachDraftLinks.review(for: index, in: reviews).map(CoachReviewCopy.strip),
                 rationale: CoachDraftLinks.rationale(for: index, in: reviews),
-                onApply: { apply(draft, at: index) }, onDiscard: { discard(at: index) }
+                onApply: { apply(draft, at: index) }, onDiscard: { discard(at: index) },
+                onCopy: {
+                    copy(CoachDraftDetail.copyText(for: draft, formatWeight: preferences.formatWeight))
+                }
             )
         } else {
-            CoachChatMessageRow(message: message, review: review(for: message))
+            CoachChatMessageRow(
+                message: message, review: review(for: message), canFold: canFold,
+                isExpanded: isExpandedBinding(for: message.id),
+                onCopy: { copy(CoachMarkdown.plainText(message.text)) }
+            )
         }
+    }
+
+    private func isExpandedBinding(for id: UUID) -> Binding<Bool> {
+        Binding(
+            get: { expandedMessageIDs.contains(id) },
+            set: { if $0 { expandedMessageIDs.insert(id) } else { expandedMessageIDs.remove(id) } }
+        )
+    }
+
+    private func copy(_ text: String) {
+        UIPasteboard.general.string = text
+        Haptics.confirm()
+        toast = "Copied"
     }
 
     private func review(for message: CoachChatMessage) -> CoachChatReview? {
@@ -185,6 +212,7 @@ struct CoachChatView: View {
         engine?.cancel()
         engine = CoachChatEngineFactory.make(thread: thread, store: store, preferences: preferences)
         cardStates = [:]
+        expandedMessageIDs = []
         dismissedError = nil
         lastSent = nil
     }

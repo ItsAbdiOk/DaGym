@@ -6,7 +6,8 @@ import SwiftUI
 /// undo toast, so this view only reports taps. Mirrors `CoachCardView`'s shape so the two
 /// coach surfaces read as one. With a second opinion on, `originLabel` says whose card this
 /// is, `reviewStrip` carries the reviewer's verdict on the drafter's card, and `rationale` is
-/// the reviewer's own paragraph above its alternative.
+/// the reviewer's own paragraph above its alternative. Long-press offers Copy; the screen
+/// writes the clipboard (`CoachDraftDetail.copyText`) and shows the toast.
 struct CoachDraftCard: View {
     var draft: CoachChatDraft
     var state: CoachDraftCardState
@@ -16,8 +17,11 @@ struct CoachDraftCard: View {
     var rationale: String?
     var onApply: () -> Void
     var onDiscard: () -> Void
+    var onCopy: () -> Void = {}
 
     @State private var isExpanded = false
+    /// Rows whose reason is shown in full rather than clipped to two lines.
+    @State private var openReasons: Set<Int> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
@@ -49,6 +53,9 @@ struct CoachDraftCard: View {
             }
         }
         .dgCard(padding: DGSpace.s4)
+        .contextMenu {
+            Button("Copy", systemImage: "doc.on.doc", action: onCopy)
+        }
         .accessibilityIdentifier(A11yID.coachChatDraftCard)
     }
 
@@ -115,20 +122,7 @@ struct CoachDraftCard: View {
         if isExpanded {
             VStack(alignment: .leading, spacing: DGSpace.s1) {
                 ForEach(rows) { row in
-                    HStack(alignment: .top) {
-                        Text(row.title)
-                            .font(DGFont.footnote)
-                            .foregroundStyle(DGColor.ink1)
-                        Spacer(minLength: DGSpace.s2)
-                        if let detail = row.detail {
-                            Text(detail)
-                                .font(DGFont.footnote)
-                                .foregroundStyle(DGColor.ink3)
-                                .multilineTextAlignment(.trailing)
-                        }
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(row.detail.map { "\(row.title): \($0)" } ?? row.title)
+                    detailRow(row)
                 }
                 if case .routine(let proposal) = draft, let notes = proposal.notes, !notes.isEmpty {
                     Text(notes)
@@ -140,6 +134,46 @@ struct CoachDraftCard: View {
             }
             .padding(DGSpace.s3)
             .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous))
+        }
+    }
+
+    /// Title and set line on one row; the drafter's reason, when it gave one, under them in
+    /// two lines that a tap opens out. The reason is its own VoiceOver element so the row
+    /// stays short.
+    @ViewBuilder
+    private func detailRow(_ row: CoachDraftDetail.Row) -> some View {
+        HStack(alignment: .top) {
+            Text(row.title)
+                .font(DGFont.footnote)
+                .foregroundStyle(DGColor.ink1)
+            Spacer(minLength: DGSpace.s2)
+            if let detail = row.detail {
+                Text(detail)
+                    .font(DGFont.footnote)
+                    .foregroundStyle(DGColor.ink3)
+                    .multilineTextAlignment(.trailing)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(row.detail.map { "\(row.title): \($0)" } ?? row.title)
+        if let reason = row.reason {
+            Button {
+                withAnimation(DGMotion.standard) {
+                    if !openReasons.insert(row.id).inserted { openReasons.remove(row.id) }
+                }
+            } label: {
+                Text(reason)
+                    .font(DGFont.caption)
+                    .foregroundStyle(DGColor.ink4)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(openReasons.contains(row.id) ? nil : 2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, DGSpace.s1)
+            .accessibilityLabel("Why \(row.title): \(reason)")
+            .accessibilityIdentifier(A11yID.coachChatDraftReason)
         }
     }
 
@@ -199,7 +233,8 @@ struct CoachDraftCard: View {
         exercises: [
             CoachChatExerciseSpec(
                 exerciseName: "Bench Press",
-                sets: Array(repeating: CoachChatSetSpec(targetReps: 8, targetWeightKg: 60), count: 3)
+                sets: Array(repeating: CoachChatSetSpec(targetReps: 8, targetWeightKg: 60), count: 3),
+                reason: "Your strongest press: 60 kg for 8 on 12 Sep, so it leads the session."
             ),
             CoachChatExerciseSpec(exerciseName: "Lat Pulldown", sets: [CoachChatSetSpec(targetReps: 12)])
         ],
