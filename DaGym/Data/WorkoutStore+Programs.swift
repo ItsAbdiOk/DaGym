@@ -43,9 +43,10 @@ struct ProgramInfo: Identifiable, Hashable {
     }
 }
 
-/// Starter program templates built from the seeded routines (`RoutineSeeder`'s starters —
-/// "Push A"/"Pull B"/"Legs", Upper/Lower A/B, Full Body A/B/C, 5×5 A/B/C), so a program can be
-/// created without an exercise-picking flow.
+/// Starter program templates built from `RoutineSeeder`'s starters — "Push A"/"Pull B"/"Legs",
+/// Upper/Lower A/B, Full Body A/B/C, 5×5 A/B/C — so a program can be created without an
+/// exercise-picking flow. The app ships no routines: `createProgram(from:)` seeds the ones the
+/// program cycles when it is created.
 enum StarterProgramKind: String, CaseIterable, Identifiable, Hashable {
     case pushPullLegs = "Push/Pull/Legs"
     case upperLower = "Upper/Lower"
@@ -54,8 +55,8 @@ enum StarterProgramKind: String, CaseIterable, Identifiable, Hashable {
 
     var id: String { rawValue }
 
-    /// Routine names to cycle through, in day order — matched against `WorkoutStore.routines()`
-    /// by name. Every one must exist for `createProgram(from:)` to build the program.
+    /// Routine names to cycle through, in day order — `RoutineSeeder` starters, seeded on
+    /// demand and matched by starter id or name when `createProgram(from:)` builds the program.
     var routineNames: [String] {
         switch self {
         case .pushPullLegs: ["Push A", "Pull B", "Legs"]
@@ -90,12 +91,23 @@ extension WorkoutStore {
         return fetch(descriptor).map { programInfo($0, now: now, calendar: calendar) }
     }
 
-    /// Builds `kind`'s program from its seeded routines. Nil — and nothing inserted — when any
-    /// of them has been deleted: a program cycling the wrong days is worse than no program.
+    /// Builds `kind`'s program from its starter routines, seeding whichever of them the store
+    /// doesn't have yet (`RoutineSeeder.seedStarters`) — the app ships no routines, so from an
+    /// empty store this writes exactly the program's days. A starter the lifter already has —
+    /// by its starter id, so a renamed or edited copy counts — is reused, not duplicated. Nil,
+    /// and nothing inserted, only when a day can't be built at all (its lifts are missing from
+    /// the library): a program cycling the wrong days is worse than no program. A routine
+    /// deleted *after* the program was created is not re-seeded; the program just loses that day.
     @discardableResult
     func createProgram(from kind: StarterProgramKind) -> ProgramInfo? {
-        let existing = routines()
-        let routineIDs = kind.routineNames.compactMap { name in existing.first { $0.name == name }?.id }
+        RoutineSeeder.seedStarters(kind.routineNames, store: self)
+        let live = fetch(FetchDescriptor<RoutineModel>()).filter { !$0.isMergedAway }
+        let routineIDs = kind.routineNames.compactMap { name -> UUID? in
+            let byStarterID = RoutineSeeder.starterIDs[name].flatMap { id in
+                live.first { $0.importedFromID == id }
+            }
+            return (byStarterID ?? live.first { $0.name == name })?.id
+        }
         guard routineIDs.count == kind.routineNames.count else { return nil }
         let model = ProgramModel(name: kind.rawValue, weeks: kind.weeks)
         model.routineIDs = routineIDs

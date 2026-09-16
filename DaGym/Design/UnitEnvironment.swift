@@ -9,7 +9,10 @@ import SwiftUI
 @Observable
 @MainActor
 final class Preferences {
-    private let defaults: UserDefaults
+    /// The suite every property persists to. Internal (not private) for the one-shot device
+    /// markers in `Preferences+Storage.swift`, which read and write it directly instead of
+    /// adding stored, observed properties to a class already at the type-body cap.
+    let defaults: UserDefaults
 
     var weightUnit: WeightUnit {
         didSet { defaults.set(weightUnit.rawValue, forKey: Key.weightUnit) }

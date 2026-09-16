@@ -45,7 +45,7 @@ struct OnDiskContainerTests {
         // Seeding + a first fetch on a fresh on-disk store is the exact path that trapped on device.
         ExerciseSeeder.seedIfNeeded(context: context)
         let store = WorkoutStore(context: context, photoContext: photoContext)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
         #expect(store.routines().count == RoutineSeeder.starterIDs.count)
     }
 }

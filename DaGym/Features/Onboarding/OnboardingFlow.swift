@@ -48,8 +48,8 @@ struct OnboardingFlow: View {
         onComplete()
     }
 
-    /// Welcome's "Explore with sample data" — seeds eight weeks of history on the starter
-    /// routines and skips straight to the tab bar, same as "Skip and start lifting". The seed
+    /// Welcome's "Explore with sample data" — seeds the Push/Pull/Legs trio and eight weeks of
+    /// history on it, then skips straight to the tab bar, same as "Skip and start lifting". The seed
     /// is a few hundred SwiftData writes on the main actor; the yield lets the busy state
     /// paint first so the tap doesn't look ignored.
     private func exploreSampleData() {

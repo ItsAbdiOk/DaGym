@@ -3,16 +3,17 @@ import GymCore
 import SwiftData
 
 /// Seeds a trial-friendly slice of history — eight weeks of finished workouts cycling the
-/// always-present Push/Pull/Legs starters — so a first-time user (or an App Review pass) can see
-/// what a trained-in DaGym looks like before logging a single set themselves (OpenGym parity 84
-/// / Adopt-now 29). Every workout it writes is tagged `sourceDevice = "sample"` so `clear` can
-/// wipe exactly what it added and nothing else.
+/// Push/Pull/Legs starters, which it seeds first if the store doesn't have them — so a
+/// first-time user (or an App Review pass) can see what a trained-in DaGym looks like before
+/// logging a single set themselves (OpenGym parity 84 / Adopt-now 29). Every workout it writes
+/// is tagged `sourceDevice = "sample"` so `clear` can wipe exactly what it added and nothing
+/// else; the trio goes with it when nothing of the lifter's own points at it.
 @MainActor
 enum SampleDataSeeder {
     /// `WorkoutModel.sourceDevice` tag for every workout this seeder inserts.
     static let sourceTag = "sample"
 
-    private static let routineNames = ["Push A", "Pull B", "Legs"]
+    private static let routineNames = RoutineSeeder.pushPullLegsNames
     /// Weekday offsets (from the start of a 7-day block, 0 = oldest day in the block) the three
     /// routines land on — spread across the week rather than back to back, with the newest
     /// session yesterday so the recovery map, "this week" and the streak all have something
@@ -21,9 +22,11 @@ enum SampleDataSeeder {
     private static let dayOffsets = [1, 3, 5]
     private static let weeks = 8
 
-    /// No-ops if the starter routines aren't present (a store that never seeded them, or had
-    /// them deleted) — sample data should never invent routines of its own.
+    /// Seeds the Push/Pull/Legs trio when the store doesn't have it (the app ships no routines),
+    /// then the history. No-ops if a day can't be built from the library — sample data never
+    /// invents routines of its own.
     static func seed(store: WorkoutStore, preferences: Preferences, now: Date = Date()) {
+        RoutineSeeder.seedStarters(routineNames, store: store)
         let routines = store.routines()
         let ordered = routineNames.compactMap { name in routines.first { $0.name == name } }
         guard ordered.count == routineNames.count else { return }
@@ -44,12 +47,14 @@ enum SampleDataSeeder {
     }
 
     /// Deletes every workout this seeder wrote and clears the flag — Home's "Sample data · Clear"
-    /// banner. Leaves the starter routines themselves alone; they're shared with the real app,
-    /// not sample-only, and stay seeded regardless.
+    /// banner. The trio it seeded goes too, once the sample workouts no longer point at it —
+    /// unless the lifter made a day theirs in the meantime (ran it, scheduled it, put it in a
+    /// program or renamed it; `RoutineSeeder.untouchedStarters`), in which case it stays.
     static func clear(store: WorkoutStore, preferences: Preferences) {
         let predicate = #Predicate<WorkoutModel> { $0.sourceDevice == "sample" }
         for model in store.fetch(FetchDescriptor(predicate: predicate)) { store.context.delete(model) }
         store.save()
+        RoutineSeeder.deleteUntouchedStarters(store: store, among: routineNames)
         store.rebuildPersonalRecords()
         preferences.sampleDataMode = false
     }

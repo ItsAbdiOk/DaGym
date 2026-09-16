@@ -6,7 +6,9 @@ import Testing
 @testable import DaGym
 
 /// OpenGym parity (insights rec 1 + engine rec 5): real starter programs seeded as dedicated
-/// routines, `createProgram(from:)` refusing when one is missing, lower-body lifts stepping 5 kg.
+/// routines on demand — `createProgram(from:)` writes exactly its own days into an empty store,
+/// reuses a starter the lifter already has and refuses only when a day can't be built —
+/// lower-body lifts stepping 5 kg.
 @MainActor
 @Suite("Parity: starter programs")
 struct ParityInsightsProgramTests {
@@ -54,16 +56,68 @@ struct ParityInsightsProgramTests {
         #expect(Set(program.routineIDs).count == 3)
     }
 
-    @Test("deleting Lower B makes Upper/Lower refuse: nil, no program inserted")
-    func missingRoutineRefuses() throws {
-        let store = try makeStore(seed: [.exercises, .routines])
-        let lowerB = try #require(store.routines().first { $0.name == "Lower B" })
+    @Test("from an empty store a starter program seeds exactly its own routines")
+    func programSeedsOnlyItsOwnDays() throws {
+        let store = try makeStore(seed: .firstLaunch)
+        #expect(store.routines().isEmpty)
+
+        let program = try #require(store.createProgram(from: .upperLower))
+
+        let names = store.routines().map(\.name)
+        #expect(Set(names) == ["Upper A", "Lower A", "Upper B", "Lower B"])
+        #expect(program.routineIDs.count == 4)
+        for name in StarterProgramKind.upperLower.routineNames {
+            let model = try routineModel(store, named: name)
+            #expect(model.importedFromID == RoutineSeeder.starterIDs[name])
+            #expect(program.routineIDs.contains(model.id))
+        }
+        // A second program adds only what it needs; Push/Pull/Legs shares nothing with it.
+        #expect(store.createProgram(from: .pushPullLegs) != nil)
+        #expect(store.routines().count == 7)
+    }
+
+    @Test("a starter the lifter already has — even renamed — is reused, not seeded again")
+    func programReusesExistingStarter() throws {
+        let store = try makeStore(seed: .firstLaunch)
+        _ = store.createProgram(from: .pushPullLegs)
+        let pushA = try routineModel(store, named: "Push A")
+        store.saveRoutine(id: pushA.id, name: "Push Day", exercises: [])
+        let mine = store.saveRoutine(id: nil, name: "Legs", exercises: [])
+        // Drop "Legs" and "Pull B" from the store's starters so the next program must re-seed
+        // Pull B, reuse the renamed Push A, and take the lifter's own "Legs" by name.
+        let legs = try #require(store.routines().first { $0.name == "Legs" && $0.id != mine.id })
+        store.deleteRoutine(id: legs.id)
+        let pullB = try routineModel(store, named: "Pull B")
+        store.deleteRoutine(id: pullB.id)
+        #expect(store.routines().count == 2)
+
+        let program = try #require(store.createProgram(from: .pushPullLegs))
+
+        #expect(program.routineIDs.contains(pushA.id))
+        #expect(program.routineIDs.contains(mine.id))
+        #expect(store.routines().filter { $0.name == "Push A" }.isEmpty)
+        #expect(store.routines().filter { $0.name == "Pull B" }.count == 1)
+    }
+
+    @Test("a routine deleted after the program was created is not re-seeded into it")
+    func deletedDayIsNotReseeded() throws {
+        let store = try makeStore(seed: .firstLaunch)
+        let program = try #require(store.createProgram(from: .upperLower))
+        let lowerB = try routineModel(store, named: "Lower B")
         store.deleteRoutine(id: lowerB.id)
 
+        let after = try #require(store.programs().first { $0.id == program.id })
+        #expect(after.routineIDs.count == 3)
+        #expect(!store.routines().contains { $0.name == "Lower B" })
+    }
+
+    @Test("a program whose day can't be built refuses: nil, no program inserted")
+    func unbuildableDayRefuses() throws {
+        // No exercise library: not one starter lift can be looked up.
+        let store = try makeStore()
         #expect(store.createProgram(from: .upperLower) == nil)
         #expect(store.programs().isEmpty)
-        // The other programs are untouched.
-        #expect(store.createProgram(from: .pushPullLegs) != nil)
+        #expect(store.routines().isEmpty)
     }
 
     @Test("seeded starter ids are stable and unique per routine")
@@ -76,21 +130,19 @@ struct ParityInsightsProgramTests {
         }
     }
 
-    @Test("a store seeded before the program routines existed gets them once; deleting one sticks")
-    func upgradeSeedsProgramRoutinesOnce() throws {
+    @Test("a store that predates the program routines gets nothing on launch — only on demand")
+    func launchNeverSeedsProgramRoutines() throws {
         let (store, context) = try makeStoreAndContext(seed: .exercises)
         _ = store.saveRoutine(id: nil, name: "My own day", exercises: [])
         SeedState.row(in: context).routinesSeeded = true
         store.save()
 
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        #expect(store.routines().count == 1)
+
+        RoutineSeeder.seedStarters(RoutineSeeder.programRoutineNames, store: store)
         #expect(store.routines().count == 1 + RoutineSeeder.programRoutineNames.count)
         #expect(!store.routines().contains { $0.name == "Push A" })
-
-        let lowerB = try #require(store.routines().first { $0.name == "Lower B" })
-        store.deleteRoutine(id: lowerB.id)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
-        #expect(!store.routines().contains { $0.name == "Lower B" })
     }
 
     @Test("seeded squat steps 5 kg, seeded bench 2.5 kg (engine rec 5, seeder half)")

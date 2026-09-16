@@ -20,12 +20,16 @@ struct TestSeed: OptionSet, Sendable {
 
     /// The bundled exercise library (`ExerciseSeeder`).
     static let exercises = TestSeed(rawValue: 1 << 0)
-    /// The starter routines (`RoutineSeeder`); pulls in `.exercises`.
+    /// All 13 starter routines (`RoutineSeeder.seedAll`); pulls in `.exercises`. The app seeds
+    /// none of them on launch — a suite that wants a stocked store asks for it here.
     static let routines = TestSeed(rawValue: 1 << 1)
     /// The stock equipment profiles (`EquipmentSeeder`).
     static let equipment = TestSeed(rawValue: 1 << 2)
-    /// Everything a first launch seeds.
-    static let firstLaunch: TestSeed = [.exercises, .routines, .equipment]
+    /// Everything a first launch seeds: the library and the equipment profiles, no routines.
+    static let firstLaunch: TestSeed = [.exercises, .equipment]
+    /// A first launch plus every starter routine — the shape an install that predates
+    /// "no shipped routines" had, and what the fold and backup suites work against.
+    static let stocked: TestSeed = [.firstLaunch, .routines]
 }
 
 /// A bare main-store context, seeded as asked, with no `WorkoutStore` in front of it.
@@ -75,6 +79,6 @@ private func makeLibraryContext(_ seed: TestSeed) throws -> ModelContext {
 
 @MainActor
 private func seedThroughStore(_ store: WorkoutStore, _ seed: TestSeed) {
-    if seed.contains(.routines) { RoutineSeeder.seedStarterRoutinesIfNeeded(store: store) }
+    if seed.contains(.routines) { RoutineSeeder.seedAll(store: store) }
     if seed.contains(.equipment) { EquipmentSeeder.seedIfNeeded(store: store) }
 }

@@ -22,6 +22,7 @@ struct HomeView: View {
     @State private var thisWeekCount = 0
     @State private var recoveryMap: [Muscle: Double] = [:]
     @State private var showingSettings = false
+    @State private var askingCoach = false
     @State private var deloadSuggestion: DeloadSuggestionInfo?
     @State private var hasSchedule = true
     @State private var hasAnyRoutines = true
@@ -38,7 +39,7 @@ struct HomeView: View {
                         SampleDataBanner(onClear: clearSampleData)
                     }
                     if !hasAnyRoutines {
-                        StarterPlanCard(onPick: pickStarterPlan)
+                        StarterPlanCard(onPick: pickStarterPlan, onAskCoach: { askingCoach = true })
                     } else if let routine {
                         ScheduledCard(
                             routine: routine, isScheduled: hasSchedule, onStart: onStart,
@@ -76,6 +77,7 @@ struct HomeView: View {
         .onChange(of: preferences.weeklyGoal) { refresh() }
         .onChange(of: preferences.weekStartsMonday) { refresh() }
         .sheet(isPresented: $showingSettings) { SettingsView() }
+        .askCoach(on: $askingCoach)
     }
 
     /// The scheduled routine itself comes from `RootView` (it owns "Start"); everything else

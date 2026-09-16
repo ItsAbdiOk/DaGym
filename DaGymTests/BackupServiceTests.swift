@@ -170,7 +170,7 @@ struct BackupServiceTests {
     @Test("a tombstoned duplicate never reaches the export")
     func tombstonesAreNotExported() throws {
         let (store, context) = try makeStoreAndContext(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
         try plantRemoteDuplicates(store, context: context)
         store.dedupeSeededRows()
 
@@ -192,14 +192,14 @@ struct BackupServiceTests {
     @Test("an older file that already contains a duplicate still converges on import")
     func olderFileWithDuplicateConverges() throws {
         let (store, context) = try makeStoreAndContext(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
         try plantRemoteDuplicates(store, context: context)
         // Exported *before* the fold: exactly the shape of a file written by an older build.
         let olderFile = BackupService.export(context: context)
         #expect(olderFile.routines.filter { $0.name == "Push A" }.count == 2)
 
         let (freshStore, freshContext) = try makeStoreAndContext(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: freshStore)
+        RoutineSeeder.seedAll(store: freshStore)
         BackupService.import(document: olderFile, context: freshContext)
         freshStore.dedupeSeededRows()
 

@@ -7,6 +7,7 @@ import SwiftUI
 
 struct StarterPlanCard: View {
     var onPick: (StarterProgramKind) -> Void
+    var onAskCoach: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
@@ -15,9 +16,13 @@ struct StarterPlanCard: View {
                 .font(DGFont.title2)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
-            Text("No routines yet. Choose a program and DaGym schedules the rest.")
+            Text("No routines yet. Ask the coach to build one for you, or choose a program and DaGym "
+                + "schedules the rest.")
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
+            DGPrimaryButton(
+                title: "Ask the Coach", symbol: "bubble.left.and.text.bubble.right", action: onAskCoach
+            )
             VStack(spacing: DGSpace.s2) {
                 ForEach(StarterProgramKind.allCases) { kind in
                     Button { onPick(kind) } label: {

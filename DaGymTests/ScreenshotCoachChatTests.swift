@@ -15,7 +15,7 @@ struct ScreenshotCoachChatTests {
 
     @Test("every draft validates against the seed library without changing")
     func draftsValidate() throws {
-        let store = try makeStore(seed: .firstLaunch)
+        let store = try makeStore(seed: .stocked)
         let availability = store.equipmentAvailabilityForProgram()
         let library = store.substitutionCandidates()
         for draft in ScreenshotCoachChat.drafts {

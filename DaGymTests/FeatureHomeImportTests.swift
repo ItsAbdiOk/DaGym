@@ -99,8 +99,9 @@ struct FeatureHomeImportTests {
         #expect(store.routines().count == 3)
     }
 
-    @Test("seeding no-ops when the starter routines aren't all present")
+    @Test("seeding no-ops when the trio can't be built and isn't there")
     func sampleDataNoOpsWithoutStarterRoutines() throws {
+        // No exercise library, so the missing two days can't be seeded either.
         let store = try makeStore()
         let preferences = Preferences(suite: makeSuite(#function))
         _ = makeRoutine(store, name: "Push A")
@@ -109,6 +110,39 @@ struct FeatureHomeImportTests {
 
         #expect(preferences.sampleDataMode == false)
         #expect(store.history().isEmpty)
+    }
+
+    @Test("sample data seeds the Push/Pull/Legs trio into an empty store and clear takes it back")
+    func sampleDataSeedsAndClearsItsTrio() throws {
+        let store = try makeStore(seed: .firstLaunch)
+        let preferences = Preferences(suite: makeSuite(#function))
+        #expect(store.routines().isEmpty)
+
+        SampleDataSeeder.seed(store: store, preferences: preferences)
+        #expect(Set(store.routines().map(\.name)) == Set(RoutineSeeder.pushPullLegsNames))
+        #expect(store.history().count == 24)
+
+        SampleDataSeeder.clear(store: store, preferences: preferences)
+        #expect(store.history().isEmpty)
+        #expect(store.routines().isEmpty)
+        #expect(preferences.sampleDataMode == false)
+    }
+
+    @Test("clear keeps a sample-seeded day the lifter scheduled or ran themselves")
+    func sampleDataClearKeepsTouchedDays() throws {
+        let store = try makeStore(seed: .firstLaunch)
+        let preferences = Preferences(suite: makeSuite(#function))
+        SampleDataSeeder.seed(store: store, preferences: preferences)
+        let legs = try #require(store.routines().first { $0.name == "Legs" })
+        store.saveSchedule(WeeklySchedule(days: [.monday: legs.id]))
+        let pushA = try #require(store.routines().first { $0.name == "Push A" })
+        store.context.insert(WorkoutModel(title: "Push A", endedAt: Date(), routineID: pushA.id))
+        store.save()
+
+        SampleDataSeeder.clear(store: store, preferences: preferences)
+
+        #expect(Set(store.routines().map(\.name)) == ["Push A", "Legs"])
+        #expect(store.history().count == 1)
     }
 
     // MARK: - Hevy API import mapping (item 22) — JSON fixture, no network
