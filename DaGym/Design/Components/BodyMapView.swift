@@ -30,6 +30,9 @@ struct BodyMapView: View {
     /// 0…1 per muscle. Missing = inert.
     var intensity: [Muscle: Double] = [:]
     var onTap: ((Muscle) -> Void)?
+    /// What VoiceOver reads for a lit, tappable region instead of the mode's step word — the
+    /// library's "Chest, 112 exercises". Nil keeps `BodyMapAccessibility.regionLabel`.
+    var regionLabel: ((Muscle, Double) -> String)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
@@ -109,7 +112,8 @@ struct BodyMapView: View {
                         .allowsHitTesting(false)
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(
-                            BodyMapAccessibility.regionLabel(muscle: muscle, value: value, mode: mode)
+                            regionLabel?(muscle, value)
+                                ?? BodyMapAccessibility.regionLabel(muscle: muscle, value: value, mode: mode)
                         )
                         .accessibilityAddTraits(.isButton)
                         .accessibilityAction { onTap?(muscle) }
