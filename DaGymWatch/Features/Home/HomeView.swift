@@ -98,7 +98,7 @@ struct RestDayHomeView: View {
                     }
                 }
                 if store.home.routines.isEmpty {
-                    Text("Routines sync from your iPhone.")
+                    Text("No routines yet — ask the coach on your iPhone.")
                         .font(WatchFont.body)
                         .foregroundStyle(WatchColor.inkSecondary)
                         .multilineTextAlignment(.center)
