@@ -1,9 +1,9 @@
 import GymCore
 import SwiftUI
 
-/// Home cards that only appear in particular states: the starter-plan picker on an empty store,
-/// the sample-data banner, and the bodyweight tile. Split out of `HomeView.swift` to keep both
-/// files under the 400-line cap.
+/// Home cards that only appear in particular states: the starter-plan picker on an empty store
+/// and the sample-data banner (the bodyweight tile is `BodyweightTile.swift`). Split out of
+/// `HomeView.swift` to keep both files under the 400-line cap.
 
 struct StarterPlanCard: View {
     var onPick: (StarterProgramKind) -> Void
@@ -60,59 +60,3 @@ struct SampleDataBanner: View {
         )
     }
 }
-
-/// Latest bodyweight + change vs 30 days ago, tapping through to `BodyView` (OpenGym parity 50).
-struct BodyweightTile: View {
-    var kg: Double?
-    var deltaKg: Double?
-    var onTap: () -> Void
-
-    @Environment(Preferences.self) private var preferences
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: DGSpace.s4) {
-                VStack(alignment: .leading, spacing: DGSpace.s1) {
-                    Text("Bodyweight").dgLabel()
-                    if let kg {
-                        HStack(alignment: .lastTextBaseline, spacing: 4) {
-                            Text(preferences.formatWeight(kg: kg))
-                                .dgMetric(DGFont.metricM)
-                                .foregroundStyle(DGColor.ink1)
-                            Text(preferences.unitSymbol)
-                                .font(DGFont.subhead)
-                                .foregroundStyle(DGColor.ink3)
-                        }
-                        Text(deltaText)
-                            .font(DGFont.footnote)
-                            .foregroundStyle(deltaColor)
-                    } else {
-                        Text("Log your weight to see it here")
-                            .font(DGFont.footnote)
-                            .foregroundStyle(DGColor.ink3)
-                    }
-                }
-                Spacer()
-                Image(systemName: "chevron.right").accessibilityHidden(true)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(DGColor.ink4)
-            }
-        }
-        .buttonStyle(.dgCard)
-        .dgCard()
-    }
-
-    private var deltaText: String {
-        guard let deltaKg, abs(deltaKg) >= 0.1 else { return "No change in 30 days" }
-        let magnitude = preferences.formatWeight(kg: abs(deltaKg))
-        let sign = deltaKg > 0 ? "+" : "-"
-        return "\(sign)\(magnitude) \(preferences.unitSymbol) vs 30 days ago"
-    }
-
-    private var deltaColor: Color {
-        guard let deltaKg, abs(deltaKg) >= 0.1 else { return DGColor.ink4 }
-        return DGColor.ink3
-    }
-}
-
-/// Half-width "3 / 4" weekly goal card with a segmented progress bar.
