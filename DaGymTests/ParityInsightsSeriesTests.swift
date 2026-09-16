@@ -72,13 +72,13 @@ struct ParityInsightsSeriesTests {
         #expect(sundayBundle.setsPerMuscle[.chest] == 2)
     }
 
-    @Test("hardOnly: 4 chest sets at RIR 3 + 1 at RIR 0 → chest = 1")
+    @Test("hardOnly: 4 chest sets at RIR 4 + 1 at RIR 0 → chest = 1")
     func hardOnlyCountsNearFailureSets() throws {
         let store = try makeStore()
         let bench = store.createCustomExercise(
             name: "Bench", primary: [.chest], equipment: "Barbell", style: .weightReps
         )
-        let rpes: [Double?] = [7, 7, 7, 7, 10]
+        let rpes: [Double?] = [6, 6, 6, 6, 10]
         let routineID = makeRoutine(store: store, exerciseID: bench.id, rpes: rpes)
         let now = date("2024-01-10T20:00:00Z")
         try logSession(store, routineID: routineID, at: date("2024-01-10T10:00:00Z"), rpes: rpes)
@@ -110,5 +110,51 @@ struct ParityInsightsSeriesTests {
         #expect(month.setsPerMuscle[.chest] == 4)
         let week = store.bodySeries(weeks: 8, calendar: calendar, now: now)
         #expect(week.setsPerMuscle[.chest] == 2)
+    }
+
+    // MARK: - Muscle map modes
+
+    @Test("ratedSetsInWindow: unrated sessions leave the hard-only map with nothing to say")
+    func ratedSetsFollowTheWindow() throws {
+        let store = try makeStore()
+        let bench = store.createCustomExercise(
+            name: "Bench", primary: [.chest], equipment: "Barbell", style: .weightReps
+        )
+        let routineID = makeRoutine(store: store, exerciseID: bench.id, rpes: [nil, nil])
+        let now = date("2024-06-01T12:00:00Z")
+        try logSession(store, routineID: routineID, at: date("2024-05-31T10:00:00Z"), rpes: [nil, nil])
+        try logSession(store, routineID: routineID, at: date("2024-04-01T10:00:00Z"), rpes: [8, nil])
+        let calendar = calendar(firstWeekday: 2)
+        let hard = { (window: BalanceWindow) in
+            store.bodySeries(weeks: 1, calendar: calendar, balanceWindow: window, hardOnly: true, now: now)
+        }
+        #expect(hard(.days(7)).ratedSetsInWindow == 0)
+        #expect(hard(.days(7)).setsPerMuscle[.chest] == nil)
+        #expect(hard(.allTime).ratedSetsInWindow == 1)
+        #expect(hard(.allTime).setsPerMuscle[.chest] == 1)
+        // An empty store has an empty window, not zeros per muscle.
+        let fresh = try makeStore()
+        let empty = fresh.bodySeries(weeks: 1, calendar: calendar, balanceWindow: .allTime, now: now)
+        #expect(empty.setsPerMuscle.isEmpty)
+        #expect(empty.ratedSetsInWindow == 0)
+    }
+
+    @Test("muscleStrength: top lifts per primary mover from the PR cache; empty store is empty")
+    func muscleStrengthFromRecords() throws {
+        let store = try makeStore()
+        #expect(store.muscleStrength().isEmpty)
+        let bench = store.createCustomExercise(
+            name: "Bench", primary: [.chest, .triceps], equipment: "Barbell", style: .weightReps
+        )
+        let routineID = makeRoutine(store: store, exerciseID: bench.id, rpes: [nil])
+        try logSession(store, routineID: routineID, at: date("2024-05-31T10:00:00Z"), rpes: [nil])
+        let top = store.muscleStrength()
+        let chest = try #require(top[.chest]?.first)
+        #expect(chest.name == "Bench")
+        #expect(chest.exerciseID == bench.id)
+        // 60 kg × 8 → the same e1RM the PR cache holds, never a second estimate.
+        #expect(abs(chest.e1rmKg - (store.bestE1RMRecord(exerciseID: bench.id)?.value ?? 0)) < 0.001)
+        #expect(top[.triceps]?.first?.name == "Bench")
+        #expect(top[.quads] == nil)
     }
 }

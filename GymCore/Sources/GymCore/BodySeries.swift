@@ -124,6 +124,20 @@ public enum BodySeries {
         return totals
     }
 
+    /// Counting sets inside `window` that carry a rating, or whose kind (failure / AMRAP) is
+    /// one. Zero means a "hard sets only" map has nothing to go on — the screen says so
+    /// instead of drawing every muscle at zero.
+    public static func ratedSetCount(
+        workouts: [BodyWorkout], window: BalanceWindow, now: Date, calendar: Calendar
+    ) -> Int {
+        workouts.lazy
+            .filter { window.contains($0.date, now: now, calendar: calendar) }
+            .flatMap(\.entries).flatMap(\.sets)
+            .count { set in
+                set.kind.countsTowardStats && (set.rpe != nil || set.kind == .failure || set.kind == .amrap)
+            }
+    }
+
     /// Every workout's duration, oldest first, for a duration-over-time chart.
     public static func sessionDurations(workouts: [BodyWorkout]) -> [(date: Date, durationSeconds: Int)] {
         workouts.sorted { $0.date < $1.date }.map { (date: $0.date, durationSeconds: $0.durationSeconds) }

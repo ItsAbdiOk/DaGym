@@ -2,8 +2,9 @@ import GymCore
 import SwiftData
 import SwiftUI
 
-/// Full recovery map: front/back body heatmap, a muscle-by-muscle fatigue list, and which
-/// muscles saw no training this week. Presented as a sheet from Home's "See Map".
+/// The muscle map in three modes — Balance (sets per muscle over a window), Fatigue (the
+/// recovery heatmap, a muscle-by-muscle fatigue list, Health context) and Strength (top lifts
+/// by e1RM per muscle). Presented as a sheet from Home's "See Map"; opens on Fatigue.
 struct RecoveryMapView: View {
     @Environment(WorkoutStore.self) private var store
     // Not `private`: `RecoveryMapView+Health.swift` (kept separate to stay under the
@@ -15,6 +16,13 @@ struct RecoveryMapView: View {
     @State private var selected: MuscleRecovery?
     @State var recoverySignals: HealthInsightsService.RecoverySignals?
     @State var isShowingHealthSettings = false
+    @State private var mode = MuscleMapMode.fatigue
+    @State private var horizon = BalanceHorizon.week
+    @State private var hardOnly = false
+    /// Balance and Strength read the store only once their mode is shown (`.task(id:)`), so
+    /// opening the sheet costs what it always did.
+    @State private var balance: WorkoutStore.BodySeriesBundle?
+    @State private var strength: [Muscle: [MuscleStrength.Entry]] = [:]
 
     var body: some View {
         ZStack {
@@ -22,13 +30,20 @@ struct RecoveryMapView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: DGSpace.s6) {
                     header
-                    mapCard
-                    healthContextCard
-                    muscleList
-                    BalanceSection(
-                        untrainedMuscles: snapshot.untrainedMuscles,
-                        restedMuscles: snapshot.detrainedMuscles
-                    )
+                    modePicker
+                    switch mode {
+                    case .balance:
+                        BalanceMapSection(
+                            bundle: balance, snapshot: snapshot, window: $horizon, hardOnly: $hardOnly,
+                            onSelect: selectMuscle
+                        )
+                    case .fatigue:
+                        mapCard
+                        healthContextCard
+                        muscleList
+                    case .strength:
+                        StrengthMapSection(top: strength, onSelect: selectMuscle)
+                    }
                 }
                 .padding(.horizontal, DGSpace.s4)
                 .padding(.top, DGSpace.s3)
@@ -36,6 +51,7 @@ struct RecoveryMapView: View {
             }
         }
         .task { await refresh() }
+        .task(id: BalanceKey(mode: mode, horizon: horizon, hardOnly: hardOnly)) { loadMode() }
         .sheet(item: $selected) { muscle in
             MuscleDetailSheet(recovery: muscle)
         }
@@ -52,16 +68,49 @@ struct RecoveryMapView: View {
         recoverySignals = await healthInsights.recoverySignals()
     }
 
+    /// What `.task(id:)` re-runs `loadMode()` for: a mode switch or a Balance control.
+    private struct BalanceKey: Equatable {
+        var mode: MuscleMapMode
+        var horizon: BalanceHorizon
+        var hardOnly: Bool
+    }
+
+    /// Balance is the coach's `get_muscle_volume` aggregation (`bodySeries`) over the picked
+    /// horizon with the training calendar deciding where the week starts; Strength is the PR
+    /// cache through the exercise catalogue.
+    private func loadMode() {
+        switch mode {
+        case .balance:
+            let calendar = preferences.trainingCalendar
+            balance = store.bodySeries(
+                weeks: 1, calendar: calendar, balanceWindow: horizon.window(calendar: calendar),
+                hardOnly: hardOnly
+            )
+        case .strength:
+            strength = store.muscleStrength()
+        case .fatigue:
+            break
+        }
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: DGSpace.s1) {
-            Text("Recovery")
+            Text(mode.title)
                 .font(DGFont.title1)
                 .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
-            Text("Fresh → spent · based on the last \(WorkoutStore.recoveryWindowDays) days")
+            Text(mode.subtitle(windowDays: WorkoutStore.recoveryWindowDays))
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
         }
+    }
+
+    private var modePicker: some View {
+        Picker("Map", selection: $mode) {
+            ForEach(MuscleMapMode.allCases) { Text($0.title).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityIdentifier(A11yID.recoveryMode)
     }
 
     private var mapCard: some View {
@@ -188,121 +237,6 @@ private struct MuscleListRow: View {
     }
 
     private var statusLabel: String { recovery.easesOffLabel }
-}
-
-/// What hasn't been trained: the "not this week" tags, plus the graded longest-without-work
-/// list the snapshot already computes. Strictly descriptive — how long it has been, never a
-/// claim about what that time off has done to the lifter.
-private struct BalanceSection: View {
-    var untrainedMuscles: [Muscle]
-    var restedMuscles: [MuscleRetention]
-
-    /// Enough to be useful, short enough that a lifter two weeks off training doesn't get a
-    /// wall of every muscle they own.
-    private static let maxListed = 4
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            Text("Balance").dgLabel()
-            thisWeek
-            if !listed.isEmpty { longestWithoutWork }
-        }
-        .dgCard()
-    }
-
-    @ViewBuilder
-    private var thisWeek: some View {
-        if untrainedMuscles.isEmpty {
-            Text("Every muscle group has seen work this week.")
-                .font(DGFont.subhead)
-                .foregroundStyle(DGColor.ink3)
-        } else {
-            VStack(alignment: .leading, spacing: DGSpace.s2) {
-                Text("Not trained this week")
-                    .font(DGFont.subhead)
-                    .foregroundStyle(DGColor.ink3)
-                RecoveryFlowLayout(spacing: DGSpace.s2) {
-                    ForEach(untrainedMuscles) { muscle in
-                        DGTag(text: muscle.displayName)
-                    }
-                }
-            }
-        }
-    }
-
-    /// Only muscles this lifter has actually trained at some point: one they have never trained
-    /// has nothing to say beyond the "not trained this week" tag it already carries, and a brand
-    /// new account would otherwise get a list of four "No sets logged" rows.
-    private var listed: [MuscleRetention] {
-        Array(restedMuscles.filter { $0.lastTrained != nil }.prefix(Self.maxListed))
-    }
-
-    private var longestWithoutWork: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s2) {
-            Text("Longest without work")
-                .font(DGFont.subhead)
-                .foregroundStyle(DGColor.ink3)
-            ForEach(listed) { rested in
-                HStack {
-                    Text(rested.muscle.displayName)
-                        .font(DGFont.body)
-                        .foregroundStyle(DGColor.ink2)
-                    Spacer()
-                    Text(Self.sinceLabel(rested.lastTrained))
-                        .font(DGFont.footnote)
-                        .foregroundStyle(DGColor.ink3)
-                }
-                .frame(minHeight: 28)
-                .accessibilityElement(children: .combine)
-            }
-        }
-    }
-
-    /// "3 weeks ago" / "18 days ago" / "No sets logged" — the fact, not an interpretation of it.
-    static func sinceLabel(_ lastTrained: Date?) -> String {
-        guard let lastTrained else { return "No sets logged" }
-        return lastTrained.formatted(.relative(presentation: .numeric))
-    }
-}
-
-/// Simple left-to-right, top-to-bottom wrap for the balance tags.
-private struct RecoveryFlowLayout: Layout {
-    var spacing: CGFloat
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? .infinity
-        var origin = CGPoint.zero
-        var rowHeight: CGFloat = 0
-        var maxWidth: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if origin.x + size.width > width, origin.x > 0 {
-                origin.x = 0
-                origin.y += rowHeight + spacing
-                rowHeight = 0
-            }
-            origin.x += size.width + spacing
-            maxWidth = max(maxWidth, origin.x)
-            rowHeight = max(rowHeight, size.height)
-        }
-        return CGSize(width: maxWidth, height: origin.y + rowHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var origin = bounds.origin
-        var rowHeight: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if origin.x + size.width > bounds.maxX, origin.x > bounds.minX {
-                origin.x = bounds.minX
-                origin.y += rowHeight + spacing
-                rowHeight = 0
-            }
-            subview.place(at: origin, proposal: .unspecified)
-            origin.x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-    }
 }
 
 #Preview {
