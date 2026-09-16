@@ -20,8 +20,15 @@ struct CoachChatArchive: Sendable {
         return decoder
     }()
 
-    /// The app's archive; nil only when Application Support itself can't be found.
+    /// The app's archive; nil only when Application Support itself can't be found. The
+    /// screenshot build gets its own directory under tmp, which `ScreenshotMode` wipes and
+    /// fills with one canned thread, so a shot never shows (or overwrites) a real chat.
     static func standard(fileManager: FileManager = .default) -> CoachChatArchive? {
+        if LaunchFlags.isScreenshotting {
+            let directory = fileManager.temporaryDirectory
+                .appending(path: "CoachChatScreenshots", directoryHint: .isDirectory)
+            return CoachChatArchive(directory: directory)
+        }
         guard let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
         else { return nil }
         return CoachChatArchive(directory: base.appending(path: "CoachChat", directoryHint: .isDirectory))

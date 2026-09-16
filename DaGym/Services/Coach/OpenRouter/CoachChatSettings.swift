@@ -13,7 +13,9 @@ enum CoachChatSettings {
         return key
     }
 
-    static var hasAPIKey: Bool { apiKey() != nil }
+    /// The screenshot build has no key and never sends; the flag stands in for one so the chat
+    /// opens on its canned thread instead of the "add your key" state.
+    static var hasAPIKey: Bool { LaunchFlags.isScreenshotting || apiKey() != nil }
 
     /// Saves a pasted key; an empty paste removes it instead of storing a blank.
     /// Debug builds only: `-dgOpenRouterKey <key>` seeds the Keychain and grants consent so a
