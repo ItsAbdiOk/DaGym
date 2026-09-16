@@ -40,15 +40,21 @@ extension MuscleRecovery {
         return "Little recent work"
     }
 
+    /// True when there is next to nothing on the muscle: "eased off" would claim a reading that
+    /// was never up, so those rows say "Fresh" instead.
+    private var isFresh: Bool { spent < TrainingConstants.recoveryHeadlineThreshold / 2 }
+
     /// Short form for the muscle list row.
     var easesOffLabel: String {
-        guard let recoveredBy else { return "Eased off" }
+        guard let recoveredBy else { return isFresh ? "Fresh" : "Eased off" }
         return "Eases off \(Self.timingLabel(recoveredBy))"
     }
 
     /// Long form for the detail sheet.
     var easesOffSentence: String {
-        guard let recoveredBy else { return "This reading has eased off" }
+        guard let recoveredBy else {
+            return isFresh ? "Fresh — little recent work on this muscle" : "This reading has eased off"
+        }
         return "Eases off around \(Self.timingLabel(recoveredBy))"
     }
 
