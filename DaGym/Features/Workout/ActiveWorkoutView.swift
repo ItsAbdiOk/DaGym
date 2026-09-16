@@ -32,6 +32,9 @@ struct ActiveWorkoutView: View {
     @State var flashOpacity: Double = 0
     @State var chromeCollapse = ChromeCollapseState()
     @State var undoAction: UndoAction?
+    /// The "…" menu's one-session layout choice; nil means the saved `Preferences.workoutLayout`.
+    /// Deliberately not written back — the default only changes in Settings › Workout.
+    @State var layoutOverride: WorkoutLayout?
     /// "Keep going" hides the all-done banner until another set is added and left open.
     @State var allDoneDismissed = false
     /// "SUNDAY · 13 SEP" — formatted once on appear (`Self.startedAtLabel(for:)`), since the
@@ -243,6 +246,7 @@ struct ActiveWorkoutView: View {
     private func staticExerciseCard(entry: WorkoutExerciseEntry, index: Int) -> some View {
         ExerciseCard(
             entry: entry, isOnDeck: session.onDeckIndex == index, effortScale: session.effortScale,
+            layout: layout,
             onTapWeight: { setID in
                 activeSheet = .keypad(exerciseID: entry.id, setID: setID, field: .weight)
             },
@@ -399,6 +403,10 @@ extension ActiveWorkoutView {
         }
         return "Backfill · \(dateText)".uppercased()
     }
+
+    /// What the exercise list renders in: the session override when the "…" menu set one, else
+    /// the saved preference.
+    var layout: WorkoutLayout { layoutOverride ?? preferences.workoutLayout }
 
     var muscleNames: String {
         let names = session.musclesHit.sorted { $0.value > $1.value }.map(\.key.displayName)

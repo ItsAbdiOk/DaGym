@@ -187,12 +187,14 @@ final class Preferences {
         didSet { defaults.set(colorBlindHeatmaps, forKey: Key.colorBlindHeatmaps) }
     }
 
-    /// Active workout: hide the last-3 strip, chips and plate line (OpenGym parity, features 24).
-    var compactWorkoutLayout: Bool {
-        didSet { defaults.set(compactWorkoutLayout, forKey: Key.compactWorkoutLayout) }
+    /// The saved active-workout layout (OpenGym parity 1): Cards, List or Compact. Set in
+    /// Settings › Workout; the active screen's "…" menu overrides it for one session without
+    /// writing here. Migrates the older "Compact layout" toggle on first read.
+    var workoutLayout: WorkoutLayout {
+        didSet { defaults.set(workoutLayout.rawValue, forKey: Key.workoutLayout) }
     }
     /// ± buttons around weight/reps on a set row, stepping by the exercise increment. Toggled
-    /// from the active workout's "…" menu, next to Compact layout.
+    /// from the active workout's "…" menu and Settings › Workout.
     var showSetSteppers: Bool {
         didSet { defaults.set(showSetSteppers, forKey: Key.showSetSteppers) }
     }
@@ -285,7 +287,7 @@ final class Preferences {
 
     init(suite: UserDefaults = .standard) {
         defaults = suite
-        compactWorkoutLayout = Self.boolValue(suite, Key.compactWorkoutLayout, default: false)
+        workoutLayout = Self.workoutLayoutValue(suite)
         showSetSteppers = Self.boolValue(suite, Key.showSetSteppers, default: false)
         restPauseSeconds = Self.intValue(suite, Key.restPauseSeconds, default: 20)
         workoutDayReminderEnabled = Self.boolValue(suite, Key.workoutDayReminderEnabled, default: false)

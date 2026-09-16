@@ -79,7 +79,11 @@ extension BackupService {
         if let raw = backup.bodyFigure, let value = Preferences.BodyFigure(rawValue: raw) {
             preferences.bodyFigure = value
         }
-        if let value = backup.compactWorkoutLayout { preferences.compactWorkoutLayout = value }
+        if backup.workoutLayout != nil || backup.compactWorkoutLayout != nil {
+            preferences.workoutLayout = WorkoutLayout(
+                stored: backup.workoutLayout, legacyCompact: backup.compactWorkoutLayout ?? false
+            )
+        }
         if let value = backup.showSetSteppers { preferences.showSetSteppers = value }
         if let value = backup.deloadSnoozedUntil { preferences.deloadSnoozedUntil = value }
         if let value = backup.voiceSpeakBackOnHeadphones {

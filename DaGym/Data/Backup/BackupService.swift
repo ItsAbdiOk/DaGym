@@ -160,7 +160,9 @@ enum BackupService {
         backup.trainingGoal = preferences.trainingGoal.rawValue
         backup.deloadSnoozedUntil = preferences.deloadSnoozedUntil
         backup.accent = preferences.accent.rawValue
-        backup.compactWorkoutLayout = preferences.compactWorkoutLayout
+        backup.workoutLayout = preferences.workoutLayout.rawValue
+        // Kept for an older app restoring this export: it only knows the compact toggle.
+        backup.compactWorkoutLayout = !preferences.workoutLayout.showsCardExtras
         backup.showSetSteppers = preferences.showSetSteppers
         backup.restPauseSeconds = preferences.restPauseSeconds
         backup.workoutDayReminderEnabled = preferences.workoutDayReminderEnabled

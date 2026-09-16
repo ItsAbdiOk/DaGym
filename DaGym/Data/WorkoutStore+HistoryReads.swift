@@ -171,7 +171,8 @@ extension WorkoutStore {
         return WorkoutDetail(
             id: model.id, title: model.title, startedAt: model.startedAt, endedAt: model.endedAt,
             exercises: entries, notes: model.notes, isBackfilled: model.isBackfilled,
-            prCount: prCount(for: model.id), routineGlyphs: routineGlyphs(for: entries)
+            prCount: prCount(for: model.id), routineGlyphs: routineGlyphs(for: entries),
+            canEditNotes: model.endedAt != nil
         )
     }
 

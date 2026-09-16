@@ -17,6 +17,7 @@ enum A11yID {
     static let tabCoach = "tab.coach"
 
     static let workoutFinish = "workout.finish"
+    static let settingsWorkoutLayout = "settings.workout.layout"
 
     /// `index` is the set's position within its exercise (0-based).
     static func setRowDone(_ index: Int) -> String { "setrow.done.\(index)" }
@@ -83,6 +84,10 @@ enum A11yID {
 
     static let historyList = "history.list"
     static let historyRow0 = "history.row.0"
+    static let historyNote = "history.note"
+    static let routinesStarterPlan = "routines.starterPlan"
+    /// `name` is the `StarterProgramKind` raw value ("Push/Pull/Legs").
+    static func starterPlan(_ name: String) -> String { "starterPlan.\(name)" }
 
     static let libraryByMuscle = "library.byMuscle"
     static let libraryMuscleMapCaption = "library.muscleMap.caption"
