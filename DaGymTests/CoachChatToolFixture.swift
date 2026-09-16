@@ -12,6 +12,8 @@ import Testing
 struct CoachChatToolFixture {
     let store: WorkoutStore
     let executor: StoreCoachChatToolExecutor
+    /// The executor's memory, on a throwaway file.
+    let memory: CoachMemoryFile
     let bench: ExerciseInfo
     let row: ExerciseInfo
     let legPress: ExerciseInfo
@@ -64,13 +66,21 @@ struct CoachChatToolFixture {
             }
             _ = store.finish(session: session)
         }
+        let memory = CoachMemoryFile(fileURL: temporaryMemoryURL(), now: { now })
         let executor = StoreCoachChatToolExecutor(
-            store: store, unit: unit, weeklyGoal: 2, calendar: calendar, now: { now }
+            store: store, unit: unit, weeklyGoal: 2, calendar: calendar, memory: memory, now: { now }
         )
         return CoachChatToolFixture(
-            store: store, executor: executor, bench: bench, row: row, legPress: legPress, routine: routine,
-            now: now, calendar: calendar
+            store: store, executor: executor, memory: memory, bench: bench, row: row, legPress: legPress,
+            routine: routine, now: now, calendar: calendar
         )
+    }
+
+    /// A fresh facts file per fixture, so memory tests never see each other's facts.
+    static func temporaryMemoryURL() -> URL {
+        FileManager.default.temporaryDirectory
+            .appending(path: "coach-memory-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appending(path: "facts.json", directoryHint: .notDirectory)
     }
 
     /// Runs a tool and returns its JSON object as a dictionary.

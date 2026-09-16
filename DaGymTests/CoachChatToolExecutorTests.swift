@@ -21,6 +21,7 @@ struct CoachChatToolExecutorTests {
             .getExerciseHistory: #"{"exercise_name":"bench press"}"#,
             .forecastE1RM: #"{"exercise_id":"\#(bench)","target_kg":120}"#,
             .searchExercises: #"{"query":"press"}"#,
+            .remember: #"{"text":"Knees hurt on leg press","topic":"injury"}"#,
             .proposeRoutine: #"{"name":"Pull","exercises":[{"exercise_name":"Dumbbell Row","#
                 + #""sets":[{"target_reps":10}]}]}"#,
             .proposeProgram: #"{"name":"UL","goal":"strength","days_per_week":4}"#,

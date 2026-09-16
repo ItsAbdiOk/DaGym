@@ -8,6 +8,7 @@ import Foundation
 enum A11yID {
     static let homeStart = "home.start"
     static let homeFreestyle = "home.freestyle"
+    static let homeWeekReview = "home.weekReview"
 
     static let tabToday = "tab.today"
     static let tabRoutines = "tab.routines"
@@ -66,6 +67,12 @@ enum A11yID {
     static let coachConsentAgree = "coach.settings.consentAgree"
     static let coachConsentCancel = "coach.settings.consentCancel"
     static let coachWhatIsSent = "coach.settings.whatIsSent"
+    static let coachUsageRow = "coach.settings.usage"
+    static let coachUsageTotal = "coach.usage.total"
+    static let coachUsageReset = "coach.usage.reset"
+    static let coachMemoryRow = "coach.settings.memory"
+    static let coachMemoryList = "coach.memory.list"
+    static let coachMemoryForgetAll = "coach.memory.forgetAll"
 
     static let walletAdd = "gymcard.wallet.add"
     static let walletOpen = "gymcard.wallet.open"

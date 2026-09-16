@@ -31,23 +31,32 @@ struct CoachChatArchive: Sendable {
 
     /// Newest first. A file that won't decode is skipped and logged, not fatal to the list.
     func list() -> [CoachChatThreadSummary] {
+        threads().map {
+            CoachChatThreadSummary(
+                id: $0.id, title: $0.title, updatedAt: $0.updatedAt, messageCount: $0.messages.count
+            )
+        }
+    }
+
+    /// Every thread in full, newest first — for the usage screen, which needs each one's
+    /// usage; the chat itself lists summaries and loads one thread at a time.
+    func threads() -> [CoachChatThread] {
         let urls = (try? FileManager.default.contentsOfDirectory(
             at: directory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
         )) ?? []
         return urls
             .filter { $0.pathExtension == "json" }
-            .compactMap { url -> CoachChatThreadSummary? in
-                guard let thread = decode(at: url) else { return nil }
-                return CoachChatThreadSummary(
-                    id: thread.id, title: thread.title, updatedAt: thread.updatedAt,
-                    messageCount: thread.messages.count
-                )
-            }
+            .compactMap(decode(at:))
             .sorted { $0.updatedAt > $1.updatedAt }
     }
 
     func load(id: UUID) -> CoachChatThread? {
         decode(at: fileURL(for: id))
+    }
+
+    /// The week-review thread filed under `weekKey` (`CoachWeekReview.weekKey`), if any.
+    func weekReviewThread(weekKey: String) -> CoachChatThread? {
+        threads().first { $0.kind == .weekReview && $0.weekReviewKey == weekKey }
     }
 
     private func decode(at url: URL) -> CoachChatThread? {

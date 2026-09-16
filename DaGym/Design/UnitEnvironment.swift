@@ -271,6 +271,14 @@ final class Preferences {
     var coachChatConsentGiven: Bool {
         didSet { defaults.set(coachChatConsentGiven, forKey: Key.coachChatConsentGiven) }
     }
+    /// `CoachWeekReview.weekKey` of the last Sunday check-in started, and of the one the
+    /// lifter dismissed with "Not this week". Home's card hides for a week named in either.
+    var coachWeekReviewLastKey: String? {
+        didSet { defaults.set(coachWeekReviewLastKey, forKey: Key.coachWeekReviewLastKey) }
+    }
+    var coachWeekReviewDismissedKey: String? {
+        didSet { defaults.set(coachWeekReviewDismissedKey, forKey: Key.coachWeekReviewDismissedKey) }
+    }
 
     init(suite: UserDefaults = .standard) {
         defaults = suite
@@ -291,6 +299,8 @@ final class Preferences {
         coachModelID = suite.string(forKey: Key.coachModelID) ?? CoachChatConfiguration.defaultModelID
         coachReviewerModelID = Self.reviewerModelID(suite.string(forKey: Key.coachReviewerModelID))
         coachChatConsentGiven = Self.boolValue(suite, Key.coachChatConsentGiven, default: false)
+        coachWeekReviewLastKey = suite.string(forKey: Key.coachWeekReviewLastKey)
+        coachWeekReviewDismissedKey = suite.string(forKey: Key.coachWeekReviewDismissedKey)
         let unit = WeightUnit(rawValue: suite.string(forKey: Key.weightUnit) ?? "") ?? .kg
         weightUnit = unit
         if let stored = DistanceUnit(rawValue: suite.string(forKey: Key.distanceUnit) ?? "") {

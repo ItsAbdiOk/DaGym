@@ -54,6 +54,7 @@ struct HomeView: View {
                         StreakCard(current: streakCurrent, longest: streakLongest)
                     }
                     RecoveryCard(map: recoveryMap, onSeeRecovery: onSeeRecovery)
+                    WeekReviewCard()
                     BodyweightTile(kg: bodyweightKg, deltaKg: bodyweightDeltaKg, onTap: onOpenBody)
                     if let deloadSuggestion {
                         WhyCard(

@@ -28,6 +28,8 @@ final class CoachChatEngine {
     private(set) var isStreaming = false
     private(set) var lastError: OpenRouterError?
     private(set) var usage: CoachChatUsage
+    private(set) var kind: CoachChatThreadKind
+    private(set) var weekReviewKey: String?
 
     let client: OpenRouterClient
     let executor: any CoachChatToolExecutor
@@ -38,6 +40,8 @@ final class CoachChatEngine {
     let reviewerTools: [OpenRouterWire.ToolDefinition]
     let clock: @Sendable () -> Date
     private let archive: CoachChatArchive?
+    /// The cross-thread counters for Settings › Coach usage; nil in tests that do not care.
+    private let ledger: CoachChatUsageLedgerStore?
     private let createdAt: Date
     /// What the model sees: system prompt is prepended per request; tool calls and results stay
     /// so later turns can build on earlier lookups. Rebuilt from text only on restore.
@@ -57,6 +61,7 @@ final class CoachChatEngine {
         reviewerTools: [OpenRouterWire.ToolDefinition]? = nil,
         thread: CoachChatThread? = nil,
         archive: CoachChatArchive? = nil,
+        ledger: CoachChatUsageLedgerStore? = nil,
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.client = client
@@ -67,6 +72,7 @@ final class CoachChatEngine {
         self.reviewerTools = reviewerTools
             ?? (try? OpenRouterWire.toolDefinitions(CoachChatToolCatalog.reviewerTools)) ?? []
         self.archive = archive
+        self.ledger = ledger
         self.clock = clock
         threadID = thread?.id ?? UUID()
         createdAt = thread?.createdAt ?? clock()
@@ -77,6 +83,8 @@ final class CoachChatEngine {
         draftOrigins = restoredDrafts.indices.map { origins.indices.contains($0) ? origins[$0] : .drafter }
         reviews = thread?.reviews ?? []
         usage = thread?.usage ?? CoachChatUsage()
+        kind = thread?.kind ?? .chat
+        weekReviewKey = thread?.weekReviewKey
         wire = Self.wireTranscript(from: messages)
     }
 
@@ -84,7 +92,8 @@ final class CoachChatEngine {
     func snapshot() -> CoachChatThread {
         CoachChatThread(
             id: threadID, createdAt: createdAt, updatedAt: messages.last?.sentAt ?? createdAt,
-            messages: messages, drafts: drafts, draftOrigins: draftOrigins, reviews: reviews, usage: usage
+            messages: messages, drafts: drafts, draftOrigins: draftOrigins, reviews: reviews, usage: usage,
+            kind: kind, weekReviewKey: weekReviewKey
         )
     }
 
@@ -220,7 +229,10 @@ final class CoachChatEngine {
                 call.function.arguments += chunk
                 calls[index] = call
             case .finished(let reason, let turnUsage):
-                if let turnUsage { usage.add(turnUsage, model: request.model) }
+                if let turnUsage {
+                    usage.add(turnUsage, model: request.model)
+                    ledger?.record(turnUsage, model: request.model, at: clock())
+                }
                 reply.finishReason = reason
                 if reason == "length", let bubbleIndex { messages[bubbleIndex].isStopped = true }
             }
@@ -300,6 +312,22 @@ final class CoachChatEngine {
             case .tool, .draft, .review: nil
             }
         }
+    }
+}
+
+// MARK: - Week review
+
+extension CoachChatEngine {
+    /// Turns a fresh thread into the Sunday check-in and sends the canned turn
+    /// (`CoachWeekReviewPrompt.userTurn`), which runs through the ordinary loop — tools,
+    /// proposals, second opinion. The thread is filed at once so Home sees it as started even
+    /// if the reply never lands. A thread that already has messages is left alone.
+    func startWeekReview(weekEnding: Date, calendar: Calendar) async {
+        guard messages.isEmpty, !isStreaming else { return }
+        kind = .weekReview
+        weekReviewKey = DateKey.string(for: weekEnding, calendar: calendar)
+        persist()
+        await send(CoachWeekReviewPrompt.userTurn(weekEnding: weekEnding, calendar: calendar))
     }
 }
 

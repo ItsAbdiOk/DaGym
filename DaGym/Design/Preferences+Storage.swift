@@ -53,6 +53,8 @@ extension Preferences {
         static let coachModelID = "coachModelID"
         static let coachReviewerModelID = "coachReviewerModelID"
         static let coachChatConsentGiven = "coachChatConsentGiven"
+        static let coachWeekReviewLastKey = "coachWeekReviewLastKey"
+        static let coachWeekReviewDismissedKey = "coachWeekReviewDismissedKey"
     }
 
     enum Appearance: String, CaseIterable, Codable {

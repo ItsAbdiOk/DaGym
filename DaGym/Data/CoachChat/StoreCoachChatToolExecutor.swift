@@ -17,6 +17,10 @@ final class StoreCoachChatToolExecutor: CoachChatToolExecutor {
     let weeklyGoal: Int
     let calendar: Calendar
     let now: () -> Date
+    /// Where `remember` / `recall` read and write; nil leaves both tools answering with an error.
+    let memory: (any CoachMemoryStore)?
+    /// The thread a remembered fact is attributed to; the factory sets it once the engine exists.
+    var sourceThreadID: UUID?
 
     /// Sessions the history tools return at most before flagging `truncated`.
     static let maxSeriesSessions = 60
@@ -24,12 +28,13 @@ final class StoreCoachChatToolExecutor: CoachChatToolExecutor {
 
     init(
         store: WorkoutStore, unit: WeightUnit, weeklyGoal: Int = 4, calendar: Calendar = .current,
-        now: @escaping () -> Date = Date.init
+        memory: (any CoachMemoryStore)? = nil, now: @escaping () -> Date = Date.init
     ) {
         self.store = store
         self.unit = unit
         self.weeklyGoal = weeklyGoal
         self.calendar = calendar
+        self.memory = memory
         self.now = now
     }
 
@@ -63,6 +68,8 @@ final class StoreCoachChatToolExecutor: CoachChatToolExecutor {
         .getRecovery: { executor, _ in try executor.json(executor.recovery()) },
         .getBodyMeasurements: read(WeeksArguments.self) { $0.bodyMeasurements($1) },
         .searchExercises: read(SearchArguments.self) { try $0.searchExercises($1) },
+        .remember: read(RememberArguments.self) { try $0.remember($1) },
+        .recall: read(RecallArguments.self) { try $0.recall($1) },
         .proposeRoutine: proposal(RoutineProposal.self, CoachChatDraft.routine),
         .proposeProgram: proposal(ProgramProposal.self, CoachChatDraft.program),
         .proposeSchedule: proposal(ScheduleProposal.self, CoachChatDraft.schedule),

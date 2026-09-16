@@ -51,7 +51,12 @@ public struct LifterProfileFacts: Codable, Hashable, Sendable {
 /// The system prompt for the cloud coach. Pure text from `LifterProfileFacts` and the date;
 /// the house rules are fixed so a test can pin the wording the model is held to.
 public enum CoachChatPrompt {
-    public static func system(profile: LifterProfileFacts, now: Date, calendar: Calendar) -> String {
+    /// Facts printed in the "What you remember" block at most; older ones stay behind `recall`.
+    public static let maxMemoryLines = 15
+
+    public static func system(
+        profile: LifterProfileFacts, memory: [CoachMemoryFact] = [], now: Date, calendar: Calendar
+    ) -> String {
         [
             identity,
             "Today is \(dateLine(now, calendar: calendar)).",
@@ -59,6 +64,7 @@ public enum CoachChatPrompt {
             "About the lifter:",
             profileLines(profile).map { "- \($0)" }.joined(separator: "\n"),
             libraryBlock(profile),
+            memoryBlock(memory, calendar: calendar),
             "How you coach:",
             coachingPrinciples.map { "- \($0)" }.joined(separator: "\n"),
             "",
@@ -158,8 +164,29 @@ public enum CoachChatPrompt {
             + "library is available through search_exercises):\n" + lines.joined(separator: "\n") + "\n"
     }
 
+    /// What the coach was told to keep in mind, most recent first, at most `maxMemoryLines`
+    /// — "- [injury, 2026-09-01] Knees hurt on leg press." The blank string when there is
+    /// nothing, so the prompt reads the same as before memory existed.
+    public static func memoryBlock(_ facts: [CoachMemoryFact], calendar: Calendar) -> String {
+        guard !facts.isEmpty else { return "" }
+        let recent = facts.sorted { $0.createdAt > $1.createdAt }.prefix(maxMemoryLines)
+        let lines = recent.map { fact in
+            let stamp = DateKey.string(for: fact.createdAt, calendar: calendar)
+            let until = fact.expiresAt.map { ", until \(DateKey.string(for: $0, calendar: calendar))" } ?? ""
+            return "- [\(fact.topic.rawValue), \(stamp)\(until)] \(fact.text)"
+        }
+        let more = facts.count > recent.count
+            ? "\n(\(facts.count - recent.count) older facts are available through recall.)" : ""
+        return "\nWhat you remember from earlier chats (the lifter can edit this list in Settings):\n"
+            + lines.joined(separator: "\n") + more + "\n"
+    }
+
     /// The wording the model is held to. Kept as separate lines so a test can check each one.
     public static let houseRules: [String] = [
+        "When the lifter states a durable fact — an injury or pain, an exercise they hate or love, a "
+            + "schedule change, an equipment change, a new goal — call remember once with it, so the "
+            + "next chat knows. Never remember weights, sets, reps or what happened in a session: the "
+            + "log has those and the tools read them.",
         "Always call tools for numbers. Never guess or recall a weight, rep, date or set count; if you have "
             + "not read it this conversation, read it first.",
         "Say which data you used: name the exercise, the dates or the weeks the numbers come from.",

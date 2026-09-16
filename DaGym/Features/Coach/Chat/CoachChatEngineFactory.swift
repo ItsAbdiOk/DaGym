@@ -17,19 +17,25 @@ enum CoachChatEngineFactory {
     ) -> CoachChatEngine {
         let client = OpenRouterClient(apiKey: CoachChatSettings.keyProvider)
         let calendar = preferences.trainingCalendar
+        let memory = CoachMemoryFile.standard()
         let executor = StoreCoachChatToolExecutor(
-            store: store, unit: preferences.weightUnit, weeklyGoal: preferences.weeklyGoal, calendar: calendar
+            store: store, unit: preferences.weightUnit, weeklyGoal: preferences.weeklyGoal,
+            calendar: calendar, memory: memory
         )
         let facts = store.lifterProfileFacts(
             unit: preferences.weightUnit, weeklyGoal: preferences.weeklyGoal, trainingGoal: nil, now: now,
             calendar: calendar
         )
-        let prompt = CoachChatPrompt.system(profile: facts, now: now, calendar: calendar)
-        return CoachChatEngine(
+        let prompt = CoachChatPrompt.system(
+            profile: facts, memory: memory?.facts() ?? [], now: now, calendar: calendar
+        )
+        let engine = CoachChatEngine(
             client: client, executor: executor, configuration: configuration(preferences),
             systemPrompt: prompt, tools: (try? OpenRouterWire.toolDefinitions()) ?? [],
-            thread: thread, archive: CoachChatArchive.standard()
+            thread: thread, archive: CoachChatArchive.standard(), ledger: .standard
         )
+        executor.sourceThreadID = engine.threadID
+        return engine
     }
 
     /// The chat preferences as the Services layer wants them: the drafter's model, consent,

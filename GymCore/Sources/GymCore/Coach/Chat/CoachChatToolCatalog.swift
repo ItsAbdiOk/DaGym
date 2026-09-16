@@ -11,11 +11,11 @@ import Foundation
 /// into them.
 public enum CoachChatToolCatalog {
     /// What the drafter (the conversation model) is offered.
-    public static let tools: [CoachChatTool] = readTools + proposalTools
+    public static let tools: [CoachChatTool] = readTools + memoryTools + proposalTools
 
-    /// What the second-opinion model is offered: the same reads and proposals, plus
+    /// What the second-opinion model is offered: the same reads, memory and proposals, plus
     /// `agree_with_proposal`. The drafter never sees the agree tool.
-    public static let reviewerTools: [CoachChatTool] = readTools + proposalTools + [agreeTool]
+    public static let reviewerTools: [CoachChatTool] = tools + [agreeTool]
 
     /// Every tool either model can call, each once.
     public static let allTools: [CoachChatTool] = tools + [agreeTool]
