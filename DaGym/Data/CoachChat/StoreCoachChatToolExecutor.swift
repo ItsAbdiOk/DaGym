@@ -176,11 +176,11 @@ final class StoreCoachChatToolExecutor: CoachChatToolExecutor {
                 .replacingOccurrences(of: "```", with: "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        // Keep the outermost object/array only: anything after its close is noise.
-        if let open = text.firstIndex(where: { $0 == "{" || $0 == "[" }) {
-            let closer: Character = text[open] == "{" ? "}" : "]"
-            if let close = text.lastIndex(of: closer), close > open { text = String(text[open...close]) }
-        }
+        // Keep the outermost object/array only: anything after its close is noise, and a call
+        // with no object at all (a stray "=" for a no-argument tool) is an empty object.
+        guard let open = text.firstIndex(where: { $0 == "{" || $0 == "[" }) else { return "" }
+        let closer: Character = text[open] == "{" ? "}" : "]"
+        if let close = text.lastIndex(of: closer), close > open { text = String(text[open...close]) }
         return stripTrailingCommas(text)
     }
 

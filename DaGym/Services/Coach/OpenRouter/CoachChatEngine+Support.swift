@@ -52,13 +52,17 @@ extension CoachChatEngine {
     /// with `get_profile`, so an empty argument string becomes `{}`.
     static func orderedCalls(_ calls: [Int: OpenRouterWire.ToolCall]) -> [OpenRouterWire.ToolCall] {
         calls.keys.sorted().compactMap { calls[$0] }
-            .filter { !$0.function.name.isEmpty }
             .map { call in
                 var call = call
+                // Some providers stream the name with punctuation glued on ("get_profile=").
+                call.function.name = String(
+                    call.function.name.filter { $0.isLetter || $0.isNumber || $0 == "_" }
+                )
                 if call.function.arguments.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     call.function.arguments = "{}"
                 }
                 return call
             }
+            .filter { !$0.function.name.isEmpty }
     }
 }

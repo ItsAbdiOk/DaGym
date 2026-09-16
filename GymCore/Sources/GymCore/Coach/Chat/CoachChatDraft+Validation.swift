@@ -210,9 +210,14 @@ struct CoachChatExerciseResolver {
             found = byID[id]
             if found == nil { reasons.append("No exercise with id \(id.uuidString); use search_exercises.") }
         } else if let name, !Self.key(name).isEmpty {
-            found = byName[Self.key(name)]
+            found = byName[Self.key(name)] ?? closest(to: name)
             if found == nil {
-                reasons.append("Unknown exercise '\(name)'; use search_exercises for the exact name.")
+                let hint = suggestions(for: name)
+                reasons.append(
+                    "Unknown exercise '\(name)'"
+                        + (hint.isEmpty ? "" : " — closest in the library: \(hint.joined(separator: ", "))")
+                        + "; use search_exercises for the exact name."
+                )
             }
         } else {
             found = nil
@@ -234,5 +239,55 @@ struct CoachChatExerciseResolver {
 
     private static func key(_ name: String) -> String {
         name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    /// A model writes "Lat Pulldown" for the library's "Wide-Grip Lat Pulldown" and "DB Bench"
+    /// for "Dumbbell Bench Press"; rejecting those cost a whole round trip each. The name is
+    /// matched on words: every word of the request must appear in the library name (common
+    /// abbreviations expanded), and among the matches the fewest extra words wins, allowed
+    /// exercises before blocked ones, shorter names before longer.
+    func closest(to name: String) -> SubstitutionCandidate? {
+        let wanted = Self.words(name)
+        guard !wanted.isEmpty else { return nil }
+        let scored = library.compactMap { candidate -> (SubstitutionCandidate, Int, Int)? in
+            let have = Self.words(candidate.name)
+            guard wanted.allSatisfy({ word in have.contains(word) }) else { return nil }
+            let allowed = availability.verdict(equipment: candidate.equipment, machine: candidate.machine)
+                == .allowed ? 0 : 1
+            return (candidate, have.count - wanted.count, allowed)
+        }
+        return scored.min { lhs, rhs in
+            (lhs.1, lhs.2, lhs.0.name.count) < (rhs.1, rhs.2, rhs.0.name.count)
+        }?.0
+    }
+
+    /// Up to three library names sharing most words with `name`, for the rejection message.
+    func suggestions(for name: String) -> [String] {
+        let wanted = Self.words(name)
+        guard !wanted.isEmpty else { return [] }
+        return library
+            .map { ($0.name, Set(Self.words($0.name)).intersection(wanted).count) }
+            .filter { $0.1 > 0 }
+            .sorted { ($0.1, -$0.0.count) > ($1.1, -$1.0.count) }
+            .prefix(3)
+            .map(\.0)
+    }
+
+    private static let abbreviations: [String: String] = [
+        "db": "dumbbell", "bb": "barbell", "dbs": "dumbbell", "kb": "kettlebell", "ohp": "overhead",
+        "rdl": "romanian", "sldl": "stiff", "wg": "wide", "cg": "close", "ez": "ez", "lat": "lat"
+    ]
+
+    /// Lower-cased words with any parenthesised qualifier ("(Barbell)", "(Machine)") dropped —
+    /// export-style qualifiers name equipment the library folds into the name itself.
+    private static func words(_ name: String) -> [String] {
+        var text = name.lowercased()
+        while let open = text.firstIndex(of: "("), let close = text[open...].firstIndex(of: ")") {
+            text.removeSubrange(open...close)
+        }
+        return text
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            .map { abbreviations[String($0)] ?? String($0) }
+            .filter { !["the", "a", "with", "on", "and"].contains($0) }
     }
 }

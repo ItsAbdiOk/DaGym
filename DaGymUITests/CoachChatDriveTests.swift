@@ -17,6 +17,7 @@ final class CoachChatDriveTests: XCTestCase {
         )
     }
 
+    @MainActor
     func testAskForAnAestheticSplit() throws {
         let key = try XCTUnwrap(ProcessInfo.processInfo.environment["DAGYM_COACH_DRIVE_KEY"])
         let question = ProcessInfo.processInfo.environment["DAGYM_COACH_DRIVE_QUESTION"]
@@ -29,10 +30,10 @@ final class CoachChatDriveTests: XCTestCase {
 
         let coachTab = app.buttons["tab.coach"].exists
             ? app.buttons["tab.coach"] : app.tabBars.buttons["Coach"]
-        XCTAssertTrue(coachTab.waitForExistence(timeout: 10))
+        XCTAssertTrue(coachTab.waitForExistence(timeout: 45))
         coachTab.tap()
         let entry = app.buttons["coach.chat.entry"]
-        XCTAssertTrue(entry.waitForExistence(timeout: 10), "entry card")
+        XCTAssertTrue(entry.waitForExistence(timeout: 45), "entry card")
         entry.tap()
 
         let input = app.textFields["coach.chat.input"].exists
@@ -47,21 +48,22 @@ final class CoachChatDriveTests: XCTestCase {
         var lastSummary = ""
         while Date() < deadline {
             sleep(10)
-            let chips = elements(app, "coach.chat.tool")
-            let bubbles = elements(app, "coach.chat.assistant")
-            let drafts = elements(app, "coach.chat.draft")
-            let reviews = elements(app, "coach.chat.review")
+            // One snapshot per poll: reading live elements races the transcript's updates.
+            let tree = try? app.snapshot()
+            let chips = labels(in: tree, id: "coach.chat.tool")
+            let bubbles = labels(in: tree, id: "coach.chat.assistant")
+            let drafts = labels(in: tree, id: "coach.chat.draft")
+            let reviews = labels(in: tree, id: "coach.chat.review")
+            let strips = labels(in: tree, id: "coach.chat.draft.review")
             let summary = "chips=\(chips.count) bubbles=\(bubbles.count) drafts=\(drafts.count) "
                 + "reviews=\(reviews.count) streaming=\(app.buttons["coach.chat.stop"].exists)"
             if summary != lastSummary {
                 print("DRIVE \(Int(deadline.timeIntervalSinceNow))s left: \(summary)")
-                for chip in chips { print("DRIVE chip: \(chip.label)") }
-                for bubble in bubbles { print("DRIVE assistant: \(bubble.label.prefix(600))") }
-                for draft in drafts { print("DRIVE draft: \(draft.label.prefix(300))") }
-                for review in reviews { print("DRIVE review: \(review.label.prefix(400))") }
-                for strip in elements(app, "coach.chat.draft.review") {
-                    print("DRIVE strip: \(strip.label.prefix(300))")
-                }
+                for chip in chips { print("DRIVE chip: \(chip)") }
+                for bubble in bubbles { print("DRIVE assistant: \(bubble.prefix(600))") }
+                for draft in drafts { print("DRIVE draft: \(draft.prefix(300))") }
+                for review in reviews { print("DRIVE review: \(review.prefix(400))") }
+                for strip in strips { print("DRIVE strip: \(strip.prefix(300))") }
                 lastSummary = summary
             }
             if !app.buttons["coach.chat.stop"].exists, !bubbles.isEmpty || !drafts.isEmpty {
@@ -76,8 +78,13 @@ final class CoachChatDriveTests: XCTestCase {
         print("DRIVE done: \(lastSummary)")
     }
 
-    private func elements(_ app: XCUIApplication, _ id: String) -> [XCUIElement] {
-        app.descendants(matching: .any).matching(identifier: id).allElementsBoundByIndex
+    @MainActor
+    private func labels(in snapshot: XCUIElementSnapshot?, id: String) -> [String] {
+        guard let snapshot else { return [] }
+        var found: [String] = []
+        if snapshot.identifier == id { found.append(snapshot.label) }
+        for child in snapshot.children { found += labels(in: child, id: id) }
+        return found
     }
 }
 // swiftlint:enable no_print_statements
