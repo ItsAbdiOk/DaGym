@@ -8,12 +8,23 @@ import Testing
 @MainActor
 @Suite("RoutineSeeder")
 struct RoutineSeederTests {
-    @Test("seeding twice yields the 13 starter routines once; Push A has 5 exercises and a superset group")
-    func seedsStarterRoutinesOnce() throws {
-        let store = try makeStore(seed: .exercises)
+    @Test("a fresh store has no routines; the launch hook only marks the flag")
+    func freshStoreHasNoRoutines() throws {
+        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
+        #expect(!SeedState.row(in: context).routinesSeeded)
 
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+
+        #expect(store.routines().isEmpty)
+        #expect(SeedState.row(in: context).routinesSeeded)
+    }
+
+    @Test("seedAll twice yields the 13 starter routines once; Push A has 5 exercises and a superset group")
+    func seedAllIsIdempotent() throws {
+        let store = try makeStore(seed: .exercises)
+
+        #expect(RoutineSeeder.seedAll(store: store) == 13)
+        #expect(RoutineSeeder.seedAll(store: store) == 0)
 
         let routines = store.routines()
         #expect(routines.count == 13)
@@ -38,7 +49,7 @@ struct RoutineSeederTests {
         let store = try makeStore(seed: .exercises)
 
         let before = store.queryCount
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
         let queries = store.queryCount - before
 
         #expect(store.routines().count == 13)
@@ -51,10 +62,26 @@ struct RoutineSeederTests {
         #expect(queries == 72, "seeding the starter routines issued \(queries) queries")
     }
 
+    @Test("seedStarters writes only the named starters, skips one already present by id or name")
+    func seedStartersByName() throws {
+        let store = try makeStore(seed: .exercises)
+        let mine = store.saveRoutine(id: nil, name: "Legs", exercises: [])
+
+        #expect(RoutineSeeder.seedStarters(["Push A", "Legs", "Not a starter"], store: store) == 1)
+        #expect(Set(store.routines().map(\.name)) == ["Push A", "Legs"])
+        #expect(store.routines().first { $0.name == "Legs" }?.id == mine.id)
+
+        // Renamed, Push A is still Push A by its starter id: no second copy for the fold to eat.
+        let pushA = try #require(store.routines().first { $0.name == "Push A" })
+        store.saveRoutine(id: pushA.id, name: "Push Day", exercises: [])
+        #expect(RoutineSeeder.seedStarters(["Push A"], store: store) == 0)
+        #expect(RoutineSeeder.missingStarters(["Push A", "Pull B"], store: store) == ["Pull B"])
+    }
+
     @Test("starter routines carry explicit rules, with overrides where the routine's rule doesn't fit")
     func starterRoutinesHaveRules() throws {
         let store = try makeStore(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
 
         let routines = store.routines()
         let legs = try #require(

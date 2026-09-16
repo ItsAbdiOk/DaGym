@@ -78,9 +78,10 @@ extension WorkoutStore {
         reseedAfterWipe()
     }
 
-    /// Re-runs the first-launch seeders so the user gets the exercise library, starter routines
-    /// and equipment profiles straight back. Without this the app sat completely empty until
-    /// the next cold launch, which reads as "the reset broke it".
+    /// Re-runs the first-launch seeders so the user gets the exercise library and equipment
+    /// profiles straight back. Without this the app sat completely empty until the next cold
+    /// launch, which reads as "the reset broke it". No routines: the app ships none, and the
+    /// coach or a starter plan builds them when asked.
     private func reseedAfterWipe() {
         ExerciseSeeder.seedIfNeeded(context: context)
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: self)
@@ -187,6 +188,7 @@ extension WorkoutStore {
         preferences.playRestSoundOnSilent = false
         preferences.weighInBeforeWorkout = false
         preferences.sampleDataMode = false
+        preferences.starterRoutinesPruned = false
         preferences.voiceSpeakBackOnHeadphones = true
         preferences.voiceAutoLogEnabled = false
         preferences.onDeviceCoachEnabled = true

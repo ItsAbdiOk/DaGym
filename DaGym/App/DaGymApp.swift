@@ -177,6 +177,10 @@ struct AppRootContainer: View {
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
         EquipmentSeeder.seedIfNeeded(store: store, unit: preferences.weightUnit)
         store.dedupeSeededRows()
+        // Installs that predate "no shipped routines" still carry the 13 starters; the ones the
+        // lifter never touched go, once per device. After the fold so a synced copy is judged as
+        // one routine, not two.
+        RoutineSeeder.pruneUntouchedStartersOnce(store: store, preferences: preferences)
         // Warm-ups round onto the lifter's own rack, not a bare increment. `WorkoutSession`
         // is store-free, so this is where the two are introduced — before any session exists.
         WorkoutSession.defaultWarmupGrid = { [weak store] exercise in
@@ -253,7 +257,8 @@ struct DebugRootView: View {
         }
         ExerciseSeeder.seedIfNeeded(context: resolved.mainContext)
         let newStore = WorkoutStore(context: resolved.mainContext)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: newStore)
+        // Every starter, so a routine-backed debug screen has something to render.
+        RoutineSeeder.seedAll(store: newStore)
         container = resolved
         store = newStore
     }

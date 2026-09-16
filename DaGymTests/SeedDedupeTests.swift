@@ -42,7 +42,7 @@ struct SeedDedupeTests {
 
     @Test("a remote copy of every seeded row folds into one survivor per seedID with slots re-pointed")
     func remoteImportFoldsToOneSurvivorPerSeedID() throws {
-        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
+        let (store, context) = try makeStoreAndContext(seed: .stocked)
         let survivorIDs = Set(try context.fetch(FetchDescriptor<ExerciseModel>()).map(\.id))
         let remoteRoutineID = try simulateRemoteImport(into: context)
         #expect(try context.fetch(FetchDescriptor<ExerciseModel>()).count == survivorIDs.count * 2)
@@ -82,7 +82,7 @@ struct SeedDedupeTests {
     /// whichever copy lost the fold vanished the moment the loser was deleted.
     @Test("a note on a folded exercise's losing copy survives, re-pointed at the survivor")
     func foldedExerciseRepointsNotes() throws {
-        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
+        let (store, context) = try makeStoreAndContext(seed: .stocked)
         let bench = try #require(
             store.exercises().first { $0.seedID == "Barbell_Bench_Press_-_Medium_Grip" }
         )
@@ -105,7 +105,7 @@ struct SeedDedupeTests {
 
     @Test("dedupe with nothing to fold is a no-op")
     func dedupeIsNoOpWhenClean() throws {
-        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
+        let (store, context) = try makeStoreAndContext(seed: .stocked)
         let before = try context.fetch(FetchDescriptor<ExerciseModel>()).count
         #expect(store.dedupeSeededRows() == 0)
         #expect(try context.fetch(FetchDescriptor<ExerciseModel>()).count == before)
@@ -115,7 +115,7 @@ struct SeedDedupeTests {
 
     @Test("a workout that named a folded routine is re-pointed at the survivor")
     func foldedRoutineRepointsWorkouts() throws {
-        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
+        let (store, context) = try makeStoreAndContext(seed: .stocked)
         let original = try #require(store.routines().first { $0.name == "Legs" })
         // The other device's copy is older, so it wins the fold; the workout logged here
         // against the local copy follows it.
@@ -135,7 +135,7 @@ struct SeedDedupeTests {
 
     @Test("the seed version lives in the store: a stale store is refreshed even after another store seeded")
     func seedVersionIsPerStore() throws {
-        let (_, freshContext) = try makeStoreAndContext(seed: .firstLaunch)
+        let (_, freshContext) = try makeStoreAndContext(seed: .stocked)
         #expect(SeedState.row(in: freshContext).exerciseSeedVersion == 6)
 
         let staleContext = try makeContext()
@@ -155,12 +155,18 @@ struct SeedDedupeTests {
         #expect(try staleContext.fetch(FetchDescriptor<ExerciseModel>()).count == 1466)
     }
 
-    @Test("starter routines are seeded once per store, not whenever the list is empty")
-    func starterRoutinesSeedOncePerStore() throws {
-        let (store, _) = try makeStoreAndContext(seed: .firstLaunch)
-        for routine in store.routines() { store.deleteRoutine(id: routine.id) }
+    @Test("a first launch seeds no routines, only marks the flag; a stocked store loses none to it")
+    func firstLaunchSeedsNoRoutines() throws {
+        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
+        #expect(store.routines().isEmpty)
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
         #expect(store.routines().isEmpty)
+        #expect(SeedState.row(in: context).routinesSeeded)
+
+        let (stocked, _) = try makeStoreAndContext(seed: .stocked)
+        for routine in stocked.routines() { stocked.deleteRoutine(id: routine.id) }
+        RoutineSeeder.seedStarterRoutinesIfNeeded(store: stocked)
+        #expect(stocked.routines().isEmpty)
     }
 
     @Test("two merged seed-state rows collapse to the strongest one")
@@ -180,7 +186,7 @@ struct SeedDedupeTests {
 
     @Test("identical equipment profiles fold into one, keeping active")
     func duplicateProfilesFold() throws {
-        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
+        let (store, context) = try makeStoreAndContext(seed: .stocked)
         let profiles = try context.fetch(FetchDescriptor<EquipmentProfileModel>())
         let gym = try #require(profiles.first { $0.name == "Gym" })
         context.insert(
@@ -201,7 +207,7 @@ struct SeedDedupeTests {
 
     @Test("the newest of two schedule rows wins and the older is removed")
     func duplicateScheduleRowsFold() throws {
-        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
+        let (store, context) = try makeStoreAndContext(seed: .stocked)
         let routine = try #require(store.routines().first)
         var newest = WeeklySchedule()
         newest.days[.monday] = routine.id
@@ -228,7 +234,7 @@ struct SeedTombstoneTests {
     /// as a tombstone so the late arrivals still resolve, and the next pass re-points them.
     @Test("rows that arrive after the fold are re-pointed, not orphaned")
     func lateArrivingChildrenAreRepointed() throws {
-        let (_, context) = try makeStoreAndContext(seed: .firstLaunch)
+        let (_, context) = try makeStoreAndContext(seed: .stocked)
         let bench = try #require(
             try context.fetch(FetchDescriptor<ExerciseModel>()).first {
                 $0.seedID == "Barbell_Bench_Press_-_Medium_Grip"
@@ -275,7 +281,7 @@ struct SeedTombstoneTests {
     /// A tombstone is never handed out as a library exercise.
     @Test("a folded-away exercise is hidden from every read")
     func tombstonesAreHiddenFromReads() throws {
-        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
+        let (store, context) = try makeStoreAndContext(seed: .stocked)
         let liveCount = store.exercises().count
         let bench = try #require(
             try context.fetch(FetchDescriptor<ExerciseModel>()).first {
@@ -300,7 +306,7 @@ struct SeedTombstoneTests {
     /// seeded value are taken over, so a real edit on the survivor is never clobbered.
     @Test("rest time, increment and bar edited on the losing copy survive the fold")
     func foldCarriesExerciseEdits() throws {
-        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
+        let (store, context) = try makeStoreAndContext(seed: .stocked)
         let bench = try #require(
             try context.fetch(FetchDescriptor<ExerciseModel>()).first {
                 $0.seedID == "Barbell_Bench_Press_-_Medium_Grip"
@@ -326,7 +332,7 @@ struct SeedTombstoneTests {
     /// renamed the routine. The engine's memory is merged across rather than dropped.
     @Test("the losing routine's progression state is merged into the survivor")
     func foldMergesProgressionState() throws {
-        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
+        let (store, context) = try makeStoreAndContext(seed: .stocked)
         let legs = try #require(store.routines().first { $0.name == "Legs" })
         let trained = try #require(store.fetchRoutineModel(id: legs.id))
         let trainedSlot = try #require(trained.exercises?.first)
@@ -355,7 +361,7 @@ struct SeedTombstoneTests {
     /// ever sees — and only ever writes — a day's first routine.
     @Test("a folded routine on a two-routine day keeps the day's other routine")
     func foldedRoutineKeepsMultiRoutineDay() throws {
-        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
+        let (store, context) = try makeStoreAndContext(seed: .stocked)
         let legs = try #require(store.routines().first { $0.name == "Legs" })
         let arms = try #require(store.routines().first { $0.name == "Pull B" })
         var schedule = WeeklySchedule()

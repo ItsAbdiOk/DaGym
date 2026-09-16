@@ -22,7 +22,7 @@ struct DeloadWeekTests {
     @Test("planDeloadWeek's week 2 is normal, not another deload")
     func weekTwoIsNormal() throws {
         let store = try makeStore(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
         let routineID = try #require(store.routines().first?.id)
 
         store.planDeloadWeek()
@@ -36,7 +36,7 @@ struct DeloadWeekTests {
     @Test("once the deload week expires, the previously active program resumes")
     func previousProgramResumes() throws {
         let store = try makeStore(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
         let original = try #require(store.createProgram(from: .pushPullLegs))
         store.startProgram(id: original.id)
 
@@ -57,7 +57,7 @@ struct DeloadWeekTests {
     @Test("during its own single week, the deload program stays active")
     func deloadStaysActiveDuringItsOwnWeek() throws {
         let store = try makeStore(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
         let original = try #require(store.createProgram(from: .pushPullLegs))
         store.startProgram(id: original.id)
 
@@ -90,7 +90,7 @@ struct DeloadWeekTests {
     @Test("resuming after a deload doesn't skip the interrupted week or stack two deloads")
     func resumeShiftsTheInterruptedProgramForward() throws {
         let store = try makeStore(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
         let original = try #require(store.createProgram(from: .pushPullLegs))
         let routineID = try #require(original.routineIDs.first)
         let calendar = Self.calendar()
@@ -125,7 +125,7 @@ struct DeloadWeekTests {
     @Test("a second deload tap still resumes the real program, and leaves no extra rows")
     func doubleDeloadTap() throws {
         let store = try makeStore(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
         let original = try #require(store.createProgram(from: .pushPullLegs))
         store.startProgram(id: original.id, now: Self.date(2026, 9, 7))
         let calendar = Self.calendar()
@@ -157,7 +157,7 @@ struct DeloadWeekTests {
         defer { UserDefaults.standard.removeObject(forKey: key) }
 
         let store = try makeStore(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
         let original = try #require(store.createProgram(from: .pushPullLegs))
         store.startProgram(id: original.id)
 
@@ -180,7 +180,7 @@ struct DeloadWeekTests {
     @Test("Programmes shows the resumed programme as active once the deload week has expired")
     func programsAgreesWithTheSessionPathAboutTheActiveProgramme() throws {
         let store = try makeStore(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
         let original = try #require(store.createProgram(from: .pushPullLegs))
         store.startProgram(id: original.id)
         store.planDeloadWeek()
@@ -202,7 +202,7 @@ struct DeloadWeekTests {
     @Test("resuming works with no UserDefaults pointer at all")
     func resumesWithoutUserDefaults() throws {
         let store = try makeStore(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
         let original = try #require(store.createProgram(from: .pushPullLegs))
         store.startProgram(id: original.id, now: Self.date(2026, 9, 7))
         store.planDeloadWeek()

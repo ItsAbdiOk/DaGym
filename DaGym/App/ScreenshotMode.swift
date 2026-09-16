@@ -55,7 +55,7 @@ enum ScreenshotMode {
         Calendar.current.date(bySettingHour: 18, minute: 30, second: 0, of: Date()) ?? Date()
     }
 
-    /// Everything the shot list needs on top of the starter routines: eight weeks of
+    /// Everything the shot list needs on top of the Push/Pull/Legs trio: eight weeks of
     /// Push/Pull/Legs history, a bodyweight series with a goal, the milestones that history
     /// earns, a schedule that puts Push A on today, and Bench Press as the favourite so the
     /// exercise chart opens on it.
@@ -265,7 +265,9 @@ struct ScreenshotRootView: View {
         guard let resolved = try? ModelContainer.dagym(inMemory: true) else { return }
         ExerciseSeeder.seedIfNeeded(context: resolved.mainContext)
         let newStore = WorkoutStore(context: resolved.mainContext)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: newStore)
+        // The Push/Pull/Legs trio every shot is built on (`SampleDataSeeder.seed` would write
+        // the same three; explicit here so the shot list's dependency is visible).
+        RoutineSeeder.seedStarters(RoutineSeeder.pushPullLegsNames, store: newStore)
         EquipmentSeeder.seedIfNeeded(store: newStore, unit: preferences.weightUnit)
         WorkoutSession.defaultWarmupGrid = { [weak newStore] exercise in
             guard let newStore else { return .step(max(exercise.incrementKg, 0.5)) }

@@ -2,15 +2,16 @@ import Foundation
 import GymCore
 import SwiftData
 
-/// Seeds the starter routines once per store (`SeedStateModel.routinesSeeded`): the
-/// Push/Pull/Legs trio ("Push A", "Pull B", "Legs") plus the routines each starter program
-/// cycles — Upper/Lower A/B, Full Body A/B/C and 5×5 A/B/C (`StarterProgramKind.routineNames`).
-/// A store seeded before the program routines existed gets them on the next launch, as long
-/// as none of them is present yet. Exercises are looked up by name against
-/// the already seeded exercise library, falling back to the first exercise
-/// with the right primary muscle when a specific name isn't present. Each
-/// starter carries a fixed `importedFromID` so a copy seeded by another iCloud
-/// device folds into this one (`WorkoutStore.dedupeRoutines()`).
+/// The starter routines DaGym can build on demand: the Push/Pull/Legs trio ("Push A", "Pull B",
+/// "Legs") plus the routines each starter program cycles — Upper/Lower A/B, Full Body A/B/C and
+/// 5×5 A/B/C (`StarterProgramKind.routineNames`). Nothing is seeded on first launch any more:
+/// the app ships with no routines, and the coach builds them when asked. A starter is only
+/// written when something needs it — `WorkoutStore.createProgram(from:)` seeds the program's
+/// days, `SampleDataSeeder` seeds the trio it writes history against. Exercises are looked up by
+/// name against the already seeded exercise library, falling back to the first exercise with the
+/// right primary muscle when a specific name isn't present. Each starter carries a fixed
+/// `importedFromID` so a copy seeded by another iCloud device folds into this one
+/// (`WorkoutStore.dedupeRoutines()`).
 ///
 /// Every starter routine carries an explicit progression rule (plan.md §6.5) so the engine
 /// prescribes from the first session on — a routine saved without a rule is pre-filled by
@@ -27,6 +28,9 @@ enum RoutineSeeder {
         "5×5 A": starterID(11), "5×5 B": starterID(12), "5×5 C": starterID(13)
     ]
 
+    /// The Push/Pull/Legs trio, in day order.
+    static let pushPullLegsNames = ["Push A", "Pull B", "Legs"]
+
     /// The routines behind every non-PPL starter program, in seeding order.
     static let programRoutineNames = [
         "Upper A", "Lower A", "Upper B", "Lower B",
@@ -34,54 +38,75 @@ enum RoutineSeeder {
         "5×5 A", "5×5 B", "5×5 C"
     ]
 
+    /// Every starter, in seeding order — what `seedAll` writes.
+    static var allStarterNames: [String] { pushPullLegsNames + programRoutineNames }
+
     private static func starterID(_ index: Int) -> UUID {
         let group = String(format: "%04X", index)
         let node = String(format: "%012X", index)
         return UUID(uuidString: "6D1A5D4E-\(group)-4A00-8000-\(node)") ?? UUID()
     }
 
-    /// Folding two devices' copies of a starter (`WorkoutStore.dedupeRoutines()`) is left to
-    /// `dedupeSeededRows()`, which every launch runs once after all three seeders — a `defer`
-    /// here used to run the same full routine fetch a second time on every cold start.
+    /// First-launch hook, kept for the flag alone. `SeedStateModel.routinesSeeded` used to gate
+    /// the 13-routine seed; it is still set so a device that syncs in an older install's seed
+    /// state never treats the store as unseeded and re-runs the old first-launch seed. No
+    /// routine is written here any more.
     static func seedStarterRoutinesIfNeeded(store: WorkoutStore) {
         let state = SeedState.row(in: store.context)
-        if !state.routinesSeeded {
-            if store.routines().isEmpty {
-                let catalogue = store.exerciseCatalogue()
-                seedPushA(store: store, catalogue: catalogue)
-                seedPullB(store: store, catalogue: catalogue)
-                seedLegs(store: store, catalogue: catalogue)
-                seedProgramRoutines(store: store, catalogue: catalogue)
-            }
-            state.routinesSeeded = true
-            state.updatedAt = Date()
-            store.save()
-            return
-        }
-        seedProgramRoutinesIfMissing(store: store)
-    }
-
-    /// Adds the program routines to a store that was seeded before they existed. Only fires when
-    /// the store still has routines but none of these, so deleting one (or all) stays deleted.
-    private static func seedProgramRoutinesIfMissing(store: WorkoutStore) {
-        let programIDs = Set(programRoutineNames.compactMap { starterIDs[$0] })
-        let models = store.fetch(FetchDescriptor<RoutineModel>()).filter { !$0.isMergedAway }
-        guard !models.isEmpty else { return }
-        let existingNames = Set(models.map(\.name))
-        let alreadyThere = models.contains { $0.importedFromID.map(programIDs.contains) ?? false }
-            || programRoutineNames.contains(where: existingNames.contains)
-        guard !alreadyThere else { return }
-        seedProgramRoutines(store: store)
+        guard !state.routinesSeeded else { return }
+        state.routinesSeeded = true
+        state.updatedAt = Date()
         store.save()
     }
 
-    /// `catalogue` is the library read once for the whole seed; every slot lookup runs against it.
-    static func seedProgramRoutines(
-        store: WorkoutStore, catalogue: WorkoutStore.ExerciseCatalogue? = nil
-    ) {
-        let catalogue = catalogue ?? store.exerciseCatalogue()
-        for spec in programRoutineSpecs() {
-            seed(spec, store: store, catalogue: catalogue)
+    /// Seeds every starter that isn't in the store yet — the on-demand equivalent of the old
+    /// first-launch seed, for the debug harness and the tests that need a stocked store.
+    /// Returns how many routines were written.
+    @discardableResult
+    static func seedAll(store: WorkoutStore) -> Int {
+        seedStarters(allStarterNames, store: store)
+    }
+
+    /// Seeds the named starters that the store doesn't already have. A starter counts as present
+    /// when a live routine carries its `importedFromID` (renamed or edited, it is still that
+    /// starter — seeding a second copy under the same id would hand it to the next CloudKit fold)
+    /// or its exact name. Unknown names are ignored. Returns how many routines were written; the
+    /// library is read once for the whole batch.
+    @discardableResult
+    static func seedStarters(_ names: [String], store: WorkoutStore) -> Int {
+        let missing = missingStarters(names, store: store)
+        guard !missing.isEmpty else { return 0 }
+        let catalogue = store.exerciseCatalogue()
+        var seeded = 0
+        for name in missing where seed(named: name, store: store, catalogue: catalogue) {
+            seeded += 1
+        }
+        if seeded > 0 { store.save() }
+        return seeded
+    }
+
+    /// The subset of `names` with no live routine in the store, by starter id or name.
+    static func missingStarters(_ names: [String], store: WorkoutStore) -> [String] {
+        let live = store.fetch(FetchDescriptor<RoutineModel>()).filter { !$0.isMergedAway }
+        let presentIDs = Set(live.compactMap(\.importedFromID))
+        let presentNames = Set(live.map(\.name))
+        return names.filter { name in
+            guard let id = starterIDs[name] else { return false }
+            return !presentIDs.contains(id) && !presentNames.contains(name)
+        }
+    }
+
+    /// Writes one starter by name; false when the name is unknown or its lifts can't be found.
+    private static func seed(
+        named name: String, store: WorkoutStore, catalogue: WorkoutStore.ExerciseCatalogue
+    ) -> Bool {
+        switch name {
+        case "Push A": return seedPushA(store: store, catalogue: catalogue)
+        case "Pull B": return seedPullB(store: store, catalogue: catalogue)
+        case "Legs": return seedLegs(store: store, catalogue: catalogue)
+        default:
+            guard let spec = programRoutineSpecs().first(where: { $0.name == name }) else { return false }
+            return seed(spec, store: store, catalogue: catalogue)
         }
     }
 
@@ -92,7 +117,9 @@ enum RoutineSeeder {
 
     // MARK: - Push A
 
-    private static func seedPushA(store: WorkoutStore, catalogue: WorkoutStore.ExerciseCatalogue) {
+    private static func seedPushA(
+        store: WorkoutStore, catalogue: WorkoutStore.ExerciseCatalogue
+    ) -> Bool {
         guard
             let bench = lookup(
                 catalogue, "Barbell Bench Press - Medium Grip", fallback: "Bench Press", muscle: .chest
@@ -101,7 +128,7 @@ enum RoutineSeeder {
             let shoulderPress = lookup(catalogue, "Barbell Shoulder Press", muscle: .delts),
             let crossover = lookup(catalogue, "Cable Crossover", muscle: .chest),
             let pushdown = lookup(catalogue, "Triceps Pushdown", muscle: .triceps)
-        else { return }
+        else { return false }
 
         var pushdownSets = (0..<3).map { _ in PlannedSetDraft(kind: .working, targetReps: 12) }
         pushdownSets[pushdownSets.count - 1].kind = .drop
@@ -145,17 +172,20 @@ enum RoutineSeeder {
             rule: rule, exercises: exercises
         )
         stamp(routine, store: store)
+        return true
     }
 
     // MARK: - Pull B
 
-    private static func seedPullB(store: WorkoutStore, catalogue: WorkoutStore.ExerciseCatalogue) {
+    private static func seedPullB(
+        store: WorkoutStore, catalogue: WorkoutStore.ExerciseCatalogue
+    ) -> Bool {
         guard
             let deadlift = lookup(catalogue, "Barbell Deadlift", fallback: "Deadlift", muscle: .hams),
             let pullups = lookup(catalogue, "Pullups", fallback: "Pull-Up", muscle: .lats),
             let row = lookup(catalogue, "Bent Over Barbell Row", muscle: .lats),
             let curl = lookup(catalogue, "Dumbbell Bicep Curl", muscle: .biceps)
-        else { return }
+        else { return false }
 
         let rule = ProgressionRule.linear(incrementKg: TrainingConstants.defaultUpperBodyIncrementKg)
         let exercises = [
@@ -185,11 +215,14 @@ enum RoutineSeeder {
             id: nil, name: "Pull B", progressionRule: "linear", rule: rule, exercises: exercises
         )
         stamp(routine, store: store)
+        return true
     }
 
     // MARK: - Legs
 
-    private static func seedLegs(store: WorkoutStore, catalogue: WorkoutStore.ExerciseCatalogue) {
+    private static func seedLegs(
+        store: WorkoutStore, catalogue: WorkoutStore.ExerciseCatalogue
+    ) -> Bool {
         guard
             let squat = lookup(catalogue, "Barbell Squat", fallback: "Squat", muscle: .quads),
             let legCurl = lookup(catalogue, "Lying Leg Curls", fallback: "Leg Curl", muscle: .hams),
@@ -197,7 +230,7 @@ enum RoutineSeeder {
                 catalogue, "Standing Calf Raises", fallback: "Calf Raise", muscle: .calves
             ),
             let plank = lookup(catalogue, "Plank", muscle: .abs)
-        else { return }
+        else { return false }
 
         let rule = ProgressionRule.linear(incrementKg: TrainingConstants.defaultUpperBodyIncrementKg)
         let exercises = [
@@ -229,10 +262,14 @@ enum RoutineSeeder {
             id: nil, name: "Legs", progressionRule: "linear", rule: rule, exercises: exercises
         )
         stamp(routine, store: store)
+        return true
     }
 
-    // MARK: - Overrides
+}
 
+// MARK: - Overrides and lookup
+
+extension RoutineSeeder {
     /// The per-exercise rule a starter routine's weight-based rule can't express: bodyweight
     /// reps, timed holds, assisted work, and any lift whose seeded increment isn't the routine's
     /// (lower-body lifts step `TrainingConstants.defaultLowerBodyIncrementKg`, dumbbells 2 kg) —

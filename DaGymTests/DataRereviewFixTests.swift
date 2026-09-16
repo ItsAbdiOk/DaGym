@@ -49,10 +49,16 @@ struct DataRereviewFixTests {
     /// pristine copy, and the lifter's planned weight and swapped lift went with the tombstone.
     @Test("a starter routine edited between two seeds keeps the edits after the fold")
     func editedStarterSurvivesReseed() throws {
-        let (store, _) = try makeStoreAndContext(seed: .firstLaunch)
+        let (store, _) = try makeStoreAndContext(seed: .stocked)
         let edited = try editUpperA(store)
 
-        RoutineSeeder.seedProgramRoutines(store: store)
+        // `seedStarters` skips a starter the store has, so plant the pristine copy the way a
+        // second device's launch delivers it: same starter id, fresh timestamps.
+        let pristine = RoutineModel(
+            name: "Upper A", createdAt: Date().addingTimeInterval(60),
+            updatedAt: Date().addingTimeInterval(60), importedFromID: RoutineSeeder.starterIDs["Upper A"]
+        )
+        store.context.insert(pristine)
         store.save()
         #expect(store.routines().filter { $0.name == "Upper A" }.count == 2)
 
@@ -60,17 +66,18 @@ struct DataRereviewFixTests {
         try upperAIsTheEditedCopy(store, routineID: edited)
     }
 
-    /// The restore path: wipe (which re-seeds pristine starters), import the backup, launch
-    /// (which folds). The restored routine used to lose to the re-seeded one.
-    @Test("a backup's edited starter routine survives the wipe-then-restore fold")
-    func restoredStarterSurvivesReseedAfterWipe() throws {
-        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
+    /// The restore path: wipe, import the backup, launch (which folds). The wipe used to re-seed
+    /// pristine starters and the restored routine lost the fold to one; now it re-seeds no
+    /// routines at all, so the fold has nothing to weigh and the backup's copy is the only one.
+    @Test("a backup's edited starter routine comes back intact after a wipe-then-restore")
+    func restoredStarterSurvivesWipeThenRestore() throws {
+        let (store, context) = try makeStoreAndContext(seed: .stocked)
         let edited = try editUpperA(store)
         let document = BackupService.export(context: context)
 
         let preferences = Preferences(suite: makeSuite("data.rereview.wipe"))
         store.wipeAllData(preferences: preferences, effects: .inert)
-        #expect(store.routines().contains { $0.name == "Upper A" }, "the wipe re-seeds")
+        #expect(store.routines().isEmpty, "the wipe re-seeds no routines")
         BackupService.import(document: document, context: context)
         store.dedupeSeededRows()
 
@@ -82,7 +89,7 @@ struct DataRereviewFixTests {
     /// then signed into iCloud. "Oldest wins" handed the fold to A's untouched seed.
     @Test("a routine rebuilt on a newer device beats an older device's never-opened seed")
     func editedNewerCopyBeatsPristineOlderSeed() throws {
-        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
+        let (store, context) = try makeStoreAndContext(seed: .stocked)
         let edited = try editUpperA(store)
         let day: TimeInterval = 24 * 60 * 60
         let local = try #require(store.fetchRoutineModel(id: edited))
@@ -109,7 +116,7 @@ struct DataRereviewFixTests {
     /// loser trained more recently carries its stall state across even when the survivor has one.
     @Test("a more recently trained loser's stall state replaces the survivor's")
     func newerLoserStallStateWins() throws {
-        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
+        let (store, context) = try makeStoreAndContext(seed: .stocked)
         let legs = try #require(store.routines().first { $0.name == "Legs" })
         let survivor = try #require(store.fetchRoutineModel(id: legs.id))
         let survivorSlot = try #require(survivor.exercises?.first)
@@ -140,7 +147,7 @@ struct DataRereviewFixTests {
     /// used to delete the tombstone outright, and `.cascade` took B's slots with it.
     @Test("a tombstone edited by an offline device hands its slots and workouts to the survivor")
     func sweptTombstoneHandsChildrenToSurvivor() throws {
-        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
+        let (store, context) = try makeStoreAndContext(seed: .stocked)
         let legs = try #require(store.routines().first { $0.name == "Legs" })
         let local = try #require(store.fetchRoutineModel(id: legs.id))
         let squat = try #require(local.exercises?.first { $0.exercise?.name == "Barbell Squat" }?.exercise)
@@ -179,7 +186,7 @@ struct DataRereviewFixTests {
     /// with its redundant slots dropped one by one, not through the cascade.
     @Test("an untouched tombstone is reclaimed after the grace period without moving anything")
     func untouchedTombstoneIsReclaimed() throws {
-        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
+        let (store, context) = try makeStoreAndContext(seed: .stocked)
         let legs = try #require(store.routines().first { $0.name == "Legs" })
         let local = try #require(store.fetchRoutineModel(id: legs.id))
         let remote = RoutineModel(
@@ -266,7 +273,7 @@ struct DataRereviewFixTests {
     /// purge auto-finishes goes through both hooks exactly like a tapped Finish.
     @Test("purge's auto-finish fires the finish hooks")
     func purgeAutoFinishFiresHooks() throws {
-        let (store, _) = try makeStoreAndContext(seed: .firstLaunch)
+        let (store, _) = try makeStoreAndContext(seed: .stocked)
         let legs = try #require(store.routines().first { $0.name == "Legs" })
         let session = store.startWorkout(routineID: legs.id)
         session.exercises[0].sets[0].isDone = true

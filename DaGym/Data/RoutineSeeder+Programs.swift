@@ -3,8 +3,8 @@ import GymCore
 import SwiftData
 
 /// The routines behind the Upper/Lower, Full Body and 5×5 starter programs, described as data
-/// and seeded by `RoutineSeeder.seedProgramRoutines`. Same lookup, stamping and override rules
-/// as the Push/Pull/Legs starters.
+/// and seeded by name through `RoutineSeeder.seedStarters`. Same lookup, stamping and override
+/// rules as the Push/Pull/Legs starters.
 extension RoutineSeeder {
     /// A library exercise a starter slot asks for: exact name, search fallback, primary muscle.
     struct Lift {
@@ -79,14 +79,17 @@ extension RoutineSeeder {
         PlannedSetDraft(kind: .warmup, targetReps: 8), PlannedSetDraft(kind: .warmup, targetReps: 5)
     ]
 
-    /// Seeds one table-driven routine; skipped entirely if any of its exercises can't be found.
-    static func seed(_ spec: Spec, store: WorkoutStore, catalogue: WorkoutStore.ExerciseCatalogue) {
+    /// Seeds one table-driven routine; false (and nothing written) if any of its exercises
+    /// can't be found.
+    static func seed(
+        _ spec: Spec, store: WorkoutStore, catalogue: WorkoutStore.ExerciseCatalogue
+    ) -> Bool {
         var exercises: [RoutineExerciseDraft] = []
         for slot in spec.slots {
             let lift = slot.lift
             guard let exercise = lookup(catalogue, lift.name, fallback: lift.fallback, muscle: lift.muscle)
             else {
-                return
+                return false
             }
             exercises.append(RoutineExerciseDraft(
                 exerciseID: exercise.id, supersetGroup: slot.supersetGroup, sets: slot.sets,
@@ -99,6 +102,7 @@ extension RoutineSeeder {
             exercises: exercises
         )
         stamp(routine, store: store)
+        return true
     }
 
     static func programRoutineSpecs() -> [Spec] {

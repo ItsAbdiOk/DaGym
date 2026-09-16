@@ -11,6 +11,7 @@ struct RoutinesTabView: View {
     @State private var routines: [RoutineInfo] = []
     @State private var activeProfile: EquipmentProfileInfo?
     @State private var path = NavigationPath()
+    @State private var askingCoach = false
 
     private enum Destination: Hashable {
         case edit(UUID)
@@ -54,6 +55,7 @@ struct RoutinesTabView: View {
             .task { refresh() }
             .refreshOnStoreChange(refresh)
         }
+        .askCoach(on: $askingCoach)
         .dgWarmHaptics()
     }
 
@@ -96,10 +98,13 @@ struct RoutinesTabView: View {
     @ViewBuilder
     private var list: some View {
         if routines.isEmpty {
+            // The app ships no routines. The two real paths: the coach builds one from a
+            // sentence, or Programs seeds a starter plan; "+" above builds one by hand.
             EmptyState(
                 symbol: "dumbbell", title: "No Routines Yet",
-                message: "Build a routine to see it here and schedule it for your training days.",
-                action: "New Routine", onAction: { path.append(Destination.new) }
+                message: "Ask the coach to build one for you, pick a starter plan under Programs, "
+                    + "or tap + to build your own.",
+                action: "Ask the Coach", onAction: { askingCoach = true }
             )
         } else {
             ForEach(routines) { routine in

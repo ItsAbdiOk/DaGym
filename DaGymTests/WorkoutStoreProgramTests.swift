@@ -11,7 +11,7 @@ struct WorkoutStoreProgramTests {
     @Test("a starter program is built from the seeded routine names, with a deload last week")
     func starterProgramCreation() throws {
         let store = try makeStore(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
 
         let program = try #require(store.createProgram(from: .pushPullLegs))
 
@@ -23,7 +23,7 @@ struct WorkoutStoreProgramTests {
     @Test("currentWeek counts whole calendar weeks and wraps every `weeks` weeks")
     func weekComputation() throws {
         let store = try makeStore(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
         let created = try #require(store.createProgram(from: .pushPullLegs))
         let programModel = try #require(fetchProgram(store, id: created.id))
         let calendar = Self.calendar()
@@ -47,7 +47,7 @@ struct WorkoutStoreProgramTests {
     @Test("a Wednesday-evening start keeps the whole of that calendar week in week 1")
     func midWeekEveningStart() throws {
         let store = try makeStore(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
         let created = try #require(store.createProgram(from: .pushPullLegs))
         let programModel = try #require(fetchProgram(store, id: created.id))
         let calendar = Self.calendar()
@@ -71,7 +71,7 @@ struct WorkoutStoreProgramTests {
     @Test("a program that has run its cycles out completes instead of wrapping forever")
     func programsEventuallyEnd() throws {
         let store = try makeStore(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
         let created = try #require(store.createProgram(from: .pushPullLegs))
         let routineID = try #require(created.routineIDs.first)
         let programModel = try #require(fetchProgram(store, id: created.id))
@@ -98,7 +98,7 @@ struct WorkoutStoreProgramTests {
     @Test("a week count that doesn't match the week rows still resolves a week kind")
     func mismatchedWeekRowsStillResolve() throws {
         let store = try makeStore(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
         let routineID = try #require(store.routines().first?.id)
         let calendar = Self.calendar()
         let program = ProgramModel(
@@ -132,7 +132,7 @@ struct WorkoutStoreProgramTests {
     @Test("ProgramInfo reports the current week and cycle")
     func programInfoReportsPosition() throws {
         let store = try makeStore(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
         let created = try #require(store.createProgram(from: .pushPullLegs))
         let programModel = try #require(fetchProgram(store, id: created.id))
         let calendar = Self.calendar()
@@ -155,7 +155,7 @@ struct WorkoutStoreProgramTests {
     @Test("starting a program during its deload week flags the routine's next session")
     func deloadWeekFlag() throws {
         let store = try makeStore(seed: .exercises)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        RoutineSeeder.seedAll(store: store)
         let created = try #require(store.createProgram(from: .pushPullLegs))
         let routineID = try #require(created.routineIDs.first)
         let programModel = try #require(fetchProgram(store, id: created.id))

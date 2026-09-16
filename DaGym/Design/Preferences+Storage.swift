@@ -47,6 +47,7 @@ extension Preferences {
         static let playRestSoundOnSilent = "playRestSoundOnSilent"
         static let weighInBeforeWorkout = "weighInBeforeWorkout"
         static let sampleDataMode = "sampleDataMode"
+        static let starterRoutinesPruned = "starterRoutinesPruned"
         static let voiceSpeakBackOnHeadphones = "voiceSpeakBackOnHeadphones"
         static let voiceAutoLogEnabled = "voiceAutoLogEnabled"
         static let onDeviceCoachEnabled = "onDeviceCoachEnabled"
@@ -70,6 +71,15 @@ extension Preferences {
 
     enum BodyFigure: String, CaseIterable, Codable {
         case neutral, male, female
+    }
+
+    /// `RoutineSeeder.pruneUntouchedStartersOnce` has run on this device: the 13 starters every
+    /// install used to seed were deleted where the lifter never ran, scheduled, programmed or
+    /// renamed them. Per device (not a synced SwiftData field — the CloudKit schema is deployed),
+    /// and read straight from the suite: it's a launch-time marker no view observes.
+    var starterRoutinesPruned: Bool {
+        get { Self.boolValue(defaults, Key.starterRoutinesPruned, default: false) }
+        set { defaults.set(newValue, forKey: Key.starterRoutinesPruned) }
     }
 
     static func intValue(_ suite: UserDefaults, _ key: String, default value: Int) -> Int {
