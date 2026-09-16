@@ -28,7 +28,8 @@ struct CoachEvalTests {
             ?? URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("dagym-coach-eval")
     }
 
-    private static let skipReason = "set DAGYM_COACH_EVAL_KEY, or DAGYM_COACH_EVAL=1 with the simulator's key"
+    private static let skipReason: Comment =
+        "set DAGYM_COACH_EVAL_KEY, or DAGYM_COACH_EVAL=1 with the simulator's key"
 
     @Test("every scenario seeds a store with history the tools can read (no key needed)")
     func scenariosSeed() async throws {
