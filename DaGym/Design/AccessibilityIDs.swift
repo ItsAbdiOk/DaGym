@@ -56,6 +56,7 @@ enum A11yID {
     static let coachChatReviewRow = "coach.chat.review"
     static let coachChatShowMore = "coach.chat.showMore"
     static let coachChatDraftReason = "coach.chat.draft.reason"
+    static let coachChatDraftKeepReasoning = "coach.chat.draft.keepReasoning"
     static let coachChatErrorBanner = "coach.chat.error"
     static let coachChatErrorAction = "coach.chat.error.action"
     static let coachKeyRow = "coach.settings.key"

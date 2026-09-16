@@ -33,6 +33,20 @@ extension WorkoutStore {
         return Self.noteInfo(model)
     }
 
+    /// An "always" note the coach chat saves from a reply. Saving the same text twice (the
+    /// lifter long-presses the bubble again) keeps the one note rather than stacking a twin;
+    /// the existing note comes back so the caller can still confirm.
+    @discardableResult
+    func addCoachExerciseNote(exerciseID: UUID, text: String, createdAt: Date = Date()) -> ExerciseNoteInfo? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let existing = scopedNotes(exerciseID: exerciseID)
+            .first(where: { $0.noteScope == .always && $0.text == trimmed }) {
+            return Self.noteInfo(existing)
+        }
+        return addExerciseNote(exerciseID: exerciseID, text: trimmed, scope: .always, createdAt: createdAt)
+    }
+
     func deleteExerciseNote(id: UUID) {
         let predicate = #Predicate<ExerciseNoteModel> { $0.id == id }
         guard let model = fetchFirst(FetchDescriptor(predicate: predicate)) else { return }

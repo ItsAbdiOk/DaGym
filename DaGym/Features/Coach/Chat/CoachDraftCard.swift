@@ -6,8 +6,11 @@ import SwiftUI
 /// undo toast, so this view only reports taps. Mirrors `CoachCardView`'s shape so the two
 /// coach surfaces read as one. With a second opinion on, `originLabel` says whose card this
 /// is, `reviewStrip` carries the reviewer's verdict on the drafter's card, and `rationale` is
-/// the reviewer's own paragraph above its alternative. Long-press offers Copy; the screen
-/// writes the clipboard (`CoachDraftDetail.copyText`) and shows the toast.
+/// the reviewer's own paragraph above its alternative. Long-press offers Copy and a note per
+/// exercise the drafter gave a reason; the screen writes the clipboard
+/// (`CoachDraftDetail.copyText`), saves the note and shows the toast. On a routine or program
+/// card `keepsReasoning` is the "Keep the coach's reasoning as the routine note" switch the
+/// screen reads when Apply is tapped.
 struct CoachDraftCard: View {
     var draft: CoachChatDraft
     var state: CoachDraftCardState
@@ -18,6 +21,10 @@ struct CoachDraftCard: View {
     var onApply: () -> Void
     var onDiscard: () -> Void
     var onCopy: () -> Void = {}
+    var saveTargets: [CoachChatSaveTarget] = []
+    var onSave: (CoachChatSaveTarget) -> Void = { _ in }
+    /// nil on cards that create no routine (schedule, deload, swap): no switch is drawn.
+    var keepsReasoning: Binding<Bool>?
 
     @Environment(\.coachDraftCardsExpanded) private var expandsByDefault
     /// nil until the lifter taps Details; until then the environment says how the card starts.
@@ -51,12 +58,15 @@ struct CoachDraftCard: View {
                     .textCase(.uppercase)
                     .foregroundStyle(state == .applied ? DGColor.success : DGColor.ink4)
             } else {
+                if let keepsReasoning {
+                    reasoningToggle(keepsReasoning)
+                }
                 actions
             }
         }
         .dgCard(padding: DGSpace.s4)
         .contextMenu {
-            Button("Copy", systemImage: "doc.on.doc", action: onCopy)
+            CoachChatSaveMenu(targets: saveTargets, onCopy: onCopy, onSave: onSave)
         }
         .accessibilityIdentifier(A11yID.coachChatDraftCard)
     }
@@ -179,6 +189,18 @@ struct CoachDraftCard: View {
             .accessibilityLabel("Why \(row.title): \(reason)")
             .accessibilityIdentifier(A11yID.coachChatDraftReason)
         }
+    }
+
+    /// On by default: the reply that came with the card is worth more on the routine than in a
+    /// chat the lifter will not reopen.
+    private func reasoningToggle(_ isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            Text("Keep the coach's reasoning as the routine note")
+                .font(DGFont.footnote)
+                .foregroundStyle(DGColor.ink2)
+        }
+        .tint(DGColor.coral)
+        .accessibilityIdentifier(A11yID.coachChatDraftKeepReasoning)
     }
 
     private var actions: some View {
