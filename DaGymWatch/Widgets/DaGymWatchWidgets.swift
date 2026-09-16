@@ -1,13 +1,39 @@
+import GymCore
 import SwiftUI
 import WidgetKit
 
 /// Screen 7 complications and 3D Smart Stack card. Three families ship — circular (streak
 /// ring), corner (next session), rectangular (resting timer / today's routine) — and while a
-/// workout is live the rest timer takes over all of them.
+/// workout is live the rest timer takes over all of them. "Coach says" is a second widget on
+/// the same snapshot: the next planned session plus the on-device coach's one-line tip.
 @main
 struct DaGymWatchWidgetsBundle: WidgetBundle {
     var body: some Widget {
         DaGymComplication()
+        CoachSaysComplication()
+    }
+}
+
+struct CoachSaysComplication: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(
+            kind: "dev.abdirahmanmohamed.dagym.watch.coach", provider: WatchSnapshotProvider()
+        ) { entry in
+            CoachSaysEntryView(entry: entry)
+        }
+        .configurationDisplayName("Coach says")
+        .description("Your next planned session and the coach's tip.")
+        .supportedFamilies([.accessoryRectangular, .accessoryInline])
+    }
+}
+
+struct CoachSaysEntryView: View {
+    @Environment(\.widgetFamily) private var family
+    var entry: WatchSnapshotEntry
+
+    var body: some View {
+        CoachSaysView(entry: entry, family: family)
+            .containerBackground(.fill.tertiary, for: .widget)
     }
 }
 
@@ -44,9 +70,12 @@ struct ComplicationEntryView: View {
 /// content that only changes when the app runs.
 struct WatchSnapshotProvider: TimelineProvider {
     func placeholder(in context: Context) -> WatchSnapshotEntry {
-        WatchSnapshotEntry(
-            date: .now, snapshot: WatchSnapshot(streakWeeks: 12, nextRoutineName: "Push A", isNextToday: true)
+        var snapshot = WatchSnapshot(streakWeeks: 12, nextRoutineName: "Push A", isNextToday: true)
+        snapshot.nextSession = NextPlannedSession(
+            routineName: "Push A", dayLabel: "Today", date: .now, exerciseCount: 5, estimatedMinutes: 52
         )
+        snapshot.coachLine = "A deload looks due"
+        return WatchSnapshotEntry(date: .now, snapshot: snapshot)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (WatchSnapshotEntry) -> Void) {

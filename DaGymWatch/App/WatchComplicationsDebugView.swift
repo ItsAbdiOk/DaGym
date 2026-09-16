@@ -1,3 +1,4 @@
+import GymCore
 import SwiftUI
 import WidgetKit
 
@@ -6,7 +7,7 @@ import WidgetKit
 /// both states (idle and resting), so the simulator — which cannot add a complication — can
 /// still be screenshotted against the spec's screen 7 / 3D. Four vertical pages (`page`, from
 /// `complications`, `complications-1` …): circular + corner, rectangular, Smart Stack card,
-/// inline.
+/// inline, then the "Coach says" widget's rectangular and inline.
 ///
 /// Sizes are the HIG's complication specifications per case, keyed on the screen width the
 /// way `WatchMetric` is. `widgetLabel` / `widgetCurvesContent` only render inside WidgetKit,
@@ -18,6 +19,11 @@ struct WatchComplicationsDebugView: View {
         var snapshot = WatchSnapshot(streakWeeks: 12, nextRoutineName: "Push A", isNextToday: true)
         snapshot.trainedThisWeek = [true, true, false, true, false, false, false]
         snapshot.nextSessionDate = Calendar.current.date(bySettingHour: 18, minute: 30, second: 0, of: .now)
+        snapshot.nextSession = NextPlannedSession(
+            routineName: "Push A", dayLabel: "Today", date: snapshot.nextSessionDate ?? .now,
+            exerciseCount: 5, estimatedMinutes: 52
+        )
+        snapshot.coachLine = "Bench Press has stalled"
         return snapshot
     }()
 
@@ -40,13 +46,18 @@ struct WatchComplicationsDebugView: View {
             row("Rectangular", .accessoryRectangular, size: Sizes.rectangular).tag(1)
             row("Smart Stack", .accessoryRectangular, size: Sizes.smartStack, glass: true).tag(2)
             row("Inline", .accessoryInline, size: Sizes.inline).tag(3)
+            VStack(spacing: 10) {
+                row("Coach says", .accessoryRectangular, size: Sizes.rectangular, coach: true)
+                row("Coach inline", .accessoryInline, size: Sizes.inline, coach: true)
+            }
+            .tag(4)
         }
         .tabViewStyle(.verticalPage)
         .background(Color.black.ignoresSafeArea())
     }
 
     private func row(
-        _ title: String, _ family: WidgetFamily, size: CGSize, glass: Bool = false
+        _ title: String, _ family: WidgetFamily, size: CGSize, glass: Bool = false, coach: Bool = false
     ) -> some View {
         VStack(spacing: 4) {
             Text("\(title) \(Int(size.width))×\(Int(size.height))")
@@ -54,23 +65,29 @@ struct WatchComplicationsDebugView: View {
                 .foregroundStyle(.secondary)
             // The wide families stack; the round ones sit side by side.
             if size.width * 2 + 8 > Sizes.width {
-                cell(idle, family: family, size: size, glass: glass)
-                cell(resting, family: family, size: size, glass: glass)
+                cell(idle, family: family, size: size, glass: glass, coach: coach)
+                cell(resting, family: family, size: size, glass: glass, coach: coach)
             } else {
                 HStack(spacing: 8) {
-                    cell(idle, family: family, size: size, glass: glass)
-                    cell(resting, family: family, size: size, glass: glass)
+                    cell(idle, family: family, size: size, glass: glass, coach: coach)
+                    cell(resting, family: family, size: size, glass: glass, coach: coach)
                 }
             }
         }
     }
 
     private func cell(
-        _ snapshot: WatchSnapshot, family: WidgetFamily, size: CGSize, glass: Bool
+        _ snapshot: WatchSnapshot, family: WidgetFamily, size: CGSize, glass: Bool, coach: Bool = false
     ) -> some View {
         let entry = WatchSnapshotEntry(date: .now, snapshot: snapshot)
         return VStack(spacing: 2) {
-            ComplicationView(entry: entry, family: family, isSmartStack: glass)
+            Group {
+                if coach {
+                    CoachSaysView(entry: entry, family: family)
+                } else {
+                    ComplicationView(entry: entry, family: family, isSmartStack: glass)
+                }
+            }
                 .padding(.horizontal, glass ? 10 : 0)
                 .frame(width: size.width, height: size.height)
                 .background(
