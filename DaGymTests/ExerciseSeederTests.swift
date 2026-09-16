@@ -47,10 +47,10 @@ struct ExerciseSeederTests {
         SeedState.row(in: context).exerciseSeedVersion = 0
         try context.save()
 
-        // Now seed again as if the bundled seed bumped to version 5 (its real value) — this must
+        // Now seed again as if the bundled seed bumped to version 6 (its real value) — this must
         // refresh the stale row in place, not skip it because `insertMissing` already saw the ID.
         ExerciseSeeder.seedIfNeeded(context: context)
-        #expect(SeedState.row(in: context).exerciseSeedVersion == 5)
+        #expect(SeedState.row(in: context).exerciseSeedVersion == 6)
 
         let benchPress = try #require(
             try context.fetch(FetchDescriptor<ExerciseModel>()).first {
@@ -102,7 +102,7 @@ struct ExerciseSeederTests {
 
         #expect(bench.restSeconds == 0)
         #expect(squat.restSeconds == 240)
-        #expect(SeedState.row(in: context).exerciseSeedVersion == 5)
+        #expect(SeedState.row(in: context).exerciseSeedVersion == 6)
     }
 
     /// `needsSeeding` is what lets a cold launch skip the 1.4 MB decode: it must say "no" for a
@@ -159,6 +159,41 @@ struct ExerciseSeederTests {
         #expect(!context.hasChanges)
         #expect(SeedState.row(in: context).exerciseSeedVersion == ExerciseSeeder.bundledVersion)
         #expect(try context.fetchCount(FetchDescriptor<ExerciseModel>()) == 1466)
+    }
+
+    /// Seed v6 corrected a batch of primary-muscle/equipment tags (`Reverse_Machine_Flyes`
+    /// chest → rear delts, `Pec_Deck` bodyweight → machine, and others). A store still on an
+    /// older version must pick up the corrected values on the next launch without duplicating
+    /// the row — this is what actually gets the fix to a lifter who already has the exercise.
+    @Test("a bumped seed version refreshes a stale primary muscle and equipment tag")
+    func bumpedVersionFixesMuscleAndEquipment() throws {
+        let container = try ModelContainer.dagym(inMemory: true)
+        let context = ModelContext(container)
+        ExerciseSeeder.seedIfNeeded(context: context)
+        let seededCount = try context.fetch(FetchDescriptor<ExerciseModel>()).count
+
+        // Hand-corrupt two rows back to their pre-v6 (wrong) tags, as if seeded by an older build.
+        let reverseFlyes = try #require(
+            try context.fetch(FetchDescriptor<ExerciseModel>()).first {
+                $0.seedID == "Reverse_Machine_Flyes"
+            }
+        )
+        reverseFlyes.primaryMuscles = ["chest"]
+        reverseFlyes.secondaryMuscles = ["delts"]
+        let pecDeck = try #require(
+            try context.fetch(FetchDescriptor<ExerciseModel>()).first { $0.seedID == "Pec_Deck" }
+        )
+        pecDeck.equipment = "bodyweight"
+        SeedState.row(in: context).exerciseSeedVersion = 5
+        try context.save()
+
+        ExerciseSeeder.seedIfNeeded(context: context)
+
+        #expect(reverseFlyes.primaryMuscles == ["delts"])
+        #expect(reverseFlyes.secondaryMuscles == ["traps"])
+        #expect(pecDeck.equipment == "machine")
+        #expect(SeedState.row(in: context).exerciseSeedVersion == ExerciseSeeder.bundledVersion)
+        #expect(try context.fetch(FetchDescriptor<ExerciseModel>()).count == seededCount)
     }
 
     @Test("every seeded exercise has non-empty instructions within a sane length")

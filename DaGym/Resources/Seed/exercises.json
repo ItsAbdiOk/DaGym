@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "source": "free-exercise-db (yuhonas/free-exercise-db, Unlicense) — names, muscles, equipment; wger.de (wger-project, CC-BY-SA 3.0/4.0 per exercise) — instructions, additional exercises. See docs/exercise-data-sources.md for attribution details.",
   "exercises": [
     {
@@ -2910,12 +2910,9 @@
       "id": "Calf_Press_On_The_Leg_Press_Machine",
       "name": "Calf Press On The Leg Press Machine",
       "primary": [
-        "quads"
+        "calves"
       ],
-      "secondary": [
-        "glutes",
-        "hams"
-      ],
+      "secondary": [],
       "equipment": "machine",
       "mechanic": "isolation",
       "force": "push",
@@ -3455,7 +3452,7 @@
       "secondary": [
         "forearms"
       ],
-      "equipment": "barbell",
+      "equipment": "ezBar",
       "mechanic": "isolation",
       "force": "pull",
       "level": "beginner",
@@ -4096,7 +4093,7 @@
         "triceps"
       ],
       "secondary": [],
-      "equipment": "barbell",
+      "equipment": "ezBar",
       "mechanic": "isolation",
       "force": "push",
       "level": "beginner",
@@ -8792,7 +8789,7 @@
         "triceps"
       ],
       "secondary": [],
-      "equipment": "ezBar",
+      "equipment": "barbell",
       "mechanic": "isolation",
       "force": "push",
       "level": "intermediate",
@@ -11604,7 +11601,7 @@
       "secondary": [
         "forearms"
       ],
-      "equipment": "ezBar",
+      "equipment": "barbell",
       "mechanic": "isolation",
       "force": "pull",
       "level": "intermediate",
@@ -11794,10 +11791,10 @@
       "id": "Reverse_Machine_Flyes",
       "name": "Reverse Machine Flyes",
       "primary": [
-        "chest"
+        "delts"
       ],
       "secondary": [
-        "delts"
+        "traps"
       ],
       "equipment": "machine",
       "mechanic": "isolation",
@@ -12280,7 +12277,7 @@
       "secondary": [
         "glutes"
       ],
-      "equipment": "other",
+      "equipment": "bands",
       "mechanic": "isolation",
       "force": "pull",
       "level": "beginner",
@@ -16527,7 +16524,7 @@
       "secondary": [
         "obliques"
       ],
-      "equipment": "other",
+      "equipment": "bands",
       "mechanic": "isolation",
       "force": "pull",
       "level": "intermediate",
@@ -16984,7 +16981,7 @@
       "secondary": [
         "glutes"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -17242,7 +17239,7 @@
         "delts",
         "triceps"
       ],
-      "equipment": "other",
+      "equipment": "dumbbell",
       "mechanic": null,
       "loggingStyle": "weightReps",
       "isPerSide": false,
@@ -17359,7 +17356,7 @@
         "traps",
         "delts"
       ],
-      "equipment": "other",
+      "equipment": "dumbbell",
       "mechanic": null,
       "loggingStyle": "weightReps",
       "isPerSide": false,
@@ -17681,7 +17678,7 @@
         "triceps",
         "delts"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -17742,7 +17739,7 @@
         "chest"
       ],
       "secondary": [],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -17810,13 +17807,10 @@
       "id": "Calf_Press_Using_Leg_Press_Machine",
       "name": "Calf Press Using Leg Press Machine",
       "primary": [
-        "quads"
+        "calves"
       ],
-      "secondary": [
-        "glutes",
-        "hams"
-      ],
-      "equipment": "bodyweight",
+      "secondary": [],
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -17846,7 +17840,7 @@
         "calves"
       ],
       "secondary": [],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -17977,7 +17971,7 @@
       "secondary": [
         "obliques"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -18159,7 +18153,7 @@
       "secondary": [
         "triceps"
       ],
-      "equipment": "other",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "weightReps",
       "isPerSide": false,
@@ -18511,7 +18505,7 @@
         "chest"
       ],
       "secondary": [],
-      "equipment": "other",
+      "equipment": "dumbbell",
       "mechanic": null,
       "loggingStyle": "weightReps",
       "isPerSide": false,
@@ -18533,7 +18527,7 @@
         "triceps"
       ],
       "secondary": [],
-      "equipment": "other",
+      "equipment": "dumbbell",
       "mechanic": null,
       "loggingStyle": "weightReps",
       "isPerSide": false,
@@ -19389,7 +19383,7 @@
       "secondary": [
         "glutes"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -19427,7 +19421,7 @@
         "glutes",
         "hams"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -19460,7 +19454,7 @@
         "glutes",
         "hams"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -19570,7 +19564,7 @@
         "triceps",
         "delts"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -19597,7 +19591,7 @@
         "traps",
         "delts"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -20353,7 +20347,7 @@
         "traps",
         "delts"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -20618,7 +20612,7 @@
       "secondary": [
         "triceps"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -20882,7 +20876,7 @@
         "calves"
       ],
       "secondary": [],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -21332,7 +21326,7 @@
         "triceps"
       ],
       "secondary": [],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -21386,7 +21380,7 @@
         "traps",
         "delts"
       ],
-      "equipment": "bodyweight",
+      "equipment": "bands",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -21486,7 +21480,7 @@
         "traps",
         "biceps"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -22123,7 +22117,7 @@
         "delts"
       ],
       "secondary": [],
-      "equipment": "other",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "weightReps",
       "isPerSide": false,
@@ -22273,7 +22267,7 @@
         "chest"
       ],
       "secondary": [],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -22305,7 +22299,7 @@
       "secondary": [
         "delts"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -24132,7 +24126,7 @@
         "triceps",
         "delts"
       ],
-      "equipment": "other",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "weightReps",
       "isPerSide": false,
@@ -24771,7 +24765,7 @@
         "glutes"
       ],
       "secondary": [],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -26430,7 +26424,7 @@
         "traps",
         "delts"
       ],
-      "equipment": "other",
+      "equipment": "dumbbell",
       "mechanic": null,
       "loggingStyle": "weightReps",
       "isPerSide": false,
@@ -27354,7 +27348,7 @@
       "secondary": [
         "abs"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -27490,7 +27484,7 @@
         "chest",
         "triceps"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -27975,7 +27969,7 @@
         "glutes",
         "hams"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -28024,7 +28018,7 @@
       "secondary": [
         "forearms"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -28675,7 +28669,7 @@
         "triceps",
         "delts"
       ],
-      "equipment": "other",
+      "equipment": "dumbbell",
       "mechanic": null,
       "loggingStyle": "weightReps",
       "isPerSide": false,
@@ -28752,7 +28746,7 @@
         "glutes",
         "hams"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -28772,13 +28766,10 @@
       "id": "Calf_Raise_using_Hack_Squat_Machine",
       "name": "Calf Raise using Hack Squat Machine",
       "primary": [
-        "quads"
+        "calves"
       ],
-      "secondary": [
-        "glutes",
-        "hams"
-      ],
-      "equipment": "bodyweight",
+      "secondary": [],
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -29586,7 +29577,7 @@
         "chest",
         "triceps"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -29754,7 +29745,7 @@
         "glutes",
         "hams"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -29833,7 +29824,7 @@
         "glutes",
         "hams"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -29943,7 +29934,7 @@
         "glutes",
         "hams"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -30018,7 +30009,7 @@
       "secondary": [
         "forearms"
       ],
-      "equipment": "other",
+      "equipment": "dumbbell",
       "mechanic": null,
       "loggingStyle": "weightReps",
       "isPerSide": false,
@@ -31149,7 +31140,7 @@
         "traps",
         "delts"
       ],
-      "equipment": "other",
+      "equipment": "cable",
       "mechanic": null,
       "loggingStyle": "weightReps",
       "isPerSide": false,
@@ -31314,7 +31305,7 @@
         "traps",
         "quads"
       ],
-      "equipment": "dumbbell",
+      "equipment": "barbell",
       "mechanic": null,
       "loggingStyle": "weightReps",
       "isPerSide": false,
@@ -31503,7 +31494,7 @@
         "glutes",
         "hams"
       ],
-      "equipment": "bodyweight",
+      "equipment": "dumbbell",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -31532,7 +31523,7 @@
         "delts"
       ],
       "secondary": [],
-      "equipment": "other",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "weightReps",
       "isPerSide": false,
@@ -32044,7 +32035,7 @@
         "chest"
       ],
       "secondary": [],
-      "equipment": "other",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "weightReps",
       "isPerSide": false,
@@ -32611,7 +32602,7 @@
       "secondary": [
         "hams"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -32663,7 +32654,7 @@
         "traps",
         "delts"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -32916,7 +32907,7 @@
       "secondary": [
         "quads"
       ],
-      "equipment": "other",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "weightReps",
       "isPerSide": false,
@@ -33136,7 +33127,7 @@
         "delts"
       ],
       "secondary": [],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -33196,7 +33187,7 @@
         "glutes"
       ],
       "secondary": [],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -33362,7 +33353,7 @@
         "triceps",
         "delts"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -33410,7 +33401,7 @@
       "secondary": [
         "traps"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -33898,7 +33889,7 @@
         "triceps",
         "delts"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -34623,7 +34614,7 @@
       "name": "Banded Ankle Mobility",
       "primary": [],
       "secondary": [],
-      "equipment": "bodyweight",
+      "equipment": "bands",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -35204,7 +35195,7 @@
       "secondary": [
         "delts"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -35526,7 +35517,7 @@
         "triceps",
         "delts"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -35647,7 +35638,7 @@
       "secondary": [
         "obliques"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -35819,7 +35810,7 @@
         "glutes",
         "hams"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -37034,7 +37025,7 @@
         "quads"
       ],
       "secondary": [],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,
@@ -37502,7 +37493,7 @@
         "glutes",
         "hams"
       ],
-      "equipment": "bodyweight",
+      "equipment": "machine",
       "mechanic": null,
       "loggingStyle": "bodyweightReps",
       "isPerSide": false,

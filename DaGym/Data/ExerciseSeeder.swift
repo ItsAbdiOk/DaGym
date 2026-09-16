@@ -60,7 +60,7 @@ enum ExerciseSeeder {
     /// store is current" from the seed-state row and a count query alone — decoding the 1.4 MB
     /// file just to read its version was the single biggest cost of every cold start.
     /// `ExerciseSeederTests.bundledVersionMatchesTheFile` keeps the two in step.
-    static let bundledVersion = 5
+    static let bundledVersion = 6
 
     /// Whether `seedIfNeeded` has anything to do: the store is behind the bundled seed, or it
     /// has no exercises at all (a fresh install, or a store the reset just emptied). Two cheap
@@ -336,9 +336,11 @@ enum ExerciseSeeder {
             }
         }
         var updatedCount = 0
+        let fixMuscleAndEquipment = previousVersion < muscleEquipmentFixVersion
         for item in items {
             guard let model = bySeedID[item.id] else { continue }
             refresh(model, from: item, migrateRest: previousVersion < restMigrationVersion)
+            if fixMuscleAndEquipment { refreshMuscleAndEquipment(model, from: item) }
             updatedCount += 1
         }
         if updatedCount > 0 {
@@ -349,6 +351,14 @@ enum ExerciseSeeder {
 
     /// The seed version that moved unedited rest from the seed's number to 0.
     static let restMigrationVersion = 4
+
+    /// The seed version that corrected a batch of primary-muscle/equipment tagging mistakes
+    /// (e.g. `Reverse_Machine_Flyes` tagged chest instead of rear delts, `Pec_Deck` tagged
+    /// bodyweight instead of machine). Seeded exercises never expose primary/secondary/equipment
+    /// as editable from Exercise Settings — `WorkoutStore.updateCustomExercise` only ever touches
+    /// custom rows — so unlike `instructions`/`machine` there is no user edit to preserve here;
+    /// a store below this version always takes the seed's corrected values.
+    static let muscleEquipmentFixVersion = 6
 
     /// Seed version 5 added `machine`. A row that has none yet takes the seed's; a row the
     /// lifter already tagged from Exercise Settings keeps theirs — there is no way to tell a
@@ -363,6 +373,16 @@ enum ExerciseSeeder {
         if let licence = item.licence { model.licence = licence }
         if let authors = item.authors { model.authors = authors }
         if migrateRest, model.restSeconds == item.restSeconds { model.restSeconds = 0 }
+    }
+
+    /// Refreshes `primaryMuscles`/`secondaryMuscles`/`equipment` on a store coming from before
+    /// `muscleEquipmentFixVersion`, so the seed's corrected tags reach rows a lifter already has
+    /// without duplicating them. Skips a field that already matches so an up-to-date row (a
+    /// fresh install seeded straight from this file) isn't dirtied for nothing.
+    private static func refreshMuscleAndEquipment(_ model: ExerciseModel, from item: SeedExercise) {
+        if model.primaryMuscles != item.primary { model.primaryMuscles = item.primary }
+        if model.secondaryMuscles != item.secondary { model.secondaryMuscles = item.secondary }
+        if model.equipment != item.equipment { model.equipment = item.equipment }
     }
 }
 
