@@ -18,7 +18,7 @@ struct SeedMachineDataTests {
     @Test("every machine-kind row carries a station, except the excused few")
     func machineRowsAreTagged() throws {
         let seed = try ExerciseSeeder.loadSeed()
-        #expect(seed.version == 5)
+        #expect(seed.version == 6)
         let untagged = seed.exercises.filter { $0.equipment == "machine" && $0.machine == nil }.map(\.id)
         #expect(Set(untagged) == untaggedMachineRows, "\(untagged)")
         let taggedCount = seed.exercises.filter { $0.machine != nil }.count
@@ -247,7 +247,7 @@ struct MachineFilteringTests {
         SeedState.row(in: context).exerciseSeedVersion = 4
         try context.save()
         ExerciseSeeder.seedIfNeeded(context: context)
-        #expect(SeedState.row(in: context).exerciseSeedVersion == 5)
+        #expect(SeedState.row(in: context).exerciseSeedVersion == 6)
         #expect(legPress.machine == "legPress")
         #expect(pecDeck.machine == "chestPressMachine")
     }

@@ -65,6 +65,9 @@ enum CoachEvalRunner {
             .trimmingCharacters(in: .whitespacesAndNewlines), !key.isEmpty {
             return key
         }
+        // The Keychain fallback is opt-in so the gate never spends credit (or trips over a
+        // stale key) on a simulator that happens to hold one.
+        guard ProcessInfo.processInfo.environment["DAGYM_COACH_EVAL"] == "1" else { return nil }
         return CoachChatSettings.apiKey()
     }
 

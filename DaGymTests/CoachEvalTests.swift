@@ -10,10 +10,11 @@ import Testing
 /// Scores the cloud coach against eight scripted lifters — real `CoachChatEngine`, real
 /// `StoreCoachChatToolExecutor` over an in-memory store, real OpenRouter — so the prompt can
 /// be tuned against numbers. Skipped without a key: `DAGYM_COACH_EVAL_KEY` in the runner's
-/// environment (`TEST_RUNNER_DAGYM_COACH_EVAL_KEY=…` to xcodebuild), else the key the app on
-/// this simulator holds in its Keychain. `DAGYM_COACH_EVAL_REVIEW=1` turns the second opinion
-/// on; `DAGYM_COACH_EVAL_OUT` is where `coach-eval.json` and `coach-eval.md` land (the temp
-/// directory by default). Not part of the gate: it spends real credit and takes minutes.
+/// environment (`TEST_RUNNER_DAGYM_COACH_EVAL_KEY=…` to xcodebuild), else — only with
+/// `DAGYM_COACH_EVAL=1` — the key the app on this simulator holds in its Keychain.
+/// `DAGYM_COACH_EVAL_REVIEW=1` turns the second opinion on; `DAGYM_COACH_EVAL_OUT` is where
+/// `coach-eval.json` and `coach-eval.md` land (the temp directory by default). Not part of the
+/// gate: it spends real credit and takes minutes.
 @MainActor
 @Suite("Coach chat eval", .serialized)
 struct CoachEvalTests {
@@ -26,6 +27,8 @@ struct CoachEvalTests {
         return path.map { URL(fileURLWithPath: $0) }
             ?? URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("dagym-coach-eval")
     }
+
+    private static let skipReason = "set DAGYM_COACH_EVAL_KEY, or DAGYM_COACH_EVAL=1 with the simulator's key"
 
     @Test("every scenario seeds a store with history the tools can read (no key needed)")
     func scenariosSeed() async throws {
@@ -54,7 +57,7 @@ struct CoachEvalTests {
 
     @Test(
         "the key's balance can be read (numbers only)",
-        .enabled(if: CoachEvalRunner.apiKey() != nil, "set DAGYM_COACH_EVAL_KEY or seed the simulator's key")
+        .enabled(if: CoachEvalRunner.apiKey() != nil, Self.skipReason)
     )
     func creditLookup() async throws {
         let key = try #require(CoachEvalRunner.apiKey())
@@ -64,7 +67,7 @@ struct CoachEvalTests {
 
     @Test(
         "eight lifters through the real coach, scored",
-        .enabled(if: CoachEvalRunner.apiKey() != nil, "set DAGYM_COACH_EVAL_KEY or seed the simulator's key")
+        .enabled(if: CoachEvalRunner.apiKey() != nil, Self.skipReason)
     )
     func liveEval() async throws {
         let key = try #require(CoachEvalRunner.apiKey())
