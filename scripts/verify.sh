@@ -3,26 +3,35 @@
 # the simulator UI smoke test, and the watch test bundle. Used by the pre-push hook and
 # before every device install.
 #
-#   scripts/verify.sh [--coverage] [--skip-lint]
+#   scripts/verify.sh [--coverage] [--skip-lint] [--perf]
 #
 #   --coverage   gather code coverage for the xcodebuild runs (off by default: it instruments
 #                every target and slows both the build and the tests, and nothing reads the
 #                report on a normal push — open the .xcresult in Xcode when you want it)
 #   --skip-lint  the pre-push hook lints (and checks tool versions) before calling this, so it
 #                passes this to avoid running SwiftLint twice per push
+#   --perf       opt-in: after tests pass, run scripts/perf-measure.sh and append one summary
+#                line to the gate log (env DAGYM_VERIFY_PERF=1 does the same). Off by default —
+#                verify.sh's own xcodebuild above doesn't pin a DerivedData path, so there's
+#                nothing fixed for perf-measure.sh to reuse; it rebuilds Debug itself, which
+#                costs roughly another minute. Result JSON lands in build/perf/<date>.json so a
+#                nightly history accumulates; compare two with scripts/perf-compare.sh.
 set -eu
 cd "$(dirname "$0")/.."
 . scripts/lib/sim.sh
 
 COVERAGE=NO
 LINT=1
+PERF=0
 for arg in "$@"; do
     case "$arg" in
         --coverage) COVERAGE=YES ;;
         --skip-lint) LINT=0 ;;
-        *) echo "usage: scripts/verify.sh [--coverage] [--skip-lint]" >&2; exit 2 ;;
+        --perf) PERF=1 ;;
+        *) echo "usage: scripts/verify.sh [--coverage] [--skip-lint] [--perf]" >&2; exit 2 ;;
     esac
 done
+[ "${DAGYM_VERIFY_PERF:-0}" = 1 ] && PERF=1
 
 # Per-run log directory: several gates can run at once on this machine (parallel sessions),
 # and fixed /tmp paths made one run's failure grep print another run's errors.
@@ -85,4 +94,18 @@ run_xctest "app + database tests, UI smoke test" DaGym "$UDID" ios \
 WATCH_INFO=$(sim_resolve_watch) || { echo "no Apple Watch simulator available" >&2; exit 1; }
 echo "  $(sim_name "$WATCH_INFO")"
 run_xctest "watch tests" DaGymWatch "$(sim_udid "$WATCH_INFO")" watch -only-testing:DaGymWatchTests
+
+if [ "$PERF" = 1 ]; then
+    echo "▶ perf measurement (opt-in; rebuilds Debug — ~1 extra minute)"
+    PERF_OUT="build/perf/$(date +%Y-%m-%d).json"
+    scripts/perf-measure.sh --label "$(date +%Y-%m-%d)" --out "$PERF_OUT" \
+        > "$LOG_DIR/perf.log" 2>&1 \
+        || { tail -20 "$LOG_DIR/perf.log" >&2; echo "perf measurement failed (log: $LOG_DIR/perf.log)" >&2; exit 1; }
+    python3 -c "
+import json
+d = json.load(open('$PERF_OUT'))
+print('▶ perf  warm-launch-median={:.0f}ms  home-rss={:.1f}MB  rest-cpu={:.1f}%  app={:.1f}MB'.format(
+    d['warmLaunchMedianMs'], d['homeIdleRSSKB'] / 1024, d['restScreenCPUAvg'], d['appSizeKB'] / 1024))
+"
+fi
 echo "✓ all green"
