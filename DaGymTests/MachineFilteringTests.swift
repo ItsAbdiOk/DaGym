@@ -83,11 +83,6 @@ struct SeedMachineDataTests {
 @MainActor
 @Suite("Machine filtering")
 struct MachineFilteringTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     @discardableResult
     private func exercise(
         _ store: WorkoutStore, _ name: String, equipment: String, machine: String? = nil,
@@ -241,9 +236,7 @@ struct MachineFilteringTests {
 
     @Test("a seed bump copies the station onto existing rows but never over a lifter's own tag")
     func seederCopiesMachine() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        ExerciseSeeder.seedIfNeeded(context: context)
+        let context = try makeContext(seed: .exercises)
         let rows = try context.fetch(FetchDescriptor<ExerciseModel>())
         let legPress = try #require(rows.first { $0.seedID == "Leg_Press" })
         let pecDeck = try #require(rows.first { $0.seedID == "Butterfly" })

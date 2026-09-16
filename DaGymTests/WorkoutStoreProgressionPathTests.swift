@@ -19,11 +19,6 @@ import Testing
 struct WorkoutStoreProgressionPathTests {
     // MARK: - Fixtures
 
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private struct Lift {
         var routineID: UUID
         var exerciseID: UUID

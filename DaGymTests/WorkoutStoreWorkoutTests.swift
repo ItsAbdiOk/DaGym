@@ -8,11 +8,6 @@ import Testing
 @MainActor
 @Suite("WorkoutStore workouts")
 struct WorkoutStoreWorkoutTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     /// A routine saved with no progression rule: its sets are pre-filled by position from the
     /// last session (plan.md §6.1), never prescribed by the engine. Pass `rule:` for the other path.
     private func makeRoutine(store: WorkoutStore, exerciseID: UUID, rule: ProgressionRule? = nil) -> UUID {

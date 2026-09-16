@@ -11,11 +11,6 @@ import Testing
 @MainActor
 @Suite("WorkoutStore coach: approving a deload")
 struct WorkoutStoreCoachApproveTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     @discardableResult
     private func benchRoutine(_ store: WorkoutStore, name: String = "Bench Press") -> RoutineInfo {
         let exercise = store.createCustomExercise(

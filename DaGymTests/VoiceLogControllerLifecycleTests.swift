@@ -17,7 +17,7 @@ struct VoiceLogControllerLifecycleTests {
     @Test("releasing after a permission error keeps the error instead of \u{201C}Didn't catch that\u{201D}")
     func releaseKeepsPermissionError() async throws {
         let workout = VoiceLogFixtures.singleSetSession()
-        let store = try VoiceLogFixtures.store()
+        let store = try makeStore()
         let recognizer = FakeSpeechRecognizer(authorizationStatus: .deniedMicrophone)
         let controller = VoiceLogFixtures.controller(recognizer)
 
@@ -33,7 +33,7 @@ struct VoiceLogControllerLifecycleTests {
     @Test("a restricted device gets restriction copy, not \u{201C}turn it on in Settings\u{201D}")
     func restrictedSurfacesItsOwnError() async throws {
         let workout = VoiceLogFixtures.singleSetSession()
-        let store = try VoiceLogFixtures.store()
+        let store = try makeStore()
         let recognizer = FakeSpeechRecognizer(authorizationStatus: .restricted)
         let controller = VoiceLogFixtures.controller(recognizer)
 
@@ -51,7 +51,7 @@ struct VoiceLogControllerLifecycleTests {
     @Test("a new press during the previous release's wait is not torn down by it")
     func rePressDuringReleaseWindowSurvives() async throws {
         let workout = VoiceLogFixtures.singleSetSession()
-        let store = try VoiceLogFixtures.store()
+        let store = try makeStore()
         let preferences = VoiceLogFixtures.preferences()
         let recognizer = FakeSpeechRecognizer()
         // Still deciding: neither the stream nor `endAudio()` ends it, so the release genuinely
@@ -88,7 +88,7 @@ struct VoiceLogControllerLifecycleTests {
     @Test("the final hypothesis, not the partial on screen at release, is what is logged")
     func finalHypothesisWinsOverTruncatedPartial() async throws {
         let workout = VoiceLogFixtures.singleSetSession()
-        let store = try VoiceLogFixtures.store()
+        let store = try makeStore()
         let preferences = VoiceLogFixtures.preferences(unit: .kg, autoLog: true)
         let recognizer = FakeSpeechRecognizer()
         recognizer.finishesAutomatically = false
@@ -112,7 +112,7 @@ struct VoiceLogControllerLifecycleTests {
     @Test("a truncated partial with no final hypothesis never auto-logs")
     func truncatedPartialNeverAutoLogs() async throws {
         let workout = VoiceLogFixtures.singleSetSession()
-        let store = try VoiceLogFixtures.store()
+        let store = try makeStore()
         let preferences = VoiceLogFixtures.preferences(unit: .kg, autoLog: true)
         let recognizer = FakeSpeechRecognizer()
         recognizer.finishesAutomatically = false

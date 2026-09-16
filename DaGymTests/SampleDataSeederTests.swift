@@ -16,11 +16,6 @@ struct SampleDataSeederTests {
         return defaults
     }
 
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     @Test("loads start at a trained lifter's numbers, not the bare increment")
     func startingWeightsByEquipment() {
         let bench = ExerciseInfo(name: "Bench", primary: [.chest], equipment: "Barbell", incrementKg: 2.5)

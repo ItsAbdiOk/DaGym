@@ -22,12 +22,6 @@ private final class FakeNotificationCenter: RestNotificationCenter {
     }
 }
 
-@MainActor
-private func makeStore() throws -> WorkoutStore {
-    let container = try ModelContainer.dagym(inMemory: true)
-    return WorkoutStore(context: ModelContext(container))
-}
-
 // MARK: - WorkoutDayReminderScheduler (Batch B3 item 3)
 
 @MainActor

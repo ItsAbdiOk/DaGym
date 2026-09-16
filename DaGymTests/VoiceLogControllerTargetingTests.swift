@@ -22,7 +22,7 @@ struct VoiceLogControllerTargetingTests {
             WorkoutExerciseEntry(exercise: squat, sets: [SetEntry(weightKg: 80, reps: 5)]),
             WorkoutExerciseEntry(exercise: bench, sets: [SetEntry(weightKg: 0, reps: 0)])
         ])
-        let store = try VoiceLogFixtures.store()
+        let store = try makeStore()
         let preferences = VoiceLogFixtures.preferences()
         let recognizer = FakeSpeechRecognizer()
         recognizer.scriptedEvents = [
@@ -58,7 +58,7 @@ struct VoiceLogControllerTargetingTests {
         let workout = VoiceLogFixtures.session([WorkoutExerciseEntry(
             exercise: VoiceLogFixtures.exercise(), sets: [SetEntry(kind: .working, weightKg: 100, reps: 8)]
         )])
-        let store = try VoiceLogFixtures.store()
+        let store = try makeStore()
         let preferences = VoiceLogFixtures.preferences()
         let recognizer = FakeSpeechRecognizer()
         recognizer.scriptedEvents = [
@@ -100,7 +100,7 @@ struct VoiceLogControllerTargetingTests {
                 SetEntry(weightKg: 0, reps: 0)
             ]
         )])
-        let store = try VoiceLogFixtures.store()
+        let store = try makeStore()
         let preferences = VoiceLogFixtures.preferences()
         let recognizer = FakeSpeechRecognizer()
         recognizer.scriptedEvents = [
@@ -129,7 +129,7 @@ struct VoiceLogControllerTargetingTests {
     @Test("an edited review card still goes through the validator")
     func editedCardIsValidated() async throws {
         let workout = VoiceLogFixtures.singleSetSession()
-        let store = try VoiceLogFixtures.store()
+        let store = try makeStore()
         let preferences = VoiceLogFixtures.preferences()
         let recognizer = FakeSpeechRecognizer()
         recognizer.scriptedEvents = [
@@ -159,7 +159,7 @@ struct VoiceLogControllerTargetingTests {
     @Test("an lb user's card and confirmation are in pounds, never kg")
     func poundsUserSeesPounds() async throws {
         let workout = VoiceLogFixtures.singleSetSession()
-        let store = try VoiceLogFixtures.store()
+        let store = try makeStore()
         let preferences = VoiceLogFixtures.preferences(unit: .lb, autoLog: true)
         let recognizer = FakeSpeechRecognizer()
         recognizer.scriptedEvents = [
@@ -182,7 +182,7 @@ struct VoiceLogControllerTargetingTests {
     @Test("an lb user's review card carries the lb unit, so edits are read as pounds")
     func poundsUserCardCarriesUnit() async throws {
         let workout = VoiceLogFixtures.singleSetSession()
-        let store = try VoiceLogFixtures.store()
+        let store = try makeStore()
         let preferences = VoiceLogFixtures.preferences(unit: .lb)
         let recognizer = FakeSpeechRecognizer()
         recognizer.scriptedEvents = [

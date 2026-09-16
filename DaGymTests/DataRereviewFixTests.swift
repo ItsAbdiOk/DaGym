@@ -12,16 +12,6 @@ import Testing
 @MainActor
 @Suite("Data re-review fixes")
 struct DataRereviewFixTests {
-    private func seededStore() throws -> (store: WorkoutStore, context: ModelContext) {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        ExerciseSeeder.seedIfNeeded(context: context)
-        let store = WorkoutStore(context: context)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
-        EquipmentSeeder.seedIfNeeded(store: store)
-        return (store, context)
-    }
-
     private func makeSuite(_ name: String) -> UserDefaults {
         let defaults = UserDefaults(suiteName: name) ?? .standard
         defaults.removePersistentDomain(forName: name)
@@ -59,7 +49,7 @@ struct DataRereviewFixTests {
     /// pristine copy, and the lifter's planned weight and swapped lift went with the tombstone.
     @Test("a starter routine edited between two seeds keeps the edits after the fold")
     func editedStarterSurvivesReseed() throws {
-        let (store, _) = try seededStore()
+        let (store, _) = try makeStoreAndContext(seed: .firstLaunch)
         let edited = try editUpperA(store)
 
         RoutineSeeder.seedProgramRoutines(store: store)
@@ -74,7 +64,7 @@ struct DataRereviewFixTests {
     /// (which folds). The restored routine used to lose to the re-seeded one.
     @Test("a backup's edited starter routine survives the wipe-then-restore fold")
     func restoredStarterSurvivesReseedAfterWipe() throws {
-        let (store, context) = try seededStore()
+        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
         let edited = try editUpperA(store)
         let document = BackupService.export(context: context)
 
@@ -92,7 +82,7 @@ struct DataRereviewFixTests {
     /// then signed into iCloud. "Oldest wins" handed the fold to A's untouched seed.
     @Test("a routine rebuilt on a newer device beats an older device's never-opened seed")
     func editedNewerCopyBeatsPristineOlderSeed() throws {
-        let (store, context) = try seededStore()
+        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
         let edited = try editUpperA(store)
         let day: TimeInterval = 24 * 60 * 60
         let local = try #require(store.fetchRoutineModel(id: edited))
@@ -119,7 +109,7 @@ struct DataRereviewFixTests {
     /// loser trained more recently carries its stall state across even when the survivor has one.
     @Test("a more recently trained loser's stall state replaces the survivor's")
     func newerLoserStallStateWins() throws {
-        let (store, context) = try seededStore()
+        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
         let legs = try #require(store.routines().first { $0.name == "Legs" })
         let survivor = try #require(store.fetchRoutineModel(id: legs.id))
         let survivorSlot = try #require(survivor.exercises?.first)
@@ -150,7 +140,7 @@ struct DataRereviewFixTests {
     /// used to delete the tombstone outright, and `.cascade` took B's slots with it.
     @Test("a tombstone edited by an offline device hands its slots and workouts to the survivor")
     func sweptTombstoneHandsChildrenToSurvivor() throws {
-        let (store, context) = try seededStore()
+        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
         let legs = try #require(store.routines().first { $0.name == "Legs" })
         let local = try #require(store.fetchRoutineModel(id: legs.id))
         let squat = try #require(local.exercises?.first { $0.exercise?.name == "Barbell Squat" }?.exercise)
@@ -189,7 +179,7 @@ struct DataRereviewFixTests {
     /// with its redundant slots dropped one by one, not through the cascade.
     @Test("an untouched tombstone is reclaimed after the grace period without moving anything")
     func untouchedTombstoneIsReclaimed() throws {
-        let (store, context) = try seededStore()
+        let (store, context) = try makeStoreAndContext(seed: .firstLaunch)
         let legs = try #require(store.routines().first { $0.name == "Legs" })
         let local = try #require(store.fetchRoutineModel(id: legs.id))
         let remote = RoutineModel(
@@ -217,14 +207,12 @@ struct DataRereviewFixTests {
         let encoded = try #require(String(data: JSONEncoder().encode(WeeklySchedule()), encoding: .utf8))
         #expect(BackupService.isBlank(ScheduleModel(scheduleJSON: encoded)))
 
-        let sourceContainer = try ModelContainer.dagym(inMemory: true)
-        let sourceContext = ModelContext(sourceContainer)
+        let sourceContext = try makeContext()
         sourceContext.insert(ScheduleModel(scheduleJSON: #"{"mon":["push"]}"#))
         try sourceContext.save()
         let document = BackupService.export(context: sourceContext)
 
-        let destinationContainer = try ModelContainer.dagym(inMemory: true)
-        let destinationContext = ModelContext(destinationContainer)
+        let destinationContext = try makeContext()
         destinationContext.insert(ScheduleModel(scheduleJSON: encoded))
         try destinationContext.save()
         BackupService.import(document: document, context: destinationContext)
@@ -239,8 +227,7 @@ struct DataRereviewFixTests {
     /// the two never matched and any routine save put the plan back in front of the engine.
     @Test("a rename never re-applies a top-set-only plan over the engine's prescription")
     func topSetOnlyPlanSurvivesRename() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: ModelContext(container))
+        let store = try makeStore()
         let bench = store.createCustomExercise(
             name: "Bench Press", primary: [.chest], equipment: "Barbell", style: .weightReps
         )
@@ -279,7 +266,7 @@ struct DataRereviewFixTests {
     /// purge auto-finishes goes through both hooks exactly like a tapped Finish.
     @Test("purge's auto-finish fires the finish hooks")
     func purgeAutoFinishFiresHooks() throws {
-        let (store, _) = try seededStore()
+        let (store, _) = try makeStoreAndContext(seed: .firstLaunch)
         let legs = try #require(store.routines().first { $0.name == "Legs" })
         let session = store.startWorkout(routineID: legs.id)
         session.exercises[0].sets[0].isDone = true
@@ -302,8 +289,7 @@ struct DataRereviewFixTests {
 
     @Test("dumbbell, kettlebell and machine steps are 5/10/10 lb for an lb lifter")
     func fixedStepGridsFollowUnit() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: ModelContext(container))
+        let store = try makeStore()
         let equipment = store.activeEquipment()
         let dumbbell = store.createCustomExercise(
             name: "DB Press", primary: [.chest], equipment: "Dumbbell", style: .weightReps

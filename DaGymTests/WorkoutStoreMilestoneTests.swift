@@ -8,11 +8,6 @@ import Testing
 @MainActor
 @Suite("WorkoutStore milestones")
 struct WorkoutStoreMilestoneTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     @Test("finishing 10 workouts earns the workout-count bronze milestone once")
     func workoutCountBronzeEarnedOnce() throws {
         let store = try makeStore()

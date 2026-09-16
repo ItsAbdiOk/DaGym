@@ -12,10 +12,6 @@ import UIKit
 @MainActor
 @Suite("Backup restore: photos and Health bookkeeping")
 struct BackupImportExtrasTests {
-    private func mainContext() throws -> ModelContext {
-        ModelContext(try ModelContainer.dagym(inMemory: true))
-    }
-
     private func photoContext() throws -> ModelContext {
         ModelContext(try ModelContainer.dagymPhotos(inMemory: true))
     }
@@ -55,7 +51,7 @@ struct BackupImportExtrasTests {
             BackupProgressPhoto(id: metadataOnly, date: Date(timeIntervalSince1970: 2_000), pose: "back")
         ])
         let photos = try photoContext()
-        let main = try mainContext()
+        let main = try makeContext()
         let report = BackupService.import(document: document, context: main, photoContext: photos)
         #expect(report.photosImported == 2)
         #expect(report.problems.isEmpty)
@@ -77,7 +73,7 @@ struct BackupImportExtrasTests {
     func photosDedupeByID() throws {
         let document = document(photos: [BackupProgressPhoto(id: UUID(), date: Date())])
         let photos = try photoContext()
-        let main = try mainContext()
+        let main = try makeContext()
         _ = BackupService.import(document: document, context: main, photoContext: photos)
         let second = BackupService.import(document: document, context: main, photoContext: photos)
         #expect(second.photosImported == 0)
@@ -97,7 +93,7 @@ struct BackupImportExtrasTests {
         let photos = try photoContext()
         let marker = Data("precomputed".utf8)
         let report = BackupService.import(
-            document: document(photos: [photo]), context: try mainContext(), photoContext: photos,
+            document: document(photos: [photo]), context: try makeContext(), photoContext: photos,
             thumbnails: [id: marker]
         )
         #expect(report.photosImported == 1)
@@ -109,7 +105,7 @@ struct BackupImportExtrasTests {
     /// alone never bumped it, so the restored rows stayed invisible until an unrelated save.
     @Test("importing on the live store bumps its changeToken")
     func importOnLiveStoreBumpsChangeToken() throws {
-        let store = WorkoutStore(context: try mainContext())
+        let store = WorkoutStore(context: try makeContext())
         let before = store.changeToken
         let document = document(photos: [BackupProgressPhoto(id: UUID(), date: Date())])
         BackupService.import(
@@ -120,7 +116,7 @@ struct BackupImportExtrasTests {
 
     @Test("the async Settings entry point restores photos and reports like the sync one")
     func asyncImportRestoresPhotos() async throws {
-        let store = WorkoutStore(context: try mainContext())
+        let store = WorkoutStore(context: try makeContext())
         let id = UUID()
         let photo = BackupProgressPhoto(id: id, date: Date(), imageBase64: Self.jpegBase64)
         let report = await BackupService.import(
@@ -139,7 +135,7 @@ struct BackupImportExtrasTests {
         let garbage = Data("not a jpeg".utf8).base64EncodedString()
         let document = document(photos: [BackupProgressPhoto(id: id, date: Date(), imageBase64: garbage)])
         let photos = try photoContext()
-        let main = try mainContext()
+        let main = try makeContext()
         let report = BackupService.import(document: document, context: main, photoContext: photos)
         #expect(report.photosImported == 1)
         let row = try #require(try photos.fetch(FetchDescriptor<ProgressPhotoModel>()).first)
@@ -152,7 +148,7 @@ struct BackupImportExtrasTests {
         let document = document(photos: [
             BackupProgressPhoto(id: UUID(), date: Date()), BackupProgressPhoto(id: UUID(), date: Date())
         ])
-        let report = BackupService.import(document: document, context: try mainContext())
+        let report = BackupService.import(document: document, context: try makeContext())
         #expect(report.photosImported == 0)
         #expect(report.problems
             == ["2 progress photos couldn't be restored: the photo store isn't available."])
@@ -160,7 +156,7 @@ struct BackupImportExtrasTests {
 
     @Test("an empty photo list with no photo store is not a problem")
     func noPhotosNoProblem() throws {
-        let report = BackupService.import(document: document(photos: []), context: try mainContext())
+        let report = BackupService.import(document: document(photos: []), context: try makeContext())
         #expect(report.problems.isEmpty)
     }
 
@@ -184,7 +180,7 @@ struct BackupImportExtrasTests {
             ],
             ignoredHealthKitIDs: ["hk-ignored-already", "hk-deleted-1", "hk-deleted-2"]
         ))
-        let main = try mainContext()
+        let main = try makeContext()
         let report = BackupService.import(document: document, context: main, healthContext: health)
         #expect(report.healthTombstonesImported == 2)
         #expect(report.problems.isEmpty)
@@ -199,7 +195,7 @@ struct BackupImportExtrasTests {
     @Test("Health bookkeeping in the file but no Health store: reported, not silently dropped")
     func healthWithoutStoreIsReported() throws {
         let document = document(health: BackupHealthImport(ignoredHealthKitIDs: ["hk-deleted"]))
-        let report = BackupService.import(document: document, context: try mainContext())
+        let report = BackupService.import(document: document, context: try makeContext())
         #expect(report.healthTombstonesImported == 0)
         #expect(report.problems == [
             "Apple Health import history couldn't be restored: the Health store isn't available."
@@ -209,7 +205,7 @@ struct BackupImportExtrasTests {
     @Test("an empty Health section with no Health store is not a problem")
     func emptyHealthSectionIsFine() throws {
         let document = document(health: BackupHealthImport())
-        let report = BackupService.import(document: document, context: try mainContext())
+        let report = BackupService.import(document: document, context: try makeContext())
         #expect(report.problems.isEmpty)
     }
 }

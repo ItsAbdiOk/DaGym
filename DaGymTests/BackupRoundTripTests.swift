@@ -8,12 +8,6 @@ import Testing
 @MainActor
 @Suite("Backup round trip")
 struct BackupRoundTripTests {
-    private func makeStore() throws -> (store: WorkoutStore, context: ModelContext) {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        return (WorkoutStore(context: context), context)
-    }
-
     /// A routine with a routine-level rule and a per-exercise override, engine state on the slot,
     /// one finished workout flagged as a planned deload, a program with weeks, and an achievement.
     private func populate(_ store: WorkoutStore, context: ModelContext) throws -> UUID {
@@ -58,7 +52,7 @@ struct BackupRoundTripTests {
 
     @Test("export → import preserves rule JSON, stall, TM, planned deload, programs and achievements")
     func roundTripPreservesEngineState() throws {
-        let (source, sourceContext) = try makeStore()
+        let (source, sourceContext) = try makeStoreAndContext()
         let routineID = try populate(source, context: sourceContext)
         let exportedDocument = BackupService.export(context: sourceContext)
         let document = try BackupCodec.decode(BackupCodec.encode(exportedDocument))
@@ -77,7 +71,7 @@ struct BackupRoundTripTests {
         #expect(document.programs?.count == 1)
         #expect(document.achievements?.count == 1)
 
-        let (destination, destinationContext) = try makeStore()
+        let (destination, destinationContext) = try makeStoreAndContext()
         let report = BackupService.import(document: document, context: destinationContext)
         #expect(report.problems.isEmpty)
 
@@ -104,11 +98,11 @@ struct BackupRoundTripTests {
 
     @Test("import rebuilds the PR cache from the imported workouts")
     func importRebuildsPersonalRecords() throws {
-        let (source, sourceContext) = try makeStore()
+        let (source, sourceContext) = try makeStoreAndContext()
         _ = try populate(source, context: sourceContext)
         let document = BackupService.export(context: sourceContext)
 
-        let (destination, destinationContext) = try makeStore()
+        let (destination, destinationContext) = try makeStoreAndContext()
         BackupService.import(document: document, context: destinationContext)
         // By id, not by name search: the destination now has the seeded library too (a restore
         // seeds it if the store is empty), and "Bench Press" matches several seeded lifts before
@@ -125,11 +119,11 @@ struct BackupRoundTripTests {
 
     @Test("importing twice adds no second program or achievement")
     func reimportIsIdempotentForNewTables() throws {
-        let (source, sourceContext) = try makeStore()
+        let (source, sourceContext) = try makeStoreAndContext()
         _ = try populate(source, context: sourceContext)
         let document = BackupService.export(context: sourceContext)
 
-        let (_, destinationContext) = try makeStore()
+        let (_, destinationContext) = try makeStoreAndContext()
         BackupService.import(document: document, context: destinationContext)
         BackupService.import(document: document, context: destinationContext)
         #expect(try destinationContext.fetchCount(FetchDescriptor<ProgramModel>()) == 1)
@@ -138,7 +132,7 @@ struct BackupRoundTripTests {
 
     @Test("untouched seeded exercises are not exported as overrides; an edited one is")
     func overridesCompareAgainstTheSeed() throws {
-        let (store, context) = try makeStore()
+        let (store, context) = try makeStoreAndContext()
         ExerciseSeeder.seedIfNeeded(context: context)
         #expect(BackupService.export(context: context).exercises.isEmpty)
 
@@ -148,7 +142,7 @@ struct BackupRoundTripTests {
         #expect(document.exercises.count == 1)
         #expect(document.exercises.first?.seedID == "Barbell_Bench_Press_-_Medium_Grip")
 
-        let (destination, destinationContext) = try makeStore()
+        let (destination, destinationContext) = try makeStoreAndContext()
         ExerciseSeeder.seedIfNeeded(context: destinationContext)
         BackupService.import(document: document, context: destinationContext)
         let restored = try #require(
@@ -164,19 +158,6 @@ struct BackupRoundTripTests {
 @MainActor
 @Suite("Backup restore")
 struct BackupRestoreTests {
-    private func makeStore() throws -> (store: WorkoutStore, context: ModelContext) {
-        let context = try makeContext()
-        return (WorkoutStore(context: context), context)
-    }
-
-    /// A bare main-store context. `WorkoutStore(context:)` spins up two *extra* in-memory
-    /// containers (photos and Health) behind the scenes, so tests that only need to export and
-    /// import rows take this instead — a suite's worth of unnecessary containers is real memory
-    /// in a test host that runs every suite in one process.
-    private func makeContext() throws -> ModelContext {
-        ModelContext(try ModelContainer.dagym(inMemory: true))
-    }
-
     private func makeSuite(_ name: String) -> UserDefaults {
         let defaults = UserDefaults(suiteName: name) ?? .standard
         defaults.removePersistentDomain(forName: name)
@@ -189,7 +170,7 @@ struct BackupRestoreTests {
     /// none of the settings came back at all.
     @Test("wipe → restore brings back workouts, sets and every preference")
     func wipeThenRestoreIsFaithful() throws {
-        let (source, sourceContext) = try makeStore()
+        let (source, sourceContext) = try makeStoreAndContext()
         ExerciseSeeder.seedIfNeeded(context: sourceContext)
         let bench = try #require(source.exercises(matching: "Barbell Bench Press - Medium Grip").first)
         let workout = WorkoutModel(title: "Push A", startedAt: Date(timeIntervalSince1970: 1_700_000_000))
@@ -221,7 +202,7 @@ struct BackupRestoreTests {
         )
 
         // A wiped device: no exercises, default settings — exactly what `wipeAllData` leaves.
-        let (destination, destinationContext) = try makeStore()
+        let (destination, destinationContext) = try makeStoreAndContext()
         let destinationPreferences = Preferences(suite: makeSuite("backup.roundtrip.destination"))
         #expect(try destinationContext.fetchCount(FetchDescriptor<ExerciseModel>()) == 0)
 
@@ -265,7 +246,7 @@ struct BackupRestoreTests {
 
     @Test("excludedFromProgression and routineID survive a round trip")
     func perExerciseFlagsSurvive() throws {
-        let (source, sourceContext) = try makeStore()
+        let (source, sourceContext) = try makeStoreAndContext()
         let squat = source.createCustomExercise(
             name: "Zercher Squat", primary: [.quads], equipment: "barbell", style: .weightReps
         )
@@ -294,7 +275,7 @@ struct BackupRestoreTests {
     /// totals don't move. Export used to drop exactly those rows on the floor — silently.
     @Test("history on a deleted custom exercise survives the backup, with a problem reported")
     func historyOnDeletedExerciseSurvives() throws {
-        let (source, sourceContext) = try makeStore()
+        let (source, sourceContext) = try makeStoreAndContext()
         let ghost = source.createCustomExercise(
             name: "Ghost Lift", primary: [.chest], equipment: "other", style: .weightReps
         )

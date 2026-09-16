@@ -10,9 +10,7 @@ import Testing
 struct WorkoutStoreRoutineTests {
     @Test("routine save/load round trip including superset groups and planned set kinds")
     func routineRoundTrip() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        let store = WorkoutStore(context: context)
+        let store = try makeStore()
 
         let bench = store.createCustomExercise(
             name: "Bench Press", primary: [.chest], equipment: "Barbell", style: .weightReps
@@ -51,9 +49,7 @@ struct WorkoutStoreRoutineTests {
 
     @Test("routineDrafts(id:) round trips into editable drafts, index-paired with the routine's exercises")
     func routineDraftsRoundTrip() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        let store = WorkoutStore(context: context)
+        let store = try makeStore()
 
         let bench = store.createCustomExercise(
             name: "Bench Press", primary: [.chest], equipment: "Barbell", style: .weightReps
@@ -83,9 +79,7 @@ struct WorkoutStoreRoutineTests {
 
     @Test("a saved routine's hitMap weights primary and secondary muscles by set count")
     func hitMapWeighting() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        let store = WorkoutStore(context: context)
+        let (store, context) = try makeStoreAndContext()
 
         // Inserted directly (rather than via `createCustomExercise`, which
         // has no secondary-muscle parameter) so the hit map has both

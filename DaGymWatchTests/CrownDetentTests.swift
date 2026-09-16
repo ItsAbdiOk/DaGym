@@ -39,17 +39,14 @@ struct CrownDetentTests {
     @Test("every seeded dumbbell carries the 2 kg increment the crown steps by")
     @MainActor
     func seededDumbbells() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: container.mainContext, photoContext: nil)
-        WatchSampleSeeder.seed(store: store)
-
-        let dumbbells = store.exercises().filter { $0.equipment == "dumbbell" }
+        let fixture = try makeWatchFixture()
+        let dumbbells = fixture.phone.exercises().filter { $0.equipment == "dumbbell" }
 
         #expect(dumbbells.count == 3)
         for dumbbell in dumbbells {
             #expect(CrownDetents.step(for: .weight, exercise: dumbbell, unit: .kg) == 2, "\(dumbbell.name)")
         }
-        withExtendedLifetime(container) {}
+        withExtendedLifetime(fixture) {}
     }
 
     @Test("reps step one, assistance 5 kg, RPE half a point, rest 15 s")

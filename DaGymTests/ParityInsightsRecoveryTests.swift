@@ -12,11 +12,6 @@ import Testing
 struct ParityInsightsRecoveryTests {
     private let now = Date()
 
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func makeRoutine(store: WorkoutStore, exerciseID: UUID, sets: Int) -> UUID {
         let draft = RoutineExerciseDraft(
             exerciseID: exerciseID,

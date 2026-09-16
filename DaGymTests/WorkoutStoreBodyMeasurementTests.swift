@@ -7,11 +7,6 @@ import Testing
 @MainActor
 @Suite("WorkoutStore body measurements")
 struct WorkoutStoreBodyMeasurementTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     @Test("no measurements logged yet returns nil")
     func emptyReturnsNil() throws {
         let store = try makeStore()

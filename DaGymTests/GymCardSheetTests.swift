@@ -10,11 +10,6 @@ import VisionKit
 @MainActor
 @Suite("Gym card sheet")
 struct GymCardSheetTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     @Test("markGymCardUsed stamps the given date so the card left showing on dismiss opens next")
     func markUsedStampsDate() throws {
         let store = try makeStore()

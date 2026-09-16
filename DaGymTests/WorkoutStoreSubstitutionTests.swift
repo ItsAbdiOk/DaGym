@@ -8,15 +8,6 @@ import Testing
 @MainActor
 @Suite("WorkoutStore substitutions")
 struct WorkoutStoreSubstitutionTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        ExerciseSeeder.seedIfNeeded(context: context)
-        let store = WorkoutStore(context: context)
-        EquipmentSeeder.seedIfNeeded(store: store)
-        return store
-    }
-
     private func exercise(_ store: WorkoutStore, named name: String) throws -> ExerciseInfo {
         try #require(store.exercises(matching: name).first { $0.name == name })
     }
@@ -24,8 +15,7 @@ struct WorkoutStoreSubstitutionTests {
     /// A store with one active equipment profile and nothing else seeded — no 1466-exercise
     /// library to compete with the two hand-built candidates `recoveryPenalty` needs to reorder.
     private func makeUnseededStore(availableEquipment: [String]) throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
+        let context = try makeContext()
         context.insert(
             EquipmentProfileModel(name: "Test", isActive: true, availableEquipment: availableEquipment)
         )
@@ -35,7 +25,7 @@ struct WorkoutStoreSubstitutionTests {
 
     @Test("only equipment in the active profile comes back")
     func equipmentFiltering() throws {
-        let store = try makeStore()
+        let store = try makeStore(seed: [.exercises, .equipment])
         let home = try #require(store.equipmentProfiles().first { $0.name == "Home" })
         store.setActive(id: home.id)
 
@@ -49,7 +39,7 @@ struct WorkoutStoreSubstitutionTests {
 
     @Test("shoulderHurts steers away from delt-heavy candidates")
     func shoulderRule() throws {
-        let store = try makeStore()
+        let store = try makeStore(seed: [.exercises, .equipment])
         let gym = try #require(store.equipmentProfiles().first { $0.name == "Gym" })
         store.setActive(id: gym.id)
 
@@ -102,7 +92,7 @@ struct WorkoutStoreSubstitutionTests {
 
     @Test("returns at most 3 suggestions, each with a non-empty why")
     func topThreeWithWhy() throws {
-        let store = try makeStore()
+        let store = try makeStore(seed: [.exercises, .equipment])
         let gym = try #require(store.equipmentProfiles().first { $0.name == "Gym" })
         store.setActive(id: gym.id)
 
@@ -115,7 +105,7 @@ struct WorkoutStoreSubstitutionTests {
 
     @Test("an unknown exercise ID returns no suggestions")
     func unknownExercise() throws {
-        let store = try makeStore()
+        let store = try makeStore(seed: [.exercises, .equipment])
         #expect(store.substitutes(for: UUID(), reason: .machineTaken).isEmpty)
     }
 }

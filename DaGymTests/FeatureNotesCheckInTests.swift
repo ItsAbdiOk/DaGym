@@ -12,11 +12,6 @@ import Vision
 @MainActor
 @Suite("Feature: notes, check-in, effort, exercise actions")
 struct FeatureNotesCheckInTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func makeExercise(_ store: WorkoutStore, name: String = "Bench Press") -> ExerciseInfo {
         store.createCustomExercise(name: name, primary: [.chest], equipment: "barbell", style: .weightReps)
     }

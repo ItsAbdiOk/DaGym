@@ -8,11 +8,6 @@ import Testing
 @MainActor
 @Suite("Store parity: import and library search")
 struct ParityStoreImportTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func library(_ names: [String]) -> ParseContext {
         ParseContext(
             unit: .kg,

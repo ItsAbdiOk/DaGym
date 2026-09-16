@@ -10,11 +10,6 @@ import Testing
 @MainActor
 @Suite("Coach flows: program generator, review actions, questions")
 struct CoachFlowTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     /// A barbell compound and a cable isolation move per muscle, so every template slot fills.
     private func seedLibrary(_ store: WorkoutStore) {
         for muscle in Muscle.allCases {

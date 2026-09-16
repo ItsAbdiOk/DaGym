@@ -10,22 +10,10 @@ import Testing
 @MainActor
 @Suite("WatchStore lifecycle")
 struct WatchLifecycleTests {
-    private func makeWatch(haptics: Bool = true) throws -> (WatchStore, ModelContainer) {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: container.mainContext, photoContext: nil)
-        WatchSampleSeeder.seed(store: store)
-        let preferences = WatchPreferences(defaults: WatchTestDefaults.fresh())
-        preferences.haptics = haptics
-        let watch = WatchStore(
-            store: store, preferences: preferences, runtime: WatchWorkoutRuntime(isEnabled: false),
-            snapshotSuite: WatchTestDefaults.fresh()
-        )
-        return (watch, container)
-    }
-
     @Test("the summary is titled after the session that was done, not today's routine")
     func summaryTitleFromSession() throws {
-        let (watch, container) = try makeWatch()
+        let fixture = try makeWatchFixture()
+        let watch = fixture.watch
         watch.refreshHome()
         let today = try #require(watch.home.todaysRoutine)
         let other = try #require(watch.store.routines().first { $0.id != today.id })
@@ -41,12 +29,13 @@ struct WatchLifecycleTests {
         #expect(watch.summaryTitle != today.name)
         watch.dismissSummary()
         #expect(watch.summaryTitle == nil)
-        withExtendedLifetime(container) {}
+        withExtendedLifetime(fixture) {}
     }
 
     @Test("a resumed workout with two rows sharing an id adopts without trapping")
     func duplicateSetIDs() throws {
-        let (watch, container) = try makeWatch()
+        let fixture = try makeWatchFixture()
+        let watch = fixture.watch
         let bench = ExerciseInfo(
             name: "Bench", primary: [.chest], equipment: "barbell", loggingStyle: .weightReps
         )
@@ -59,7 +48,7 @@ struct WatchLifecycleTests {
         watch.adopt(session)
 
         #expect(watch.amrapTargets[shared] == 5)
-        withExtendedLifetime(container) {}
+        withExtendedLifetime(fixture) {}
     }
 
     @Test("a recovered HealthKit session is kept only for a workout this wrist started")
@@ -75,7 +64,8 @@ struct WatchLifecycleTests {
 
     @Test("refreshHome records where the resumable workout came from, and how many are open")
     func homeCarriesSourceAndCount() throws {
-        let (watch, container) = try makeWatch()
+        let fixture = try makeWatchFixture()
+        let watch = fixture.watch
         let routine = try #require(watch.store.todaysRoutine())
         watch.start(routineID: routine.id)
         let workoutID = try #require(watch.session?.workoutID)
@@ -89,22 +79,24 @@ struct WatchLifecycleTests {
         #expect(watch.home.resumableSourceDevice == WatchStore.sourceDevice)
         #expect(watch.home.unfinishedCount == 1)
         #expect(WatchStore.shouldKeepRecoveredSession(home: watch.home))
-        withExtendedLifetime(container) {}
+        withExtendedLifetime(fixture) {}
     }
 
     @Test("the injected preferences gate the haptics, not the shared instance")
     func hapticsFollowInjectedPreferences() throws {
-        let (watch, container) = try makeWatch(haptics: false)
+        let fixture = try makeWatchFixture(haptics: false)
+        let watch = fixture.watch
         #expect(Haptics.preferences === watch.preferences)
         #expect(!Haptics.preferences.haptics)
         watch.preferences.haptics = true
         #expect(Haptics.preferences.haptics)
-        withExtendedLifetime(container) {}
+        withExtendedLifetime(fixture) {}
     }
 
     @Test("the source device stamp is the one constant the gate and the start share")
     func sourceDeviceConstant() throws {
-        let (watch, container) = try makeWatch()
+        let fixture = try makeWatchFixture()
+        let watch = fixture.watch
         let routine = try #require(watch.store.todaysRoutine())
         watch.start(routineID: routine.id)
         let workoutID = try #require(watch.session?.workoutID)
@@ -113,6 +105,6 @@ struct WatchLifecycleTests {
             sourceDevice: WatchStore.sourceDevice, startedAt: Date(), lastLoggedAt: Date(), now: Date()
         )
         #expect(verdict == .resumable)
-        withExtendedLifetime(container) {}
+        withExtendedLifetime(fixture) {}
     }
 }

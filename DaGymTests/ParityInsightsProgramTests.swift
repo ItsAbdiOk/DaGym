@@ -10,15 +10,6 @@ import Testing
 @MainActor
 @Suite("Parity: starter programs")
 struct ParityInsightsProgramTests {
-    private func makeSeededStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        ExerciseSeeder.seedIfNeeded(context: context)
-        let store = WorkoutStore(context: context)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
-        return store
-    }
-
     private func routineModel(_ store: WorkoutStore, named name: String) throws -> RoutineModel {
         let info = try #require(store.routines().first { $0.name == name })
         return try #require(store.fetchRoutineModel(id: info.id))
@@ -26,7 +17,7 @@ struct ParityInsightsProgramTests {
 
     @Test("5×5 cycles three routines, each exactly 3 exercises × 5 sets × 5 reps on a linear rule")
     func fiveByFiveShape() throws {
-        let store = try makeSeededStore()
+        let store = try makeStore(seed: [.exercises, .routines])
         let program = try #require(store.createProgram(from: .fiveByFive))
         #expect(program.routineIDs.count == 3)
         #expect(Set(program.routineIDs).count == 3)
@@ -45,7 +36,7 @@ struct ParityInsightsProgramTests {
 
     @Test("Upper/Lower cycles 4 distinct routines, none of them Push A")
     func upperLowerIsDedicated() throws {
-        let store = try makeSeededStore()
+        let store = try makeStore(seed: [.exercises, .routines])
         let program = try #require(store.createProgram(from: .upperLower))
         #expect(program.routineIDs.count == 4)
         #expect(Set(program.routineIDs).count == 4)
@@ -58,14 +49,14 @@ struct ParityInsightsProgramTests {
 
     @Test("Full Body cycles 3 distinct routines")
     func fullBodyIsDedicated() throws {
-        let store = try makeSeededStore()
+        let store = try makeStore(seed: [.exercises, .routines])
         let program = try #require(store.createProgram(from: .fullBody))
         #expect(Set(program.routineIDs).count == 3)
     }
 
     @Test("deleting Lower B makes Upper/Lower refuse: nil, no program inserted")
     func missingRoutineRefuses() throws {
-        let store = try makeSeededStore()
+        let store = try makeStore(seed: [.exercises, .routines])
         let lowerB = try #require(store.routines().first { $0.name == "Lower B" })
         store.deleteRoutine(id: lowerB.id)
 
@@ -87,10 +78,7 @@ struct ParityInsightsProgramTests {
 
     @Test("a store seeded before the program routines existed gets them once; deleting one sticks")
     func upgradeSeedsProgramRoutinesOnce() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        ExerciseSeeder.seedIfNeeded(context: context)
-        let store = WorkoutStore(context: context)
+        let (store, context) = try makeStoreAndContext(seed: .exercises)
         _ = store.saveRoutine(id: nil, name: "My own day", exercises: [])
         SeedState.row(in: context).routinesSeeded = true
         store.save()
@@ -107,7 +95,7 @@ struct ParityInsightsProgramTests {
 
     @Test("seeded squat steps 5 kg, seeded bench 2.5 kg (engine rec 5, seeder half)")
     func lowerBodyIncrement() throws {
-        let store = try makeSeededStore()
+        let store = try makeStore(seed: [.exercises, .routines])
         let fiveByFiveA = try routineModel(store, named: "5×5 A")
         let routineRule = fiveByFiveA.progressionRuleValue
         let byName = Dictionary(
@@ -127,7 +115,7 @@ struct ParityInsightsProgramTests {
 
     @Test("starterIncrementKg: lower-body primary → 5 kg, otherwise the library increment")
     func starterIncrementHelper() {
-        let store = (try? makeSeededStore())
+        let store = (try? makeStore(seed: [.exercises, .routines]))
         let squat = store?.exercises(matching: "Barbell Squat").first { $0.name == "Barbell Squat" }
         let curl = store?.exercises(matching: "Dumbbell Bicep Curl")
             .first { $0.name == "Dumbbell Bicep Curl" }

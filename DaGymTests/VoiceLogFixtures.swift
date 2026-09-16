@@ -28,11 +28,6 @@ enum VoiceLogFixtures {
         session([WorkoutExerciseEntry(exercise: exercise(), sets: [SetEntry(weightKg: 0, reps: 0)])])
     }
 
-    static func store() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     static func preferences(unit: WeightUnit = .kg, autoLog: Bool = false) -> Preferences {
         let suite = UserDefaults(suiteName: "VoiceLogFixtures-\(UUID().uuidString)") ?? .standard
         let preferences = Preferences(suite: suite)

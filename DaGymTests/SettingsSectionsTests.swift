@@ -48,11 +48,6 @@ struct SettingsImportSplitTests {
         "2024-03-11 18:24:00,Push Day,1h 5m,Bench Press,2,65,6,,,,,"
     ].joined(separator: "\n") + "\n"
 
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     @Test("a detached parse followed by a main-actor preview matches the one-call preview")
     func detachedParseMatchesOneCallPreview() async throws {
         let store = try makeStore()

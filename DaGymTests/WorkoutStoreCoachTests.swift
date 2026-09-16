@@ -11,11 +11,6 @@ import Testing
 @MainActor
 @Suite("WorkoutStore coach adapter")
 struct WorkoutStoreCoachTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     /// A one-exercise linear routine at 80 kg × 8.
     @discardableResult
     private func benchRoutine(

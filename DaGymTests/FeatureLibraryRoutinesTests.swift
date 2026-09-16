@@ -8,11 +8,6 @@ import Testing
 @MainActor
 @Suite("Feature: library filtering & routine builder")
 struct FeatureLibraryRoutinesTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func exercise(_ store: WorkoutStore, _ name: String, equipment: String) -> ExerciseInfo {
         store.createCustomExercise(name: name, primary: [.chest], equipment: equipment, style: .weightReps)
     }

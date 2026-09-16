@@ -33,11 +33,6 @@ struct VoiceLogControllerTests {
         return session
     }
 
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func makePreferences(unit: WeightUnit = .lb, autoLog: Bool = false) -> Preferences {
         let suite = UserDefaults(suiteName: "VoiceLogControllerTests-\(UUID().uuidString)") ?? .standard
         let preferences = Preferences(suite: suite)

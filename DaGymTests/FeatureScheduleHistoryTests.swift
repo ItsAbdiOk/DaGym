@@ -35,11 +35,6 @@ struct FeatureScheduleHistoryTests {
         return calendar().date(from: components) ?? Date()
     }
 
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func makeRoutine(_ store: WorkoutStore, name: String, exercises: Int = 1) -> RoutineInfo {
         let drafts = (0..<exercises).map { index in
             let exercise = store.createCustomExercise(

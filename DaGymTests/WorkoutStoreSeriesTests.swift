@@ -8,11 +8,6 @@ import Testing
 @MainActor
 @Suite("WorkoutStore series")
 struct WorkoutStoreSeriesTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func makeRoutine(store: WorkoutStore, exerciseID: UUID) -> UUID {
         let draft = RoutineExerciseDraft(
             exerciseID: exerciseID,

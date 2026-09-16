@@ -10,10 +10,7 @@ import Testing
 struct RoutineSeederTests {
     @Test("seeding twice yields the 13 starter routines once; Push A has 5 exercises and a superset group")
     func seedsStarterRoutinesOnce() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        ExerciseSeeder.seedIfNeeded(context: context)
-        let store = WorkoutStore(context: context)
+        let store = try makeStore(seed: .exercises)
 
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
@@ -38,10 +35,7 @@ struct RoutineSeederTests {
     /// Query count, not wall-clock: the library and PR cache must be read once for the whole seed.
     @Test("a first-launch seed reads the exercise library once, not once per slot")
     func firstLaunchSeedReadsTheLibraryOnce() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        ExerciseSeeder.seedIfNeeded(context: context)
-        let store = WorkoutStore(context: context)
+        let store = try makeStore(seed: .exercises)
 
         let before = store.queryCount
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
@@ -59,10 +53,7 @@ struct RoutineSeederTests {
 
     @Test("starter routines carry explicit rules, with overrides where the routine's rule doesn't fit")
     func starterRoutinesHaveRules() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        ExerciseSeeder.seedIfNeeded(context: context)
-        let store = WorkoutStore(context: context)
+        let store = try makeStore(seed: .exercises)
         RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
 
         let routines = store.routines()

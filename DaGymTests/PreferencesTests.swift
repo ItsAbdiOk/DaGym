@@ -21,11 +21,6 @@ struct PreferencesTests {
         return defaults
     }
 
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     /// A two-set session on one exercise whose own rest is `restSeconds` (0 = "unset").
     private func makeSession(restSeconds: Int) -> WorkoutSession {
         let exercise = ExerciseInfo(

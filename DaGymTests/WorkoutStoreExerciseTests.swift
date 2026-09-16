@@ -10,9 +10,7 @@ import Testing
 struct WorkoutStoreExerciseTests {
     @Test("custom exercise round trip and favorites sort first")
     func customExerciseRoundTrip() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        let store = WorkoutStore(context: context)
+        let (store, context) = try makeStoreAndContext()
 
         let created = store.createCustomExercise(
             name: "Zercher Squat", primary: [.quads], equipment: "Barbell", style: .weightReps
@@ -34,9 +32,7 @@ struct WorkoutStoreExerciseTests {
 
     @Test("updateExerciseSettings writes rest, bar type and increment back to the model")
     func updateExerciseSettings() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        let store = WorkoutStore(context: context)
+        let store = try makeStore()
 
         let created = store.createCustomExercise(
             name: "Incline Press", primary: [.chest], equipment: "Barbell", style: .weightReps

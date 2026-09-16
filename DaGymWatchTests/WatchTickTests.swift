@@ -11,22 +11,10 @@ import Testing
 @MainActor
 @Suite("Watch ticker gating")
 struct WatchTickTests {
-    private func makeWatch() throws -> (WatchStore, ModelContainer) {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let store = WorkoutStore(context: container.mainContext, photoContext: nil)
-        WatchSampleSeeder.seed(store: store)
-        let watch = WatchStore(
-            store: store, preferences: WatchPreferences(defaults: WatchTestDefaults.fresh()),
-            runtime: WatchWorkoutRuntime(isEnabled: false), snapshotSuite: WatchTestDefaults.fresh()
-        )
-        let routine = try #require(store.todaysRoutine())
-        watch.start(routineID: routine.id)
-        return (watch, container)
-    }
-
     @Test("a fresh session does not tick until its first rest starts")
     func idleUntilRest() throws {
-        let (watch, container) = try makeWatch()
+        let fixture = try makeWatchFixture(startsToday: true)
+        let watch = fixture.watch
         let session = try #require(watch.session)
         #expect(!watch.needsTicker)
         #expect(!watch.isTicking)
@@ -39,12 +27,13 @@ struct WatchTickTests {
         #expect(watch.isTicking)
         watch.discard()
         #expect(!watch.isTicking)
-        withExtendedLifetime(container) {}
+        withExtendedLifetime(fixture) {}
     }
 
     @Test("skipping the rest leaves nothing to tick, and the loop lets itself stop")
     func skipEndsNeed() async throws {
-        let (watch, container) = try makeWatch()
+        let fixture = try makeWatchFixture(startsToday: true)
+        let watch = fixture.watch
         let session = try #require(watch.session)
         let bench = try #require(session.exercises.first)
         watch.logCurrentSet(exerciseID: bench.id)
@@ -60,12 +49,13 @@ struct WatchTickTests {
         watch.logCurrentSet(exerciseID: bench.id)
         #expect(watch.isTicking)
         watch.discard()
-        withExtendedLifetime(container) {}
+        withExtendedLifetime(fixture) {}
     }
 
     @Test("a timed hold needs the tick with no rest running")
     func holdNeedsTick() throws {
-        let (watch, container) = try makeWatch()
+        let fixture = try makeWatchFixture(startsToday: true)
+        let watch = fixture.watch
         let session = try #require(watch.session)
         let plank = try #require(session.exercises.first { $0.exercise.loggingStyle == .timedHold })
         #expect(!watch.needsTicker)
@@ -76,6 +66,6 @@ struct WatchTickTests {
         #expect(watch.needsTicker)
         #expect(watch.isTicking)
         watch.discard()
-        withExtendedLifetime(container) {}
+        withExtendedLifetime(fixture) {}
     }
 }

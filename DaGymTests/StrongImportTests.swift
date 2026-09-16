@@ -32,16 +32,9 @@ struct StrongImportTests {
     "2026-08-10 19:00:00","Push","45min","Bench Press (Barbell)","1","185","lbs","5","8","0","mi","0",""
     """
 
-    private func seededStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
-        ExerciseSeeder.seedIfNeeded(context: context)
-        return WorkoutStore(context: context)
-    }
-
     @Test("common Strong names resolve to seeded exercises; only a genuine unknown is invented")
     func matchesSeededLibrary() throws {
-        let store = try seededStore()
+        let store = try makeStore(seed: .exercises)
         let preview = try #require(WorkoutImportService.preview(csv: Self.export, store: store))
         #expect(preview.source == .strong)
         #expect(preview.workouts.count == 2)
@@ -58,7 +51,7 @@ struct StrongImportTests {
 
     @Test("a workout's numbers, duration and timed hold survive the round trip")
     func keepsNumbersAndDuration() throws {
-        let store = try seededStore()
+        let store = try makeStore(seed: .exercises)
         let preview = try #require(WorkoutImportService.preview(csv: Self.export, store: store))
         _ = WorkoutImportService.apply(preview: preview, store: store)
 
@@ -80,7 +73,7 @@ struct StrongImportTests {
 
     @Test("a pounds export is stored in kilograms")
     func convertsPounds() throws {
-        let store = try seededStore()
+        let store = try makeStore(seed: .exercises)
         let preview = try #require(WorkoutImportService.preview(csv: Self.poundsExport, store: store))
         _ = WorkoutImportService.apply(preview: preview, store: store)
         let workout = try #require(store.history().first)
@@ -91,7 +84,7 @@ struct StrongImportTests {
 
     @Test("re-importing the same file adds nothing")
     func reimportIsANoOp() throws {
-        let store = try seededStore()
+        let store = try makeStore(seed: .exercises)
         let first = try #require(WorkoutImportService.preview(csv: Self.export, store: store))
         _ = WorkoutImportService.apply(preview: first, store: store)
         let second = try #require(WorkoutImportService.preview(csv: Self.export, store: store))

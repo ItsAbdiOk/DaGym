@@ -8,11 +8,6 @@ import Testing
 @MainActor
 @Suite("WorkoutStore history detail")
 struct WorkoutStoreHistoryDetailTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func makeRoutine(store: WorkoutStore, exerciseID: UUID) -> UUID {
         let draft = RoutineExerciseDraft(
             exerciseID: exerciseID,
@@ -157,11 +152,6 @@ struct WorkoutStoreHistoryDetailTests {
 @MainActor
 @Suite("Volume and tonnage — assisted lifts")
 struct WorkoutStoreAssistedVolumeTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     /// One working set per exercise, so `sets[0]` is the set to log.
     private func makeRoutine(store: WorkoutStore, exerciseIDs: [UUID]) -> UUID {
         let drafts = exerciseIDs.map {

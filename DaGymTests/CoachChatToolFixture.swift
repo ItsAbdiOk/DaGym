@@ -21,7 +21,7 @@ struct CoachChatToolFixture {
     let calendar: Calendar
 
     static func make(unit: WeightUnit = .kg) throws -> CoachChatToolFixture {
-        let store = WorkoutStore(context: ModelContext(try ModelContainer.dagym(inMemory: true)))
+        let store = try makeStore()
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
         calendar.firstWeekday = 2

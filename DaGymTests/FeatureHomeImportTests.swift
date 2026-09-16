@@ -17,11 +17,6 @@ struct FeatureHomeImportTests {
         return defaults
     }
 
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func makeRoutine(_ store: WorkoutStore, name: String) -> RoutineInfo {
         let exercise = store.createCustomExercise(
             name: "\(name) Exercise", primary: [.chest], equipment: "Barbell", style: .weightReps

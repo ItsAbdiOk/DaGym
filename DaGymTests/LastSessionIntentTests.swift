@@ -8,11 +8,6 @@ import Testing
 @MainActor
 @Suite("LastSessionIntent")
 struct LastSessionIntentTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     @Test("the spoken line is in the user's unit")
     func lineInLb() {
         let line = LastSessionIntent.line(weightKg: 80, reps: [8, 8, 7], unit: .lb)

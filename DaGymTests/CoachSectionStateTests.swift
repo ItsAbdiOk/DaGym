@@ -10,11 +10,6 @@ import Testing
 @MainActor
 @Suite("Coach section states: approve, empty review, debrief timeout")
 struct CoachSectionStateTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func benchRoutine(_ store: WorkoutStore) -> (bench: ExerciseInfo, routine: RoutineInfo) {
         let bench = store.createCustomExercise(
             name: "Bench Press", primary: [.chest], equipment: "barbell", style: .weightReps

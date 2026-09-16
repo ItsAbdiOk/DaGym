@@ -12,11 +12,6 @@ import Testing
 @MainActor
 @Suite("Apple Health import and sync regressions")
 struct HealthImportTombstoneTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func makeSuite(_ name: String) -> UserDefaults {
         let defaults = UserDefaults(suiteName: name) ?? .standard
         defaults.removePersistentDomain(forName: name)

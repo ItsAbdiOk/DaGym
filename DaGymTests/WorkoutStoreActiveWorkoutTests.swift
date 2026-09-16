@@ -8,11 +8,6 @@ import Testing
 @MainActor
 @Suite("WorkoutStore active-workout mutations")
 struct WorkoutStoreActiveWorkoutTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     @Test("discard deletes the backing workout")
     func discardDeletesWorkout() throws {
         let store = try makeStore()
@@ -94,11 +89,6 @@ struct WorkoutStoreActiveWorkoutTests {
 @MainActor
 @Suite("Life of a workout — persisted behaviour")
 struct WorkoutLifecycleFixTests {
-    private func makeStore() throws -> WorkoutStore {
-        let container = try ModelContainer.dagym(inMemory: true)
-        return WorkoutStore(context: ModelContext(container))
-    }
-
     private func bench(_ store: WorkoutStore) -> ExerciseInfo {
         store.createCustomExercise(
             name: "Barbell Bench Press", primary: [.chest], equipment: "Barbell", style: .weightReps

@@ -10,8 +10,7 @@ import Testing
 struct ExerciseSeederTests {
     @Test("seeding is idempotent and produces 1466 exercises with valid muscle raw values")
     func seedsOnceWithValidMuscles() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
+        let context = try makeContext()
 
         ExerciseSeeder.seedIfNeeded(context: context)
         let firstCount = try context.fetch(FetchDescriptor<ExerciseModel>()).count
@@ -30,8 +29,7 @@ struct ExerciseSeederTests {
 
     @Test("a bumped seed version refreshes an existing row's stale instructions and provenance")
     func bumpedVersionUpdatesExistingRows() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
+        let context = try makeContext()
         // Seed once at version 0 (nothing applied yet), then hand-corrupt one row the way an
         // older seed version would have left it — stale instructions and a placeholder source —
         // so the update pass this test actually exercises has something to fix.
@@ -71,8 +69,7 @@ struct ExerciseSeederTests {
 
     @Test("a fresh seed leaves rest at 0 so Settings → Default rest applies")
     func freshRowsHaveNoRestOverride() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
+        let context = try makeContext()
 
         ExerciseSeeder.seedIfNeeded(context: context)
         let models = try context.fetch(FetchDescriptor<ExerciseModel>())
@@ -81,8 +78,7 @@ struct ExerciseSeederTests {
 
     @Test("an existing install's unedited seeded rest migrates to 0; an edited one is kept")
     func versionBumpMigratesUneditedRestToDefault() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
+        let context = try makeContext()
         ExerciseSeeder.seedIfNeeded(context: context)
         let seed = try ExerciseSeeder.loadSeed(bundle: Bundle(for: BundleAnchor.self))
         let benchID = "Barbell_Bench_Press_-_Medium_Grip"
@@ -110,8 +106,7 @@ struct ExerciseSeederTests {
     /// library (a fresh install, or the store the reset just wiped).
     @Test("a store at the bundled version with rows in it needs no seeding; a stale or empty one does")
     func needsSeedingGatesOnVersionAndCount() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
+        let context = try makeContext()
         #expect(ExerciseSeeder.needsSeeding(context: context))
 
         ExerciseSeeder.seedIfNeeded(context: context)
@@ -139,8 +134,7 @@ struct ExerciseSeederTests {
 
     @Test("the off-main variant seeds the same library and is a no-op the second time")
     func asyncSeedMatchesSync() async throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
+        let context = try makeContext()
         await ExerciseSeeder.seedIfNeededAsync(context: context)
         #expect(try context.fetchCount(FetchDescriptor<ExerciseModel>()) == 1466)
         #expect(SeedState.row(in: context).exerciseSeedVersion == ExerciseSeeder.bundledVersion)
@@ -153,8 +147,7 @@ struct ExerciseSeederTests {
     /// Pins the stamp and that the pass leaves the context clean.
     @Test("a fresh install seeds in one pass: version stamped, nothing left to save")
     func freshInstallSeedsInOnePass() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
+        let context = try makeContext()
         ExerciseSeeder.seedIfNeeded(context: context)
         #expect(!context.hasChanges)
         #expect(SeedState.row(in: context).exerciseSeedVersion == ExerciseSeeder.bundledVersion)
@@ -163,8 +156,7 @@ struct ExerciseSeederTests {
 
     @Test("every seeded exercise has non-empty instructions within a sane length")
     func everyExerciseHasInstructions() throws {
-        let container = try ModelContainer.dagym(inMemory: true)
-        let context = ModelContext(container)
+        let context = try makeContext()
 
         ExerciseSeeder.seedIfNeeded(context: context)
         let models = try context.fetch(FetchDescriptor<ExerciseModel>())
