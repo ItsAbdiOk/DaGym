@@ -81,6 +81,34 @@ enum RoutineReorder {
         remaining.insert(contentsOf: moving, at: max(0, insertAt))
         return remaining.flatMap { $0 }
     }
+
+    /// The in-place drag in the builder: the unit holding `source` takes the slot of the unit
+    /// holding `target` (the card the drag is hovering), so a superset pair travels together and
+    /// a single dropped on a pair lands beside it, never between its members. Unchanged when
+    /// both indices sit in the same unit or either is out of range.
+    static func moveUnit<Item>(
+        _ items: [Item], groups: [Int?], containing source: Int, toUnitContaining target: Int
+    ) -> [Item] {
+        let units = units(groups: groups)
+        guard let from = units.firstIndex(where: { $0.contains(source) }),
+              let to = units.firstIndex(where: { $0.contains(target) }), from != to else { return items }
+        return moveUnits(items, groups: groups, fromOffsets: [from], toOffset: to > from ? to + 1 : to)
+    }
+
+    /// "Move up" / "Move down" for the card menu — the VoiceOver route. Inside a superset the
+    /// two members swap (their order within the pair is the lifter's to choose); at the edge of
+    /// a unit the whole unit steps past its neighbour, so a menu move can't split a pair either.
+    static func step<Item>(_ items: [Item], groups: [Int?], index: Int, up: Bool) -> [Item] {
+        guard items.indices.contains(index) else { return items }
+        let neighbour = up ? index - 1 : index + 1
+        guard items.indices.contains(neighbour) else { return items }
+        if let group = groups[index], groups[neighbour] == group {
+            var swapped = items
+            swapped.swapAt(index, neighbour)
+            return swapped
+        }
+        return moveUnit(items, groups: groups, containing: index, toUnitContaining: neighbour)
+    }
 }
 
 /// Dashed-outline "add exercise" affordance.
@@ -166,4 +194,38 @@ struct BuilderCardioSetRow: View {
             set: { set.targetDistanceMeters = $0 > 0 ? preferences.distanceUnit.toMeters($0) : nil }
         )
     }
+}
+
+/// Reorders the draft as a dragged card crosses another: entering a card moves the dragged
+/// unit into that card's slot (`RoutineReorder.moveUnit`), so the list rearranges live under
+/// the finger and the drop itself has nothing left to do but clear the lift.
+struct DraftDropDelegate: DropDelegate {
+    let targetID: UUID
+    @Binding var items: [EditableExercise]
+    @Binding var draggingID: UUID?
+    var reduceMotion = false
+
+    func dropEntered(info: DropInfo) {
+        guard let draggingID, draggingID != targetID,
+              let source = items.firstIndex(where: { $0.id == draggingID }),
+              let target = items.firstIndex(where: { $0.id == targetID }) else { return }
+        let moved = RoutineReorder.moveUnit(
+            items, groups: items.map(\.supersetGroup), containing: source, toUnitContaining: target
+        )
+        guard moved.map(\.id) != items.map(\.id) else { return }
+        withAnimation(DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion)) {
+            items = moved
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggingID = nil
+        return true
+    }
+
+    func dropExited(info: DropInfo) {}
 }
