@@ -39,8 +39,8 @@ extension WorkoutDetail {
     }
 }
 
-/// Read-only detail for one finished workout: title, time range, stats and
-/// a card per exercise with its logged sets.
+/// Detail for one finished workout: title, time range, stats and a card per exercise with its
+/// logged sets — read-only except the session note, which opens `NotesSheet` on tap.
 struct WorkoutDetailView: View {
     var workoutID: UUID
 
@@ -48,6 +48,7 @@ struct WorkoutDetailView: View {
     @Environment(Preferences.self) private var preferences
     @Environment(\.dismiss) private var dismiss
     @State private var detail: WorkoutDetail?
+    @State private var isEditingNote = false
 
     var body: some View {
         ZStack {
@@ -64,7 +65,7 @@ struct WorkoutDetailView: View {
                             }
                             ForEach(group.exercises) { entry in ExerciseEntryCard(entry: entry) }
                         }
-                        if !detail.notes.isEmpty { notesCard(detail) }
+                        if !detail.notes.isEmpty || detail.canEditNotes { notesCard(detail) }
                     }
                     .padding(.horizontal, DGSpace.s4)
                     .padding(.top, DGSpace.s3)
@@ -73,7 +74,15 @@ struct WorkoutDetailView: View {
             }
         }
         .navigationBarHidden(true)
-        .task { detail = store.workoutDetail(id: workoutID) }
+        .task { refresh() }
+        // A note saved here bumps `changeToken`; so does a delete or an import elsewhere.
+        .refreshOnStoreChange(refresh)
+        .sheet(isPresented: $isEditingNote) {
+            NotesSheet(title: "Session note", text: detail?.notes ?? "") { text in
+                store.updateWorkoutNote(id: workoutID, text: text)
+                refresh()
+            }
+        }
     }
 
     private var topRow: some View {
@@ -133,15 +142,55 @@ struct WorkoutDetailView: View {
         }
     }
 
+    private func refresh() {
+        detail = store.workoutDetail(id: workoutID)
+    }
+
+    /// The session note. Tappable — opening `NotesSheet` — on any finished main-store workout,
+    /// backfilled or synced from the Watch alike; a read-only card for an imported Apple Health
+    /// session. With no note yet the card is the "Add a note" affordance.
+    @ViewBuilder
     private func notesCard(_ detail: WorkoutDetail) -> some View {
-        VStack(alignment: .leading, spacing: DGSpace.s2) {
-            Text("Notes").dgLabel()
-            Text(detail.notes)
-                .font(DGFont.body)
-                .foregroundStyle(DGColor.ink2)
+        if detail.canEditNotes {
+            Button { isEditingNote = true } label: {
+                notesCardContent(detail)
+            }
+            .buttonStyle(.dgCard)
+            .dgCard()
+            .accessibilityLabel(detail.notes.isEmpty ? "Add a note" : "Notes, \(detail.notes)")
+            .accessibilityHint("Edits the session note")
+            .accessibilityIdentifier(A11yID.historyNote)
+        } else {
+            notesCardContent(detail).dgCard()
+        }
+    }
+
+    private func notesCardContent(_ detail: WorkoutDetail) -> some View {
+        HStack(alignment: .top, spacing: DGSpace.s3) {
+            VStack(alignment: .leading, spacing: DGSpace.s2) {
+                Text("Notes").dgLabel()
+                if detail.notes.isEmpty {
+                    Text("Add a note")
+                        .font(DGFont.body)
+                        .foregroundStyle(DGColor.ink3)
+                } else {
+                    // The whole note, however long: a card that clipped it would hide exactly
+                    // what the lifter opened the workout to read.
+                    Text(detail.notes)
+                        .font(DGFont.body)
+                        .foregroundStyle(DGColor.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
+            if detail.canEditNotes {
+                Image(systemName: detail.notes.isEmpty ? "plus" : "pencil")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(DGColor.ink4)
+                    .accessibilityHidden(true)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .dgCard()
     }
 
     private static let dayFormatter: DateFormatter = {

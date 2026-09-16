@@ -343,13 +343,18 @@ struct WorkoutDetail: Identifiable {
     /// carry, for `WorkoutDetailView`'s group headers. Empty for a single-routine or freestyle
     /// workout — see `WorkoutDetail.exerciseGroups`.
     var routineGlyphs: [UUID: RoutineGlyphInfo]
+    /// Whether History may rewrite `notes` (`WorkoutStore.updateWorkoutNote`): a finished
+    /// main-store workout. False for an imported Apple Health session and the not-found
+    /// placeholder, which have no row to write to.
+    var canEditNotes: Bool
 
     init(
         id: UUID = UUID(), title: String, startedAt: Date, endedAt: Date? = nil,
         exercises: [WorkoutExerciseEntry] = [], notes: String = "", isBackfilled: Bool = false,
-        prCount: Int = 0, routineGlyphs: [UUID: RoutineGlyphInfo] = [:]
+        prCount: Int = 0, routineGlyphs: [UUID: RoutineGlyphInfo] = [:], canEditNotes: Bool = false
     ) {
         self.id = id
+        self.canEditNotes = canEditNotes
         self.title = title
         self.startedAt = startedAt
         self.endedAt = endedAt
