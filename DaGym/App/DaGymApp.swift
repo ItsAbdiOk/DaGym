@@ -170,31 +170,20 @@ struct AppRootContainer: View {
         let provider = ContainerProvider.shared
         guard let store = provider.store(cloudKitEnabled: preferences.iCloudSyncEnabled) else { return }
         let interval = launchSignposter.beginInterval("coldLaunchSeed")
-        // A store already at the bundled seed version returns from each seeder after a count or
-        // a flag read; the 1.4 MB JSON is only decoded (off the main actor) on a version bump or
-        // a fresh install. The one fold pass for everything is `dedupeSeededRows()` below.
-        await ExerciseSeeder.seedIfNeededAsync(context: store.context)
-        RoutineSeeder.seedStarterRoutinesIfNeeded(store: store)
+        // Seed, fold, prune, repair — one function, shared with `UpgradePathTests`.
+        await LaunchSeeding.run(store: store, preferences: preferences)
         if LaunchFlags.isUITesting {
             // The smoke tests log a routine-backed workout from Home; the in-memory UI-test store
             // gets the Push/Pull/Legs trio a real install no longer ships.
             _ = RoutineSeeder.seedStarters(RoutineSeeder.pushPullLegsNames, store: store)
         }
-        EquipmentSeeder.seedIfNeeded(store: store, unit: preferences.weightUnit)
-        store.dedupeSeededRows()
-        // Installs that predate "no shipped routines" still carry the 13 starters; the ones the
-        // lifter never touched go, once per device. After the fold so a synced copy is judged as
-        // one routine, not two.
-        RoutineSeeder.pruneUntouchedStartersOnce(store: store, preferences: preferences)
         // Warm-ups round onto the lifter's own rack, not a bare increment. `WorkoutSession`
         // is store-free, so this is where the two are introduced — before any session exists.
         WorkoutSession.defaultWarmupGrid = { [weak store] exercise in
             guard let store else { return .step(max(exercise.incrementKg, 0.5)) }
             return store.loadGrid(for: exercise, equipment: store.activeEquipment())
         }
-        purgeHealthDerivedRowsOnce(store: store)
         CoachChatSettings.adoptLaunchArgumentKey(preferences: preferences)
-        store.backfillWorkoutTotalsIfNeeded()
         // A second iCloud device imports the first one's seeded rows after launch; fold those
         // as they land. Kept in `phase` so the observer lives as long as the store does.
         let deduper = store.startRemoteChangeDedupe()
@@ -215,19 +204,6 @@ struct AppRootContainer: View {
         // launches that need it.
         launchSignposter.endInterval("coldLaunchSeed", interval)
         phase = .ready(store, sync, healthInsights, deduper)
-    }
-
-    /// One-time repair: the first Apple Health build wrote HealthKit-derived rows into the
-    /// CloudKit-mirrored main store. Move/clear them — App Store Guideline 5.1.3. Gated on the
-    /// seed-state row like the other seeders: it used to run its two predicate fetches on every
-    /// launch, forever, for a build almost nobody still has data from.
-    private func purgeHealthDerivedRowsOnce(store: WorkoutStore) {
-        let state = SeedState.row(in: store.context)
-        guard !state.healthRowsPurged else { return }
-        store.purgeHealthDerivedRowsFromMainStore()
-        state.healthRowsPurged = true
-        state.updatedAt = Date()
-        store.save()
     }
 }
 

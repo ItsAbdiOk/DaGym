@@ -1,0 +1,39 @@
+{
+  "bodyMeasurements" : 1,
+  "bodyweightKg" : 82.5,
+  "equipmentProfiles" : 2,
+  "exerciseNotes" : 1,
+  "exercises" : 1466,
+  "exerciseSeedVersion" : 5,
+  "keptRoutineNames" : [
+    "5×5 A",
+    "Full Body A",
+    "Full Body B (mine)",
+    "Legs",
+    "Lower A",
+    "Lower B",
+    "Pull B",
+    "Push A",
+    "Upper A",
+    "Upper B"
+  ],
+  "noteText" : "Pinkies on the rings.",
+  "personalRecordEvents" : 384,
+  "personalRecords" : 132,
+  "plannedSets" : 205,
+  "programs" : 1,
+  "programWeeks" : 4,
+  "prunedRoutineNames" : [
+    "5×5 B",
+    "5×5 C",
+    "Full Body C"
+  ],
+  "routineExercises" : 56,
+  "routines" : 13,
+  "schedules" : 1,
+  "sets" : 312,
+  "totalSetsDone" : 312,
+  "totalVolumeKg" : 135752,
+  "workoutExercises" : 104,
+  "workouts" : 24
+}
