@@ -123,7 +123,8 @@ struct GymCardSheet: View {
     private var emptyState: some View {
         EmptyState(
             symbol: "barcode.viewfinder", title: "Scan your gym card",
-            message: "Scan the barcode on your membership card once and it lives here, bright enough for the desk scanner."
+            message: "Scan the barcode on your membership card once and it lives here, "
+                + "bright enough for the desk scanner."
         )
         .frame(maxWidth: .infinity)
         .padding(.vertical, DGSpace.s6)
@@ -135,20 +136,22 @@ struct GymCardSheet: View {
             ForEach(cards) { card in
                 GymCardFace(card: card, onRename: { rename(card, to: $0) }, onDelete: { delete(card) })
                     .tag(Optional(card.id))
-                    .padding(.horizontal, DGSpace.s1)
-                    .padding(.bottom, cards.count > 1 ? DGSpace.s6 : 0)
+                    .padding(.horizontal, DGSpace.s4)
+                    .padding(.bottom, cards.count > 1 ? DGSpace.s10 : DGSpace.s6)
             }
         }
         .tabViewStyle(.page(indexDisplayMode: cards.count > 1 ? .always : .never))
         .indexViewStyle(.page(backgroundDisplayMode: .never))
         // A paged TabView has no intrinsic height: the tallest face (a square 2-D code) sets it.
         .frame(height: railHeight)
-        .padding(.horizontal, -DGSpace.s1)
+        .padding(.horizontal, -DGSpace.s4)
+        // The pages carry the shadow's room at the bottom; pull the next row back up to 16 pt.
+        .padding(.bottom, -DGSpace.s2)
     }
 
     private var railHeight: CGFloat {
         let square = cards.contains { $0.symbology.isTwoDimensional }
-        return (square ? 380 : 260) + (cards.count > 1 ? DGSpace.s6 : 0)
+        return (square ? 380 : 260) + (cards.count > 1 ? DGSpace.s10 : DGSpace.s6)
     }
 
     /// Scan / photo / typed number. The scan is the primary action before any card exists and

@@ -43,8 +43,8 @@ struct EquipmentFilterBanner: View {
     /// The same words `title` returns, with the profile name in bold.
     private var sentence: Text {
         if showingAll { return Text("Showing all equipment") }
-        return Text("Showing what's in ") + Text(profileName).fontWeight(.semibold)
-            + Text(Self.hiddenSuffix(hidden))
+        let name = Text(profileName).fontWeight(.semibold)
+        return Text("Showing what's in \(name)\(Self.hiddenSuffix(hidden))")
     }
 }
 
@@ -96,7 +96,8 @@ struct LibraryRow: View {
 
     private var accessibilityValue: String {
         if let best = exercise.bestE1RM {
-            return "\(exercise.muscleLine), estimated 1RM \(preferences.formatWeight(kg: best)) \(preferences.unitSymbol)"
+            let figure = "\(preferences.formatWeight(kg: best)) \(preferences.unitSymbol)"
+            return "\(exercise.muscleLine), estimated 1RM \(figure)"
         }
         return exercise.muscleLine
     }
@@ -118,31 +119,5 @@ struct LibraryRow: View {
         } else if exercise.isCustom {
             DGTag(text: "Mine", tint: DGColor.coralText, wash: DGColor.coralWash)
         }
-    }
-}
-
-/// The library row's picture: the illustrated art where an exercise has it (the same drawing
-/// the detail screen's hero animates, held still here), otherwise the body-map thumbnail
-/// lit up on the muscles it works. Photographs are skipped at this size — a 36 pt HEIC decode
-/// per row is not worth a picture nobody can read.
-struct ExerciseThumbnail: View {
-    var exercise: ExerciseInfo
-    var size: CGFloat = 40
-
-    var body: some View {
-        Group {
-            if case .vector(let seedID) = ExerciseHeroMedia.choice(for: exercise.seedID) {
-                ExerciseArtView(seedID: seedID, size: size - 8)
-            } else {
-                BodyMapView(
-                    side: BodyMapMuscleMapping.thumbnailSide(forPrimary: exercise.primary),
-                    intensity: exercise.hitMap
-                )
-                .padding(5)
-            }
-        }
-        .frame(width: size, height: size)
-        .background(DGColor.surface3, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .accessibilityHidden(true)
     }
 }

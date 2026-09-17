@@ -61,7 +61,7 @@ struct LibraryView: View {
                     }
                     .padding(.horizontal, DGSpace.s4)
                     .padding(.top, DGSpace.s3)
-                    .padding(.bottom, DGSpace.s6)
+                    .padding(.bottom, 110)
                 }
             }
         }

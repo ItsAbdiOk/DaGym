@@ -42,7 +42,7 @@ extension ExerciseDetailView {
         case .vector(let seedID): vectorHero(seedID: seedID)
         case .photo(let seedID): photoHero(seedID: seedID)
         case .none:
-            BodyMapPair(intensity: exercise.hitMap, height: 150)
+            BodyMapPair(intensity: exercise.hitMap, height: 140)
                 .frame(maxWidth: .infinity)
                 .accessibilityLabel("Muscles worked by \(exercise.name)")
         }
@@ -53,7 +53,7 @@ extension ExerciseDetailView {
     /// captioned as though they carried the same terms.
     private func vectorHero(seedID: String) -> some View {
         VStack(spacing: DGSpace.s2) {
-            ExerciseArtView(seedID: seedID, size: 200, animated: true)
+            ExerciseArtView(seedID: seedID, size: 160, animated: true)
                 .accessibilityLabel("Illustration demonstrating \(exercise.name)")
             Text("Illustration: Bryl Lim, derived from Everkinetic · CC BY-SA 4.0")
                 .font(Font.system(.caption2))
