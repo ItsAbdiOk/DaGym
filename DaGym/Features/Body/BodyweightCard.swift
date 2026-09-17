@@ -1,4 +1,5 @@
 import Charts
+import GymCore
 import SwiftUI
 import UIKit
 
@@ -74,22 +75,33 @@ struct BodyweightCard: View {
 
     // MARK: - Numbers
 
-    /// "−1.2 over 30 days": the latest reading against the first one inside the last 30 days.
+    /// "−1.2 over 30 days": the latest reading against the one on file 30 days before it.
     private var thirtyDayMove: String? {
-        guard let latest = series.last,
-              let since = Calendar.current.date(byAdding: .day, value: -30, to: latest.date),
-              let baseline = series.first(where: { $0.date >= since }), baseline.id != latest.id else {
-            return nil
+        Self.thirtyDayDeltaKg(series: series).map {
+            "\(Self.signed(preferences.weightUnit.display(kg: $0))) over 30 days"
         }
-        let delta = preferences.weightUnit.display(kg: latest.kg - baseline.kg)
-        return "\(Self.signed(delta)) over 30 days"
     }
 
-    /// "2.1 kg to goal", or "At goal" within a tenth.
+    /// The same comparison Home's tile and the You card make (`HomeSnapshot.bodyweightDeltaKg`):
+    /// the latest reading minus the latest reading *as of* 30 days before it, nil without one
+    /// that far back. This card used to compare against the first reading *inside* the window,
+    /// so a lifter who logged on days −31, −20 and 0 saw "−2.0" on Today and "−1.0" here.
+    static func thirtyDayDeltaKg(series: [BodyMeasurementInfo], calendar: Calendar = .current) -> Double? {
+        guard let latest = series.last,
+              let since = calendar.date(byAdding: .day, value: -30, to: latest.date),
+              let baseline = series.last(where: { $0.date <= since }) else { return nil }
+        return latest.kg - baseline.kg
+    }
+
+    /// "2.1 kg to goal", or "At goal" once the gap rounds away in the lifter's unit — the same
+    /// judgement as Home's tile (`BodyweightGoal.status`).
     private var toGoal: String? {
         guard let goalKg = preferences.bodyweightGoalKg, let latest = series.last else { return nil }
-        let gap = abs(preferences.weightUnit.display(kg: latest.kg - goalKg))
-        guard gap >= 0.05 else { return "At goal" }
+        let status = BodyweightGoal.status(
+            currentKg: latest.kg, goalKg: goalKg, deltaKg: nil, unit: preferences.weightUnit
+        )
+        guard !status.isReached else { return "At goal" }
+        let gap = preferences.weightUnit.display(kg: status.remainingKg)
         return "\(String(format: "%.1f", gap)) \(preferences.unitSymbol) to goal"
     }
 

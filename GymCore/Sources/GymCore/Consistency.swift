@@ -102,7 +102,7 @@ public enum ConsistencyCalendar {
         while day <= end {
             let totals = byDay[day] ?? (sets: 0, minutes: 0)
             result.append(
-                DayCell(date: day, level: level(sets: totals.sets, maxSets: maxSets),
+                DayCell(date: day, level: level(sets: totals.sets, minutes: totals.minutes, maxSets: maxSets),
                         sets: totals.sets, minutes: totals.minutes)
             )
             guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
@@ -111,8 +111,10 @@ public enum ConsistencyCalendar {
         return result
     }
 
-    private static func level(sets: Int, maxSets: Int) -> Int {
-        guard sets > 0, maxSets > 0 else { return 0 }
+    private static func level(sets: Int, minutes: Int, maxSets: Int) -> Int {
+        // A session with no logged sets (an Apple Health import, a cardio-only day) is still a
+        // day trained: the lightest tier, not a blank that says the lifter stayed home.
+        guard sets > 0, maxSets > 0 else { return minutes > 0 ? 1 : 0 }
         let ratio = Double(sets) / Double(maxSets)
         if ratio < 0.25 { return 1 }
         if ratio < 0.5 { return 2 }

@@ -84,7 +84,8 @@ extension WorkoutStore {
             return sets.map { String($0.reps) }.joined(separator: ", ")
         case .weightReps, .assisted, .weightedBodyweight:
             let reps = sets.map { String($0.reps) }.joined(separator: ",")
-            return "\(WorkoutSession.format(first.weightKg)) × \(reps)"
+            // In the lifter's unit, like the cardio line above: a lb lifter's 135 read "61.2 × 5".
+            return "\(preferredWeightUnit.format(kg: first.weightKg)) × \(reps)"
         }
     }
 
