@@ -1,21 +1,18 @@
 import GymCore
 import SwiftUI
 
-/// The muscle map's Balance mode: sets per muscle over a week / month / all time (the same
-/// `WorkoutStore.bodySeries` aggregation the coach's `get_muscle_volume` reads), with a
-/// "hard sets only" switch, plus the untrained list that was always here.
+/// The muscle map's Balance mode, under the hero card: the week / month / all-time window and
+/// the "hard sets only" switch (the same `WorkoutStore.bodySeries` aggregation the coach's
+/// `get_muscle_volume` reads), plus the untrained list that was always here.
 struct BalanceMapSection: View {
     var bundle: WorkoutStore.BodySeriesBundle?
     var snapshot: RecoverySnapshot
     @Binding var window: BalanceHorizon
     @Binding var hardOnly: Bool
-    var onSelect: (Muscle) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s6) {
+        VStack(alignment: .leading, spacing: DGSpace.s3) {
             controls
-            mapCard
-            setsList
             BalanceSection(
                 untrainedMuscles: snapshot.untrainedMuscles, restedMuscles: snapshot.detrainedMuscles
             )
@@ -24,44 +21,24 @@ struct BalanceMapSection: View {
 
     private var controls: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
-            Picker("Window", selection: $window) {
-                ForEach(BalanceHorizon.allCases) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.segmented)
+            ProgressSegmentControl(
+                selection: $window, title: \.title,
+                accessibilityID: { "recovery.window.\($0.rawValue)" }, controlLabel: "Window"
+            )
             .accessibilityIdentifier(A11yID.recoveryWindow)
             Toggle("Hard sets only", isOn: $hardOnly)
-                .font(DGFont.footnote)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(DGColor.ink1)
                 .tint(DGColor.coral)
                 .accessibilityIdentifier(A11yID.recoveryHardSets)
                 .accessibilityHint(Self.hardSetsHint)
-        }
-    }
-
-    private var mapCard: some View {
-        VStack(spacing: DGSpace.s4) {
-            HStack(spacing: DGSpace.s4) {
-                BodyMapView(side: .front, intensity: intensity, onTap: onSelect, regionLabel: regionLabel)
-                BodyMapView(side: .back, intensity: intensity, onTap: onSelect, regionLabel: regionLabel)
-            }
-            .frame(height: 260)
             Text(caption)
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .dgCard()
-    }
-
-    /// Sets per muscle scaled so the most-worked reads 1.0 — the same normalisation the routine
-    /// builder's hit map uses, so the two figures speak one colour language.
-    private var intensity: [Muscle: Double] {
-        let sets = bundle?.setsPerMuscle ?? [:]
-        guard let top = sets.values.max(), top > 0 else { return [:] }
-        return sets.filter { $0.value > 0 }.mapValues { $0 / top }
-    }
-
-    private func regionLabel(_ muscle: Muscle, _ value: Double) -> String {
-        "\(muscle.displayName), \(Self.setsLabel(bundle?.setsPerMuscle[muscle] ?? 0))"
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dgCard(radius: 20, padding: DGSpace.s4)
     }
 
     /// Why the figure is blank, when it is — a window with no sets, or "hard only" with nothing
@@ -74,27 +51,6 @@ struct BalanceMapSection: View {
         }
         if total == 0 { return "No sets logged \(window.inPhrase)." }
         return "\(hardOnly ? "Hard sets" : "Sets") per muscle \(window.inPhrase) · darker means more."
-    }
-
-    @ViewBuilder
-    private var setsList: some View {
-        let rows = (bundle?.setsPerMuscle ?? [:]).filter { $0.value > 0 }
-            .sorted { $0.value == $1.value ? $0.key.rawValue < $1.key.rawValue : $0.value > $1.value }
-        if !rows.isEmpty {
-            VStack(alignment: .leading, spacing: DGSpace.s2) {
-                Text("Sets per muscle").dgLabel()
-                ForEach(rows, id: \.key) { muscle, sets in
-                    HStack {
-                        Text(muscle.displayName).font(DGFont.body).foregroundStyle(DGColor.ink2)
-                        Spacer()
-                        Text(Self.setsLabel(sets)).font(DGFont.footnote).foregroundStyle(DGColor.ink3)
-                    }
-                    .frame(minHeight: 28)
-                    .accessibilityElement(children: .combine)
-                }
-            }
-            .dgCard()
-        }
     }
 
     /// The toggle's rule in words, from the one constant that defines it.
@@ -132,6 +88,15 @@ enum BalanceHorizon: String, CaseIterable, Identifiable {
         }
     }
 
+    /// "the week" / "the month" / "the load" — "Chest is carrying …" in the hero headline.
+    var carryingPhrase: String {
+        switch self {
+        case .week: "the week"
+        case .month: "the month"
+        case .all: "the load"
+        }
+    }
+
     /// `.thisWeek` takes the training calendar so the week starts where Home's does.
     func window(calendar: Calendar) -> BalanceWindow {
         switch self {
@@ -155,11 +120,12 @@ struct BalanceSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
-            Text("Balance").dgLabel()
+            ProgressCardTitle(title: "Balance")
             thisWeek
             if !listed.isEmpty { longestWithoutWork }
         }
-        .dgCard()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dgCard(radius: 20, padding: DGSpace.s4)
     }
 
     @ViewBuilder

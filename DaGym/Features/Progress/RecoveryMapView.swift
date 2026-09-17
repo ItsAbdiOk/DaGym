@@ -2,54 +2,65 @@ import GymCore
 import SwiftData
 import SwiftUI
 
-/// The muscle map in three modes — Balance (sets per muscle over a window), Fatigue (the
-/// recovery heatmap, a muscle-by-muscle fatigue list, Health context) and Strength (top lifts
-/// by e1RM per muscle). Presented as a sheet from Home's "See Map"; opens on Fatigue.
+/// The muscle map in three modes — Balance (sets per muscle over a window), Recovery (the
+/// fatigue heatmap, a muscle-by-muscle list, Health context) and Strength (top lifts by e1RM
+/// per muscle). Pushed from the You hub and the Progress hub; Home's "See map" opens it as a
+/// sheet. Each mode is a hero card (figure on the left, headline and list on the right) with
+/// that mode's controls and detail underneath.
 struct RecoveryMapView: View {
+    /// Which segment the screen opens on: Home wants Recovery, the Progress hub Balance.
+    var initialMode = MuscleMapMode.fatigue
+
     @Environment(WorkoutStore.self) private var store
     // Not `private`: `RecoveryMapView+Health.swift` (kept separate to stay under the
     // type-body-length lint limit) reads these — `private` is file-scoped in Swift, so a
     // same-type extension in a different file can't see a `private` member.
     @Environment(Preferences.self) var preferences
     @Environment(HealthInsightsService.self) var healthInsights
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
     @State private var snapshot = RecoverySnapshot(map: [:], perMuscle: [], untrainedMuscles: [])
     @State private var selected: MuscleRecovery?
     @State var recoverySignals: HealthInsightsService.RecoverySignals?
     @State var isShowingHealthSettings = false
-    @State private var mode = MuscleMapMode.fatigue
+    @State private var mode: MuscleMapMode
     @State private var horizon = BalanceHorizon.week
     @State private var hardOnly = false
     /// Balance and Strength read the store only once their mode is shown (`.task(id:)`), so
-    /// opening the sheet costs what it always did.
+    /// opening the screen costs what it always did.
     @State private var balance: WorkoutStore.BodySeriesBundle?
     @State private var strength: [Muscle: [MuscleStrength.Entry]] = [:]
+
+    init(initialMode: MuscleMapMode = .fatigue) {
+        self.initialMode = initialMode
+        _mode = State(initialValue: initialMode)
+    }
 
     var body: some View {
         ZStack {
             AmbientWash()
             ScrollView {
-                VStack(alignment: .leading, spacing: DGSpace.s6) {
-                    header
+                VStack(alignment: .leading, spacing: DGSpace.s3) {
                     modePicker
+                    hero
                     switch mode {
                     case .balance:
                         BalanceMapSection(
-                            bundle: balance, snapshot: snapshot, window: $horizon, hardOnly: $hardOnly,
-                            onSelect: selectMuscle
+                            bundle: balance, snapshot: snapshot, window: $horizon, hardOnly: $hardOnly
                         )
                     case .fatigue:
-                        mapCard
                         healthContextCard
-                        muscleList
+                        RecoveryMuscleList(muscles: snapshot.perMuscle) { selected = $0 }
                     case .strength:
-                        StrengthMapSection(top: strength, onSelect: selectMuscle)
+                        StrengthMapSection(top: strength)
                     }
                 }
                 .padding(.horizontal, DGSpace.s4)
                 .padding(.top, DGSpace.s3)
-                .padding(.bottom, DGSpace.s8)
+                .padding(.bottom, 110)
             }
         }
+        .navigationTitle("Muscle map")
+        .navigationBarTitleDisplayMode(.inline)
         .task { await refresh() }
         .task(id: BalanceKey(mode: mode, horizon: horizon, hardOnly: hardOnly)) { loadMode() }
         .sheet(item: $selected) { muscle in
@@ -93,83 +104,28 @@ struct RecoveryMapView: View {
         }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s1) {
-            Text(mode.title)
-                .font(DGFont.title1)
-                .foregroundStyle(DGColor.ink1)
-            Text(mode.subtitle(windowDays: WorkoutStore.recoveryWindowDays))
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink3)
-        }
-    }
-
     private var modePicker: some View {
-        Picker("Map", selection: $mode) {
-            ForEach(MuscleMapMode.allCases) { Text($0.title).tag($0) }
-        }
-        .pickerStyle(.segmented)
+        ProgressSegmentControl(
+            selection: $mode, title: \.title,
+            accessibilityID: { A11yID.recoverySegment($0.title) }, controlLabel: "Map"
+        )
         .accessibilityIdentifier(A11yID.recoveryMode)
     }
 
-    private var mapCard: some View {
-        VStack(spacing: DGSpace.s4) {
-            HStack(spacing: DGSpace.s4) {
-                BodyMapView(side: .front, mode: .recovery, intensity: snapshot.map, onTap: selectMuscle)
-                BodyMapView(side: .back, mode: .recovery, intensity: snapshot.map, onTap: selectMuscle)
-            }
-            .frame(height: 260)
-            RecoveryLegend()
-        }
-        .dgCard()
-    }
-
-    private func selectMuscle(_ muscle: Muscle) {
-        guard let match = snapshot.perMuscle.first(where: { $0.muscle == muscle }) else { return }
-        selected = match
-    }
-
-    private var muscleList: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            Text("Muscles").dgLabel()
-            if snapshot.perMuscle.isEmpty {
-                Text("Log a workout to start tracking recovery.")
-                    .font(DGFont.subhead)
-                    .foregroundStyle(DGColor.ink3)
-            } else {
-                VStack(spacing: DGSpace.s2) {
-                    ForEach(snapshot.perMuscle) { muscle in
-                        MuscleListRow(recovery: muscle) { selected = muscle }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// 5-stop "FRESH … RECOVERING … SPENT" legend row under the map. Text labels sit under the
-/// ramp regardless of which ramp is active, so a colour-blind lifter reading the accessible
-/// ramp (or anyone glancing quickly) never has to infer status from colour alone.
-private struct RecoveryLegend: View {
-    @Environment(Preferences.self) private var preferences
-    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s1) {
-            HStack(spacing: 4) {
-                ForEach(Array(ramp.enumerated()), id: \.offset) { _, color in
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(color)
-                        .frame(height: 6)
-                }
-            }
-            HStack {
-                Text("Fresh").dgLabel()
-                Spacer()
-                Text("Recovering").dgLabel()
-                Spacer()
-                Text("Spent").dgLabel()
-            }
+    @ViewBuilder
+    private var hero: some View {
+        switch mode {
+        case .balance:
+            MuscleMapHeroCard(
+                model: .balance(bundle: balance, snapshot: snapshot, horizon: horizon, hardOnly: hardOnly),
+                onSelect: selectMuscle
+            )
+        case .fatigue:
+            MuscleMapHeroCard(model: .recovery(snapshot: snapshot, ramp: ramp), onSelect: selectMuscle)
+        case .strength:
+            MuscleMapHeroCard(
+                model: .strength(top: strength, preferences: preferences), onSelect: selectMuscle
+            )
         }
     }
 
@@ -179,70 +135,64 @@ private struct RecoveryLegend: View {
             colorBlindHeatmaps: preferences.colorBlindHeatmaps
         )
     }
+
+    private func selectMuscle(_ muscle: Muscle) {
+        guard let match = snapshot.perMuscle.first(where: { $0.muscle == muscle }) else { return }
+        selected = match
+    }
 }
 
-/// One row: muscle name, a fatigue bar in the ramp colour, and when it'll be fresh again.
-private struct MuscleListRow: View {
-    var recovery: MuscleRecovery
-    var onTap: () -> Void
-
-    @Environment(Preferences.self) private var preferences
-    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
+/// Every trained muscle as a row — name, how much recent work it has taken, when the reading
+/// eases off — opening `MuscleDetailSheet`. The hero card shows the top of this list; this is
+/// the whole of it.
+private struct RecoveryMuscleList: View {
+    var muscles: [MuscleRecovery]
+    var onSelect: (MuscleRecovery) -> Void
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: DGSpace.s3) {
-                VStack(alignment: .leading, spacing: DGSpace.s1) {
-                    Text(recovery.muscle.displayName)
-                        .font(DGFont.title3)
-                        .foregroundStyle(DGColor.ink1)
-                    GeometryReader { geo in
-                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                            .fill(DGColor.surface3)
-                            .overlay(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                    .fill(rampColor)
-                                    .frame(width: geo.size.width * recovery.spent)
+        if muscles.isEmpty {
+            Text("Log a workout to start tracking recovery.")
+                .font(DGFont.subhead)
+                .foregroundStyle(DGColor.ink3)
+                .padding(.horizontal, DGSpace.s1)
+        } else {
+            TrainRowGroup {
+                ForEach(Array(muscles.enumerated()), id: \.element.id) { offset, muscle in
+                    Button { onSelect(muscle) } label: {
+                        HStack(spacing: DGSpace.s3) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(muscle.muscle.displayName)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(DGColor.ink1)
+                                Text(muscle.workloadLabel)
+                                    .font(.system(size: 12.5))
+                                    .foregroundStyle(DGColor.ink3)
                             }
+                            Spacer(minLength: 0)
+                            Text(muscle.easesOffLabel)
+                                .font(.system(size: 12.5))
+                                .foregroundStyle(DGColor.ink3)
+                                .multilineTextAlignment(.trailing)
+                            TrainChevron()
+                        }
+                        .padding(.horizontal, 15)
+                        .padding(.vertical, 12)
+                        .contentShape(Rectangle())
+                        .trainRowDivider(isLast: offset == muscles.count - 1)
                     }
-                    .frame(height: 6)
+                    .buttonStyle(.dgRow)
+                    .accessibilityElement(children: .combine)
                 }
-                Text(statusLabel)
-                    .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.ink3)
-                    .frame(minWidth: 120, alignment: .trailing)
-                Image(systemName: "chevron.right").accessibilityHidden(true)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(DGColor.ink4)
-            }
-            .padding(DGSpace.s4)
-            .frame(minHeight: DGTap.min)
-            .background(DGColor.surface1, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
-                    .strokeBorder(DGColor.hairline, lineWidth: 1)
             }
         }
-        .buttonStyle(.dgRow)
     }
-
-    private var rampColor: Color {
-        let index = Int((recovery.spent * 4).rounded())
-        let ramp = DGColor.recoveryRamp(
-            differentiateWithoutColor: differentiateWithoutColor,
-            colorBlindHeatmaps: preferences.colorBlindHeatmaps
-        )
-        return ramp[min(4, max(0, index))]
-    }
-
-    private var statusLabel: String { recovery.easesOffLabel }
 }
 
 #Preview {
     if let container = try? ModelContainer.dagym(inMemory: true) {
         let store = WorkoutStore(context: container.mainContext)
         let preferences = Preferences()
-        RecoveryMapView()
+        NavigationStack { RecoveryMapView() }
             .environment(store)
             .environment(preferences)
             .environment(HealthInsightsService(

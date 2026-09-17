@@ -1,69 +1,38 @@
 import GymCore
 import SwiftUI
 
-/// The muscle map's Strength mode: per primary mover, the lifter's top exercises by best
-/// estimated 1RM (`WorkoutStore.muscleStrength`, off the PR cache), in the lifter's unit.
+/// The muscle map's Strength mode, under the hero card: per primary mover, the lifter's top
+/// exercises by best estimated 1RM (`WorkoutStore.muscleStrength`, off the PR cache), in the
+/// lifter's unit.
 struct StrengthMapSection: View {
     var top: [Muscle: [MuscleStrength.Entry]]
-    var onSelect: (Muscle) -> Void
 
     @Environment(Preferences.self) private var preferences
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s6) {
-            mapCard
-            if !top.isEmpty { list }
-        }
-    }
-
-    private var mapCard: some View {
-        VStack(spacing: DGSpace.s4) {
-            HStack(spacing: DGSpace.s4) {
-                BodyMapView(side: .front, intensity: intensity, onTap: onSelect, regionLabel: regionLabel)
-                BodyMapView(side: .back, intensity: intensity, onTap: onSelect, regionLabel: regionLabel)
-            }
-            .frame(height: 260)
-            Text(caption)
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink3)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .dgCard()
-    }
-
-    private var intensity: [Muscle: Double] { MuscleStrength.mapIntensity(top) }
-
-    private var caption: String {
-        top.isEmpty
-            ? "No estimated 1RMs yet — log a loaded set with reps and the map fills in."
-            : "Best estimated 1RM per muscle · darker means heavier."
-    }
-
-    /// "Chest, best 120 kg on Bench Press".
-    private func regionLabel(_ muscle: Muscle, _ value: Double) -> String {
-        guard let best = top[muscle]?.first else { return muscle.displayName }
-        return "\(muscle.displayName), best \(preferences.formatWeight(kg: best.e1rmKg)) on \(best.name)"
+        if !top.isEmpty { list }
     }
 
     /// Strongest muscle first, then its top lifts with the number.
     private var list: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
-            Text("Strongest lifts").dgLabel()
+            ProgressCardTitle(title: "Strongest lifts")
             ForEach(ordered, id: \.self) { muscle in
                 VStack(alignment: .leading, spacing: DGSpace.s1) {
                     Text(muscle.displayName)
-                        .font(DGFont.title3)
+                        .font(.system(size: 13.5, weight: .semibold))
                         .foregroundStyle(DGColor.ink1)
                     ForEach(top[muscle] ?? []) { entry in
                         HStack {
                             Text(entry.name)
-                                .font(DGFont.body)
+                                .font(.system(size: 14))
                                 .foregroundStyle(DGColor.ink2)
                                 .lineLimit(1)
                             Spacer()
-                            Text(preferences.formatWeight(kg: entry.e1rmKg))
-                                .dgMetric(DGFont.metricM, tracking: -0.5)
-                                .foregroundStyle(DGColor.prGoldText)
+                            Text("\(preferences.formatWeight(kg: entry.e1rmKg)) \(preferences.unitSymbol)")
+                                .font(.system(size: 14, weight: .semibold))
+                                .monospacedDigit()
+                                .foregroundStyle(DGColor.ink1)
                         }
                         .frame(minHeight: 28)
                         .accessibilityElement(children: .combine)
@@ -72,7 +41,8 @@ struct StrengthMapSection: View {
                 .padding(.vertical, DGSpace.s1)
             }
         }
-        .dgCard()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dgCard(radius: 20, padding: DGSpace.s4)
     }
 
     private var ordered: [Muscle] {
