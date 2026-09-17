@@ -1,68 +1,37 @@
 import SwiftUI
 
-/// "What's your main goal?" — stores `preferences.trainingGoal` and, crucially, *applies* it:
-/// `applyTrainingGoalDefaults()` writes the rest length and weekly session count each option's
-/// subtitle promises, so the answer changes the app instead of being filed away. "General
-/// fitness" is pre-selected so Continue is always available without forcing a choice.
+/// Step 2, "What are you training for?" — stores `preferences.trainingGoal` and, crucially,
+/// *applies* it: `applyTrainingGoalDefaults()` writes the rest length and weekly session count
+/// each option's subtitle promises, so the answer changes the app instead of being filed away.
+/// "General fitness" is pre-selected so Continue is always available without forcing a choice.
 struct OnboardingGoalStep: View {
     var onNext: () -> Void
     @Environment(Preferences.self) private var preferences
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s6) {
-            Text("What's your\nmain goal?")
-                .font(DGFont.title1)
-                .foregroundStyle(DGColor.ink1)
-                .accessibilityIdentifier(A11yID.onboardingStep("goal"))
-            VStack(spacing: DGSpace.s3) {
+        OnboardingPage(
+            step: .goal, name: "goal", symbol: "target", title: "What are you training for?",
+            message: "This sets your default rest and weekly target.", cta: "Continue", onContinue: onNext
+        ) {
+            OnboardingOptionGroup {
                 ForEach(Preferences.TrainingGoal.allCases, id: \.self) { goal in
-                    GoalRow(goal: goal, isSelected: preferences.trainingGoal == goal) {
+                    OnboardingOptionRow(
+                        title: goal.title, sub: goal.detail, isSelected: preferences.trainingGoal == goal
+                    ) {
                         preferences.trainingGoal = goal
                         preferences.applyTrainingGoalDefaults()
                         Haptics.step()
                     }
                 }
             }
-            Spacer()
-            DGPrimaryButton(title: "Continue", action: onNext)
-                .accessibilityIdentifier(A11yID.onboardingNext)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct GoalRow: View {
-    var goal: Preferences.TrainingGoal
-    var isSelected: Bool
-    var onSelect: () -> Void
-
-    var body: some View {
-        Button(action: onSelect) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(goal.title.uppercased())
-                        .font(DGFont.title3)
-                        .foregroundStyle(DGColor.ink1)
-                    Text(goal.detail)
-                        .font(DGFont.footnote)
-                        .foregroundStyle(DGColor.ink3)
-                }
-                Spacer()
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isSelected ? DGColor.coral : DGColor.ink4)
-            }
-            .dgCard(fill: isSelected ? DGColor.coralWash : DGColor.surface1, padding: DGSpace.s4)
-        }
-        .buttonStyle(.dgCard)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
 #Preview {
     ZStack {
-        AmbientWash()
+        DGColor.bgBase.ignoresSafeArea()
         OnboardingGoalStep(onNext: {})
             .environment(Preferences())
-            .padding(DGSpace.s5)
     }
 }

@@ -1,37 +1,45 @@
 import SwiftUI
 
-/// The "APPLE HEALTH" settings screen (plan.md §6.8): connect, then two plain-language toggles
-/// for exactly what's shared. Presented as a sheet from `SettingsView`'s "Apple Health" row.
+/// The Apple Health settings page (plan.md §6.8): connect, then plain-language toggles for
+/// exactly what's shared, the full read/write list, the bodyweight sheet and the Health
+/// import row. Pushed from Settings (`pushed: true`) and still presented as a sheet from the
+/// Body and Recovery screens, where it wraps its own stack and shows a Close button.
 struct HealthSettingsView: View {
+    var pushed = false
+
     @Environment(Preferences.self) private var preferences
     @Environment(HealthSyncService.self) private var healthSync
     @Environment(\.dismiss) private var dismiss
+    @State private var showingBodyweightSheet = false
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AmbientWash()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: DGSpace.s6) {
-                        statusCard
-                        toggleCard
-                        permissionsCard
-                        syncFooter
-                        disclaimer
+        if pushed {
+            page
+        } else {
+            NavigationStack {
+                page.toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        DGIconButton(symbol: "xmark", accessibilityLabel: "Close") { dismiss() }
                     }
-                    .padding(.horizontal, DGSpace.s4)
-                    .padding(.top, DGSpace.s3)
-                    .padding(.bottom, DGSpace.s8)
-                }
-            }
-            .navigationTitle("Apple Health")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    DGIconButton(symbol: "xmark", accessibilityLabel: "Close") { dismiss() }
                 }
             }
         }
+    }
+
+    private var page: some View {
+        SettingsPage(title: "Apple Health") {
+            statusCard
+            toggleCard
+            SettingsSection {
+                SettingsLinkRow(label: "Bodyweight", sub: "Log a weigh-in") { showingBodyweightSheet = true }
+                SettingsDivider()
+                HealthImportRow()
+            }
+            permissionsCard
+            syncFooter
+            disclaimer
+        }
+        .sheet(isPresented: $showingBodyweightSheet) { BodyweightSheet() }
     }
 
     private var statusCard: some View {
@@ -42,9 +50,9 @@ struct HealthSettingsView: View {
                     .foregroundStyle(DGColor.danger)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(healthSync.isAvailable ? "Health is available" : "Health isn't available")
-                        .font(DGFont.body)
+                        .font(DGFont.subhead)
                         .foregroundStyle(DGColor.ink1)
-                    Text(statusSubtitle).font(DGFont.footnote).foregroundStyle(DGColor.ink4)
+                    Text(statusSubtitle).font(DGFont.footnote).foregroundStyle(DGColor.ink3)
                 }
                 Spacer()
             }
@@ -58,7 +66,7 @@ struct HealthSettingsView: View {
                 .disabled(healthSync.isAuthorizing)
             }
         }
-        .dgCard()
+        .dgCard(radius: 16, padding: DGSpace.s4)
     }
 
     private var statusSubtitle: String {
@@ -69,7 +77,7 @@ struct HealthSettingsView: View {
 
     private var toggleCard: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
-            Text("What's shared").dgLabel()
+            Text("What's shared").dgLabel().padding(.horizontal, DGSpace.s1).padding(.top, DGSpace.s3)
             VStack(spacing: 0) {
                 HealthToggleRow(
                     title: "Save workouts to Health",
@@ -126,7 +134,7 @@ struct HealthSettingsView: View {
                     isOn: binding(\.healthEstimateCalories)
                 )
             }
-            .dgCard(padding: 0)
+            .dgCard(radius: 16, padding: 0)
         }
         // A freshly enabled sync should start observing now, not after a relaunch. Registration
         // is idempotent (`HealthKitStore.shared` keeps one observer per type), and turning the
@@ -152,13 +160,15 @@ struct HealthSettingsView: View {
     private var permissionsCard: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
             Text("Exactly what's read and written").dgLabel()
+                .padding(.horizontal, DGSpace.s1)
+                .padding(.top, DGSpace.s3)
             VStack(spacing: 0) {
                 ForEach(Array(Self.permissionRows.enumerated()), id: \.offset) { index, row in
                     if index > 0 { SettingsDivider() }
                     HealthPermissionRow(row: row)
                 }
             }
-            .dgCard(padding: 0)
+            .dgCard(radius: 16, padding: 0)
         }
     }
 
@@ -197,16 +207,12 @@ struct HealthSettingsView: View {
     @ViewBuilder
     private var syncFooter: some View {
         if let lastSync = healthSync.lastSyncDate {
-            Text("Last synced \(lastSync.formatted(date: .abbreviated, time: .shortened))")
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink4)
+            SettingsNote(text: "Last synced \(lastSync.formatted(date: .abbreviated, time: .shortened))")
         }
     }
 
     private var disclaimer: some View {
-        Text("Training suggestions, not medical advice.")
-            .font(DGFont.footnote)
-            .foregroundStyle(DGColor.ink4)
+        SettingsNote(text: "Health data is context only — training suggestions, not medical advice.")
     }
 
     private func binding<T>(_ keyPath: ReferenceWritableKeyPath<Preferences, T>) -> Binding<T> {
@@ -223,18 +229,18 @@ private struct HealthToggleRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: DGSpace.s3) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(DGFont.body).foregroundStyle(DGColor.ink1)
+                Text(title).font(DGFont.subhead).foregroundStyle(DGColor.ink1)
                 Text(detail)
                     .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.ink4)
+                    .foregroundStyle(DGColor.ink3)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: DGSpace.s3)
             Toggle(title, isOn: $isOn).tint(DGColor.coral).labelsHidden()
                 .accessibilityHint(detail)
         }
-        .padding(.horizontal, DGSpace.s5)
-        .padding(.vertical, DGSpace.s4)
+        .padding(.horizontal, 15)
+        .padding(.vertical, DGSpace.s3)
     }
 }
 
@@ -258,14 +264,14 @@ private struct HealthPermissionRow: View {
                 .frame(minWidth: 44, alignment: .leading)
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 2) {
-                Text(row.title).font(DGFont.body).foregroundStyle(DGColor.ink1)
-                Text(row.reason).font(DGFont.footnote).foregroundStyle(DGColor.ink4)
+                Text(row.title).font(DGFont.subhead).foregroundStyle(DGColor.ink1)
+                Text(row.reason).font(DGFont.footnote).foregroundStyle(DGColor.ink3)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, DGSpace.s5)
-        .padding(.vertical, DGSpace.s4)
+        .padding(.horizontal, 15)
+        .padding(.vertical, DGSpace.s3)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(row.kind == .read ? "Reads" : "Writes") \(row.title). \(row.reason)")
     }

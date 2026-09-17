@@ -79,7 +79,7 @@ struct HomeView: View {
         .refreshOnStoreChange(refresh)
         .onChange(of: preferences.weeklyGoal) { refresh() }
         .onChange(of: preferences.weekStartsMonday) { refresh() }
-        .sheet(isPresented: $showingSettings) { SettingsView() }
+        .sheet(isPresented: $showingSettings) { SettingsView(standalone: true) }
         .askCoach(on: $askingCoach)
     }
 

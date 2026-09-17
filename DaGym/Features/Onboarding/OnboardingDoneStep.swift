@@ -1,40 +1,44 @@
 import SwiftUI
 
-/// The final onboarding screen: confirms setup is done and states the
-/// training-advice disclaimer once, plainly, before handing off to
-/// `RootView`.
+/// The final onboarding screen: the answers just given, read back from `Preferences` and the
+/// store (so a skipped question shows its default, not a blank), the training-advice
+/// disclaimer once, plainly, and the hand-off to `RootView`.
 struct OnboardingDoneStep: View {
     var onFinish: () -> Void
+    @Environment(Preferences.self) private var preferences
+    @Environment(WorkoutStore.self) private var store
 
     var body: some View {
-        VStack(spacing: DGSpace.s8) {
-            Spacer()
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 48, weight: .bold))
-                .foregroundStyle(DGColor.success)
-                .accessibilityHidden(true)
-            VStack(spacing: DGSpace.s3) {
-                Text("You're Set")
-                    .font(DGFont.title1)
-                    .foregroundStyle(DGColor.ink1)
-                    .accessibilityIdentifier(A11yID.onboardingStep("done"))
-                Text("Suggestions, not medical advice.")
-                    .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.ink4)
-                    .multilineTextAlignment(.center)
+        OnboardingPage(
+            step: .done, name: "done", symbol: "checkmark", title: "You are set up",
+            message: "Start whenever you are ready. Suggestions, not medical advice.",
+            cta: "Start training", onContinue: onFinish
+        ) {
+            OnboardingOptionGroup {
+                OnboardingSummaryRow(label: "Units", value: unitsLabel)
+                OnboardingSummaryRow(label: "Goal", value: preferences.trainingGoal.title)
+                OnboardingSummaryRow(label: "Weekly target", value: "\(preferences.weeklyGoal) sessions")
+                OnboardingSummaryRow(label: "Equipment", value: activeProfileName)
             }
-            Spacer()
-            DGPrimaryButton(title: "Get Started", action: onFinish)
-                .accessibilityIdentifier(A11yID.onboardingNext)
         }
-        .frame(maxWidth: .infinity)
+    }
+
+    private var unitsLabel: String {
+        "\(preferences.unitSymbol) · \(preferences.distanceUnit.symbol)"
+    }
+
+    private var activeProfileName: String {
+        store.equipmentProfiles().first(where: \.isActive)?.name ?? "—"
     }
 }
 
 #Preview {
-    ZStack {
-        AmbientWash()
-        OnboardingDoneStep(onFinish: {})
-            .padding(DGSpace.s5)
+    if let store = PreviewStore.make() {
+        ZStack {
+            DGColor.bgBase.ignoresSafeArea()
+            OnboardingDoneStep(onFinish: {})
+                .environment(Preferences())
+                .environment(store)
+        }
     }
 }

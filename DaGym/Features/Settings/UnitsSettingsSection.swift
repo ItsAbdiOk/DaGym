@@ -8,25 +8,27 @@ struct UnitsSettingsSection: View {
 
     var body: some View {
         @Bindable var preferences = preferences
-        SettingsSection(title: "Units") {
-            SettingsRow(label: "Weight unit") {
-                Picker("Weight unit", selection: $preferences.weightUnit) {
-                    Text("KG").tag(WeightUnit.kg)
-                    Text("LB").tag(WeightUnit.lb)
-                }
-                .pickerStyle(.segmented)
-                .tint(DGColor.coral)
-                .frame(width: 120)
+        SettingsSection(note: "Applies everywhere: logging, plate maths, charts and exports.") {
+            SettingsRow(label: "Weight") {
+                SettingsSegment(
+                    label: "Weight unit", selection: $preferences.weightUnit,
+                    options: [(WeightUnit.kg, "kg"), (WeightUnit.lb, "lb")]
+                )
             }
-            SettingsRow(label: "Distance unit") {
-                Picker("Distance unit", selection: $preferences.distanceUnit) {
-                    Text("KM").tag(DistanceUnit.km)
-                    Text("MI").tag(DistanceUnit.mi)
-                }
-                .pickerStyle(.segmented)
-                .tint(DGColor.coral)
-                .frame(width: 120)
+            SettingsDivider()
+            SettingsRow(label: "Distance") {
+                SettingsSegment(
+                    label: "Distance unit", selection: $preferences.distanceUnit,
+                    options: [(DistanceUnit.km, "km"), (DistanceUnit.mi, "mi")]
+                )
             }
         }
     }
+}
+
+#Preview {
+    NavigationStack {
+        SettingsPage(title: "Units") { UnitsSettingsSection() }
+    }
+    .environment(Preferences())
 }

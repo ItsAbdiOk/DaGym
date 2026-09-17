@@ -1,182 +1,173 @@
 import GymCore
 import SwiftUI
 
-/// Settings — a list of section cards (units, effort, rest timer, training, reminders, …)
-/// plus the About card. Every control binds directly to `Preferences`, the single
-/// persisted source of truth (see `DaGym/Design/UnitEnvironment.swift`).
+/// Settings — the redesign's index page: four kickers (Logging, Plan, Coach & display, Your
+/// data) of icon rows, each showing its current value and pushing its own page. Every page
+/// binds directly to `Preferences`, the single persisted source of truth (see
+/// `DaGym/Design/UnitEnvironment.swift`).
+///
+/// Pushed from the You hub (`YouDestination.settings`), so it registers its
+/// `navigationDestination` on the hub's stack and adds no `NavigationStack` of its own. A few
+/// callers still present it as a sheet (the coach's "open Settings" action, screenshot mode);
+/// those pass `standalone: true` and get their own stack plus a Done button.
 struct SettingsView: View {
+    var standalone = false
+
     @Environment(Preferences.self) private var preferences
+    @Environment(WorkoutStore.self) private var store
     @Environment(\.dismiss) private var dismiss
-    @State private var showingAcknowledgements = false
-    @State private var showingPrivacyPolicy = false
 
     var body: some View {
-        ZStack {
-            AmbientWash()
-            ScrollView {
-                VStack(alignment: .leading, spacing: DGSpace.s6) {
-                    header
-                    UnitsSettingsSection()
-                    EffortSettingsSection()
-                    RestTimerSettingsSection()
-                    WorkoutSettingsSection()
-                    TrainingSettingsSection()
-                    RemindersSettingsSection()
-                    VoiceSettingsSection()
-                    CoachSettingsSection()
-                    DisplaySettingsSection()
-                    CalendarSettingsSection()
-                    ICloudSettingsSection()
-                    DataSettingsSection()
-                    ImportSettingsSection()
-                    EquipmentSettingsSection()
-                    AppleHealthSettingsCard()
-                    aboutCard
-                }
-                .padding(.horizontal, DGSpace.s4)
-                .padding(.top, DGSpace.s3)
-                .padding(.bottom, 100)
-            }
-        }
-        .sheet(isPresented: $showingAcknowledgements) { AcknowledgementsView() }
-        .sheet(isPresented: $showingPrivacyPolicy) { PrivacyPolicyView() }
-    }
-
-    private var header: some View {
-        HStack {
-            Text("Settings")
-                .font(DGFont.title1)
-                .foregroundStyle(DGColor.ink1)
-            Spacer()
-            DGIconButton(symbol: "xmark", accessibilityLabel: "Close") { dismiss() }
-        }
-    }
-
-    private var aboutCard: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            Text("About").dgLabel()
-            VStack(spacing: 0) {
-                SettingsRow(label: "Version") {
-                    Text(Self.versionText).font(DGFont.subhead).foregroundStyle(DGColor.ink3)
-                }
-                SettingsDivider()
-                acknowledgementsRow
-                SettingsDivider()
-                privacyPolicyRow
-            }
-            .dgCard(padding: 0)
-            Text(preferences.iCloudSyncEnabled ? "Synced with your iCloud" : "Data stays on your device")
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink4)
-        }
-    }
-
-    private var acknowledgementsRow: some View {
-        Button { showingAcknowledgements = true } label: {
-            SettingsRow(label: "Acknowledgements") {
-                Image(systemName: "chevron.right").accessibilityHidden(true)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(DGColor.ink4)
-            }
-        }
-        .buttonStyle(.dgRow)
-    }
-
-    private var privacyPolicyRow: some View {
-        Button { showingPrivacyPolicy = true } label: {
-            SettingsRow(label: "Privacy") {
-                Image(systemName: "chevron.right").accessibilityHidden(true)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(DGColor.ink4)
-            }
-        }
-        .buttonStyle(.dgRow)
-    }
-
-    private static var versionText: String {
-        let info = Bundle.main.infoDictionary
-        let version = info?["CFBundleShortVersionString"] as? String ?? "—"
-        let build = info?["CFBundleVersion"] as? String ?? "—"
-        return "\(version) (\(build))"
-    }
-
-}
-
-/// A labeled "SECTION" title above a `.dgCard()` of hairline-separated rows. Not `private`:
-/// the section files alongside reuse this and `SettingsRow`/`SettingsDivider` below for the
-/// same visual language — `private` is file-scoped in Swift, so a different file can't see it.
-struct SettingsSection<Content: View>: View {
-    var title: String
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            Text(title).dgLabel()
-            VStack(spacing: 0) { content }
-                .dgCard(padding: 0)
-        }
-    }
-}
-
-/// One "label … trailing control" row inside a settings card.
-struct SettingsRow<Trailing: View>: View {
-    var label: String
-    @ViewBuilder var trailing: Trailing
-
-    var body: some View {
-        DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
-            Text(label).font(DGFont.body).foregroundStyle(DGColor.ink1)
-            Spacer()
-            trailing
-        }
-        .padding(.horizontal, DGSpace.s5)
-        .frame(minHeight: 52)
-    }
-}
-
-/// The "Goal" row: the onboarding answer, made editable and made real. Changing it calls back so
-/// the caller can re-apply that goal's rest length and weekly session count — the two numbers its
-/// own subtitle promises — rather than leaving the answer as a stored string nobody reads.
-struct TrainingGoalRow: View {
-    var onApply: () -> Void
-    @Environment(Preferences.self) private var preferences
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            SettingsRow(label: "Goal") {
-                Picker("Goal", selection: goalBinding) {
-                    ForEach(Preferences.TrainingGoal.allCases, id: \.self) { goal in
-                        Text(goal.title).tag(goal)
+        if standalone {
+            NavigationStack {
+                index.toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }.tint(DGColor.coralText)
                     }
                 }
-                .pickerStyle(.menu)
-                .tint(DGColor.coral)
             }
-            Text(preferences.trainingGoal.detail)
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink4)
-                .padding(.horizontal, DGSpace.s5)
-                .padding(.bottom, DGSpace.s3)
+        } else {
+            index
         }
     }
 
-    private var goalBinding: Binding<Preferences.TrainingGoal> {
-        Binding(
-            get: { preferences.trainingGoal },
-            set: {
-                preferences.trainingGoal = $0
-                onApply()
+    private var index: some View {
+        SettingsPage(title: "Settings") {
+            SettingsSection(title: "Logging") {
+                row(.units, value: "\(preferences.unitSymbol) · \(preferences.distanceUnit.symbol)")
+                SettingsDivider()
+                row(.effort, value: effortValue)
+                SettingsDivider()
+                row(.rest, value: RestTimerSettingsSection.clock(preferences.defaultRestSeconds))
+                SettingsDivider()
+                row(.workout, value: preferences.workoutLayout.title)
             }
-        )
+            SettingsSection(title: "Plan") {
+                row(.training, value: preferences.trainingGoal.title)
+                SettingsDivider()
+                row(.reminders, value: RemindersSettingsSection.hourLabel(preferences.reminderHour))
+                SettingsDivider()
+                row(.voice, value: nil)
+            }
+            SettingsSection(title: "Coach & display") {
+                row(.coach, value: preferences.onDeviceCoachEnabled ? "On" : "Off")
+                SettingsDivider()
+                row(.display, value: preferences.appearance.rawValue.capitalized)
+                SettingsDivider()
+                row(.sync, value: preferences.iCloudSyncEnabled ? "On" : "Off")
+                SettingsDivider()
+                row(.health, value: preferences.healthWriteWorkouts ? "On" : "Off")
+            }
+            SettingsSection(
+                title: "Your data",
+                note: "Everything lives on your device. iCloud sync is optional and chats never leave "
+                    + "the app."
+            ) {
+                row(.equipment, value: store.equipmentProfiles().first(where: \.isActive)?.name)
+                SettingsDivider()
+                row(.data, value: nil)
+                SettingsDivider()
+                row(.about, value: AboutSettingsSection.shortVersion)
+            }
+        }
+        .navigationDestination(for: SettingsDestination.self) { destination in
+            destination.screen
+        }
+    }
+
+    private var effortValue: String {
+        preferences.effortTrackingEnabled ? preferences.effortScale.rawValue.uppercased() : "Off"
+    }
+
+    private func row(_ destination: SettingsDestination, value: String?) -> some View {
+        NavigationLink(value: destination) {
+            HStack(spacing: DGSpace.s3) {
+                SettingsIconSquare(symbol: destination.symbol)
+                Text(destination.title).font(DGFont.subhead).foregroundStyle(DGColor.ink1)
+                Spacer(minLength: DGSpace.s2)
+                if let value {
+                    Text(value).font(DGFont.subhead).foregroundStyle(DGColor.ink3).lineLimit(1)
+                }
+                SettingsChevron()
+            }
+            .padding(.horizontal, 15)
+            .frame(minHeight: 52)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.dgRow)
+        .accessibilityLabel(value.map { "\(destination.title): \($0)" } ?? destination.title)
+        .accessibilityIdentifier(destination.accessibilityID)
     }
 }
 
-/// Hairline separator between rows, indented to align with row text. The one divider for every
-/// Settings card (`DisplaySettingsSection`, `RemindersSettingsSection`, `HealthSettingsView`
-/// included) — it used to exist four times over.
-struct SettingsDivider: View {
-    var body: some View {
-        Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
+/// The fourteen Settings pages, in index order. Each is one push deep from the index.
+enum SettingsDestination: Hashable, CaseIterable {
+    case units, effort, rest, workout, training, reminders, voice
+    case coach, display, sync, health, equipment, data, about
+
+    var title: String {
+        switch self {
+        case .units: "Units"
+        case .effort: "Effort"
+        case .rest: "Rest timer"
+        case .workout: "Workout"
+        case .training: "Training"
+        case .reminders: "Reminders"
+        case .voice: "Voice logging"
+        case .coach: "Coach"
+        case .display: "Display"
+        case .sync: "Calendar & sync"
+        case .health: "Apple Health"
+        case .equipment: "Equipment profiles"
+        case .data: "Data & backup"
+        case .about: "About"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .units: "scalemass.fill"
+        case .effort: "gauge.with.needle.fill"
+        case .rest: "timer"
+        case .workout: "dumbbell.fill"
+        case .training: "target"
+        case .reminders: "bell.fill"
+        case .voice: "mic.fill"
+        case .coach: "bubble.left.fill"
+        case .display: "circle.lefthalf.filled"
+        case .sync: "calendar"
+        case .health: "heart.fill"
+        case .equipment: "shippingbox.fill"
+        case .data: "externaldrive.fill"
+        case .about: "info.circle.fill"
+        }
+    }
+
+    var accessibilityID: String { "settings.\(String(describing: self))" }
+
+    @ViewBuilder @MainActor
+    var screen: some View {
+        switch self {
+        case .units: SettingsPage(title: title) { UnitsSettingsSection() }
+        case .effort: SettingsPage(title: title) { EffortSettingsSection() }
+        case .rest: SettingsPage(title: title) { RestTimerSettingsSection() }
+        case .workout: SettingsPage(title: title) { WorkoutSettingsSection() }
+        case .training: SettingsPage(title: title) { TrainingSettingsSection() }
+        case .reminders: SettingsPage(title: title) { RemindersSettingsSection() }
+        case .voice: SettingsPage(title: title) { VoiceSettingsSection() }
+        case .coach: SettingsPage(title: title) { CoachSettingsSection() }
+        case .display: SettingsPage(title: title) { DisplaySettingsSection() }
+        case .sync: SettingsPage(title: title) { CalendarSettingsSection(); ICloudSettingsSection() }
+        case .health: HealthSettingsView(pushed: true)
+        case .equipment: EquipmentProfilesScreen()
+        case .data:
+            SettingsPage(title: title) {
+                DataSettingsSection()
+                ImportSettingsSection()
+                ResetSettingsSection()
+            }
+        case .about: SettingsPage(title: title) { AboutSettingsSection() }
+        }
     }
 }
 
@@ -184,7 +175,7 @@ struct SettingsDivider: View {
     if let store = PreviewStore.make() {
         let preferences = Preferences()
         return AnyView(
-            SettingsView()
+            NavigationStack { SettingsView() }
                 .environment(preferences)
                 .environment(store)
                 .environment(HealthInsightsService(

@@ -1,38 +1,23 @@
 import GymCore
 import SwiftUI
 
-/// The Settings "WORKOUT" card: the saved active-workout layout (Cards / List / Compact) and
-/// the set-row ± steppers. The active screen's "…" menu can override the layout for one
-/// session; this is where the default changes.
+/// Settings › Workout: the saved active-workout layout (Cards / List / Compact) and the set-row
+/// ± steppers. The active screen's "…" menu can override the layout for one session; this is
+/// where the default changes.
 struct WorkoutSettingsSection: View {
     @Environment(Preferences.self) private var preferences
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            rows
-            Text(preferences.workoutLayout.settingsDetail)
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink4)
-        }
-    }
-
-    private var rows: some View {
-        SettingsSection(title: "Workout") {
+        SettingsSection(note: preferences.workoutLayout.settingsDetail) {
             SettingsRow(label: "Layout") {
-                Picker("Layout", selection: binding(\.workoutLayout)) {
-                    ForEach(WorkoutLayout.allCases) { layout in
-                        Text(layout.title).tag(layout)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .tint(DGColor.coral)
-                .frame(width: 220)
+                SettingsSegment(
+                    label: "Layout", selection: binding(\.workoutLayout),
+                    options: WorkoutLayout.allCases.map { ($0, $0.title) }
+                )
                 .accessibilityIdentifier(A11yID.settingsWorkoutLayout)
             }
             SettingsDivider()
-            SettingsRow(label: "Set steppers") {
-                Toggle("Set steppers", isOn: binding(\.showSetSteppers)).tint(DGColor.coral).labelsHidden()
-            }
+            SettingsToggleRow(label: "Set steppers", isOn: binding(\.showSetSteppers))
         }
     }
 
@@ -53,9 +38,8 @@ extension WorkoutLayout {
 }
 
 #Preview {
-    ScrollView {
-        WorkoutSettingsSection().padding(DGSpace.s4)
+    NavigationStack {
+        SettingsPage(title: "Workout") { WorkoutSettingsSection() }
     }
     .environment(Preferences())
-    .background(AmbientWash())
 }

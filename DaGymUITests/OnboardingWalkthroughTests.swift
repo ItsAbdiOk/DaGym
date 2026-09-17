@@ -2,9 +2,10 @@ import XCTest
 
 /// Walks every onboarding step end to end with real choices (not the defaults `SmokeTests`
 /// accepts), attaches a screenshot per step, and then checks that Home and Settings reflect
-/// those choices: the goal's rest default, the weekly goal on Home, and the active equipment
-/// profile. Runs against the fresh in-memory store `-dgUITest` seeds; `-dgOnboarding` forces
-/// the flow to start at Welcome regardless of what a previous simulator run left behind.
+/// those choices: the goal's rest default (Settings › Rest timer), the weekly goal on Home and
+/// in Settings › Training, and the active equipment profile (Settings › Equipment profiles).
+/// Runs against the fresh in-memory store `-dgUITest` seeds; `-dgOnboarding` forces the flow
+/// to start at Welcome regardless of what a previous simulator run left behind.
 @MainActor
 final class OnboardingWalkthroughTests: XCTestCase {
     private let timeout: TimeInterval = 25
@@ -15,8 +16,7 @@ final class OnboardingWalkthroughTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// A button matched by its visible label, case-insensitively — chips and goal rows render
-    /// through `.textCase(.uppercase)`, so their accessibility label may be upper-cased too.
+    /// A button matched by its visible label, case-insensitively.
     private func button(_ app: XCUIApplication, labelled label: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "label ==[c] %@", label)).firstMatch
     }
@@ -27,6 +27,16 @@ final class OnboardingWalkthroughTests: XCTestCase {
 
     private func buttonBeginning(_ app: XCUIApplication, with prefix: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH[c] %@", prefix)).firstMatch
+    }
+
+    /// Settings is one push deep from the You tab, and each of its pages one push deeper: open
+    /// the row carrying `rowID` from the index, run `check`, then pop back to the index.
+    private func onSettingsPage(_ app: XCUIApplication, rowID: String, check: () -> Void) {
+        let row = app.descendants(matching: .any)[rowID]
+        XCTAssertTrue(row.waitForExistence(timeout: timeout), "\(rowID) never appeared in Settings")
+        row.tap()
+        check()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
     }
 
     /// Asserts the step's title identifier is on screen and attaches a screenshot named after it.
@@ -166,21 +176,37 @@ final class OnboardingWalkthroughTests: XCTestCase {
         homeShot.lifetime = .keepAlways
         add(homeShot)
 
-        // Settings: Strength's 3:30 rest default and the Home profile active.
-        let settings = app.buttons["Settings"]
+        // Settings: Strength's 3:30 rest default and the Home profile active. Settings lives
+        // behind the You tab (iOS 27's tab bar exposes only the title, hence the fallback).
+        let youTab = app.buttons[A11yID.tabYou].exists
+            ? app.buttons[A11yID.tabYou] : app.tabBars.buttons["You"]
+        XCTAssertTrue(youTab.waitForExistence(timeout: timeout), "You tab never appeared")
+        youTab.tap()
+        let settings = app.descendants(matching: .any).matching(identifier: A11yID.youSettings).firstMatch
         XCTAssertTrue(settings.waitForExistence(timeout: timeout), "Settings button never appeared")
         settings.tap()
-        // SwiftUI prefixes a stepper's label with its value ("3:30, Default rest"), so match the end.
-        let rest = app.steppers.matching(NSPredicate(format: "label ENDSWITH %@", "Default rest")).firstMatch
-        XCTAssertTrue(rest.waitForExistence(timeout: timeout), "Default rest stepper never appeared")
-        XCTAssertEqual(rest.value as? String, "3:30", "Strength goal did not set the 3:30 rest default")
-        let weekly = app.steppers.matching(NSPredicate(format: "label ENDSWITH %@", "Weekly goal")).firstMatch
-        XCTAssertEqual(weekly.value as? String, "5 workouts", "Settings does not show the 5-session goal")
 
-        let activeHome = button(app, labelled: "Home, active profile")
-        if !activeHome.exists {
+        onSettingsPage(app, rowID: "settings.rest") {
+            // SwiftUI prefixes a stepper's label with its value ("3:30, Default rest"), so match the end.
+            let rest = app.steppers
+                .matching(NSPredicate(format: "label ENDSWITH %@", "Default rest")).firstMatch
+            XCTAssertTrue(rest.waitForExistence(timeout: timeout), "Default rest stepper never appeared")
+            XCTAssertEqual(rest.value as? String, "3:30", "Strength goal did not set the 3:30 rest default")
+        }
+        onSettingsPage(app, rowID: "settings.training") {
+            let weekly = app.steppers
+                .matching(NSPredicate(format: "label ENDSWITH %@", "Weekly goal")).firstMatch
+            XCTAssertTrue(weekly.waitForExistence(timeout: timeout), "Weekly goal stepper never appeared")
+            XCTAssertEqual(weekly.value as? String, "5 workouts", "Settings does not show the 5-session goal")
+        }
+
+        let equipment = app.descendants(matching: .any)["settings.equipment"]
+        if !equipment.exists {
             app.swipeUp()
         }
+        XCTAssertTrue(equipment.waitForExistence(timeout: timeout), "settings.equipment never appeared")
+        equipment.tap()
+        let activeHome = button(app, labelled: "Home, active profile")
         XCTAssertTrue(
             activeHome.waitForExistence(timeout: timeout), "Home is not the active equipment profile"
         )

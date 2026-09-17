@@ -58,7 +58,7 @@ struct CoachChatEntryCard: View {
         .fullScreenCover(isPresented: $showingChat) { CoachChatView() }
         .sheet(
             isPresented: $showingSettings, onDismiss: { hasKey = CoachChatSettings.hasAPIKey },
-            content: { SettingsView() }
+            content: { SettingsView(standalone: true) }
         )
         .onAppear { hasKey = CoachChatSettings.hasAPIKey }
     }
@@ -103,7 +103,7 @@ struct AskCoachPresenter: ViewModifier {
                 }
             }
             .fullScreenCover(isPresented: $showingChat) { CoachChatView() }
-            .sheet(isPresented: $showingSettings) { SettingsView() }
+            .sheet(isPresented: $showingSettings) { SettingsView(standalone: true) }
     }
 }
 

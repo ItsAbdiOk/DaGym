@@ -1,78 +1,54 @@
 import SwiftUI
 
-/// The onboarding welcome screen (mockup 06_00 "15a"): brand mark, three
-/// value lines, and the choice to walk through setup or skip straight to
-/// the app with sensible defaults.
+/// The onboarding welcome screen: three ways in — walk the five questions, explore eight weeks
+/// of sample history, or skip straight to the app with defaults. One is picked in the list and
+/// Continue acts on it, so the single call to action stays where every other step has it.
 struct OnboardingWelcomeStep: View {
-    /// Sample data is being built: every button disables and the sample-data row shows it.
+    /// Sample data is being built: every button disables and the call to action says so.
     var isSeeding = false
     var onStart: () -> Void
     var onSkip: () -> Void
     var onExploreSampleData: () -> Void
 
-    private let valueLines = [
-        "Unlimited routines and history",
-        "Every chart, every export",
-        "Coaching that runs on your phone"
-    ]
+    @State private var mode = Mode.setup
+
+    enum Mode { case setup, sample, skip }
 
     var body: some View {
-        VStack(spacing: DGSpace.s8) {
-            Spacer(minLength: DGSpace.s10)
-            Image(systemName: "square.fill")
-                .font(.system(size: 40, weight: .bold))
-                .foregroundStyle(DGColor.inkOnCoral)
-                .frame(width: 96, height: 96)
-                .background(
-                    DGColor.coral, in: RoundedRectangle(cornerRadius: DGRadius.xl, style: .continuous)
-                )
-                .accessibilityHidden(true)
-            VStack(spacing: DGSpace.s3) {
-                Text("DaGym")
-                    .font(DGFont.title1)
-                    .foregroundStyle(DGColor.ink1)
-                    .accessibilityIdentifier(A11yID.onboardingStep("welcome"))
-                Text("The whole app. No account, no ads, no subscription, nothing held back.")
-                    .font(DGFont.body)
-                    .foregroundStyle(DGColor.ink3)
-                    .multilineTextAlignment(.center)
-            }
-            VStack(alignment: .leading, spacing: DGSpace.s3) {
-                ForEach(valueLines, id: \.self) { line in
-                    HStack(spacing: DGSpace.s3) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(DGColor.success)
-                            .accessibilityHidden(true)
-                        Text(line)
-                            .font(DGFont.subhead)
-                            .foregroundStyle(DGColor.ink2)
-                    }
-                }
-            }
-            Spacer()
-            VStack(spacing: DGSpace.s3) {
-                DGPrimaryButton(title: "Set Up · 5 Questions", action: onStart)
-                    .accessibilityIdentifier(A11yID.onboardingNext)
-                Button("Skip and start lifting", action: onSkip)
-                    .buttonStyle(.dgControl)
-                    .font(DGFont.condensedLabel(13))
-                    .foregroundStyle(DGColor.ink3)
-                    .accessibilityIdentifier(A11yID.onboardingSkipAll)
-                Button(action: onExploreSampleData) {
-                    HStack(spacing: DGSpace.s2) {
-                        if isSeeding {
-                            ProgressView().controlSize(.small).tint(DGColor.ink4)
-                        }
-                        Text(Self.sampleDataTitle(isSeeding: isSeeding))
-                    }
-                }
-                .buttonStyle(.dgControl)
-                .font(DGFont.condensedLabel(13))
-                .foregroundStyle(DGColor.ink4)
+        OnboardingPage(
+            step: .welcome, name: "welcome", symbol: "dumbbell.fill",
+            title: "Five questions and you are training",
+            message: "You can change any of this later. Nothing is locked in.",
+            cta: isSeeding ? Self.sampleDataTitle(isSeeding: true) : "Continue",
+            ctaDisabled: isSeeding, onContinue: proceed
+        ) {
+            OnboardingOptionGroup {
+                OnboardingOptionRow(
+                    title: "Set me up", sub: "Units, goal, schedule, equipment", isSelected: mode == .setup
+                ) { pick(.setup) }
+                OnboardingOptionRow(
+                    title: Self.sampleDataTitle(isSeeding: false), sub: "Eight weeks of example history",
+                    isSelected: mode == .sample
+                ) { pick(.sample) }
+                OnboardingOptionRow(
+                    title: "Skip setup", sub: "Start with the defaults now", isSelected: mode == .skip
+                ) { pick(.skip) }
             }
             .disabled(isSeeding)
         }
-        .frame(maxWidth: .infinity)
+    }
+
+    private func pick(_ new: Mode) {
+        mode = new
+        Haptics.step()
+    }
+
+    private func proceed() {
+        switch mode {
+        case .setup: onStart()
+        case .sample: onExploreSampleData()
+        case .skip: onSkip()
+        }
     }
 
     /// The sample-data row's label; pinned in `SampleDataSeederTests` alongside the seed itself.
@@ -83,8 +59,7 @@ struct OnboardingWelcomeStep: View {
 
 #Preview {
     ZStack {
-        AmbientWash()
+        DGColor.bgBase.ignoresSafeArea()
         OnboardingWelcomeStep(onStart: {}, onSkip: {}, onExploreSampleData: {})
-            .padding(DGSpace.s5)
     }
 }

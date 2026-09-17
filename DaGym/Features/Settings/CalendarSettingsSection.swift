@@ -1,8 +1,8 @@
 import GymCore
 import SwiftUI
 
-/// The Settings "CALENDAR" card: the schedule-to-Calendar toggle, the start hour, and what the
-/// last sync refused to do.
+/// Settings › Calendar & sync, first group: the schedule-to-Calendar toggle, the start hour, and
+/// what the last sync refused to do.
 struct CalendarSettingsSection: View {
     @Environment(Preferences.self) private var preferences
     @Environment(WorkoutStore.self) private var store
@@ -11,28 +11,19 @@ struct CalendarSettingsSection: View {
     @State private var syncProblem: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            rows
-            if let message = calendarProblemMessage {
-                Text(message).font(DGFont.footnote).foregroundStyle(DGColor.danger)
-            }
-        }
-    }
-
-    private var rows: some View {
-        SettingsSection(title: "Calendar") {
-            SettingsRow(label: "Add my schedule to Calendar") {
-                Toggle("Add my schedule to Calendar", isOn: calendarSyncBinding)
-                    .tint(DGColor.coral).labelsHidden()
-            }
+        SettingsSection {
+            SettingsToggleRow(label: "Add schedule to Calendar", isOn: calendarSyncBinding)
             SettingsDivider()
             SettingsRow(label: "Start time") {
                 Stepper(value: binding(\.scheduledStartHour), in: 0...23) {
-                    Text(startHourLabel).font(DGFont.subhead).foregroundStyle(DGColor.ink3)
+                    Text(startHourLabel).font(DGFont.subhead).foregroundStyle(DGColor.ink3).monospacedDigit()
                 }
                 .accessibilityLabel("Start time")
                 .accessibilityValue(startHourLabel)
             }
+        }
+        if let message = calendarProblemMessage {
+            SettingsNote(text: message, tint: DGColor.danger)
         }
     }
 
@@ -90,12 +81,10 @@ struct CalendarSettingsSection: View {
 
 #Preview {
     if let store = PreviewStore.make() {
-        ScrollView {
-            CalendarSettingsSection()
-                .padding(DGSpace.s4)
+        NavigationStack {
+            SettingsPage(title: "Calendar & sync") { CalendarSettingsSection() }
         }
         .environment(Preferences())
         .environment(store)
-        .background(AmbientWash())
     }
 }

@@ -1,56 +1,29 @@
 import GymCore
 import SwiftUI
 
-/// The Settings "Effort" section: an on/off toggle (OpenGym parity, features "Adopt now" #18)
-/// that hides the RIR/RPE scale picker and the effort column everywhere else in the app, plus a
-/// "What are RIR and RPE?" help sheet. Split out of `SettingsView` to keep that struct's body
-/// under SwiftLint's `type_body_length` limit — same pattern as `DisplaySettingsSection`.
+/// Settings › Effort: an on/off toggle (OpenGym parity, features "Adopt now" #18) that hides
+/// the RIR/RPE scale picker and the effort column everywhere else in the app, plus a "What are
+/// RPE and RIR?" help sheet.
 struct EffortSettingsSection: View {
     @Environment(Preferences.self) private var preferences
     @State private var showingHelp = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            Text("Effort").dgLabel()
-            VStack(spacing: 0) {
-                row(label: "Track effort") {
-                    Toggle("Track effort", isOn: trackingBinding).tint(DGColor.coral).labelsHidden()
+        SettingsSection {
+            SettingsToggleRow(label: "Track effort", isOn: trackingBinding)
+            if preferences.effortTrackingEnabled {
+                SettingsDivider()
+                SettingsRow(label: "Scale") {
+                    SettingsSegment(
+                        label: "Effort scale", selection: scaleBinding,
+                        options: [(Effort.Scale.rpe, "RPE"), (Effort.Scale.rir, "RIR")]
+                    )
                 }
-                if preferences.effortTrackingEnabled {
-                    EffortSectionDivider()
-                    row(label: "Scale") {
-                        Picker("Effort scale", selection: scaleBinding) {
-                            Text("RPE").tag(Effort.Scale.rpe)
-                            Text("RIR").tag(Effort.Scale.rir)
-                        }
-                        .pickerStyle(.segmented)
-                        .tint(DGColor.coral)
-                        .frame(width: 120)
-                    }
-                    EffortSectionDivider()
-                    Button { showingHelp = true } label: {
-                        row(label: "What are RIR and RPE?") {
-                            Image(systemName: "chevron.right").accessibilityHidden(true)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(DGColor.ink4)
-                        }
-                    }
-                    .buttonStyle(.dgRow)
-                }
+                SettingsDivider()
+                SettingsLinkRow(label: "What are RPE and RIR?") { showingHelp = true }
             }
-            .dgCard(padding: 0)
         }
         .sheet(isPresented: $showingHelp) { EffortHelpSheet() }
-    }
-
-    private func row<Trailing: View>(label: String, @ViewBuilder trailing: () -> Trailing) -> some View {
-        DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
-            Text(label).font(DGFont.body).foregroundStyle(DGColor.ink1)
-            Spacer()
-            trailing()
-        }
-        .padding(.horizontal, DGSpace.s5)
-        .frame(minHeight: 52)
     }
 
     private var trackingBinding: Binding<Bool> {
@@ -62,17 +35,9 @@ struct EffortSettingsSection: View {
     }
 }
 
-private struct EffortSectionDivider: View {
-    var body: some View {
-        Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
-    }
-}
-
 #Preview {
-    ScrollView {
-        EffortSettingsSection()
-            .padding(DGSpace.s4)
+    NavigationStack {
+        SettingsPage(title: "Effort") { EffortSettingsSection() }
     }
     .environment(Preferences())
-    .background(AmbientWash())
 }

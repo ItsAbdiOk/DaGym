@@ -351,7 +351,7 @@ private struct ScreenshotScreenView: View {
                 }
             }
         case .settings:
-            RootView().sheet(isPresented: .constant(true)) { SettingsView() }
+            RootView().sheet(isPresented: .constant(true)) { SettingsView(standalone: true) }
         case .gymCard:
             RootView().sheet(isPresented: .constant(true)) { GymCardSheet() }
         case .settingsData:

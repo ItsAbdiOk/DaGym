@@ -3,12 +3,13 @@ import os
 import SwiftData
 import SwiftUI
 
-/// The Settings "DATA" section: export a full JSON backup via `.fileExporter`,
+/// Settings › Data & backup, first group: export a full JSON backup via `.fileExporter`,
 /// or import one back in via `.fileImporter` — preview counts, then confirm
-/// to merge (plan.md §6.3). The file read, JSON decode/encode and document build run
-/// off the main thread, and so do the row writes on import (`ImportActor`, batched, with the
-/// progress line and Cancel below the row); only the export's model walk is main-actor bound
-/// (it walks the store's `ModelContext`) and runs here after a yield so the spinner paints.
+/// to merge (plan.md §6.3). The reset row is `ResetSettingsSection`, at the foot of the page.
+/// The file read, JSON decode/encode and document build run off the main thread, and so do the
+/// row writes on import (`ImportActor`, batched, with the progress line and Cancel below the
+/// row); only the export's model walk is main-actor bound (it walks the store's `ModelContext`)
+/// and runs here after a yield so the spinner paints.
 struct DataSettingsSection: View {
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
@@ -30,7 +31,6 @@ struct DataSettingsSection: View {
     @State private var pendingReport: ImportReport?
     @State private var errorMessage: String?
     @State private var confirmationMessage: String?
-    @State private var showingResetConfirm = false
     @State private var exportWarning: String?
     /// The finished import's report, so its problems stay readable after the sheet is dismissed.
     @State private var completedReport: ImportReport?
@@ -40,16 +40,20 @@ struct DataSettingsSection: View {
     @State private var importTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            Text("Data").dgLabel()
-            VStack(spacing: 0) {
-                exportRow
-                Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
-                importRow
-                Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
-                resetRow
+        VStack(alignment: .leading, spacing: DGSpace.s2) {
+            SettingsSection {
+                SettingsLinkRow(
+                    label: "Export backup", sub: "Save everything as a JSON file", isBusy: isBusy
+                ) {
+                    Task { await prepareExport() }
+                }
+                SettingsDivider()
+                SettingsLinkRow(
+                    label: "Import backup", sub: "Merge a previously exported file", isBusy: isBusy
+                ) {
+                    showingImporter = true
+                }
             }
-            .dgCard(padding: 0)
             footnote
         }
         .fileExporter(
@@ -73,58 +77,6 @@ struct DataSettingsSection: View {
             "Couldn't Complete That", isPresented: errorBinding,
             actions: {}, message: { Text(errorMessage ?? "") }
         )
-        .sheet(isPresented: $showingResetConfirm) {
-            ResetAllDataSheet(onConfirm: performReset)
-        }
-    }
-
-    private var resetRow: some View {
-        Button { showingResetConfirm = true } label: {
-            DataRow(
-                title: "Reset everything…", subtitle: "Erase all data and settings on this device",
-                symbol: "trash", isBusy: isBusy, tint: DGColor.danger, titleTint: DGColor.danger
-            )
-        }
-        .buttonStyle(.dgRow)
-        .disabled(isBusy)
-    }
-
-    /// `wipeAllData` deletes every row one at a time and reseeds the library, routines and
-    /// equipment before returning — seconds of main-actor work. The yield lets the confirm sheet
-    /// finish dismissing and the row's spinner paint before that starts, so the reset no longer
-    /// looks hung.
-    private func performReset() {
-        isBusy = true
-        Task {
-            defer { isBusy = false }
-            await Task.yield()
-            store.wipeAllData(preferences: preferences)
-            completedReport = nil
-            exportWarning = nil
-            confirmationMessage = "Everything was reset"
-        }
-    }
-
-    private var exportRow: some View {
-        Button { Task { await prepareExport() } } label: {
-            DataRow(
-                title: "Export backup…", subtitle: "Save everything as a JSON file",
-                symbol: "square.and.arrow.up", isBusy: isBusy
-            )
-        }
-        .buttonStyle(.dgRow)
-        .disabled(isBusy)
-    }
-
-    private var importRow: some View {
-        Button { showingImporter = true } label: {
-            DataRow(
-                title: "Import backup…", subtitle: "Merge a previously exported file",
-                symbol: "square.and.arrow.down", isBusy: isBusy
-            )
-        }
-        .buttonStyle(.dgRow)
-        .disabled(isBusy)
     }
 
     @ViewBuilder
@@ -133,19 +85,15 @@ struct DataSettingsSection: View {
             if let importProgress {
                 ImportProgressRow(title: "Importing", progress: importProgress) { importTask?.cancel() }
             } else if let confirmationMessage {
-                Text(confirmationMessage)
-                    .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.success)
+                SettingsNote(text: confirmationMessage, tint: DGColor.success)
             } else {
-                Text(
-                    "Backups include routines, workouts, custom exercises, equipment profiles, "
+                SettingsNote(
+                    text: "Backups include routines, workouts, custom exercises, equipment profiles, "
                         + "progress photos and your settings."
                 )
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink4)
             }
             if let exportWarning {
-                Text(exportWarning).font(DGFont.footnote).foregroundStyle(DGColor.ink3)
+                SettingsNote(text: exportWarning)
             }
             problemsFootnote
         }
@@ -159,12 +107,10 @@ struct DataSettingsSection: View {
         if let problems = completedReport?.problems, !problems.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(problems.prefix(8), id: \.self) { problem in
-                    Text(problem).font(DGFont.footnote).foregroundStyle(DGColor.danger)
+                    SettingsNote(text: problem, tint: DGColor.danger)
                 }
                 if problems.count > 8 {
-                    Text("…and \(problems.count - 8) more.")
-                        .font(DGFont.footnote)
-                        .foregroundStyle(DGColor.danger)
+                    SettingsNote(text: "…and \(problems.count - 8) more.", tint: DGColor.danger)
                 }
             }
         }
@@ -288,52 +234,16 @@ struct DataSettingsSection: View {
     }
 }
 
-/// Row chrome shared by the export/import buttons: icon, title, subtitle,
-/// trailing chevron (or a spinner while busy).
-private struct DataRow: View {
-    var title: String
-    var subtitle: String
-    var symbol: String
-    var isBusy: Bool
-    var tint: Color = DGColor.coral
-    var titleTint: Color = DGColor.ink1
-
-    var body: some View {
-        HStack(spacing: DGSpace.s3) {
-            Image(systemName: symbol)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(DGFont.body).foregroundStyle(titleTint)
-                Text(subtitle).font(DGFont.footnote).foregroundStyle(DGColor.ink4)
-            }
-            Spacer()
-            if isBusy {
-                ProgressView().tint(DGColor.ink3).accessibilityLabel("In progress")
-            } else {
-                Image(systemName: "chevron.right").accessibilityHidden(true)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(DGColor.ink4)
-            }
-        }
-        .padding(.horizontal, DGSpace.s5)
-        .frame(minHeight: 56)
-    }
-}
-
 extension BackupDocument: @retroactive Identifiable {
     public var id: Date { exportedAt }
 }
 
 #Preview {
     if let store = PreviewStore.make() {
-        ScrollView {
-            DataSettingsSection()
-                .padding(DGSpace.s4)
+        NavigationStack {
+            SettingsPage(title: "Data & backup") { DataSettingsSection() }
         }
         .environment(store)
         .environment(Preferences())
-        .background(AmbientWash())
     }
 }
