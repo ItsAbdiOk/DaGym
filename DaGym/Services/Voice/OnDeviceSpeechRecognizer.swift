@@ -47,29 +47,23 @@ final class OnDeviceSpeechRecognizer: SpeechRecognizing {
         await VoiceAuthorization.request()
     }
 
-    func startListening() throws -> AsyncThrowingStream<SpeechRecognitionEvent, Error> {
+    func startListening() async throws -> AsyncThrowingStream<SpeechRecognitionEvent, Error> {
         stopListening() // Clean slate: never stack a second tap/task on top of a live one.
 
         guard authorizationStatus == .authorized else { throw SpeechRecognitionFailure.notAuthorized }
         guard let recognizer, recognizer.isAvailable, recognizer.supportsOnDeviceRecognition else {
             throw SpeechRecognitionFailure.onDeviceUnavailable
         }
-
-        do {
-            try VoiceAudioSession.activateForRecording()
-        } catch {
-            throw SpeechRecognitionFailure.audioEngineUnavailable
-        }
+        // The simulator claims on-device support, then coreaudiod's input initialisation deadlocks
+        // and CoreAudio aborts the process ("Initialize: RPC timeout. Apparently deadlocked").
+        // There is no speech to recognise there anyway; fail the way a device without the model
+        // does, so the screen can be exercised without taking the app down.
+        guard !Self.isSimulator else { throw SpeechRecognitionFailure.onDeviceUnavailable }
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         request.requiresOnDeviceRecognition = true
-        do {
-            try resources.start(request: request)
-        } catch {
-            VoiceAudioSession.deactivate()
-            throw SpeechRecognitionFailure.audioEngineUnavailable
-        }
+        try await startEngine(request: request)
 
         generation += 1
         let generation = self.generation
@@ -79,7 +73,11 @@ final class OnDeviceSpeechRecognizer: SpeechRecognizing {
             Task { @MainActor in self?.stopListening(ifGeneration: generation) }
         }
 
-        let task = recognizer.recognitionTask(with: request) { [weak self] result, error in
+        // `@Sendable` is load-bearing: Speech does not mark this block Sendable, so a plain closure
+        // written here would inherit this class's main-actor isolation — and Speech calls it on
+        // its own queue, where Swift 6's runtime isolation check traps the app (SIGTRAP, "Block
+        // was expected to execute on queue main-thread"). See `VoiceAuthorization.request()`.
+        let task = recognizer.recognitionTask(with: request) { @Sendable [weak self] result, error in
             Self.handle(
                 result: result, error: error, continuation: continuation,
                 resources: self?.resources
@@ -90,6 +88,66 @@ final class OnDeviceSpeechRecognizer: SpeechRecognizing {
         resources.adopt(task: task)
         observeRouteAndInterruptions(generation: generation)
         return stream
+    }
+
+    /// How long a Bluetooth route gets to settle its sample rate before the one retry. Switching
+    /// the session to `.playAndRecord` with AirPods connected flips the route to HFP, and for a
+    /// beat the input node reports a 0 Hz (or mismatched) format — the exact input the tap and
+    /// engine crash on. `SpeechAudioResources.start` refuses that beat; this waits it out once.
+    nonisolated private static let routeSettleDelay: TimeInterval = 0.15
+
+    private static let isSimulator: Bool = {
+        #if targetEnvironment(simulator)
+        true
+        #else
+        false
+        #endif
+    }()
+
+    /// Activates the session and starts the engine, retrying once when the input format isn't
+    /// ready yet. Every failure deactivates the session it activated.
+    ///
+    /// Off the main actor on purpose: `AVAudioSession.setActive(true)` and the engine's first
+    /// `inputNode` are synchronous calls into coreaudiod that take hundreds of milliseconds while
+    /// a Bluetooth route negotiates — AVFAudio flags the main-thread call as a hang risk at
+    /// runtime — and the caller is already `async`. `resources` and `VoiceAudioSession` are
+    /// nonisolated and lock-guarded, so this is legal from a detached task.
+    private func startEngine(request: SFSpeechAudioBufferRecognitionRequest) async throws {
+        let resources = self.resources
+        nonisolated(unsafe) let request = request
+        try await Task.detached(priority: .userInitiated) {
+            try Self.activateAndStart(resources, request: request)
+        }.value
+    }
+
+    /// The blocking part of `startEngine`, on whatever thread called it.
+    nonisolated private static func activateAndStart(
+        _ resources: SpeechAudioResources, request: SFSpeechAudioBufferRecognitionRequest
+    ) throws(SpeechRecognitionFailure) {
+        do {
+            try VoiceAudioSession.activateForRecording()
+        } catch {
+            throw .audioEngineUnavailable
+        }
+        var attempt: Result<Void, SpeechAudioResources.StartFailure> = .success(())
+        do {
+            try resources.start(request: request)
+        } catch {
+            attempt = .failure(error)
+        }
+        if case .failure(.formatNotReady) = attempt {
+            Thread.sleep(forTimeInterval: routeSettleDelay)
+            do {
+                try resources.start(request: request)
+                attempt = .success(())
+            } catch {
+                attempt = .failure(error)
+            }
+        }
+        if case .failure = attempt {
+            VoiceAudioSession.deactivate()
+            throw .audioEngineUnavailable
+        }
     }
 
     /// Yields one recognition callback onto `continuation` and reports whether the turn is over.
@@ -176,8 +234,10 @@ final class OnDeviceSpeechRecognizer: SpeechRecognizing {
         }
     }
 
-    /// AirPods (or any output) disconnecting mid-hold, and a phone call or other interruption,
-    /// both end listening cleanly instead of talking to a dead or pre-empted route.
+    /// AirPods (or any output) disconnecting mid-hold, a phone call or other interruption, and
+    /// the engine being reconfigured under us (a route change that alters the sample rate stops
+    /// the engine with the tap still installed — the transcript would silently freeze) all end
+    /// listening cleanly instead of talking to a dead or pre-empted route.
     private func observeRouteAndInterruptions(generation: Int) {
         let center = NotificationCenter.default
         let route = center.addObserver(
@@ -198,5 +258,13 @@ final class OnDeviceSpeechRecognizer: SpeechRecognizing {
         }
         resources.adopt(observer: route)
         resources.adopt(observer: interruption)
+        if let engine = resources.currentEngine {
+            let reconfigured = center.addObserver(
+                forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
+            ) { [weak self] _ in
+                Task { @MainActor in self?.stopListening(ifGeneration: generation) }
+            }
+            resources.adopt(observer: reconfigured)
+        }
     }
 }

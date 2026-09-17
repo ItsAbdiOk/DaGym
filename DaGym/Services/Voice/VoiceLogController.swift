@@ -105,6 +105,10 @@ final class VoiceLogController {
     /// `.final` arrives — which is the whole point of waiting for it on release.
     private var finalTranscript: SpeechTranscript?
     private var streamEnded = false
+    /// True once this turn's `startListening()` has returned a stream — i.e. the mic is (or
+    /// was) actually open. A release before that (the permission prompts cancelled the gesture,
+    /// or the route was still settling) has nothing to log and nothing to complain about.
+    private var hasOpenedStream = false
     /// Bumped on every press. A release that was awaiting the final hypothesis when a *new*
     /// press arrived must not resume and tear that new turn down.
     private var turn = 0
@@ -129,24 +133,31 @@ final class VoiceLogController {
         isHolding = true
         finalTranscript = nil
         streamEnded = false
+        hasOpenedStream = false
         state = .listening(partial: "")
+        let pressGeneration = turn
         listenTask = Task { [weak self] in
             guard let self else { return }
             let authorization = recognizer.authorizationStatus == .notDetermined
                 ? await recognizer.requestAuthorization()
                 : recognizer.authorizationStatus
-            // `.notDetermined` puts two system alerts under the held finger, which cancels the
-            // drag gesture. Starting the mic now would leave "Listening…" up with nobody
-            // holding anything — and the next release would log whatever the gym said.
-            guard isHolding else {
-                streamEnded = true
-                state = .idle
-                return
-            }
+            // The prompts are not cancellable, so a newer press may own the controller by the
+            // time they return; this turn's answer must not overwrite that press's state.
+            guard pressGeneration == turn else { return }
             switch authorization {
             case .authorized:
+                // `.notDetermined` puts two system alerts under the held finger, which cancels
+                // the drag gesture. Starting the mic now would leave "Listening…" up with nobody
+                // holding anything — and the next release would log whatever the gym said.
+                guard isHolding else {
+                    streamEnded = true
+                    state = .idle
+                    return
+                }
                 await stream()
             case .restricted:
+                // Told even when the finger is already up: the answer to "why didn't that work"
+                // is the prompt they just declined, and there is no other moment to say so.
                 streamEnded = true
                 state = .error(.permissionRestricted)
             default:
@@ -167,8 +178,15 @@ final class VoiceLogController {
     private func stream() async {
         defer { streamEnded = true }
         do {
-            let events = try recognizer.startListening()
+            let events = try await recognizer.startListening()
+            hasOpenedStream = true
             wornOutputAtListenStart = speaker.isRoutedToHeadphones
+            // Released while the engine was still coming up: nothing was heard, so there is no
+            // final hypothesis to wait for. Close the mic; the release already went idle.
+            guard isHolding else {
+                recognizer.stopListening()
+                return
+            }
             for try await event in events {
                 guard !Task.isCancelled else { return }
                 switch event {
@@ -210,6 +228,13 @@ final class VoiceLogController {
         isHolding = false
         let pressGeneration = turn
 
+        // The mic never opened (the permission prompts are up, or the route is still settling):
+        // the listen task is still on its way and will report a denial itself. Going quiet here
+        // is what keeps "Didn't catch that" from landing on top of the permission sheet.
+        guard hasOpenedStream else {
+            if case .listening = state { state = .idle }
+            return
+        }
         recognizer.endAudio()
         await waitForFinalHypothesis()
         // A fresh press while we were waiting owns the recognizer now; this release belongs to a
@@ -244,6 +269,7 @@ final class VoiceLogController {
         listenTask?.cancel()
         listenTask = nil
         finalTranscript = nil
+        hasOpenedStream = false
         state = .idle
     }
 

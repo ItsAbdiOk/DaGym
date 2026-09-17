@@ -45,6 +45,9 @@ struct ResetSideEffects {
                     memory: CoachMemoryFile.standard(), ledger: .standard,
                     archive: CoachChatArchive.standard()
                 )
+                // The import log is a record of what was pulled onto this device; a wipe of
+                // "everything" includes it.
+                ImportHistoryLog.shared.clear()
             }
         )
     }

@@ -79,17 +79,16 @@ struct ScreenDoorTests {
         #expect(TrendsDoor.sets.anchor == "thisWeek.card.sets")
     }
 
-    @Test("a manual bodyweight reading can be corrected or removed; a Health one cannot")
+    @Test("a manual bodyweight reading can be corrected; a Health one cannot")
     func editReading() throws {
         let store = try makeStore()
         let manual = store.logBodyweight(kg: 82, source: "manual")
         let health = store.logBodyweight(kg: 81, source: "health")
         #expect(store.updateBodyMeasurement(id: manual.id, kg: 82.5))
         #expect(!store.updateBodyMeasurement(id: health.id, kg: 70))
+        #expect(!store.updateBodyMeasurement(id: UUID(), kg: 70))
         #expect(store.recentBodyMeasurements().first { $0.id == manual.id }?.kg == 82.5)
-        #expect(store.deleteBodyMeasurement(id: manual.id))
-        #expect(!store.deleteBodyMeasurement(id: health.id))
-        #expect(store.recentBodyMeasurements().map(\.id) == [health.id])
+        #expect(store.recentBodyMeasurements().first { $0.id == health.id }?.kg == 81)
     }
 
     @Test("the workout stat tiles explain every number they show")

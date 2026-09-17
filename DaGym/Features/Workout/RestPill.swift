@@ -55,6 +55,9 @@ struct RestPill: View {
         .padding(.vertical, DGSpace.s3)
         .background(Self.ink.opacity(0.92), in: Self.shape)
         .background(.ultraThinMaterial, in: Self.shape)
+        // A hairline edge: in dark mode the strip is the same near-black as the page and the
+        // shadow alone did not separate it.
+        .overlay { Self.shape.strokeBorder(.white.opacity(0.14), lineWidth: 0.5) }
         .shadow(color: .black.opacity(0.28), radius: 17, y: 7)
         .dgDenseType()
     }

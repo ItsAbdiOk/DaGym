@@ -134,8 +134,8 @@ private struct MuscleTileView: View {
 }
 
 /// The tinted coverage callout with its accent "Fix" pill. The words open the muscle map on
-/// the muscle they name; Fix goes to the coach, whose coverage-gap card carries the same
-/// finding with the evidence behind it.
+/// the muscle they name; Fix opens the coach with the finding already written as a question
+/// ("Biceps have had 4 sets in 14 days. What should I add?"), focused and unsent.
 private struct ProgressCallout: View {
     var callout: ProgressHubSummary.Callout
 
@@ -161,7 +161,7 @@ private struct ProgressCallout: View {
             .accessibilityHint("Opens the muscle map")
             .accessibilityIdentifier(A11yID.progressCallout)
             Spacer(minLength: 0)
-            NavigationLink(value: YouDestination.coach) {
+            NavigationLink(value: YouDestination.coachQuestion(callout.question)) {
                 Text("Fix")
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(DGColor.inkOnCoral)

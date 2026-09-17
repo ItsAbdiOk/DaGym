@@ -27,6 +27,23 @@ struct ConsistencyTests {
         #expect(cells.allSatisfy { $0.level == 0 && $0.sets == 0 })
     }
 
+    @Test("a session with minutes but no sets (a Health import, a run) is the lightest tier")
+    func setlessSessionIsLevelOne() {
+        let base = calendar.startOfDay(for: Date())
+        let cells = ConsistencyCalendar.cells(
+            workouts: [(day(0, from: base), 0, 30), (day(1, from: base), 12, 40)],
+            from: base, to: day(2, from: base), calendar: calendar
+        )
+        #expect(cells[0].level == 1 && cells[0].sets == 0 && cells[0].minutes == 30)
+        #expect(cells[1].level == 4)
+        #expect(cells[2].level == 0)
+        // Alone in the range, with no busiest day to scale against, it still shows.
+        let alone = ConsistencyCalendar.cells(
+            workouts: [(day(0, from: base), 0, 30)], from: base, to: base, calendar: calendar
+        )
+        #expect(alone.first?.level == 1)
+    }
+
     @Test("levels are quantiles of the busiest day in the range")
     func levelsAreQuantilesOfMax() {
         let base = calendar.startOfDay(for: Date())

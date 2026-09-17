@@ -15,8 +15,9 @@ extension CoachChatScreen {
         )
     }
 
-    /// Opens what the screen was launched for: the newest saved thread (or a fresh one), or the
-    /// week's review thread — started with the canned turn when it does not exist yet.
+    /// Opens what the screen was launched for: the newest saved thread (or a fresh one), the
+    /// week's review thread — started with the canned turn when it does not exist yet — or the
+    /// newest thread with a carried-in question filled and focused, for the lifter to send.
     func openLaunch() {
         refreshHeader()
         threads = archive?.list() ?? []
@@ -27,6 +28,11 @@ extension CoachChatScreen {
             open(thread: threadID.flatMap { archive?.load(id: $0) })
             guard threadID == nil else { return }
             beginWeekReview(weekEnding: weekEnding)
+        case .prefilled:
+            open(thread: threads.first.flatMap { archive?.load(id: $0.id) })
+            guard let question = CoachChatOpening.prefilledInput(for: launch) else { return }
+            input = question
+            inputFocused = true
         }
     }
 

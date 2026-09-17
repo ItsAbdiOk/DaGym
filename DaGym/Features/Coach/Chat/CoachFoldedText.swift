@@ -12,6 +12,7 @@ struct CoachFoldedText: View {
     @Binding var isExpanded: Bool
     var font: Font = DGFont.body
     var color: Color = DGColor.ink1
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var blocks: [CoachMarkdown.Block] { CoachMarkdownCache.parse(text) }
     private var isFolded: Bool { canFold && !isExpanded && CoachMarkdown.isLong(text) }
@@ -27,7 +28,9 @@ struct CoachFoldedText: View {
             }
             if showsToggle {
                 Button {
-                    withAnimation(DGMotion.standard) { isExpanded.toggle() }
+                    withAnimation(DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion)) {
+                        isExpanded.toggle()
+                    }
                 } label: {
                     HStack(spacing: DGSpace.s1) {
                         Text(isExpanded ? "Show less" : "Show more")

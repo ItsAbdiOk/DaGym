@@ -37,9 +37,16 @@ extension WorkoutStore {
             let predicate = #Predicate<WorkoutModel> { $0.endedAt != nil && $0.startedAt >= since }
         let descriptor = FetchDescriptor<WorkoutModel>(predicate: predicate)
         let workouts = fetch(descriptor)
-        return workouts.map { workout in
+        let own = workouts.map { workout in
             (date: workout.startedAt, sets: countedSets(in: workout).count, minutes: minutes(of: workout))
         }
+        // Apple Health sessions have no sets but did happen; the streak counts them, so the
+        // heatmap shows them (at the lightest tier) rather than a blank day under a streak.
+        let imported = importedHealthWorkouts().filter { $0.startedAt >= since }.map { workout in
+            (date: workout.startedAt, sets: 0,
+             minutes: max(1, Int(workout.endedAt.timeIntervalSince(workout.startedAt) / 60)))
+        }
+        return own + imported
     }
 
     private func weekActivity(from: Date, to: Date) -> WeekActivity {
@@ -51,9 +58,13 @@ extension WorkoutStore {
         let sets = workouts.reduce(0) { total, workout in total + countedSets(in: workout).count }
         let volumeTotal = workouts.reduce(0.0) { total, workout in total + volume(of: workout) }
         let minutesTotal = workouts.reduce(0) { total, workout in total + minutes(of: workout) }
+        // Sessions imported from Apple Health live in the local Health store and carry no sets,
+        // but they are workouts done: the ring and the streak count them (`workoutDates`), so
+        // the recap card's "N workouts" must too or the two disagree on the same week.
+        let imported = importedHealthWorkouts().filter { $0.startedAt >= from && $0.startedAt < to }
         return WeekActivity(
-            workouts: workouts.count, sets: sets, volumeKg: volumeTotal, durationMinutes: minutesTotal,
-            prs: prCount(from: from, to: to)
+            workouts: workouts.count + imported.count, sets: sets, volumeKg: volumeTotal,
+            durationMinutes: minutesTotal, prs: prCount(from: from, to: to)
         )
     }
 

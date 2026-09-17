@@ -126,14 +126,3 @@ struct WeekReviewCard: View {
         refresh()
     }
 }
-
-/// How the coach chat was opened: on the newest thread, or on a week review to start or resume.
-enum CoachChatLaunch: Identifiable, Equatable {
-    case weekReview(weekEnding: Date, threadID: UUID?)
-
-    var id: String {
-        switch self {
-        case .weekReview(let weekEnding, _): "weekReview:\(weekEnding.timeIntervalSince1970)"
-        }
-    }
-}

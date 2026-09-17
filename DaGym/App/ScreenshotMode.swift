@@ -20,6 +20,11 @@ enum ScreenshotScreen: String, CaseIterable {
     case coachChat, coachReview, coachProgram, gymCard
     /// The chat on an empty thread: the opening bubble built from the week and the prompt chips.
     case coachEmpty
+    /// Edge-case states for the accessibility/appearance sweep (not on the shot list): the You
+    /// hub, History and a workout's detail, Today on a rest day / with no routines / with the
+    /// sample banner / with the deload strip, the other two muscle-map modes, and onboarding.
+    case you, history, workoutDetail, homeRest, homeNoRoutines, homeSample, homeDeload
+    case muscleBalance, muscleStrength, onboarding
 
     static var fromLaunchArguments: ScreenshotScreen? {
         let args = ProcessInfo.processInfo.arguments
@@ -90,6 +95,28 @@ enum ScreenshotMode {
         }
         if let bench = benchPress(in: store), !bench.isFavorite { store.toggleFavorite(id: bench.id) }
         seedMilestones(store: store, preferences: preferences)
+    }
+
+    /// The Today variants on top of `seed`: an empty schedule for today, no routines at all,
+    /// the sample-data banner, or the deload strip (the snooze `seed` set is lifted).
+    static func seedHomeVariant(_ screen: ScreenshotScreen?, store: WorkoutStore, preferences: Preferences) {
+        switch screen {
+        case .homeRest:
+            var schedule = store.schedule()
+            let today = Weekday(rawValue: Calendar.current.component(.weekday, from: now)) ?? .monday
+            schedule.setRoutines([], on: today)
+            store.saveSchedule(schedule)
+        case .homeNoRoutines:
+            for routine in store.routines() { store.deleteRoutine(id: routine.id) }
+        case .homeSample:
+            preferences.sampleDataMode = true
+        case .homeDeload:
+            preferences.deloadSnoozedUntil = nil
+        case .onboarding:
+            preferences.hasCompletedOnboarding = false
+        default:
+            break
+        }
     }
 
     /// Milestones dated when the history would actually have earned them. The store's own
@@ -285,6 +312,7 @@ struct ScreenshotRootView: View {
             return newStore.loadGrid(for: exercise, equipment: newStore.activeEquipment())
         }
         ScreenshotMode.seed(store: newStore, preferences: preferences)
+        ScreenshotMode.seedHomeVariant(screen, store: newStore, preferences: preferences)
         ScreenshotMode.seedCoachChat(for: screen)
         if screen?.needsInProgressWorkout == true || screen == .summary {
             let live = ScreenshotMode.inProgressSession(store: newStore, preferences: preferences)
@@ -319,8 +347,26 @@ private struct ScreenshotScreenView: View {
     @ViewBuilder
     private var content: some View {
         switch screen {
-        case nil, .home:
+        case nil, .home, .homeRest, .homeNoRoutines, .homeSample, .homeDeload:
             RootView()
+        case .onboarding:
+            OnboardingFlow(onComplete: {})
+        case .you:
+            tabbed(.you) { YouHubView(onShowTrain: { _ in }) }
+        case .history:
+            tabbed(.you) { NavigationStack { HistoryTabView() } }
+        case .workoutDetail:
+            tabbed(.you) {
+                NavigationStack {
+                    if let newest = store.finishedWorkoutModelsNewestFirst().first {
+                        WorkoutDetailView(workoutID: newest.id)
+                    }
+                }
+            }
+        case .muscleBalance:
+            tabbed(.you) { NavigationStack { RecoveryMapView(initialMode: .balance) } }
+        case .muscleStrength:
+            tabbed(.you) { NavigationStack { RecoveryMapView(initialMode: .strength) } }
         case .workout, .rest:
             if let session { ActiveWorkoutView(session: session, onFinish: { _ in }) }
         case .summary:

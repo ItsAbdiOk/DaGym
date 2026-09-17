@@ -112,3 +112,53 @@ struct CoachCardCopyTests {
         #expect(rest?.hasPrefix("Approve just") == true)
     }
 }
+
+@Suite("Coach chat launch: a prefilled question")
+struct CoachChatPrefilledLaunchTests {
+    @Test("a prefilled launch yields its question as the composer's input; the others yield nothing")
+    func prefilledInput() {
+        let question = "Biceps have had 4 sets in 14 days. What should I add?"
+        #expect(CoachChatOpening.prefilledInput(for: .prefilled(question: question)) == question)
+        #expect(CoachChatOpening.prefilledInput(for: nil) == nil)
+        #expect(CoachChatOpening.prefilledInput(for: .weekReview(weekEnding: .now, threadID: nil)) == nil)
+        #expect(CoachChatLaunch.prefilled(question: question).id == "prefilled:\(question)")
+    }
+
+    @Test("the questions restate the finding and end with the ask")
+    func questions() {
+        #expect(
+            CoachChatQuestion.coverage(finding: "Biceps have had 4 sets in 14 days")
+                == "Biceps have had 4 sets in 14 days. What should I add?"
+        )
+        #expect(
+            CoachChatQuestion.idle(muscle: .chest, since: "3 weeks ago")
+                == "Chest hasn't been trained since 3 weeks ago. What should I add?"
+        )
+        #expect(
+            CoachChatQuestion.fewestSets(muscle: .biceps, inPhrase: "this week")
+                == "Biceps have had the fewest sets this week. What should I add?"
+        )
+        let callout = ProgressHubSummary.callout(.init(muscle: .biceps, sets: 4))
+        #expect(callout.question == "Biceps have had 4 sets in 14 days. What should I add?")
+    }
+
+    @Test("Ask the coach replaces Got it only on the rules the chat can take further")
+    func singleActionLabel() {
+        func card(_ rule: CoachRule) -> CoachCard {
+            CoachCard(
+                rule: rule, severity: .info, title: "Title", body: "Bench has stalled at 80 kg.",
+                evidence: [], suggestedAction: .none, firedDate: .distantPast
+            )
+        }
+        #expect(CoachCardCopy.singleActionLabel(for: card(.muscleCoverageGap)) == "Ask the coach")
+        #expect(CoachCardCopy.singleActionLabel(for: card(.stalledLift)) == "Ask the coach")
+        #expect(CoachCardCopy.singleActionLabel(for: card(.e1rmDowntrend)) == "Ask the coach")
+        #expect(CoachCardCopy.singleActionLabel(for: card(.prMilestone)) == "Got it")
+        #expect(CoachCardCopy.singleActionLabel(for: card(.trainingReview)) == "Got it")
+        #expect(
+            CoachChatQuestion.forCard(card(.stalledLift))
+                == "Bench has stalled at 80 kg. How do I get it moving again?"
+        )
+        #expect(CoachChatQuestion.forCard(card(.prMilestone)) == nil)
+    }
+}

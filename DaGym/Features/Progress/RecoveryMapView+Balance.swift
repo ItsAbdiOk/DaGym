@@ -9,12 +9,15 @@ struct BalanceMapSection: View {
     var snapshot: RecoverySnapshot
     @Binding var window: BalanceHorizon
     @Binding var hardOnly: Bool
+    /// Where an idle row's "Ask the coach" sends its question.
+    var onAskCoach: ((String) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
             controls
             BalanceSection(
-                untrainedMuscles: snapshot.untrainedMuscles, restedMuscles: snapshot.detrainedMuscles
+                untrainedMuscles: snapshot.untrainedMuscles, restedMuscles: snapshot.detrainedMuscles,
+                onAskCoach: onAskCoach
             )
         }
     }
@@ -113,6 +116,9 @@ enum BalanceHorizon: String, CaseIterable, Identifiable {
 struct BalanceSection: View {
     var untrainedMuscles: [Muscle]
     var restedMuscles: [MuscleRetention]
+    /// A long press on a "Longest without work" row offers "Ask the coach" with the gap as a
+    /// question ("Chest hasn't been trained since 3 weeks ago. What should I add?").
+    var onAskCoach: ((String) -> Void)?
 
     /// Enough to be useful, short enough that a lifter two weeks off training doesn't get a
     /// wall of every muscle they own.
@@ -171,7 +177,17 @@ struct BalanceSection: View {
                         .foregroundStyle(DGColor.ink3)
                 }
                 .frame(minHeight: 28)
+                .contentShape(Rectangle())
                 .accessibilityElement(children: .combine)
+                .contextMenu {
+                    if let onAskCoach {
+                        Button(CoachCardCopy.askCoachLabel, systemImage: "bubble.left.fill") {
+                            onAskCoach(CoachChatQuestion.idle(
+                                muscle: rested.muscle, since: Self.sinceLabel(rested.lastTrained)
+                            ))
+                        }
+                    }
+                }
             }
         }
     }

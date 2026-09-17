@@ -16,6 +16,8 @@ struct ProgressHubSummary {
         var muscle: Muscle
         var title: String
         var detail: String
+        /// What "Fix" writes into the coach's composer: the title as a question.
+        var question: String { CoachChatQuestion.coverage(finding: title) }
     }
 
     var thisWeekCount = 0
@@ -57,7 +59,14 @@ struct ProgressHubSummary {
         let body = store.bodySeries(
             weeks: 1, calendar: calendar, balanceWindow: .thisWeek(calendar), now: now
         )
-        summary.thisWeekCount = body.thisWeek.workouts
+        // Training days against the goal, exactly as Home and You count them (`Streaks.weekly`):
+        // two sessions on one Saturday are one day, and a session imported from Apple Health
+        // counts. The body series' `thisWeek.workouts` is main-store sessions, so the hub's ring
+        // read 2 / 4 while Home's read 1 / 4 for the same week.
+        summary.thisWeekCount = Streaks.weekly(
+            workoutDates: store.workoutDates(), weeklyGoal: preferences.weeklyGoal, calendar: calendar,
+            now: now
+        ).thisWeekCount
         summary.weeklyGoal = preferences.weeklyGoal
         summary.volumeKg = body.thisWeek.volumeKg
         summary.lastWeekVolumeKg = body.lastWeek.volumeKg
@@ -97,6 +106,10 @@ struct ProgressHubSummary {
     /// muscle has been worked inside the retention window, the widest coverage gap stands in,
     /// so the tile and the callout below it name the same muscle.
     static func needsWork(snapshot: RecoverySnapshot, gap: CoverageGap?, now: Date) -> MuscleTile? {
+        // Nothing trained, ever: every muscle is "untrained this week", and naming one of them
+        // as needing work on a brand-new install is a warning about nothing.
+        let everTrained = snapshot.detrainedMuscles.contains { $0.lastTrained != nil }
+        guard !snapshot.perMuscle.isEmpty || everTrained else { return nil }
         if let rested = snapshot.detrainedMuscles.first(where: { $0.lastTrained != nil }),
            let last = rested.lastTrained {
             let days = max(0, Int(now.timeIntervalSince(last) / 86_400))

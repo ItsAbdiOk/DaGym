@@ -62,7 +62,8 @@ struct YouHubView: View {
     }
 
     private var goToGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 9), count: 3), spacing: 9) {
+        // Three across; two at accessibility sizes so "Settings" still fits a tile.
+        DGAdaptiveGrid(columns: 3, spacing: 9) {
             ForEach(YouDestination.gridOrder, id: \.self) { destination in
                 NavigationLink(value: destination) {
                     YouGridTile(title: destination.title, symbol: destination.symbol)
@@ -87,17 +88,41 @@ struct YouHubView: View {
                 .accessibilityIdentifier(destination.accessibilityID)
             }
         }
-        .background(.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(.white.opacity(0.95), lineWidth: 0.5)
-        }
+        .youPanel(radius: 16)
     }
+}
+
+/// The hub's frosted white panel (the prototype's `rgba(255,255,255,.7)` with a bright edge).
+/// Dark mode drops to a low white so the ink stays legible — at 0.7 the tiles were bright
+/// white with near-white text on them.
+struct YouPanel: ViewModifier {
+    var radius: CGFloat
+    @Environment(\.colorScheme) private var scheme
+
+    /// White at 0.7 over the wash in light mode; 0.07 in dark, where 0.7 was a white tile
+    /// under near-white ink.
+    static func fillOpacity(dark: Bool) -> Double { dark ? 0.07 : 0.7 }
+    static func edgeOpacity(dark: Bool) -> Double { dark ? 0.12 : 0.95 }
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        let dark = scheme == .dark
+        content
+            .background(.white.opacity(Self.fillOpacity(dark: dark)), in: shape)
+            .overlay { shape.strokeBorder(.white.opacity(Self.edgeOpacity(dark: dark)), lineWidth: 0.5) }
+    }
+}
+
+private extension View {
+    func youPanel(radius: CGFloat) -> some View { modifier(YouPanel(radius: radius)) }
 }
 
 /// Where the hub can push. `screen` builds the destination lazily so the hub itself stays cheap.
 enum YouDestination: Hashable {
     case progress, history, muscles, body, coach, settings, library, equipment, gymCard, insights
+    /// The coach with a question already in the composer (`CoachChatLaunch.prefilled`) — how
+    /// Progress's coverage "Fix" and an Insights card's "Ask the coach" hand a finding over.
+    case coachQuestion(String)
 
     static let gridOrder: [YouDestination] = [.progress, .history, .muscles, .body, .coach, .settings]
     static let rowOrder: [YouDestination] = [.library, .equipment, .gymCard]
@@ -114,6 +139,7 @@ enum YouDestination: Hashable {
         case .equipment: "Equipment profiles"
         case .gymCard: "Gym card"
         case .insights: "Insights"
+        case .coachQuestion: "Coach"
         }
     }
 
@@ -129,6 +155,7 @@ enum YouDestination: Hashable {
         case .equipment: "shippingbox.fill"
         case .gymCard: "barcode"
         case .insights: "lightbulb.fill"
+        case .coachQuestion: "bubble.left.fill"
         }
     }
 
@@ -144,6 +171,7 @@ enum YouDestination: Hashable {
         case .equipment: A11yID.youEquipment
         case .gymCard: A11yID.youGymCard
         case .insights: A11yID.youInsights
+        case .coachQuestion: A11yID.youCoach
         }
     }
 
@@ -159,6 +187,7 @@ enum YouDestination: Hashable {
         case .equipment: EquipmentProfilesScreen()
         case .gymCard: GymCardSheet(isPushed: true)
         case .insights: InsightsScreen()
+        case .coachQuestion(let question): CoachChatScreen(launch: .prefilled(question: question))
         }
     }
 }
@@ -180,11 +209,7 @@ private struct YouGridTile: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
         .padding(.horizontal, DGSpace.s2)
-        .background(.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(.white.opacity(0.95), lineWidth: 0.5)
-        }
+        .youPanel(radius: 18)
     }
 }
 
@@ -207,6 +232,7 @@ private struct YouRow: View {
             Image(systemName: "chevron.right")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(DGColor.ink4)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 15)
         .frame(minHeight: 46)

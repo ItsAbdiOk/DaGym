@@ -13,7 +13,9 @@ struct ProgressRingsCard: View {
     static let effortTint = Color(hex: 0xB5771C)
 
     var body: some View {
-        HStack(spacing: 18) {
+        // The legend sits beside the rings, or under them at accessibility sizes where the
+        // column beside a 140 pt ring broke "SESSIONS" one letter per line.
+        DGAdaptiveStack(spacing: 18) {
             rings
             VStack(alignment: .leading, spacing: 14) {
                 legend("Sessions", tint: DGColor.coral, value: sessionsText)

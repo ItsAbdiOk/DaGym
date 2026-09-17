@@ -120,29 +120,37 @@ struct CoachCardView: View {
 
     /// Informational cards (`.none`) get one button, not two. An "Approve" that did nothing but
     /// record agreement sat next to "Not now" looking like a choice with consequences and wasn't
-    /// one; "Got it" says what the tap does.
+    /// one; "Got it" says what the tap does. The exception is a finding the coach can take
+    /// further (`CoachChatQuestion.forCard`): its primary pushes the chat with the question
+    /// written, and "Not now" stays so the card can still be put away.
     private var hasApprovableAction: Bool {
         if case .none = card.suggestedAction { return false }
         return true
+    }
+
+    private var coachQuestion: String? {
+        hasApprovableAction ? nil : CoachChatQuestion.forCard(card)
     }
 
     private var actions: some View {
         HStack(spacing: DGSpace.s2) {
             if hasApprovableAction {
                 Button(action: onApprove) {
-                    Text(CoachCardCopy.primaryLabel(for: card.suggestedAction, formatWeight: formatWeight))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(DGColor.inkOnCoral)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity, minHeight: 40)
-                        .background(DGColor.coral, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    primaryLabel(
+                        CoachCardCopy.primaryLabel(for: card.suggestedAction, formatWeight: formatWeight)
+                    )
                 }
                 .buttonStyle(.dgControl)
                 .accessibilityLabel("Approve, \(card.title)")
+            } else if let coachQuestion {
+                NavigationLink(value: YouDestination.coachQuestion(coachQuestion)) {
+                    primaryLabel(CoachCardCopy.askCoachLabel)
+                }
+                .buttonStyle(.dgControl)
+                .accessibilityLabel("Ask the coach, \(card.title)")
             }
             Button(action: onDismiss) {
-                Text(hasApprovableAction ? "Not now" : "Got it")
+                Text(hasApprovableAction || coachQuestion != nil ? "Not now" : "Got it")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(DGColor.ink1)
                     .frame(maxWidth: .infinity, minHeight: 40)
@@ -153,6 +161,16 @@ struct CoachCardView: View {
             .buttonStyle(.dgControl)
             .accessibilityLabel("Dismiss, \(card.title)")
         }
+    }
+
+    private func primaryLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(DGColor.inkOnCoral)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(maxWidth: .infinity, minHeight: 40)
+            .background(DGColor.coral, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func format(_ value: CoachEvidenceValue) -> String {

@@ -9,6 +9,9 @@ struct MuscleMapHeroCard: View {
         var muscle: Muscle
         var value: String
         var tint: Color
+        /// Set on a row that needs work (Balance's fewest-sets muscles): a long press offers
+        /// "Ask the coach", which opens the chat with this written in the composer.
+        var question: String?
         var id: Muscle { muscle }
     }
 
@@ -24,6 +27,8 @@ struct MuscleMapHeroCard: View {
 
     var model: Model
     var onSelect: (Muscle) -> Void
+    /// Where a row's "Ask the coach" sends its question; nil hides the menu.
+    var onAskCoach: ((String) -> Void)?
 
     /// Enough rows to read the shape of the week without a wall of every muscle.
     private static let maxRows = 6
@@ -45,6 +50,13 @@ struct MuscleMapHeroCard: View {
                         ForEach(model.rows.prefix(Self.maxRows)) { row in
                             Button { onSelect(row.muscle) } label: { rowView(row) }
                                 .buttonStyle(.dgRow)
+                                .contextMenu {
+                                    if let question = row.question, let onAskCoach {
+                                        Button(CoachCardCopy.askCoachLabel, systemImage: "bubble.left.fill") {
+                                            onAskCoach(question)
+                                        }
+                                    }
+                                }
                         }
                     }
                     .padding(.top, 7)
@@ -128,12 +140,16 @@ extension MuscleMapHeroCard.Model {
             detail = "Rate RPE as you log, or turn off Hard sets only."
         }
         let intensity = top > 0 ? sets.mapValues { $0 / top } : [:]
+        // The rows the detail sentence names as needing work carry the question a long press asks.
+        let fewest = Set(sorted.count > 2 ? sorted.suffix(2).map(\.key) : [])
         return Self(
             headline: headline, detail: detail,
             rows: sorted.map { entry in
                 MuscleMapHeroCard.Row(
                     muscle: entry.key, value: BalanceMapSection.setsLabel(entry.value),
-                    tint: DGColor.coral.opacity(0.35 + 0.65 * (top > 0 ? entry.value / top : 0))
+                    tint: DGColor.coral.opacity(0.35 + 0.65 * (top > 0 ? entry.value / top : 0)),
+                    question: fewest.contains(entry.key)
+                        ? CoachChatQuestion.fewestSets(muscle: entry.key, inPhrase: horizon.inPhrase) : nil
                 )
             },
             mapMode: .hit, intensity: intensity,

@@ -113,7 +113,7 @@ extension WorkoutStore {
                 var info = ExerciseInfo(model: model)
                 if let best = catalogue.bestByExercise[model.id] {
                     info.bestE1RM = best.value
-                    info.bestSet = Self.bestSetLine(best)
+                    info.bestSet = bestSetLine(best)
                 }
                 return info
             }
@@ -196,12 +196,14 @@ extension WorkoutStore {
             info.sessions = sessionCount(exerciseID: model.id)
         }
         info.bestE1RM = best?.value
-        info.bestSet = best.map(Self.bestSetLine)
+        info.bestSet = best.map(bestSetLine)
         return info
     }
 
-    private static func bestSetLine(_ record: PersonalRecordModel) -> String {
-        "\(WorkoutSession.format(record.weightKg))×\(record.reps)"
+    /// "82.5×8" in the lifter's unit — the Exercise Detail "Best set" tile printed kg for a lb
+    /// lifter.
+    private func bestSetLine(_ record: PersonalRecordModel) -> String {
+        "\(preferredWeightUnit.format(kg: record.weightKg))×\(record.reps)"
     }
 
     @discardableResult
