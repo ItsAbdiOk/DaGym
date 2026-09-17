@@ -131,6 +131,9 @@ struct YouWeekCard: View {
                     Text(trailing)
                         .font(DGFont.caption)
                         .foregroundStyle(trailingTint)
+                        // A delta beside a fixed 20 pt value: chrome, so it stops where the
+                        // kickers do rather than growing to twice the number it qualifies.
+                        .dynamicTypeSize(...DGFont.kickerCap)
                 }
             }
         }
