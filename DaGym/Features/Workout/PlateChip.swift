@@ -21,18 +21,13 @@ struct PlateChip: View {
         let result = result
         let text = Self.text(for: result, format: { preferences.formatWeight(kg: $0) })
         Button(action: action) {
-            HStack(spacing: DGSpace.s2) {
-                Image(systemName: "circle.circle")
-                    .font(.system(size: 12, weight: .bold))
-                Text(text)
-                    .font(DGFont.condensedLabel(12))
-                    .tracking(0.8)
-            }
-            .foregroundStyle(Self.isLoadable(result) ? DGColor.ink2 : DGColor.danger)
-            .padding(.horizontal, DGSpace.s3)
-            .frame(minHeight: 32)
-            .background(DGColor.surface2, in: Capsule())
-            .overlay(Capsule().strokeBorder(DGColor.hairline))
+            Text(text)
+                .font(.system(size: 11.5, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(Self.isLoadable(result) ? DGColor.ink2 : DGColor.danger)
+                .padding(.horizontal, 9)
+                .frame(minHeight: 24)
+                .dgInkPill(radius: DGRadius.chip, opacity: 0.06)
         }
         .buttonStyle(.dgControl)
         .accessibilityLabel("Plates, \(text)")

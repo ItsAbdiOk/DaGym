@@ -1,8 +1,9 @@
 import GymCore
 import SwiftUI
 
-// `ExerciseCard`'s two one-line layouts and the body-map thumbnail they share with the on-deck
-// card (`OnDeckExerciseCard.swift`).
+// `ExerciseCard`'s two one-line layouts and the art thumbnail they share with the on-deck
+// card (`OnDeckExerciseCard.swift`). Both rows are the prototype's collapsed row: a 34 pt
+// thumbnail, the name over "3 × 10 · 30 kg", and "0/3" at the right.
 
 /// Collapsed one-line row for an incomplete exercise that isn't on deck yet.
 struct CollapsedExerciseRow: View {
@@ -14,17 +15,7 @@ struct CollapsedExerciseRow: View {
     private var firstOpenSetID: UUID? { entry.nextOpenSetID ?? entry.sets.first?.id }
 
     var body: some View {
-        HStack(spacing: DGSpace.s3) {
-            ExerciseThumbnail(exercise: entry.exercise, size: 36)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.exercise.name)
-                    .font(DGFont.title3)
-                    .foregroundStyle(DGColor.ink1)
-                Text(summaryLine)
-                    .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.ink3)
-            }
-            Spacer(minLength: DGSpace.s2)
+        ExerciseRowFrame(entry: entry, summary: summaryLine) {
             if entry.isTimed {
                 Button {
                     if let setID = firstOpenSetID { onStartTimed(setID) }
@@ -33,19 +24,15 @@ struct CollapsedExerciseRow: View {
                         .font(DGFont.condensedLabel(12))
                         .foregroundStyle(DGColor.ink1)
                         .padding(.horizontal, DGSpace.s3)
-                        .frame(minHeight: 36)
-                        .dgGlass(.regular, in: Capsule())
+                        .frame(minHeight: 32)
+                        .dgInkPill(radius: DGRadius.pill, opacity: 0.07)
                 }
                 .buttonStyle(.dgControl)
                 .accessibilityLabel("Start \(entry.exercise.name)")
             } else {
-                Text("\(entry.doneCount)/\(entry.sets.count)")
-                    .dgMetric(DGFont.subhead)
-                    .foregroundStyle(DGColor.ink3)
-                    .accessibilityLabel("\(entry.doneCount) of \(entry.sets.count) sets done")
+                ExerciseProgressLabel(entry: entry)
             }
         }
-        .dgCard(padding: DGSpace.s4)
         // One row, one element — the "Start" button (timed holds) stays reachable as a child.
         .accessibilityElement(children: entry.isTimed ? .contain : .combine)
     }
@@ -67,58 +54,109 @@ struct CollapsedExerciseRow: View {
     }
 }
 
-/// One-liner for a finished exercise.
+/// One-liner for a finished exercise: the same row, "4/4" at the right.
 struct CompletedExerciseRow: View {
     var entry: WorkoutExerciseEntry
 
     @Environment(Preferences.self) private var preferences
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("Completed").dgLabel(DGColor.success)
-            Text(summary)
-                .font(DGFont.subhead)
-                .foregroundStyle(DGColor.ink2)
+        ExerciseRowFrame(entry: entry, summary: summary) {
+            ExerciseProgressLabel(entry: entry)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .dgCard(padding: DGSpace.s4)
         .accessibilityElement(children: .combine)
     }
 
     private var summary: String {
-        let name = entry.exercise.name.uppercased()
-        guard let first = entry.sets.first else { return name }
+        guard let first = entry.sets.first else { return "Done" }
         if entry.isCardio {
             let meters = entry.distanceMeters
             let seconds = entry.sets.compactMap(\.durationSeconds).reduce(0, +)
-            let line = SetEntry(weightKg: 0, reps: 0, durationSeconds: seconds, distanceMeters: meters)
+            return SetEntry(weightKg: 0, reps: 0, durationSeconds: seconds, distanceMeters: meters)
                 .cardioSummary(unit: preferences.distanceUnit)
-            return "\(name) · \(line)"
         }
         if entry.isTimed {
             let best = entry.sets.compactMap(\.durationSeconds).max() ?? 0
-            return "\(name) · \(entry.sets.count) holds · best \(WorkoutSession.clock(best))"
+            return "\(entry.sets.count) holds · best \(WorkoutSession.clock(best))"
         }
-        guard first.weightKg > 0 else { return "\(name) · \(entry.sets.count) × \(first.reps)" }
+        guard first.weightKg > 0 else { return "\(entry.sets.count) × \(first.reps)" }
         let weight = preferences.formatWeight(kg: first.weightKg)
-        return "\(name) · \(entry.sets.count) × \(first.reps) · \(weight) \(preferences.unitSymbol)"
+        return "\(entry.sets.count) × \(first.reps) · \(weight) \(preferences.unitSymbol)"
     }
 }
 
+/// The collapsed row's chrome: thumbnail, name, summary, and whatever sits at the trailing
+/// edge (the done count, or "Start" for a hold).
+private struct ExerciseRowFrame<Trailing: View>: View {
+    var entry: WorkoutExerciseEntry
+    var summary: String
+    @ViewBuilder var trailing: () -> Trailing
+
+    var body: some View {
+        HStack(spacing: DGSpace.s3) {
+            ExerciseThumbnail(exercise: entry.exercise, size: 34)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(entry.exercise.name)
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .foregroundStyle(DGColor.ink1)
+                    .lineLimit(1)
+                Text(summary)
+                    .font(.system(size: 12))
+                    .monospacedDigit()
+                    .foregroundStyle(DGColor.ink3)
+            }
+            Spacer(minLength: DGSpace.s2)
+            trailing()
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 13)
+        .dgTile(radius: 18, opacity: 0.52)
+    }
+}
+
+/// "0/3" — done count over planned count, accent once every set is ticked.
+private struct ExerciseProgressLabel: View {
+    var entry: WorkoutExerciseEntry
+
+    var body: some View {
+        Text("\(entry.doneCount)/\(entry.sets.count)")
+            .font(.system(size: 12, weight: .semibold))
+            .monospacedDigit()
+            .foregroundStyle(entry.isComplete ? DGColor.coralText : DGColor.ink3)
+            .accessibilityLabel("\(entry.doneCount) of \(entry.sets.count) sets done")
+    }
+}
+
+/// The exercise's picture in the row and card corners: the illustrated art where we have it,
+/// the public-domain photo next, and the body-map thumbnail for everything else — so the slot
+/// is never an empty dashed box.
 struct ExerciseThumbnail: View {
     var exercise: ExerciseInfo
     var size: CGFloat = 44
 
     var body: some View {
-        BodyMapView(
-            side: BodyMapMuscleMapping.thumbnailSide(forPrimary: exercise.primary),
-            mode: .hit,
-            intensity: exercise.hitMap
-        )
-            .padding(6)
-            .frame(width: size, height: size)
-            .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous))
-            // Decorative: the exercise name beside it is the content.
-            .accessibilityHidden(true)
+        Group {
+            switch ExerciseHeroMedia.choice(for: exercise.seedID) {
+            case .vector(let seedID):
+                ExerciseArtView(seedID: seedID, size: size - 8)
+            case .photo(let seedID):
+                // 3:2 photo, cropped to the square.
+                ExercisePhotoView(seedID: seedID, width: size * 1.5, exerciseName: exercise.name)
+                    .frame(width: size, height: size)
+                    .clipped()
+            case .none:
+                BodyMapView(
+                    side: BodyMapMuscleMapping.thumbnailSide(forPrimary: exercise.primary),
+                    mode: .hit,
+                    intensity: exercise.hitMap
+                )
+                .padding(6)
+            }
+        }
+        .frame(width: size, height: size)
+        .background(DGColor.surface3, in: RoundedRectangle(cornerRadius: size * 0.27, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.27, style: .continuous))
+        // Decorative: the exercise name beside it is the content.
+        .accessibilityHidden(true)
     }
 }

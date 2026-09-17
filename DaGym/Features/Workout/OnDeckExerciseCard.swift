@@ -1,8 +1,12 @@
 import GymCore
 import SwiftUI
 
-/// The detailed, fully expanded card for the exercise currently being worked. `rows` is the
-/// same `ExerciseSetRows` the List layout renders, so logging is identical in every layout.
+/// The detailed, fully expanded card for the exercise currently being worked (prototype
+/// `sWorkout`, the deck card): art, name and muscles with the "…" button; "Set 1 of 4 · rest
+/// 2:30 · increment 2.5 kg"; the plate chip and the tinted progression chip with its
+/// one-sentence reason; the "LAST 3" strip with its sparkline; the set table; "Add set" and
+/// "Swap". `rows` is the same `ExerciseSetRows` the List layout renders, so logging is
+/// identical in every layout.
 struct OnDeckExerciseCard: View {
     var entry: WorkoutExerciseEntry
     var layout: WorkoutLayout
@@ -10,59 +14,94 @@ struct OnDeckExerciseCard: View {
     var rows: ExerciseSetRows
     var onTapWeight: (UUID) -> Void
     var onMore: () -> Void
-    var onNote: () -> Void
+    var onAddSet: () -> Void
+    var onSwap: () -> Void
 
     @Environment(Preferences.self) private var preferences
 
-    /// `WorkoutLayout.compact`: just the header and the rows — no on-deck pill, last-3 strip,
-    /// why-card or plate chip.
+    /// `WorkoutLayout.compact`: just the header and the rows — no chips, last-3 strip or
+    /// reason line.
     private var showsExtras: Bool { layout.showsCardExtras }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if showsExtras {
-                Text("On deck").dgLabel(DGColor.coralText)
-                    .padding(.horizontal, DGSpace.s2)
-                    .padding(.vertical, 4)
-                    .background(DGColor.coralWash, in: Capsule())
-                    .padding(.bottom, DGSpace.s2)
-            }
             header
-            if let plateSet, let bar = entry.exercise.bar, showsExtras {
-                PlateChip(weightKg: plateSet.weightKg, bar: bar, inventory: inventory) {
-                    onTapWeight(plateSet.id)
+            Text(setLine)
+                .font(.system(size: 12.5, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(DGColor.ink3)
+                .padding(.top, DGSpace.s3)
+            if showsExtras {
+                chips.padding(.top, 10)
+                if let whyBody = entry.whyBody {
+                    Text(whyBody)
+                        .font(.system(size: 12))
+                        .foregroundStyle(DGColor.ink3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, DGSpace.s2)
                 }
-                    .padding(.top, DGSpace.s3)
+                if let note = entry.note, !note.isEmpty {
+                    Text(note)
+                        .font(.system(size: 12).italic())
+                        .foregroundStyle(DGColor.ink3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, DGSpace.s2)
+                        .accessibilityLabel("Note: \(note)")
+                }
+                if !entry.lastSessions.isEmpty {
+                    lastSessionsStrip.padding(.top, 14)
+                }
             }
-            if !entry.lastSessions.isEmpty, showsExtras {
-                lastSessionsStrip.padding(.top, DGSpace.s4)
+            rows.padding(.top, 14)
+            DGAdaptiveStack(spacing: DGSpace.s2) {
+                WorkoutPillButton(title: "Add set", style: .ink, radius: DGRadius.sm, action: onAddSet)
+                WorkoutPillButton(title: "Swap", style: .ink, radius: DGRadius.sm, action: onSwap)
             }
-            if let whyTitle = entry.whyTitle, let whyBody = entry.whyBody, showsExtras {
-                WhyCard(title: whyTitle, message: whyBody, labelColor: whyLabelColor)
-                    .padding(.top, DGSpace.s3)
-            }
-            rows.padding(.top, DGSpace.s4)
+            .padding(.top, DGSpace.s3)
         }
-        .dgCard()
+        .dgCard(radius: DGRadius.lg, padding: DGSpace.s4)
     }
 
     private var header: some View {
-        HStack(spacing: DGSpace.s3) {
-            ExerciseThumbnail(exercise: entry.exercise)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .top, spacing: DGSpace.s3) {
+            ExerciseThumbnail(exercise: entry.exercise, size: 44)
+            VStack(alignment: .leading, spacing: 3) {
                 Text(entry.exercise.name)
-                    .font(DGFont.title2)
+                    .font(.system(size: 16.5, weight: .semibold))
                     .foregroundStyle(DGColor.ink1)
-                Text(footnote)
-                    .font(DGFont.footnote)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(entry.exercise.muscleLine)
+                    .font(.system(size: 12.5))
                     .foregroundStyle(DGColor.ink3)
             }
             Spacer(minLength: 0)
-            DGIconButton(
-                symbol: "text.bubble", size: 36, tint: DGColor.ink2, accessibilityLabel: "Notes",
-                action: onNote
+            WorkoutRoundButton(
+                symbol: "ellipsis", size: 30, accessibilityLabel: "More options", action: onMore
             )
-            DGIconButton(symbol: "ellipsis", accessibilityLabel: "More options", action: onMore)
+        }
+    }
+
+    /// Plate maths on one line, the progression chip on the next — the prototype wraps them.
+    @ViewBuilder
+    private var chips: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let plateSet, let bar = entry.exercise.bar {
+                PlateChip(weightKg: plateSet.weightKg, bar: bar, inventory: inventory) {
+                    onTapWeight(plateSet.id)
+                }
+            }
+            if let whyTitle = entry.whyTitle {
+                Text(whyTitle)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(whyTint)
+                    .padding(.horizontal, 9)
+                    .frame(minHeight: 24)
+                    .background(
+                        whyTint.opacity(0.14),
+                        in: RoundedRectangle(cornerRadius: DGRadius.chip, style: .continuous)
+                    )
+                    .accessibilityLabel("Why: \(whyTitle)")
+            }
         }
     }
 
@@ -74,11 +113,13 @@ struct OnDeckExerciseCard: View {
         return set
     }
 
-    private var whyLabelColor: Color {
-        entry.whyKind == .deload ? DGColor.warning : DGColor.aiVioletText
+    /// Accent for a coach prescription; the warning amber for a deload back-off, so it reads
+    /// as a heads-up rather than routine coaching.
+    private var whyTint: Color {
+        entry.whyKind == .deload ? DGColor.warning : DGColor.coralText
     }
 
-    private var footnote: String {
+    private var setLine: String {
         let step = entry.doneCount + 1 <= entry.sets.count ? entry.doneCount + 1 : entry.sets.count
         let restSeconds = entry.exercise.restSeconds(defaultingTo: preferences.defaultRestSeconds)
         let rest = restSeconds > 0 ? WorkoutSession.clock(restSeconds) : "off"
@@ -95,19 +136,25 @@ struct OnDeckExerciseCard: View {
     }
 
     private var lastSessionsStrip: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s1) {
-            Text("Last 3 sessions").dgLabel()
-            HStack(spacing: DGSpace.s3) {
-                Text(entry.lastSessions.joined(separator: " · "))
-                    .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.ink2)
-                Spacer(minLength: DGSpace.s2)
-                // The three numbers beside it say the same thing in words.
-                Sparkline(values: entry.sparkline)
-                    .frame(width: 60, height: 22)
-                    .accessibilityHidden(true)
-            }
+        HStack(spacing: DGSpace.s2) {
+            Text("Last 3").dgLabel()
+            Text(entry.lastSessions.joined(separator: " · "))
+                .font(.system(size: 12, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(DGColor.ink3)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: DGSpace.s2)
+            // The three numbers beside it say the same thing in words.
+            Sparkline(values: entry.sparkline)
+                .frame(width: 46, height: 16)
+                .accessibilityHidden(true)
         }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .background(
+            DGColor.ink1.opacity(0.045), in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
+        )
         .accessibilityElement(children: .combine)
     }
 }

@@ -3,9 +3,10 @@ import SwiftData
 import SwiftUI
 import UIKit
 
-/// The Active Workout screen: glass nav header, stat strip, muscle map, PR
-/// banner and the exercise list, with a sticky rest pill + action bar at the
-/// bottom. Tab bar visibility is the parent's job. See mockups 02_00 / 02_01.
+/// The Active Workout screen from the redesign prototype: a sticky header with three stat
+/// tiles, the accent PR banner, the exercise list (one frosted on-deck card, the rest as
+/// collapsed rows) with "Add exercise / Reorder" under it, and the dark rest pill floating at
+/// the bottom. Tab bar visibility is the parent's job.
 struct ActiveWorkoutView: View {
     @Bindable var session: WorkoutSession
     var onFinish: (WorkoutSummary) -> Void
@@ -37,7 +38,7 @@ struct ActiveWorkoutView: View {
     @State var layoutOverride: WorkoutLayout?
     /// "Keep going" hides the all-done banner until another set is added and left open.
     @State var allDoneDismissed = false
-    /// "SUNDAY · 13 SEP" — formatted once on appear (`Self.startedAtLabel(for:)`), since the
+    /// "Wed 17 Sep" — formatted once on appear (`Self.startedAtLabel(for:)`), since the
     /// header re-renders on every set edit and two `DateFormatter`s per render added up.
     @State var startedAtLabel = ""
     /// The pending write for the workout note: every keystroke used to `sync` (a walk of every
@@ -51,11 +52,9 @@ struct ActiveWorkoutView: View {
                 condensedNavHeader
             } else {
                 navHeader
-                statStrip
             }
             ScrollView {
-                VStack(spacing: DGSpace.s4) {
-                    musclesCard
+                VStack(spacing: DGSpace.s3) {
                     if let pr = session.prBanner { PRBanner(info: pr) }
                     if showsAllDone {
                         AllDoneBanner(
@@ -64,11 +63,13 @@ struct ActiveWorkoutView: View {
                         )
                     }
                     exerciseList
+                    listActions
+                    musclesCard
                     workoutNoteField
                 }
                 .padding(.horizontal, DGSpace.s4)
-                .padding(.top, DGSpace.s4)
-                .padding(.bottom, 140)
+                .padding(.top, DGSpace.s3)
+                .padding(.bottom, 120)
             }
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 geometry.contentOffset.y
@@ -119,16 +120,22 @@ struct ActiveWorkoutView: View {
             cancelPendingNoteSync()
         }
         .sheet(item: $activeSheet, onDismiss: { store.sync(session: session) }, content: sheetContent)
-        .confirmationDialog(finishPrompt, isPresented: $showFinishConfirm, titleVisibility: .visible) {
-            Button("Finish workout", action: finishSession)
-            Button("Discard workout", role: .destructive, action: discardSession)
+        .sheet(isPresented: $showFinishConfirm) {
+            FinishWorkoutSheet(prompt: finishPrompt, onFinish: finishSession, onDiscard: discardSession)
         }
-        .confirmationDialog("Exercise", isPresented: menuIsPresented, titleVisibility: .visible) {
-            exerciseMenuButtons
-        }
+        .sheet(isPresented: menuIsPresented) { exerciseActionsSheet }
     }
 
     // MARK: Muscles + PR
+
+    /// "Add exercise / Reorder" under the list, as in the prototype — no sticky action bar.
+    private var listActions: some View {
+        DGAdaptiveStack(spacing: DGSpace.s2) {
+            WorkoutPillButton(title: "Add exercise") { activeSheet = .addExercise }
+            WorkoutPillButton(title: "Reorder") { activeSheet = .reorder }
+        }
+        .padding(.top, DGSpace.s2)
+    }
 
     private var musclesCard: some View {
         HStack(spacing: DGSpace.s3) {
@@ -136,13 +143,14 @@ struct ActiveWorkoutView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Muscles hit today").dgLabel()
                 Text(muscleNames)
-                    .font(DGFont.body)
+                    .font(DGFont.subhead)
                     .foregroundStyle(DGColor.ink1)
             }
             .accessibilityElement(children: .combine)
             Spacer(minLength: 0)
         }
-        .dgCard(padding: DGSpace.s4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dgCard(radius: 18, padding: DGSpace.s4)
     }
 
     /// Free-text note for the whole session, synced once typing pauses (`noteSyncTask`).
@@ -256,6 +264,8 @@ struct ActiveWorkoutView: View {
             onTapEffort: { setID in activeSheet = .effort(exerciseID: entry.id, setID: setID) },
             onToggleDone: { set in toggleDone(exerciseID: entry.id, set: set) },
             onMore: { menuExerciseID = entry.id },
+            onAddSet: { addSet(exerciseID: entry.id, kind: .working) },
+            onSwap: { activeSheet = .swap(entryID: entry.id, exercise: entry.exercise) },
             onStartTimed: { setID in startTimedHold(exerciseID: entry.id, setID: setID) },
             onTapCardioField: { setID, field in
                 activeSheet = .keypad(exerciseID: entry.id, setID: setID, field: field)
@@ -274,19 +284,6 @@ struct ActiveWorkoutView: View {
             },
             inventory: inventory
         )
-    }
-
-    // MARK: Bottom sticky group
-
-    var bottomGroup: some View {
-        VStack(spacing: DGSpace.s2) {
-            RestPillSection(session: session)
-            WorkoutActionBar(
-                onAddExercise: { activeSheet = .addExercise }, onReorder: { activeSheet = .reorder }
-            )
-        }
-        .padding(.horizontal, DGSpace.s4)
-        .padding(.bottom, DGSpace.s2)
     }
 
     // MARK: Timers
@@ -308,67 +305,30 @@ struct ActiveWorkoutView: View {
     }
 }
 
-/// The sticky "Exercise / Reorder / Coach" pill under the rest timer.
-private struct WorkoutActionBar: View {
-    var onAddExercise: () -> Void
-    var onReorder: () -> Void
-
-    var body: some View {
-        HStack(spacing: 0) {
-            actionItem(title: "Exercise", symbol: "plus", tint: DGColor.coralText, action: onAddExercise)
-            actionItem(title: "Reorder", symbol: "list.bullet", tint: DGColor.ink2, action: onReorder)
-            actionItem(title: "Coach", symbol: "sparkles", tint: DGColor.ink4, action: {})
-                .opacity(0.5)
-                .disabled(true)
-                .accessibilityHint("Coming soon")
-        }
-        .frame(minHeight: 56)
-        .dgGlass(.thick, in: Capsule())
-        .dgDenseType()
-    }
-
-    private func actionItem(
-        title: String, symbol: String, tint: Color, action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: symbol).font(.system(size: 14, weight: .bold))
-                    .accessibilityHidden(true)
-                Text(title).font(DGFont.condensedLabel(13))
-            }
-            .foregroundStyle(tint)
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.dgControl)
-    }
-}
-
-/// Sweeps gold once when a set beats a personal record.
+/// The accent "★ New PR — Seated Overhead Press / 50 kg × 8 · best estimated 1RM 62.5 kg"
+/// card, white on terracotta, that rises in once a set beats a personal record.
 private struct PRBanner: View {
     var info: PersonalRecordInfo
 
     var body: some View {
-        HStack(spacing: DGSpace.s3) {
+        HStack(spacing: 10) {
             Image(systemName: "star.fill")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(DGColor.prGoldDeep)
-                .frame(width: 44, height: 44)
-                .background(
-                    DGColor.prGold, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
-                )
+                .font(.system(size: 17, weight: .bold))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text("New PR — \(info.exerciseName)").dgLabel(DGColor.prGoldText)
+                Text("New PR — \(info.exerciseName)")
+                    .font(.system(size: 13.5, weight: .semibold))
                 Text(info.line)
-                    .font(DGFont.subhead)
-                    .foregroundStyle(DGColor.ink2)
+                    .font(.system(size: 13.5))
+                    .opacity(0.85)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            Spacer(minLength: 0)
         }
-        .dgCard(
-            radius: DGRadius.md, fill: DGColor.prGold.opacity(0.14),
-            stroke: DGColor.prGold.opacity(0.4), padding: DGSpace.s4
-        )
+        .foregroundStyle(DGColor.inkOnCoral)
+        .padding(.horizontal, 15)
+        .padding(.vertical, 13)
+        .background(DGColor.coral, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 }
@@ -390,18 +350,17 @@ extension ActiveWorkoutView {
 
     private static let weekdayFormatter: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE"
+        formatter.dateFormat = "EEE"
         return formatter
     }()
 
-    /// "SUNDAY · 13 SEP", or "BACKFILL · 11 SEP" for a session logged after the fact.
+    /// "Wed 17 Sep", or "Backfill · 11 Sep" for a session logged after the fact.
     static func startedAtLabel(for session: WorkoutSession) -> String {
-        let dateText = dayMonthFormatter.string(from: session.startedAt).uppercased()
+        let dateText = dayMonthFormatter.string(from: session.startedAt)
         guard session.isBackfilled else {
-            let dayText = weekdayFormatter.string(from: session.startedAt).uppercased()
-            return "\(dayText) · \(dateText)"
+            return "\(weekdayFormatter.string(from: session.startedAt)) \(dateText)"
         }
-        return "Backfill · \(dateText)".uppercased()
+        return "Backfill · \(dateText)"
     }
 
     /// What the exercise list renders in: the session override when the "…" menu set one, else
@@ -418,12 +377,12 @@ extension ActiveWorkoutView {
         session.setsTotal > 0 && !session.hasUndoneSets && !allDoneDismissed
     }
 
-    /// What finishing now would save — the title of the finish/discard dialog, so it never just
-    /// repeats the button label.
+    /// What finishing now would save — the finish sheet's subtitle, so it never just repeats
+    /// the button label.
     var finishPrompt: String {
         let done = session.setsDone
         guard done > 0 else { return "Nothing logged yet" }
         let elapsed = WorkoutSession.clock(session.elapsedSeconds())
-        return "\(done) of \(session.setsTotal) sets done · \(elapsed)"
+        return "\(done) / \(session.setsTotal) sets done · \(elapsed) elapsed"
     }
 }

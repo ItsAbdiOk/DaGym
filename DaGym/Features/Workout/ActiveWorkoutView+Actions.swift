@@ -193,27 +193,33 @@ extension ActiveWorkoutView {
         Binding(get: { menuExerciseID != nil }, set: { if !$0 { menuExerciseID = nil } })
     }
 
+    /// The "…" sheet for one entry (`ExerciseActionsSheet`). Actions that open another sheet
+    /// (swap, notes) set `activeSheet` after this one has dismissed itself.
     @ViewBuilder
-    var exerciseMenuButtons: some View {
+    var exerciseActionsSheet: some View {
         if let id = menuExerciseID, let index = session.exercises.firstIndex(where: { $0.id == id }) {
             let entry = session.exercises[index]
-            Button("Swap exercise") { activeSheet = .swap(entryID: id, exercise: entry.exercise) }
-            Button("Remove exercise", role: .destructive) { removeExercise(id: id) }
-            Button("Add set") { addSet(exerciseID: id, kind: .working) }
-            Button("Add warm-up set") { addSet(exerciseID: id, kind: .warmup) }
-            // A run has no load to ramp up to.
-            if !entry.isCardio {
-                Button("Generate warm-ups") { generateWarmups(exerciseID: id) }
+            ExerciseActionsSheet(
+                options: .init(
+                    name: entry.exercise.name, isCardio: entry.isCardio, hasPrevious: index > 0,
+                    hasNext: index + 1 < session.exercises.count, isInSuperset: entry.supersetGroup != nil
+                )
+            ) { action in
+                perform(action, on: id, entry: entry)
             }
-            if index > 0 {
-                Button("Superset with previous") { pairSuperset(entryID: id, with: .previous) }
-            }
-            if index + 1 < session.exercises.count {
-                Button("Superset with next") { pairSuperset(entryID: id, with: .next) }
-            }
-            if entry.supersetGroup != nil {
-                Button("Unpair superset") { unpairSuperset(entryID: id) }
-            }
+        }
+    }
+
+    private func perform(_ action: ExerciseActionsSheet.Action, on id: UUID, entry: WorkoutExerciseEntry) {
+        switch action {
+        case .addSet(let kind): addSet(exerciseID: id, kind: kind)
+        case .generateWarmups: generateWarmups(exerciseID: id)
+        case .pairPrevious: pairSuperset(entryID: id, with: .previous)
+        case .pairNext: pairSuperset(entryID: id, with: .next)
+        case .unpair: unpairSuperset(entryID: id)
+        case .notes: activeSheet = .notes(exerciseID: id)
+        case .swap: activeSheet = .swap(entryID: id, exercise: entry.exercise)
+        case .remove: removeExercise(id: id)
         }
     }
 
@@ -273,26 +279,38 @@ extension ActiveWorkoutView {
     private func keypadSheet(exerciseID: UUID, setID: UUID, field: ActiveSheet.KeypadField) -> some View {
         if let entry = session.exercises.first(where: { $0.id == exerciseID }),
            let set = entry.sets.first(where: { $0.id == setID }) {
-            let exercise = entry.exercise
             let ids = SetAddress(exerciseID: exerciseID, setID: setID)
             switch field {
-            case .weight:
-                WeightKeypadSheet(
-                    title: "Weight", value: weightBinding(ids), step: exercise.incrementKg,
-                    bar: exercise.bar, last: set.previousWeightKg.map { preferences.formatWeight(kg: $0) },
-                    unit: preferences.weightUnit, inventory: inventory,
-                    onDone: { store.sync(session: session) }
-                )
-            case .reps:
-                WeightKeypadSheet(
-                    title: "Reps", value: repsBinding(ids), step: 1, bar: nil,
-                    last: set.previousReps.map(String.init), unit: nil,
-                    onDone: { store.sync(session: session) }
+            case .weight, .reps:
+                SetKeypadSheet(
+                    exercise: entry.exercise, set: set, setNumber: setNumber(of: setID, in: entry),
+                    initialField: field == .reps ? .reps : .weight, effortScale: session.effortScale,
+                    weight: weightBinding(ids), reps: repsBinding(ids), effort: effortBinding(ids),
+                    inventory: inventory,
+                    onLog: { effort in logSet(exerciseID: exerciseID, setID: setID, effort: effort) }
                 )
             case .minutes, .distance, .incline:
                 cardioKeypad(field: field, set: set, ids: ids)
             }
         }
+    }
+
+    /// "set 2" in the keypad's title: the row's 1-based position within its exercise.
+    private func setNumber(of setID: UUID, in entry: WorkoutExerciseEntry) -> Int {
+        (entry.sets.firstIndex { $0.id == setID } ?? 0) + 1
+    }
+
+    /// The keypad's "Log set": an open set is completed (with the typed effort, if any) and
+    /// starts rest, exactly like ticking it; one that's already done just keeps the edits.
+    func logSet(exerciseID: UUID, setID: UUID, effort: Effort?) {
+        let entry = session.exercises.first(where: { $0.id == exerciseID })
+        let isDone = entry?.sets.first(where: { $0.id == setID })?.isDone ?? false
+        if !isDone {
+            session.completeSet(exerciseID: exerciseID, setID: setID, effort: effort)
+        } else if let effort {
+            session.setEffort(exerciseID: exerciseID, setID: setID, effort: effort)
+        }
+        store.sync(session: session)
     }
 
     /// Where a keypad binding writes: looked up by id on every get/set, never by the indices
@@ -349,6 +367,10 @@ extension ActiveWorkoutView {
             case .incline, .weight, .reps: set.inclinePercent = value
             }
         }
+    }
+
+    private func effortBinding(_ ids: SetAddress) -> Binding<Effort?> {
+        setBinding(ids, fallback: nil, read: \.effort) { set, value in set.effort = value }
     }
 
     private func weightBinding(_ ids: SetAddress) -> Binding<Double> {

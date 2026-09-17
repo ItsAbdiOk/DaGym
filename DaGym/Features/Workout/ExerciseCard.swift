@@ -16,6 +16,9 @@ struct ExerciseCard: View {
     var onTapEffort: (UUID) -> Void
     var onToggleDone: (SetEntry) -> Void
     var onMore: () -> Void
+    /// The on-deck card's "Add set" and "Swap" pills.
+    var onAddSet: () -> Void = {}
+    var onSwap: () -> Void = {}
     var onStartTimed: (UUID) -> Void
     /// A cardio row's time / distance / incline tap: opens the keypad on that field.
     var onTapCardioField: (UUID, ActiveSheet.KeypadField) -> Void = { _, _ in }
@@ -41,7 +44,7 @@ struct ExerciseCard: View {
         } else if isOnDeck {
             OnDeckExerciseCard(
                 entry: entry, layout: layout, inventory: inventory, rows: rows(highlightsCurrent: true),
-                onTapWeight: onTapWeight, onMore: onMore, onNote: onNote
+                onTapWeight: onTapWeight, onMore: onMore, onAddSet: onAddSet, onSwap: onSwap
             )
         } else {
             CollapsedExerciseRow(entry: entry, onStartTimed: onStartTimed)
@@ -90,14 +93,14 @@ struct ListExerciseSection: View {
             }
             Spacer(minLength: DGSpace.s2)
             Text("\(entry.doneCount)/\(entry.sets.count)")
-                .dgMetric(DGFont.subhead)
-                .foregroundStyle(entry.isComplete ? DGColor.success : DGColor.ink3)
+                .font(.system(size: 12, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(entry.isComplete ? DGColor.coralText : DGColor.ink3)
                 .accessibilityLabel("\(entry.doneCount) of \(entry.sets.count) sets done")
-            DGIconButton(
-                symbol: "text.bubble", size: 36, tint: DGColor.ink2, accessibilityLabel: "Notes",
-                action: onNote
+            WorkoutRoundButton(symbol: "text.bubble", size: 30, accessibilityLabel: "Notes", action: onNote)
+            WorkoutRoundButton(
+                symbol: "ellipsis", size: 30, accessibilityLabel: "More options", action: onMore
             )
-            DGIconButton(symbol: "ellipsis", size: 36, accessibilityLabel: "More options", action: onMore)
         }
         .frame(minHeight: DGTap.min)
         .dgDenseType()

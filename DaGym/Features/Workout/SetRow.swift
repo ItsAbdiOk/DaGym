@@ -1,8 +1,9 @@
 import GymCore
 import SwiftUI
 
-/// One loggable set: badge · previous ghost · weight · reps · effort chip · done.
-/// 56 pt tall. See design sheet 01_04 "core components / set row".
+/// One loggable set, the prototype's table row: index · kind over the previous ghost · weight
+/// · reps · effort · round tick. A done row dims its numbers and fills the tick with the
+/// accent. Tapping weight or reps opens the keypad; the effort cell opens the picker.
 struct SetRow: View {
     var set: SetEntry
     var badgeIndex: Int
@@ -48,6 +49,17 @@ struct SetRow: View {
         }
     }
 
+    // MARK: Columns
+
+    /// The table's fixed column widths, shared with `ExerciseSetRows`' header so the two line up.
+    enum Column {
+        static let index: CGFloat = 26
+        static let weight: CGFloat = 52
+        static let reps: CGFloat = 44
+        static let effort: CGFloat = 40
+        static let done: CGFloat = 30
+    }
+
     private static let swipeButtonWidth: CGFloat = 52
     private static let actionsWidth = swipeButtonWidth * 4
     private var showsSteppers: Bool { preferences.showSetSteppers }
@@ -61,57 +73,103 @@ struct SetRow: View {
     }
 
     private var rowContent: some View {
-        HStack(spacing: showsSteppers ? DGSpace.s2 : DGSpace.s3) {
-            SetKindBadge(kind: set.kind, index: badgeIndex)
-            // The ghost is the first thing to go when type is large: it's a hint, not a control.
-            if !showsSteppers, !dynamicTypeSize.isAccessibilitySize { previousGhost }
+        HStack(spacing: showsSteppers ? DGSpace.s1 : 0) {
+            indexLabel
+            // The kind + ghost column is the first thing to go when type is large or the ±
+            // steppers need the room: it's a hint, not a control.
+            if !showsSteppers, !dynamicTypeSize.isAccessibilitySize {
+                kindAndPrevious
+            } else {
+                Spacer(minLength: 0)
+            }
             if showsSteppers {
                 stepper(symbol: "minus", label: "Decrease weight") { onAdjustWeight(-weightStepKg) }
             }
-            Button(action: onTapWeight) {
-                Text(preferences.formatWeight(kg: set.weightKg))
-                    .dgMetric(DGFont.metricM)
-                    .foregroundStyle(weightColor)
-                    .frame(minWidth: 44, alignment: .leading)
-            }
-            .buttonStyle(.dgControl)
-            .accessibilityLabel("Weight")
-            .accessibilityValue(
-                "\(preferences.formatWeight(kg: set.weightKg)) \(preferences.weightUnit.symbol)"
-            )
+            weightCell
             if showsSteppers {
                 stepper(symbol: "plus", label: "Increase weight") { onAdjustWeight(weightStepKg) }
                 stepper(symbol: "minus", label: "Decrease reps") { onAdjustReps(-1) }
             }
-            Button(action: onTapReps) {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(repsText)
-                        .dgMetric(DGFont.metricM)
-                        .foregroundStyle(DGColor.ink1)
-                    if isPerSide {
-                        Text("per side")
-                            .font(DGFont.caption)
-                            .foregroundStyle(DGColor.ink4)
-                    }
-                }
-                .frame(minWidth: 30, alignment: .leading)
-            }
-            .buttonStyle(.dgControl)
-            .accessibilityLabel("Reps")
-            .accessibilityValue(isPerSide ? "\(repsText) per side" : repsText)
+            repsCell
             if showsSteppers { stepper(symbol: "plus", label: "Increase reps") { onAdjustReps(1) } }
-            if preferences.effortTrackingEnabled { effortChip }
-            Spacer(minLength: 0)
+            if preferences.effortTrackingEnabled { effortCell }
             doneButton
         }
-        .padding(.horizontal, DGSpace.s3)
-        .frame(minHeight: DGTap.rowHeight)
-        .background(rowFill, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
-                .strokeBorder(rowStroke, lineWidth: isCurrent ? 1 : 0)
-        }
+        .padding(.horizontal, DGSpace.s1)
+        .padding(.vertical, 10)
+        .frame(minHeight: 52)
+        .dgTile(radius: DGRadius.sm, opacity: set.isDone ? 0.5 : 0.7)
         .dgDenseType()
+    }
+
+    private var indexLabel: some View {
+        Text(String(rowIndex + 1))
+            .font(.system(size: 12.5, weight: .semibold))
+            .monospacedDigit()
+            .foregroundStyle(DGColor.ink3)
+            .frame(width: Column.index)
+            .accessibilityLabel(SetKindBadge.accessibilityLabel(kind: set.kind, index: badgeIndex))
+    }
+
+    /// "Warm-up" over "40 × 10" — the set's kind and last session's numbers for the same slot.
+    private var kindAndPrevious: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(set.kind.displayName)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(set.kind == .working ? DGColor.ink3 : set.kind.color)
+            Text(previousText)
+                .font(.system(size: 12))
+                .monospacedDigit()
+                .foregroundStyle(DGColor.ink3)
+        }
+        .lineLimit(1)
+        .padding(.leading, DGSpace.s1)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityLabel(SetRowAccessibility.previousLabel(
+            weight: set.previousWeightKg.map { preferences.formatWeight(kg: $0) },
+            reps: set.previousReps, unit: preferences.weightUnit.symbol
+        ))
+    }
+
+    private var weightCell: some View {
+        Button(action: onTapWeight) {
+            Text(preferences.formatWeight(kg: set.weightKg))
+                .font(.system(size: 15, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(valueColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(width: showsSteppers ? nil : Column.weight)
+                .frame(minWidth: Column.reps, minHeight: 36)
+        }
+        .buttonStyle(.dgControl)
+        .accessibilityLabel("Weight")
+        .accessibilityValue(
+            "\(preferences.formatWeight(kg: set.weightKg)) \(preferences.weightUnit.symbol)"
+        )
+    }
+
+    private var repsCell: some View {
+        Button(action: onTapReps) {
+            VStack(spacing: 0) {
+                Text(repsText)
+                    .font(.system(size: 15, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(valueColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if isPerSide {
+                    Text("per side")
+                        .font(.system(size: 9))
+                        .foregroundStyle(DGColor.ink4)
+                }
+            }
+            .frame(width: showsSteppers ? nil : Column.reps)
+            .frame(minWidth: Column.reps, minHeight: 36)
+        }
+        .buttonStyle(.dgControl)
+        .accessibilityLabel("Reps")
+        .accessibilityValue(isPerSide ? "\(repsText) per side" : repsText)
     }
 
     private var swipeActions: some View {
@@ -145,10 +203,10 @@ struct SetRow: View {
     private func stepper(symbol: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 12, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(DGColor.ink2)
-                .frame(width: 28, height: 28)
-                .background(DGColor.surface3, in: Circle())
+                .frame(width: 26, height: 26)
+                .background(DGColor.ink1.opacity(0.06), in: Circle())
         }
         .buttonStyle(.dgControl)
         .accessibilityLabel(label)
@@ -162,7 +220,7 @@ struct SetRow: View {
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(tint)
                 .frame(width: Self.swipeButtonWidth)
-                .frame(minHeight: DGTap.rowHeight)
+                .frame(minHeight: 52)
                 .background(fill)
         }
         .buttonStyle(.dgControl)
@@ -175,40 +233,20 @@ struct SetRow: View {
         return isPendingAmrap ? "AMRAP" : String(set.reps)
     }
 
-    private var previousGhost: some View {
-        Text(previousText)
-            .font(DGFont.footnote)
-            .foregroundStyle(DGColor.ink3)
-            .frame(minWidth: 44, alignment: .leading)
-            .accessibilityLabel(SetRowAccessibility.previousLabel(
-                weight: set.previousWeightKg.map { preferences.formatWeight(kg: $0) },
-                reps: set.previousReps, unit: preferences.weightUnit.symbol
-            ))
-    }
-
     private var previousText: String {
         guard let weight = set.previousWeightKg, let reps = set.previousReps else { return "–" }
         return "\(preferences.formatWeight(kg: weight)) × \(reps)"
     }
 
-    private var effortChip: some View {
+    /// The rating as a plain number ("8"), or "—" until one is logged; colour never travels
+    /// without the picker's plain-language line, so the cell itself stays ink.
+    private var effortCell: some View {
         Button(action: onTapEffort) {
-            Group {
-                if let effort = set.effort {
-                    Text(effort.displayValue(scale: effortScale))
-                        .font(DGFont.condensedLabel(13))
-                        .foregroundStyle(effort.color)
-                        .frame(minWidth: 28, minHeight: 28)
-                        .background(
-                            effort.color.opacity(0.18),
-                            in: RoundedRectangle(cornerRadius: DGRadius.chip, style: .continuous)
-                        )
-                } else {
-                    RoundedRectangle(cornerRadius: DGRadius.chip, style: .continuous)
-                        .strokeBorder(DGColor.hairline, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                        .frame(width: 28, height: 28)
-                }
-            }
+            Text(set.effort?.displayValue(scale: effortScale) ?? "—")
+                .font(.system(size: 12.5, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(DGColor.ink3)
+                .frame(width: Column.effort, height: 36)
         }
         .buttonStyle(.dgControl)
         .accessibilityLabel(
@@ -219,13 +257,12 @@ struct SetRow: View {
     private var doneButton: some View {
         Button(action: onToggleDone) {
             Image(systemName: "checkmark")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(set.isDone ? DGColor.success : DGColor.ink4)
-                .frame(width: DGTap.done, height: DGTap.done)
-                .background(
-                    set.isDone ? DGColor.success.opacity(0.22) : DGColor.surface3,
-                    in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
-                )
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(set.isDone ? DGColor.inkOnCoral : .white)
+                .frame(width: 21, height: 21)
+                .background(set.isDone ? DGColor.coral : DGColor.ink1.opacity(0.12), in: Circle())
+                .frame(width: Column.done, height: 36)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.dgControl)
         .accessibilityIdentifier(A11yID.setRowDone(rowIndex))
@@ -250,23 +287,16 @@ struct SetRow: View {
         )
     }
 
-    private var weightColor: Color {
-        if isCurrent { return DGColor.coral }
-        return set.isDone ? DGColor.ink1 : DGColor.ink2
+    /// Done rows dim; open rows read at full ink.
+    private var valueColor: Color {
+        self.set.isDone ? DGColor.ink3 : DGColor.ink1
     }
-
-    private var rowFill: Color {
-        if set.isDone { return DGColor.success.opacity(0.16) }
-        return DGColor.surface2
-    }
-
-    private var rowStroke: Color { DGColor.coral }
 }
 
 #Preview {
-    VStack(spacing: DGSpace.s2) {
+    VStack(spacing: 6) {
         SetRow(
-            set: SetEntry(kind: .warmup, weightKg: 40, reps: 10, isDone: true),
+            set: SetEntry(kind: .warmup, weightKg: 40, reps: 10, effort: Effort(rpe: 6), isDone: true),
             badgeIndex: 0, rowIndex: 0, isCurrent: false, effortScale: .rpe,
             onTapWeight: {}, onTapReps: {}, onTapEffort: {}, onToggleDone: {}
         )
@@ -281,6 +311,11 @@ struct SetRow: View {
         SetRow(
             set: SetEntry(weightKg: 82.5, reps: 8, previousWeightKg: 80, previousReps: 8),
             badgeIndex: 2, rowIndex: 2, isCurrent: true, effortScale: .rpe,
+            onTapWeight: {}, onTapReps: {}, onTapEffort: {}, onToggleDone: {}
+        )
+        SetRow(
+            set: SetEntry(kind: .amrap, weightKg: 82.5, reps: 8, previousWeightKg: 82.5, previousReps: 6),
+            badgeIndex: 3, rowIndex: 3, isCurrent: false, effortScale: .rpe,
             onTapWeight: {}, onTapReps: {}, onTapEffort: {}, onToggleDone: {}
         )
     }
