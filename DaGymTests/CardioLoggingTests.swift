@@ -109,7 +109,7 @@ struct CardioLoggingTests {
 
     @Test("the next session pre-fills last session's time and distance and the why card says so")
     func prescriptionRepeatsLastRun() throws {
-        let (store, _) = try makeStoreAndContext()
+        let (store, _) = try makeStoreAndContext(units: .fixed(weight: .kg, distance: .km))
         let exercise = treadmill(store)
         let routine = cardioRoutine(store, exercise: exercise)
         let first = store.startWorkout(routineID: routine.id)
