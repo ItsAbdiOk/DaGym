@@ -117,7 +117,7 @@ extension WorkoutStore {
         if let tint {
             model.tint = tint
         } else if id == nil {
-            model.tint = RoutineTint.suggested(for: name).rawValue
+            model.tint = RoutineTintSuggestion.tint(for: name)
         }
         model.updatedAt = Date()
         replaceExercises(exercises, on: model)
@@ -313,5 +313,21 @@ extension WorkoutStore {
             return plannedSet
         }
         return routineExercise
+    }
+}
+
+/// The tint a new routine gets from its name so a fresh Push / Pull / Legs set is told apart
+/// at a glance (the design gives each routine card its own colour). Raw `RoutineTint` values;
+/// this lives in Data because the store is compiled into targets that lack the glyph view.
+/// Anything unrecognised falls back to the accent; the user can repaint it in the builder.
+enum RoutineTintSuggestion {
+    static func tint(for name: String) -> String {
+        let lower = name.lowercased()
+        let table: [(String, String)] = [
+            ("pull", "ice"), ("back", "ice"), ("leg", "green"), ("lower", "green"), ("squat", "green"),
+            ("upper", "violet"), ("arm", "violet"), ("full", "gold"), ("body", "gold"), ("cardio", "red"),
+            ("condition", "red")
+        ]
+        return table.first { lower.contains($0.0) }?.1 ?? "coral"
     }
 }

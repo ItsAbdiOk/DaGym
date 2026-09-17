@@ -21,8 +21,8 @@ extension CoachRules {
         let hardWeeksInvolved = input.hardWeeksInARow >= TrainingConstants.deloadHardWeeksThreshold
         if !hardWeeksInvolved, !driving.isEmpty, driving.isSubset(of: coveredLifts) { return [] }
 
+        // The reason itself is the card body; the evidence box only carries what it adds.
         let evidence: [CoachEvidenceItem] = [
-            .init("Reason", .text(suggestion.reason)),
             .init("Hard weeks in a row", .count(input.hardWeeksInARow))
         ]
         return [CoachCard(

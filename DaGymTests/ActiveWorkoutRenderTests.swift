@@ -36,18 +36,19 @@ struct ActiveWorkoutRenderTests {
         components.hour = 10
         let date = try #require(Calendar(identifier: .gregorian).date(from: components))
         let live = WorkoutSession(title: "Push", subtitle: "", startedAt: date, exercises: [])
-        // Month and weekday names follow the device locale, so only the shape is pinned.
+        // Month and weekday names follow the device locale, so only the shape is pinned:
+        // "Sun 13 Sep" — sentence case, no separator, as the redesign's header prints it.
         let label = ActiveWorkoutView.startedAtLabel(for: live)
-        #expect(label.contains(" · "))
+        #expect(!label.contains(" · "))
         #expect(label.contains("13"))
-        #expect(label == label.uppercased())
-        #expect(!label.hasPrefix("BACKFILL"))
+        #expect(label != label.uppercased())
+        #expect(!label.hasPrefix("Backfill"))
 
         let backfilled = WorkoutSession(
             title: "Push", subtitle: "", startedAt: date, exercises: [], isBackfilled: true
         )
         let backfillLabel = ActiveWorkoutView.startedAtLabel(for: backfilled)
-        #expect(backfillLabel.hasPrefix("BACKFILL · "))
+        #expect(backfillLabel.hasPrefix("Backfill · "))
         #expect(backfillLabel.contains("13"))
     }
 }

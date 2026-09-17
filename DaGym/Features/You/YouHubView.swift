@@ -152,12 +152,12 @@ enum YouDestination: Hashable {
         case .history: HistoryTabView()
         case .muscles: RecoveryMapView()
         case .body: BodyView()
-        case .coach: CoachView()
+        case .coach: CoachChatScreen()
         case .settings: SettingsView()
         case .library: LibraryView()
         case .equipment: EquipmentProfilesScreen()
         case .gymCard: GymCardSheet(isPushed: true)
-        case .insights: CoachView()
+        case .insights: InsightsScreen()
         }
     }
 }

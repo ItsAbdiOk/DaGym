@@ -32,7 +32,7 @@ struct ExerciseSetRows: View {
         switch entry.onDeckRows {
         case .loaded:
             columnHeader
-            setRows.padding(.top, DGSpace.s2)
+            setRows
         case .timed(let startSetID):
             timedColumnHeader
             timedRows(startSetID: startSetID).padding(.top, DGSpace.s2)
@@ -48,17 +48,23 @@ struct ExerciseSetRows: View {
     /// VoiceOver label ("Weight", "Reps", …), so reading "SET PREV KG" first is noise. The
     /// "Prev" column disappears with the row's ghost at accessibility sizes.
     private var columnHeader: some View {
-        HStack(spacing: DGSpace.s3) {
-            Text("Set").frame(minWidth: 28, alignment: .leading)
-            if !dynamicTypeSize.isAccessibilitySize {
-                Text("Prev").frame(minWidth: 44, alignment: .leading)
+        let showsPrevious = !preferences.showSetSteppers && !dynamicTypeSize.isAccessibilitySize
+        return HStack(spacing: 0) {
+            Text("Set").frame(width: SetRow.Column.index)
+            if showsPrevious {
+                Text("Previous").padding(.leading, DGSpace.s1).frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Spacer(minLength: 0)
             }
-            Text(preferences.unitSymbol.uppercased()).frame(minWidth: 44, alignment: .leading)
-            Text("Reps").frame(minWidth: 30, alignment: .leading)
+            Text(preferences.unitSymbol).frame(minWidth: SetRow.Column.weight)
+            Text("Reps").frame(minWidth: SetRow.Column.reps)
             if preferences.effortTrackingEnabled {
-                Text(effortScale == .rpe ? "Rpe" : "Rir").frame(minWidth: 28, alignment: .leading)
+                Text(effortScale == .rpe ? "RPE" : "RIR").frame(width: SetRow.Column.effort)
             }
+            Color.clear.frame(width: SetRow.Column.done, height: 1)
         }
+        .padding(.horizontal, DGSpace.s1)
+        .padding(.bottom, DGSpace.s2)
         .dgLabel()
         .dgDenseType()
         .accessibilityHidden(true)
@@ -131,7 +137,7 @@ struct ExerciseSetRows: View {
     private var setRows: some View {
         let firstOpenID = entry.nextOpenSetID
         let badges = entry.workingBadgeIndices
-        return VStack(spacing: DGSpace.s2) {
+        return VStack(spacing: 6) {
             ForEach(Array(entry.sets.enumerated()), id: \.element.id) { index, set in
                 SetRow(
                     set: set, badgeIndex: badges[index], rowIndex: index,

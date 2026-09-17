@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Tiny trend line drawn from raw values, coral stroke.
+/// Tiny trend line drawn from raw values: a quiet ink stroke, the way the prototype draws it
+/// beside the "LAST 3" numbers.
 struct Sparkline: View {
     var values: [Double]
 
@@ -21,7 +22,7 @@ struct Sparkline: View {
                     }
                 }
             }
-            .stroke(DGColor.coral, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+            .stroke(DGColor.ink4, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
         }
     }
 }

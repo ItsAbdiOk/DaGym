@@ -1,8 +1,9 @@
 import GymCore
 import SwiftUI
 
-/// Workout Summary — "Push A Done". Stat tiles, a PR card, muscles hit,
-/// a notes card, and Done/Share actions. Driven entirely by the
+/// Workout Summary from the redesign prototype: the date kicker over a 33 pt title, three stat
+/// tiles (Time / Volume / Sets), PRs and milestones, "Muscles hit" with the mini body map, the
+/// coach debrief, then "Share card" and an accent "Done". Driven entirely by the
 /// `WorkoutSummary` the store hands back from `finish(session:)`.
 struct WorkoutSummaryView: View {
     var summary: WorkoutSummary
@@ -11,14 +12,22 @@ struct WorkoutSummaryView: View {
 
     @Environment(Preferences.self) private var preferences
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    /// The summary is shown the moment the workout ends, so its date kicker is simply now.
+    @State private var shownAt = Date()
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE d MMMM"
+        return formatter
+    }()
 
     var body: some View {
         ZStack {
             AmbientWash(heat: 0.9)
             ScrollView {
-                VStack(spacing: DGSpace.s6) {
+                VStack(spacing: 10) {
                     header
-                    statRow
+                    statRow.padding(.top, 6)
                     if !summary.prs.isEmpty { PRCard(prs: summary.prs) }
                     if !summary.achievements.isEmpty {
                         MilestoneUnlockedCard(achievements: summary.achievements)
@@ -30,10 +39,11 @@ struct WorkoutSummaryView: View {
                     actionRow
                 }
                 .padding(.horizontal, DGSpace.s4)
-                .padding(.top, DGSpace.s3)
+                .padding(.top, DGSpace.s2)
                 .padding(.bottom, 100)
             }
         }
+        .background(DGColor.bgBase)
         .task {
             guard !summary.achievements.isEmpty else { return }
             Haptics.personalRecord()
@@ -41,35 +51,50 @@ struct WorkoutSummaryView: View {
     }
 
     private var header: some View {
-        VStack(spacing: DGSpace.s1) {
-            Text("Session complete").dgLabel()
+        VStack(alignment: .leading, spacing: 6) {
+            Text(Self.dateFormatter.string(from: shownAt))
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(DGColor.ink3)
             Text(title)
                 .font(DGFont.title1)
                 .foregroundStyle(DGColor.ink1)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, DGSpace.s1)
+        .accessibilityElement(children: .combine)
     }
 
     private var statRow: some View {
-        DGAdaptiveStack(spacing: DGSpace.s3, threshold: .accessibility3) {
-            StatTile(value: WorkoutSession.clock(summary.durationSeconds), label: "Time").dgCard(radius: 14)
-            StatTile(value: volumeText, label: "Volume").dgCard(radius: 14)
-            StatTile(value: "\(summary.setsDone)", label: "Sets").dgCard(radius: 14)
+        DGAdaptiveStack(spacing: DGSpace.s2, threshold: .accessibility3) {
+            SummaryStatTile(value: WorkoutSession.clock(summary.durationSeconds), label: "Time")
+            SummaryStatTile(value: volumeText, label: "Volume")
+            SummaryStatTile(value: "\(summary.setsDone)", label: "Sets")
         }
     }
 
-    /// "7 400 · 5.0 km" once a run is in the session; the plain tonnage otherwise.
+    /// "2.2 t" (the header tile's figure), with "· 5.0 km" once a run is in the session.
     private var volumeText: String {
-        let volume = preferences.formatVolume(kg: summary.volumeKg)
+        let tile = ActiveWorkoutView.volumeTile(kg: summary.volumeKg, preferences: preferences)
+        let volume = "\(tile.value) \(tile.suffix)"
         guard summary.distanceMeters > 0 else { return volume }
         return "\(volume) · \(preferences.formatDistance(meters: summary.distanceMeters, decimals: 1))"
     }
 
     private var actionRow: some View {
-        HStack(spacing: DGSpace.s3) {
-            DGPrimaryButton(title: "Done", symbol: "checkmark", action: onDone)
-                .accessibilityIdentifier(A11yID.summaryDone)
+        DGAdaptiveStack(spacing: DGSpace.s2) {
             shareMenu
+            Button(action: onDone) {
+                Text("Done")
+                    .font(DGFont.condensedLabel(13.5))
+                    .foregroundStyle(DGColor.inkOnCoral)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 44)
+                    .background(
+                        DGColor.coral, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
+                    )
+            }
+            .buttonStyle(.dgControl)
+            .accessibilityIdentifier(A11yID.summaryDone)
         }
     }
 
@@ -85,11 +110,12 @@ struct WorkoutSummaryView: View {
                 preferences: preferences, reduceTransparency: reduceTransparency
             )
         } label: {
-            Image(systemName: "square.and.arrow.up")
-                .font(.system(size: 17, weight: .semibold))
+            Text("Share card")
+                .font(DGFont.condensedLabel(13.5))
                 .foregroundStyle(DGColor.ink1)
-                .frame(width: 52, height: 52)
-                .dgGlass(.regular, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 44)
+                .dgTile(radius: DGRadius.md, opacity: 0.66)
         }
         .buttonStyle(.dgControl)
         .accessibilityLabel("Share workout")
@@ -127,7 +153,33 @@ private struct ShareCardMenuItems: View {
     }
 }
 
-/// Gold-outlined "N personal records" card.
+/// A 20 pt bold value over an 11 pt label, centred, on a flat tile.
+private struct SummaryStatTile: View {
+    var value: String
+    var label: String
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(value)
+                .font(.system(size: 20, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(DGColor.ink1)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(DGColor.ink3)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, DGSpace.s3)
+        .padding(.vertical, 14)
+        .dgTile(radius: 18, opacity: 0.66)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(value), \(label)")
+    }
+}
+
+/// "N personal records", star on an accent disc.
 private struct PRCard: View {
     var prs: [PersonalRecordInfo]
 
@@ -141,19 +193,19 @@ private struct PRCard: View {
 
     var body: some View {
         HStack(spacing: DGSpace.s3) {
-            RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
-                .fill(DGColor.prGold)
-                .frame(width: 44, height: 44)
+            Circle()
+                .fill(DGColor.coral)
+                .frame(width: 28, height: 28)
                 .overlay {
                     Image(systemName: "star.fill")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(DGColor.inkOnCoral)
                 }
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(titleText)
-                    .font(DGFont.title3)
-                    .foregroundStyle(DGColor.prGoldText)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(DGColor.ink1)
                 Text(detailText)
                     .font(DGFont.footnote)
                     .foregroundStyle(DGColor.ink3)
@@ -162,14 +214,7 @@ private struct PRCard: View {
         }
         .padding(DGSpace.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            DGColor.prGold.opacity(0.10),
-            in: RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
-                .strokeBorder(DGColor.prGold.opacity(0.4), lineWidth: 1)
-        }
+        .dgTile(radius: 20, opacity: 0.66)
         .accessibilityElement(children: .combine)
     }
 }
@@ -185,19 +230,19 @@ private struct MilestoneUnlockedCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: DGSpace.s3) {
-            RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
-                .fill(DGColor.prGoldDeep)
-                .frame(width: 44, height: 44)
+            Circle()
+                .fill(DGColor.coral)
+                .frame(width: 28, height: 28)
                 .overlay {
                     Image(systemName: "trophy.fill")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(DGColor.inkOnCoral)
                 }
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: DGSpace.s1) {
                 Text(titleText)
-                    .font(DGFont.title3)
-                    .foregroundStyle(DGColor.prGoldText)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(DGColor.ink1)
                 ForEach(achievements) { achievement in
                     Text("\(achievement.title) · \(achievement.line)")
                         .font(DGFont.footnote)
@@ -209,14 +254,7 @@ private struct MilestoneUnlockedCard: View {
         }
         .padding(DGSpace.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            DGColor.prGold.opacity(0.10),
-            in: RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
-                .strokeBorder(DGColor.prGold.opacity(0.4), lineWidth: 1)
-        }
+        .dgTile(radius: 20, opacity: 0.66)
         .accessibilityElement(children: .combine)
     }
 }
@@ -232,33 +270,31 @@ private struct MusclesHitCard: View {
             .map { (muscle: $0.key, share: $0.value / total) }
     }
 
+    /// "Chest 46% · Shoulders 31% · Triceps 23%" — one line, as the prototype prints it.
+    private var line: String {
+        guard !topMuscles.isEmpty else { return "No sets logged" }
+        return topMuscles
+            .map { "\($0.muscle.displayName) \(Int(($0.share * 100).rounded()))%" }
+            .joined(separator: " · ")
+    }
+
     var body: some View {
-        DGAdaptiveStack(verticalAlignment: .top, spacing: DGSpace.s4) {
-            BodyMapPair(intensity: musclesHit, height: 96)
+        HStack(spacing: 14) {
+            BodyMapPair(intensity: musclesHit, height: 76)
             VStack(alignment: .leading, spacing: DGSpace.s2) {
-                Text("Muscles Hit").dgLabel()
-                if topMuscles.isEmpty {
-                    Text("No sets logged")
-                        .font(DGFont.body)
-                        .foregroundStyle(DGColor.ink1)
-                } else {
-                    // One muscle per line: "Triceps 25%" must never wrap between name and number.
-                    ForEach(topMuscles, id: \.muscle) { item in
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(item.muscle.displayName)
-                                .font(DGFont.body)
-                                .foregroundStyle(DGColor.ink1)
-                            Spacer(minLength: DGSpace.s2)
-                            Text("\(Int((item.share * 100).rounded()))%")
-                                .font(DGFont.title3)
-                                .foregroundStyle(DGColor.ink2)
-                        }
-                        .accessibilityElement(children: .combine)
-                    }
-                }
+                Text("Muscles hit")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(DGColor.ink1)
+                Text(line)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(DGColor.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            Spacer(minLength: 0)
         }
-        .dgCard()
+        .padding(DGSpace.s4)
+        .dgTile(radius: 20, opacity: 0.66)
+        .accessibilityElement(children: .combine)
     }
 }
 

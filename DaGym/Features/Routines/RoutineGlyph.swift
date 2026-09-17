@@ -7,19 +7,6 @@ enum RoutineTint: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    /// The tint a new routine gets from its name so a fresh Push / Pull / Legs set is told apart
-    /// at a glance (the design gives each routine card its own colour). Anything unrecognised
-    /// falls back to the accent; the user can always repaint it in the builder.
-    static func suggested(for name: String) -> RoutineTint {
-        let lower = name.lowercased()
-        let table: [(String, RoutineTint)] = [
-            ("pull", .ice), ("back", .ice), ("leg", .green), ("lower", .green), ("squat", .green),
-            ("upper", .violet), ("arm", .violet), ("full", .gold), ("body", .gold), ("cardio", .red),
-            ("condition", .red)
-        ]
-        return table.first { lower.contains($0.0) }?.1 ?? .coral
-    }
-
     var displayName: String {
         switch self {
         case .coral: "Coral"

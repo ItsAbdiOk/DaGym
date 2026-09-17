@@ -1,9 +1,10 @@
 import GymCore
 import SwiftUI
 
-/// Glass keypad sheet for logging a weight or rep count. Never the system
-/// keyboard — the ± column steps by the exercise's own increment and the
-/// plate line updates live. Detent-sized to ~520 pt. See mockup 10_00.
+/// The single-field keypad: a cardio field (minutes, distance, incline) or a bodyweight.
+/// A loaded set's weight, reps and effort go through `SetKeypadSheet` instead. Never the
+/// system keyboard — the ± row steps by the field's own increment and the plate line updates
+/// live. Styled like the set keypad: frosted fields and white keys on the stone page.
 ///
 /// `value` is always canonical: kg when `unit` is set, raw reps when `unit`
 /// is nil. Everything shown/typed converts to the user's unit at the edges.
@@ -48,68 +49,90 @@ struct WeightKeypadSheet: View {
     @Environment(Preferences.self) private var preferences
 
     var body: some View {
-        VStack(spacing: DGSpace.s6) {
-            Text(title).dgLabel()
+        VStack(spacing: DGSpace.s3) {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(DGColor.ink1)
+                .frame(maxWidth: .infinity, alignment: .leading)
             stepperRow
             metaLabel
             if unit != nil, purpose.showsPlateLine {
                 PlateLine(target: value, bar: bar ?? preferences.weightUnit.defaultBar, inventory: inventory)
             }
             keyGrid
-            DGPrimaryButton(
-                title: purpose.primaryTitle, symbol: "checkmark", fill: DGColor.success, height: 52
-            ) {
+            Button {
                 onDone()
                 dismiss()
+            } label: {
+                Text(purpose.primaryTitle)
+                    .font(DGFont.condensedLabel(15))
+                    .foregroundStyle(DGColor.inkOnCoral)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 46)
+                    .background(
+                        DGColor.coral, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
+                    )
             }
+            .buttonStyle(.dgControl)
             .accessibilityIdentifier(A11yID.keypadLog)
         }
-        .padding(.horizontal, DGSpace.s5)
-        .padding(.top, DGSpace.s8)
-        .padding(.bottom, DGSpace.s4)
-        .presentationDetents([.height(520)])
+        .padding(.horizontal, DGSpace.s4)
+        .padding(.top, DGSpace.s6)
+        .padding(.bottom, DGSpace.s6)
+        .presentationDetents([.height(540)])
         .presentationDragIndicator(.visible)
-        .presentationBackground(DGColor.surface1)
+        .presentationBackground(DGColor.bgBase)
+        .presentationCornerRadius(DGRadius.xl)
+        .dgDenseType()
     }
 
+    /// The one field, framed like the set keypad's selected tile, between the ± keys.
     private var stepperRow: some View {
-        HStack {
-            Button {
-                step(by: -effectiveStep)
-            } label: {
-                Image(systemName: "minus")
-                    .font(.system(size: 18, weight: .bold))
+        HStack(spacing: DGSpace.s2) {
+            stepButton(symbol: "minus", label: "Decrease by \(formattedStep)") { step(by: -effectiveStep) }
+            VStack(alignment: .leading, spacing: 7) {
+                Text(unitLabel).dgLabel()
+                Text(displayValue)
+                    .font(.system(size: 24, weight: .bold))
+                    .monospacedDigit()
                     .foregroundStyle(DGColor.ink1)
-                    .frame(width: 44, height: 44)
-                    .background(DGColor.surface3, in: Circle())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
             }
-            .buttonStyle(.dgControl)
-            .accessibilityLabel("Decrease by \(formattedStep)")
-            Spacer(minLength: DGSpace.s4)
-            Text(displayValue)
-                .dgMetric(DGFont.metricXL)
-                .foregroundStyle(DGColor.ink1)
-                .accessibilityLabel("Value")
-                .accessibilityValue(displayValue)
-            Spacer(minLength: DGSpace.s4)
-            Button {
-                step(by: effectiveStep)
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(DGColor.inkOnCoral)
-                    .frame(width: 44, height: 44)
-                    .background(DGColor.coral, in: Circle())
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, DGSpace.s3)
+            .padding(.vertical, 11)
+            .dgTile(radius: DGRadius.md, opacity: 0.85)
+            .overlay {
+                RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
+                    .strokeBorder(DGColor.coral, lineWidth: 1)
             }
-            .buttonStyle(.dgControl)
-            .accessibilityLabel("Increase by \(formattedStep)")
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Value")
+            .accessibilityValue(displayValue)
+            stepButton(symbol: "plus", label: "Increase by \(formattedStep)") { step(by: effectiveStep) }
         }
+    }
+
+    private func stepButton(symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(DGColor.ink1)
+                .frame(width: 52, height: 62)
+                .dgInkPill(radius: DGRadius.md, opacity: 0.06)
+        }
+        .buttonStyle(.dgControl)
+        .accessibilityLabel(label)
     }
 
     private var metaLabel: some View {
-        var parts = [unitLabel, "STEP \(formattedStep)"]
-        if let last { parts.append("LAST \(last)") }
-        return Text(parts.joined(separator: " · ")).dgLabel()
+        var parts = ["Step \(formattedStep)"]
+        if let last { parts.append("last \(last)") }
+        return Text(parts.joined(separator: " · "))
+            .font(.system(size: 12))
+            .foregroundStyle(DGColor.ink2)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var keyGrid: some View {
@@ -232,6 +255,7 @@ enum KeypadStep {
     }
 }
 
+/// `SetKeypadKey` with the quick ± keys picked out in the accent.
 private struct KeypadKey: View {
     var label: String
     var isAccent: Bool
@@ -243,11 +267,13 @@ private struct KeypadKey: View {
     var body: some View {
         Button(action: action) {
             Text(label)
-                .font(DGFont.condensedLabel(20))
+                .font(.system(size: isAccent ? 17 : 22, weight: isAccent ? .semibold : .medium))
+                .monospacedDigit()
                 .foregroundStyle(isAccent ? DGColor.coralText : DGColor.ink1)
                 .frame(maxWidth: .infinity)
-                .frame(minHeight: 52)
-                .dgGlass(.regular, radius: DGRadius.sm)
+                .frame(minHeight: 48)
+                .dgTile(radius: DGRadius.md, opacity: 0.8)
+                .shadow(color: Color(hex: 0x3C2814).opacity(0.08), radius: 1, y: 1)
         }
         .buttonStyle(.dgControl)
         .accessibilityLabel(accessibilityLabel ?? label)
@@ -282,8 +308,8 @@ private struct PlateLine: View {
             .foregroundStyle(isInvalid ? DGColor.danger : DGColor.ink2)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, DGSpace.s3)
-            .frame(minHeight: 40)
-            .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous))
+            .frame(minHeight: 36)
+            .dgInkPill(radius: DGRadius.sm, opacity: 0.045)
             .onChange(of: isInvalid) { _, invalid in
                 if invalid { Haptics.invalid() }
             }

@@ -290,6 +290,48 @@ enum CoachChatTranscript {
         return entries
     }
 
+    /// One line of the tool trail: "Searching exercises ×2".
+    struct ToolLine: Equatable, Hashable, Sendable {
+        var label: String
+        var count: Int
+        var failed: Bool
+
+        var text: String { count > 1 ? "\(label) ×\(count)" : label }
+    }
+
+    /// What the screen stacks: a message, or a run of tool calls drawn as one bubble listing
+    /// what the coach read ("Reading your schedule / Searching exercises ×2"), the way the
+    /// prototype shows a turn in progress.
+    enum Block: Identifiable, Equatable {
+        case message(CoachChatMessage)
+        case trail([ToolLine])
+
+        var id: String {
+            switch self {
+            case .message(let message): message.id.uuidString
+            case .trail(let lines): "trail:" + lines.map { "\($0.label):\($0.count):\($0.failed)" }.joined()
+            }
+        }
+    }
+
+    static func blocks(_ messages: [CoachChatMessage]) -> [Block] {
+        var blocks: [Block] = []
+        for entry in collapse(messages) {
+            switch entry {
+            case .message(let message):
+                blocks.append(.message(message))
+            case .toolGroup(let label, let count, let failed):
+                let line = ToolLine(label: label, count: count, failed: failed)
+                if case .trail(let lines)? = blocks.last {
+                    blocks[blocks.count - 1] = .trail(lines + [line])
+                } else {
+                    blocks.append(.trail([line]))
+                }
+            }
+        }
+        return blocks
+    }
+
     /// The messages of the turn in progress or just finished — the last question and everything
     /// after it. These never fold behind "Show more": the lifter is reading them now.
     static func latestTurnIDs(_ messages: [CoachChatMessage]) -> Set<UUID> {

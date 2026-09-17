@@ -6,13 +6,13 @@ import Testing
 struct RoutineTintSuggestionTests {
     @Test("Push / Pull / Legs get three different tints")
     func pushPullLegsDiffer() {
-        let tints = ["Push A", "Pull B", "Legs"].map(RoutineTint.suggested(for:))
+        let tints = ["Push A", "Pull B", "Legs"].map(RoutineTintSuggestion.tint(for:))
         #expect(Set(tints).count == 3)
-        #expect(tints[0] == .coral)
+        #expect(tints[0] == "coral")
     }
 
     @Test("Unknown names fall back to the accent")
     func unknownIsAccent() {
-        #expect(RoutineTint.suggested(for: "Tuesday thing") == .coral)
+        #expect(RoutineTintSuggestion.tint(for: "Tuesday thing") == "coral")
     }
 }

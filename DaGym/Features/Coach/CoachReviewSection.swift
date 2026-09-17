@@ -13,7 +13,6 @@ struct CoachReviewSection: View {
     @Environment(CoachServices.self) private var coach
     @State private var cards: [CoachCard] = []
     @State private var changes: [String: ReviewChange] = [:]
-    @State private var expanded: Set<String> = []
     @State private var isReviewing = false
     @State private var hasReviewed = false
     /// Why the last Approve did nothing, shown under the cards until the next tap.
@@ -30,11 +29,11 @@ struct CoachReviewSection: View {
                     reviewTask = Task { await review() }
                 }
                     .buttonStyle(.dgControl)
-                    .font(DGFont.condensedLabel(13))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, DGSpace.s3)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(DGColor.inkOnCoral)
+                    .padding(.horizontal, DGSpace.s4)
                     .frame(minHeight: 36)
-                    .background(DGColor.aiViolet, in: Capsule())
+                    .background(DGColor.coral, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .disabled(isReviewing)
                     .accessibilityIdentifier(A11yID.coachReview)
             }
@@ -46,9 +45,8 @@ struct CoachReviewSection: View {
             }
             ForEach(cards, id: \.fingerprint) { card in
                 CoachCardView(
-                    card: card, isExpanded: expanded.contains(card.fingerprint),
-                    formatWeight: preferences.formatWeight,
-                    onToggle: { toggle(card) }, onApprove: { approve(card) }, onDismiss: { dismiss(card) }
+                    card: card, formatWeight: preferences.formatWeight,
+                    onApprove: { approve(card) }, onDismiss: { dismiss(card) }
                 )
             }
             if let applyFailure {
@@ -90,14 +88,6 @@ struct CoachReviewSection: View {
         }
         cards = built
         changes = byFingerprint
-    }
-
-    private func toggle(_ card: CoachCard) {
-        if expanded.contains(card.fingerprint) {
-            expanded.remove(card.fingerprint)
-        } else {
-            expanded.insert(card.fingerprint)
-        }
     }
 
     private func approve(_ card: CoachCard) {
