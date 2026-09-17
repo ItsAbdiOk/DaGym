@@ -118,16 +118,24 @@ struct InsightsScreen: View {
             rule: card.rule, fingerprint: card.fingerprint, outcome: .approved
         )
         var applied: CoachDeloadApplication?
-        if case .deloadExercise(let name, let exerciseID, let toWeightKg) = card.suggestedAction {
+        var plannedWeek = false
+        switch card.suggestedAction {
+        case .deloadExercise(let name, let exerciseID, let toWeightKg):
             applied = store.applyCoachDeload(
                 exerciseID: exerciseID, exerciseName: name, toWeightKg: toWeightKg
             )
+        case .planDeloadWeek:
+            store.planDeloadWeek()
+            plannedWeek = true
+        default:
+            break
         }
         let message = applied.map {
             "\($0.exerciseName) set to \(preferences.formatWeight(kg: $0.weightKg))"
-        } ?? "Approved \"\(card.title)\""
+        } ?? (plannedWeek ? "Deload week planned" : "Approved \"\(card.title)\"")
         undoAction = UndoAction(message: message) {
             if let applied { store.undoCoachDeload(applied) }
+            if plannedWeek { store.cancelPlannedDeloadWeek() }
             store.removeCoachInteraction(id: interactionID)
             refresh()
         }

@@ -55,6 +55,8 @@ public enum CoachSuggestedAction: Hashable, Sendable {
     case changeProgressionRule(exerciseID: UUID, exerciseName: String, rule: ProgressionRule)
     /// Move the session on `from` to `to`, leaving `from` as a rest day.
     case moveRestDay(from: Weekday, to: Weekday)
+    /// Plan a lighter week from the next session on (the app's `planDeloadWeek`).
+    case planDeloadWeek
     /// No concrete action — the card is informational only (e.g. a PR callout).
     case none
 }

@@ -285,3 +285,18 @@ struct WorkoutStoreCoachApproveTests {
         store.discard(session: next)
     }
 }
+
+@MainActor
+@Suite("Insights: plan a deload week")
+struct InsightsPlanDeloadWeekTests {
+    @Test("planning then undoing a deload week restores the interrupted programme")
+    func planAndUndo() throws {
+        let store = try makeStore(seed: .firstLaunch)
+        let program = try #require(store.adoptStarterPlan(.pushPullLegs))
+        store.planDeloadWeek()
+        #expect(store.activeProgramModel()?.name == WorkoutStore.deloadProgramName)
+        store.cancelPlannedDeloadWeek()
+        #expect(store.activeProgramModel()?.id == program.id)
+        #expect(!store.programs().contains { $0.name == WorkoutStore.deloadProgramName })
+    }
+}

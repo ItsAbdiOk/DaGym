@@ -78,6 +78,24 @@ extension WorkoutStore {
         save()
     }
 
+    /// Undo for `planDeloadWeek()` from the Insights toast: deletes the still-running deload shim
+    /// and hands control straight back to the programme it interrupted (the one most recently
+    /// started that isn't complete — the same derivation the expiry path uses). A shim that has
+    /// already expired is left alone; it is the record of a deload actually taken.
+    func cancelPlannedDeloadWeek() {
+        let descriptor = FetchDescriptor<ProgramModel>(predicate: #Predicate { $0.isActive })
+        guard let shim = fetchFirst(descriptor), shim.name == Self.deloadProgramName,
+              shim.completedAt == nil else { return }
+        context.delete(shim)
+        if let resumed = fetch(FetchDescriptor<ProgramModel>())
+            .filter({ $0.name != Self.deloadProgramName && $0.completedAt == nil })
+            .compactMap({ model in model.startedAt.map { (model, $0) } })
+            .max(by: { $0.1 < $1.1 })?.0 {
+            resumed.isActive = true
+        }
+        save()
+    }
+
     // MARK: - Helpers
 
     /// Shared with `WorkoutStore+Programs.swift`'s `resumeProgramIfDeloadExpired()`.

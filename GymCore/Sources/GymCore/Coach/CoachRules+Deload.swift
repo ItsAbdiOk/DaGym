@@ -27,7 +27,7 @@ extension CoachRules {
         ]
         return [CoachCard(
             rule: .deloadOverdue, severity: .warning, title: "A deload looks due",
-            body: suggestion.reason, evidence: evidence, suggestedAction: .none,
+            body: suggestion.reason, evidence: evidence, suggestedAction: .planDeloadWeek,
             distinguishingKey: distinguishingKey(driving: driving, hardWeeksInvolved: hardWeeksInvolved),
             firedDate: now
         )]

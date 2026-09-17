@@ -34,6 +34,7 @@ enum CoachCardCopy {
         case .changeRepRange(_, _, let low, let high): "Set \(low)–\(high) reps"
         case .changeProgressionRule(_, _, let rule): "Use \(rule.displayName)"
         case .moveRestDay(_, let to): "Move to \(to.displayName)"
+        case .planDeloadWeek: "Plan a deload week"
         case .substituteExercise, .addSession, .restMuscle, .easeBackIn: "Approve"
         case .none: "Got it"
         }
@@ -63,6 +64,9 @@ enum CoachCardCopy {
                 + "\(Int((loadFraction * 100).rounded()))% of your usual weight."
         case .addExercise, .replaceExercise, .changeRepRange, .changeProgressionRule, .moveRestDay:
             reviewActionNote(for: action)
+        case .planDeloadWeek:
+            "Schedules a lighter week from your next session, then hands back to your programme. "
+                + "You can undo it."
         case .none:
             nil
         }
@@ -84,7 +88,8 @@ enum CoachCardCopy {
             "Puts \(exerciseName) on \(rule.displayName) progression. You can undo it."
         case .moveRestDay(let from, let to):
             "Moves \(from.displayName)'s session to \(to.displayName) in your schedule. You can undo it."
-        case .deloadExercise, .substituteExercise, .addSession, .restMuscle, .easeBackIn, .none:
+        case .deloadExercise, .substituteExercise, .addSession, .restMuscle, .easeBackIn, .planDeloadWeek,
+             .none:
             nil
         }
     }
