@@ -108,7 +108,10 @@ struct ProgressHubSummary {
     static func needsWork(snapshot: RecoverySnapshot, gap: CoverageGap?, now: Date) -> MuscleTile? {
         // Nothing trained, ever: every muscle is "untrained this week", and naming one of them
         // as needing work on a brand-new install is a warning about nothing.
+        // A coverage gap with sets in it is itself proof of training (the recovery snapshot
+        // only carries muscles worked inside its own window).
         let everTrained = snapshot.detrainedMuscles.contains { $0.lastTrained != nil }
+            || (gap?.sets ?? 0) > 0
         guard !snapshot.perMuscle.isEmpty || everTrained else { return nil }
         if let rested = snapshot.detrainedMuscles.first(where: { $0.lastTrained != nil }),
            let last = rested.lastTrained {
