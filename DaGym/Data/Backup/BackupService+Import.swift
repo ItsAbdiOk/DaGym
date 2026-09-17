@@ -82,7 +82,7 @@ extension BackupService {
     /// stay and re-running the same file skips them by id.
     static func `import`(
         document: BackupDocument, store: WorkoutStore, preferences: Preferences,
-        progress: @escaping ImportActor.ProgressHandler = { _ in }
+        progress: @escaping ImportActor.ProgressHandler = { _ in }, history: ImportHistoryLog = .shared
     ) async throws -> ImportReport {
         let photos = document.progressPhotos ?? []
         let thumbnails = await Task.detached(priority: .userInitiated) { thumbnails(for: photos) }.value
@@ -103,6 +103,7 @@ extension BackupService {
         applyPreferences(document.preferences, to: preferences)
         report.preferencesRestored = true
         store.absorbExternalImport(rebuildRecords: report.workoutsImported > 0)
+        history.record(.backup(report))
         return report
     }
 

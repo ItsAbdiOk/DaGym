@@ -53,6 +53,17 @@ struct DataSettingsSection: View {
                 ) {
                     showingImporter = true
                 }
+                SettingsDivider()
+                NavigationLink {
+                    ImportHistoryView()
+                } label: {
+                    SettingsRow(label: "Import history", sub: "Every backup, CSV and Health import") {
+                        SettingsChevron()
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.dgRow)
+                .accessibilityIdentifier(A11yID.importHistoryRow)
             }
             footnote
         }

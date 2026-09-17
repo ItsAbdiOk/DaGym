@@ -98,6 +98,8 @@ enum A11yID {
     static let historyList = "history.list"
     static let historyRow0 = "history.row.0"
     static let historyNote = "history.note"
+    static let importHistoryRow = "settings.data.importHistory"
+    static let importHistoryList = "settings.data.importHistory.list"
     static let routinesStarterPlan = "routines.starterPlan"
     /// `label` is the `TrainSegment` raw value ("Routines" / "Programs" / "Schedule").
     static func trainSegment(_ label: String) -> String { "train.segment.\(label.lowercased())" }

@@ -142,9 +142,15 @@ final class HealthInsightsService {
     /// opted into automatic import — from the background observer. Returns what actually landed,
     /// for a confirmation.
     @discardableResult
-    func importPendingExternalWorkouts() async -> [ImportedHealthWorkoutModel] {
+    func importPendingExternalWorkouts(
+        history: ImportHistoryLog = .shared
+    ) async -> [ImportedHealthWorkoutModel] {
         let pending = await pendingExternalWorkouts()
-        return pending.compactMap { workoutStore.importExternalWorkout($0) }
+        let imported = pending.compactMap { workoutStore.importExternalWorkout($0) }
+        // Recorded even when nothing was new, like the file imports: the row says the pull
+        // happened and found nothing, which is an answer.
+        history.record(.health(workouts: imported.count))
+        return imported
     }
 
     // MARK: - Bodyweight chart merge (Body screen)

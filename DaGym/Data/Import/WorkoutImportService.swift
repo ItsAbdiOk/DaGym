@@ -139,7 +139,8 @@ enum WorkoutImportService {
     /// the external writes (`absorbExternalImport`) — on a cancel too, for the batches that had
     /// landed. Throws `CancellationError` when the calling task is cancelled mid-import.
     static func apply(
-        preview: ImportPreview, store: WorkoutStore, progress: @escaping ImportActor.ProgressHandler
+        preview: ImportPreview, store: WorkoutStore, progress: @escaping ImportActor.ProgressHandler,
+        history: ImportHistoryLog = .shared
     ) async throws -> WorkoutImportReport {
         // Anything pending on the main context is saved first so the actor's context sees it.
         store.save()
@@ -147,6 +148,7 @@ enum WorkoutImportService {
         do {
             let report = try await actor.importWorkouts(preview, progress: progress)
             store.absorbExternalImport(rebuildRecords: report.workoutsImported > 0)
+            history.record(.workouts(report, source: preview.source))
             return report
         } catch {
             store.absorbExternalImport(rebuildRecords: true)
