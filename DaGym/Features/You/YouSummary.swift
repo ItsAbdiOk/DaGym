@@ -67,7 +67,8 @@ struct YouWeekCard: View {
             ring
             VStack(alignment: .leading, spacing: 13) {
                 metric(
-                    "Volume", value: preferences.formatVolume(kg: summary.volumeKg) + " " + preferences.unitSymbol,
+                    "Volume",
+                    value: preferences.formatVolume(kg: summary.volumeKg) + " " + preferences.unitSymbol,
                     trailing: summary.volumeDeltaPercent.map { Self.signed($0, suffix: "%") },
                     trailingTint: DGColor.coralText
                 )
@@ -162,7 +163,9 @@ struct YouUpNextCard: View {
         }
         .padding(.vertical, 15)
         .padding(.horizontal, 17)
-        .background(Color(hex: 0x1C1917).opacity(0.94), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(
+            Color(hex: 0x1C1917).opacity(0.94), in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+        )
     }
 }
 
@@ -179,7 +182,9 @@ struct StartFAB: View {
                 .background(DGColor.coral, in: Circle())
                 .overlay {
                     Circle().strokeBorder(
-                        LinearGradient(colors: [.white.opacity(0.4), .clear], startPoint: .top, endPoint: .center),
+                        LinearGradient(
+                            colors: [.white.opacity(0.4), .clear], startPoint: .top, endPoint: .center
+                        ),
                         lineWidth: 1
                     )
                 }
