@@ -10,6 +10,8 @@ struct DebugScreenView: View {
     @Environment(Preferences.self) private var preferences
     @State private var session = SampleData.makeSession()
     @State private var weight = 82.5
+    @State private var reps = 8.0
+    @State private var effort: Effort? = Effort(rpe: 8)
     @State private var scale = Effort.Scale.rpe
     @State private var healthSync: HealthSyncService?
     @State private var healthInsights: HealthInsightsService?
@@ -68,6 +70,28 @@ struct DebugScreenView: View {
             sheetHost { SwapExerciseSheet(exercise: SampleData.cableFly, onPick: { _, _ in }) }
         case .newExercise:
             sheetHost { NewExerciseSheet(onSave: { _ in }) }
+        case .setKeypad:
+            sheetHost {
+                SetKeypadSheet(
+                    exercise: SampleData.bench, set: SetEntry(weightKg: 82.5, reps: 8), setNumber: 2,
+                    initialField: .weight, effortScale: scale, weight: $weight, reps: $reps, effort: $effort,
+                    onLog: { _ in }
+                )
+            }
+        case .exerciseActions:
+            sheetHost {
+                ExerciseActionsSheet(
+                    options: .init(
+                        name: SampleData.bench.name, isCardio: false, hasPrevious: false, hasNext: true,
+                        isInSuperset: false
+                    ),
+                    onAction: { _ in }
+                )
+            }
+        case .finish:
+            sheetHost {
+                FinishWorkoutSheet(prompt: "4 / 19 sets done · 25:05 elapsed", onFinish: {}, onDiscard: {})
+            }
         }
     }
 

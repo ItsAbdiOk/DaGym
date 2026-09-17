@@ -1,10 +1,11 @@
 import GymCore
 import SwiftUI
 
-/// "Chrome sheds on scroll" (mockups 02_00/02_01): scrolling down past a threshold condenses
-/// the nav to a single 40pt row and slides the action bar away, leaving a compact rest pill
-/// plus a coral "+" satellite; scrolling back up restores everything. `ChromeCollapseState`
-/// owns the threshold + hysteresis math — this file just renders its two states.
+/// The sticky header from the redesign prototype: a round chevron (the workout-options menu),
+/// "Push · Heavy" over "25:00 · Wed 17 Sep", the hold-to-talk mic and the accent "Finish"
+/// pill, then three frosted stat tiles. Scrolling down past a threshold sheds the tiles and
+/// condenses the row (`ChromeCollapseState` owns the threshold + hysteresis math); scrolling
+/// back up restores them.
 extension ActiveWorkoutView {
     /// Feeds a new `contentOffset.y` reading into `chromeCollapse`, animating only when the
     /// collapsed/expanded state actually flips.
@@ -17,7 +18,7 @@ extension ActiveWorkoutView {
         withAnimation(DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion)) { chromeCollapse = next }
     }
 
-    /// The "…" next to FINISH: layout and session-level additions that don't belong on any one
+    /// The chevron's menu: layout and session-level additions that don't belong on any one
     /// exercise. The layout picker is a per-session override of `Preferences.workoutLayout`
     /// (the saved default lives in Settings › Workout); the steppers toggle is remembered.
     var headerMenu: some View {
@@ -40,11 +41,7 @@ extension ActiveWorkoutView {
                 activeSheet = .addRoutine
             }
         } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(DGColor.ink1)
-                .frame(width: 44, height: 44)
-                .dgGlass(.regular, in: Circle())
+            WorkoutRoundGlyph(symbol: "chevron.down", size: 32)
         }
         .accessibilityLabel("Workout options")
     }
@@ -57,40 +54,61 @@ extension ActiveWorkoutView {
     // MARK: Expanded header
 
     var navHeader: some View {
-        // Title on its own line at accessibility sizes; the controls become a second row.
-        DGAdaptiveStack(verticalAlignment: .top, spacing: DGSpace.s3) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(startedAtLabel).dgLabel()
-                Text(session.title)
-                    .font(DGFont.title1)
-                    .foregroundStyle(DGColor.ink1)
-            }
-            Spacer(minLength: DGSpace.s2)
-            headerControls
+        VStack(spacing: DGSpace.s3) {
+            headerRow
+            statTiles
         }
         .padding(.horizontal, DGSpace.s4)
         .padding(.top, DGSpace.s2)
         .padding(.bottom, DGSpace.s3)
-        .dgGlass(.regular, radius: 0)
+        .background(headerBackdrop)
+    }
+
+    /// `rgba(246,243,239,.78)` over a blur with a hairline underneath — the page colour, not a
+    /// glass pill, so it reads as the page continuing rather than a floating bar.
+    private var headerBackdrop: some View {
+        DGColor.bgBase.opacity(0.78)
+            .background(.ultraThinMaterial)
+            .overlay(alignment: .bottom) { Divider().overlay(DGColor.hairline) }
+            .ignoresSafeArea(edges: .top)
+    }
+
+    private var headerRow: some View {
+        // Title on its own line at accessibility sizes; the controls become a second row.
+        DGAdaptiveStack(verticalAlignment: .center, spacing: 10) {
+            HStack(spacing: 10) {
+                headerMenu
+                titleBlock
+            }
+            Spacer(minLength: DGSpace.s2)
+            headerControls
+        }
+    }
+
+    private var titleBlock: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(session.title)
+                .font(DGFont.title3)
+                .foregroundStyle(DGColor.ink1)
+                .lineLimit(1)
+            HStack(spacing: 0) {
+                if !session.isBackfilled {
+                    TimelineView(.periodic(from: session.startedAt, by: 1)) { context in
+                        Text(WorkoutSession.clock(session.elapsedSeconds(at: context.date)))
+                            .monospacedDigit()
+                    }
+                    Text(" · ")
+                }
+                Text(startedAtLabel)
+            }
+            .font(.system(size: 12.5))
+            .foregroundStyle(DGColor.ink3)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     var headerControls: some View {
-        HStack(alignment: .top, spacing: DGSpace.s3) {
-            if !session.isBackfilled {
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("Elapsed").dgLabel()
-                    TimelineView(.periodic(from: session.startedAt, by: 1)) { context in
-                        Text(WorkoutSession.clock(session.elapsedSeconds(at: context.date)))
-                            .dgMetric(DGFont.metricL)
-                            .foregroundStyle(DGColor.ink1)
-                    }
-                }
-                // The clock never compresses; the title on the other side of the row wraps.
-                .fixedSize()
-            }
-            DGPrimaryButton(title: "Finish", height: 44) { showFinishConfirm = true }
-                .frame(width: 96)
-                .accessibilityIdentifier(A11yID.workoutFinish)
+        HStack(spacing: DGSpace.s2) {
             // Voice logging entry point (plan: DaGym/Features/Voice). The controller is the
             // screen's (`voiceController`), owned once for the whole workout.
             if let voiceController {
@@ -99,90 +117,102 @@ extension ActiveWorkoutView {
                     undoAction: $undoAction
                 )
             }
-            headerMenu
+            finishPill
         }
         .fixedSize(horizontal: true, vertical: false)
         .dgDenseType()
     }
 
-    var statStrip: some View {
-        DGAdaptiveStack(spacing: 0, threshold: .accessibility3) {
-            StatTile(
-                value: preferences.formatWeight(kg: session.volumeKg),
-                label: "\(preferences.unitSymbol) volume"
-            )
-            Divider().overlay(DGColor.hairline)
-            StatTile(value: "\(session.setsDone) / \(session.setsTotal)", label: "sets")
-            Divider().overlay(DGColor.hairline)
-            StatTile(value: "\(session.prCount)", label: "pr", tint: DGColor.prGoldText)
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .background(DGColor.surface1, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
-                .strokeBorder(DGColor.hairline, lineWidth: 1)
-        }
-        .padding(.horizontal, DGSpace.s4)
-        .padding(.bottom, DGSpace.s3)
+    private var finishPill: some View {
+        Button("Finish") { showFinishConfirm = true }
+            .buttonStyle(.dgControl)
+            .font(DGFont.condensedLabel(13.5))
+            .foregroundStyle(DGColor.inkOnCoral)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 36)
+            .background(DGColor.coral, in: Capsule())
+            .accessibilityIdentifier(A11yID.workoutFinish)
     }
 
-    /// Single 40pt row: title + elapsed on one line, FINISH shrunk to a 36pt pill.
+    /// "VOLUME 2.2 t · SETS 4 / 19 · PRS 1" — three flat tiles, kicker over a 15 pt tabular value.
+    var statTiles: some View {
+        let volume = Self.volumeTile(kg: session.volumeKg, preferences: preferences)
+        return DGAdaptiveStack(spacing: DGSpace.s2, threshold: .accessibility3) {
+            WorkoutStatTile(kicker: "Volume", value: volume.value, suffix: volume.suffix)
+            WorkoutStatTile(kicker: "Sets", value: "\(session.setsDone) / \(session.setsTotal)")
+            WorkoutStatTile(kicker: "PRs", value: "\(session.prCount)")
+        }
+    }
+
+    /// Session volume for the tile: tonnes to one decimal for a kg lifter ("2.2 t" fits where
+    /// "2 240 kg" wraps); the grouped pound total for a lb lifter, since pounds have no tonne.
+    static func volumeTile(kg: Double, preferences: Preferences) -> (value: String, suffix: String) {
+        guard preferences.weightUnit == .kg else {
+            return (preferences.formatVolume(kg: kg), preferences.unitSymbol)
+        }
+        return (String(format: "%.1f", (kg / 100).rounded() / 10), "t")
+    }
+
+    /// Single 40pt row: title + elapsed on one line, Finish shrunk beside it.
     var condensedNavHeader: some View {
         HStack(spacing: DGSpace.s3) {
+            headerMenu
             Text(session.title)
                 .font(DGFont.title3)
                 .foregroundStyle(DGColor.ink1)
                 .lineLimit(1)
             Spacer(minLength: DGSpace.s2)
-            TimelineView(.periodic(from: session.startedAt, by: 1)) { context in
-                Text(WorkoutSession.clock(session.elapsedSeconds(at: context.date)))
-                    .dgMetric(DGFont.body)
-                    .foregroundStyle(DGColor.ink1)
+            if !session.isBackfilled {
+                TimelineView(.periodic(from: session.startedAt, by: 1)) { context in
+                    Text(WorkoutSession.clock(session.elapsedSeconds(at: context.date)))
+                        .font(.system(size: 12.5))
+                        .monospacedDigit()
+                        .foregroundStyle(DGColor.ink3)
+                }
             }
-            Button("Finish") { showFinishConfirm = true }
-                .buttonStyle(.dgControl)
-                .font(DGFont.condensedLabel(13))
-                .foregroundStyle(DGColor.inkOnCoral)
-                .padding(.horizontal, DGSpace.s3)
-                .frame(minHeight: 36)
-                .background(DGColor.coral, in: Capsule())
-                .accessibilityIdentifier(A11yID.workoutFinish)
+            finishPill
         }
         .padding(.horizontal, DGSpace.s4)
-        .frame(minHeight: 40)
-        .dgGlass(.regular, radius: 0)
+        .padding(.vertical, DGSpace.s2)
+        .background(headerBackdrop)
         .dgDenseType()
     }
 
-    /// The bottom sticky group, swapped between the full action bar and the condensed
-    /// rest-pill + "+" satellite as `chromeCollapse` flips.
-    @ViewBuilder
+    /// The floating bottom chrome: only the rest pill, in either scroll state. The list's own
+    /// "Add exercise / Reorder" pills sit at the end of the scroll, as in the prototype.
     var bottomChrome: some View {
-        if chromeCollapse.isCollapsed {
-            condensedBottomGroup
-        } else {
-            bottomGroup
-        }
+        RestPillSection(session: session)
+            .padding(.horizontal, DGSpace.s4)
+            .padding(.bottom, DGSpace.s3)
     }
+}
 
-    /// Compact bottom chrome: rest pill (only while resting) + a single coral "+" satellite
-    /// that opens the add-exercise sheet, replacing the full action bar.
-    var condensedBottomGroup: some View {
-        HStack(spacing: DGSpace.s3) {
-            RestPillCompactSection(session: session)
-            Spacer(minLength: 0)
-            Button { activeSheet = .addExercise } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(DGColor.inkOnCoral)
-                    .frame(width: 52, height: 52)
-                    .background(DGColor.coral, in: Circle())
-                    .shadow(color: DGColor.coral.opacity(0.35), radius: 12, y: 6)
+/// One of the header's three tiles: an 11 pt uppercase kicker over a 15 pt semibold value.
+struct WorkoutStatTile: View {
+    var kicker: String
+    var value: String
+    var suffix: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(kicker).dgLabel()
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(value)
+                    .font(.system(size: 15, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(DGColor.ink1)
+                if let suffix {
+                    Text(suffix)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(DGColor.ink3)
+                }
             }
-            .buttonStyle(.dgControl)
-            .accessibilityLabel("Add exercise")
         }
-        .padding(.horizontal, DGSpace.s4)
-        .padding(.bottom, DGSpace.s2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .dgTile(radius: 13)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(value)\(suffix.map { " \($0)" } ?? ""), \(kicker)")
     }
 }

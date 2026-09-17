@@ -1,8 +1,10 @@
 import GymCore
 import SwiftUI
 
-/// Mid-workout swap: pick a reason (or type one), see why the coach chose these three, then
-/// swap. See mockup 10_01 (left). Candidates always come from the rule engine
+/// Mid-workout swap, in two steps as the prototype draws it: first "Why swap this exercise?"
+/// as a plain list of reasons (or "Search the library instead"), then the three candidates
+/// for that reason with the coach's why, a field for the reason in your own words, and the
+/// library as a fallback. Candidates always come from the rule engine
 /// (`WorkoutStore.scoredSubstitutes`, plan §6.6); when the on-device coach is available it
 /// reorders those same three for the reason in the lifter's own words and explains each — it
 /// can never add an exercise (`SubstitutionRankingValidator`).
@@ -19,6 +21,8 @@ struct SwapExerciseSheet: View {
     @Environment(CoachServices.self) private var coach
     @Environment(\.dismiss) private var dismiss
     @State private var reason = SwapReason.machineTaken
+    /// Nil until a reason is picked: the first step is the reason list.
+    @State private var hasReason = false
     @State private var reasonText = ""
     @State private var suggestions: [SubstitutionSuggestion] = []
     @State private var isRanking = false
@@ -26,26 +30,13 @@ struct SwapExerciseSheet: View {
     @State private var pendingCandidate: ExerciseInfo?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s5) {
-            Text("Swap \(exercise.name)")
-                .font(DGFont.title1)
-                .foregroundStyle(DGColor.ink1)
-            reasonChips
-            reasonField
-            WhyCard(title: isRanking ? "Ordering for your reason…" : "Why these three", message: whyMessage)
-            candidateList
-            Button("Search the library instead") { showingLibrary = true }
-                .buttonStyle(.dgControl)
-                .font(DGFont.condensedLabel(13))
-                .foregroundStyle(DGColor.ink3)
-                .frame(maxWidth: .infinity)
+        Group {
+            if hasReason {
+                candidatesStep
+            } else {
+                reasonStep
+            }
         }
-        .padding(.horizontal, DGSpace.s5)
-        .padding(.top, DGSpace.s5)
-        .padding(.bottom, DGSpace.s4)
-        .presentationDetents([.height(640)])
-        .presentationDragIndicator(.visible)
-        .presentationBackground(DGColor.surface1)
         .task(id: reason) { await refresh() }
         .sheet(isPresented: $showingLibrary) {
             ExercisePickerSheet(onPick: use)
@@ -74,8 +65,45 @@ struct SwapExerciseSheet: View {
         Binding(get: { pendingCandidate != nil }, set: { if !$0 { pendingCandidate = nil } })
     }
 
-    private var reasonChips: some View {
-        FlowChips(reason: $reason)
+    /// Step one: the prototype's "Why swap this exercise?" list.
+    private var reasonStep: some View {
+        WorkoutChoiceSheet(title: "Why swap this exercise?") {
+            ForEach(Array(FlowChips.options.enumerated()), id: \.offset) { _, option in
+                WorkoutChoiceRow(title: option.title) {
+                    reason = option.reason
+                    hasReason = true
+                }
+            }
+            WorkoutChoiceRow(title: "Search the library instead", isLast: true) { showingLibrary = true }
+        }
+        .presentationDetents([.height(CGFloat(FlowChips.options.count + 1) * 48 + 132)])
+    }
+
+    /// Step two: the candidates for the chosen reason.
+    private var candidatesStep: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: DGSpace.s4) {
+                Text("Swap \(exercise.name)")
+                    .font(DGFont.title3)
+                    .foregroundStyle(DGColor.ink1)
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
+                FlowChips(reason: $reason)
+                reasonField
+                WhyCard(
+                    title: isRanking ? "Ordering for your reason…" : "Why these three", message: whyMessage,
+                    labelColor: DGColor.coralText
+                )
+                candidateList
+                WorkoutPillButton(title: "Search the library instead") { showingLibrary = true }
+            }
+            .padding(.horizontal, DGSpace.s4)
+            .padding(.top, DGSpace.s5)
+            .padding(.bottom, DGSpace.s4)
+        }
+        .presentationDetents([.height(640), .large])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(DGColor.bgBase)
     }
 
     /// Free text on top of the chips: "left knee's twinging", "only dumbbells free". A typed
@@ -87,7 +115,7 @@ struct SwapExerciseSheet: View {
             .foregroundStyle(DGColor.ink1)
             .padding(.horizontal, DGSpace.s4)
             .frame(minHeight: 44)
-            .dgCard(padding: 0)
+            .dgTile(radius: DGRadius.md, opacity: 0.7)
             .submitLabel(.done)
             .onSubmit {
                 if let parsed = SwapReasonParser.parse(reasonText), parsed != reason {
@@ -157,18 +185,19 @@ struct SwapExerciseSheet: View {
     }
 }
 
-/// Reason chips wrap onto a second line, matching the mockup's two-row layout.
+/// Reason chips on the candidates step, so the reason can still be changed without going back.
 private struct FlowChips: View {
     @Binding var reason: SwapReason
 
-    private static let options: [(reason: SwapReason, title: String)] = [
+    /// The prototype's reason list, in its order.
+    static let options: [(reason: SwapReason, title: String)] = [
         (.machineTaken, "Machine taken"),
-        (.noBarbell, "No barbell"),
+        (.noBarbell, "No barbell free"),
         (.shoulderHurts, "Shoulder hurts"),
         (.shortOnTime, "Short on time"),
         // The Coach's struggling-exercise card tells the lifter to swap from here, so the reason
         // it scored its suggestion with has to be one they can actually pick.
-        (.strugglingWithExercise, "Struggling with it")
+        (.strugglingWithExercise, "Struggling today")
     ]
 
     static func title(for reason: SwapReason) -> String {
@@ -179,10 +208,7 @@ private struct FlowChips: View {
         let columns = [GridItem(.adaptive(minimum: 110), spacing: DGSpace.s2)]
         LazyVGrid(columns: columns, alignment: .leading, spacing: DGSpace.s2) {
             ForEach(Array(Self.options.enumerated()), id: \.offset) { _, option in
-                DGChip(
-                    title: option.title, selected: reason == option.reason,
-                    selectedFill: DGColor.aiViolet, selectedInk: .white
-                ) {
+                DGChip(title: option.title, selected: reason == option.reason) {
                     reason = option.reason
                 }
             }
@@ -211,8 +237,8 @@ private struct CandidateRow: View {
                     DGColor.surface2, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
                 )
             VStack(alignment: .leading, spacing: 2) {
-                Text(exercise.name.uppercased())
-                    .font(DGFont.title3)
+                Text(exercise.name)
+                    .font(.system(size: 14.5, weight: .semibold))
                     .foregroundStyle(DGColor.ink1)
                 Text(suggestion.why)
                     .font(DGFont.footnote)
@@ -222,12 +248,13 @@ private struct CandidateRow: View {
             Button("Use") { onUse(exercise) }
                 .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(12))
-                .foregroundStyle(isPrimary ? .white : DGColor.ink2)
+                .foregroundStyle(isPrimary ? DGColor.inkOnCoral : DGColor.ink2)
                 .padding(.horizontal, DGSpace.s3)
                 .frame(minHeight: 36)
-                .background(isPrimary ? DGColor.aiViolet : DGColor.surface3, in: Capsule())
+                .background(isPrimary ? DGColor.coral : DGColor.surface3, in: Capsule())
         }
-        .dgCard(padding: DGSpace.s3)
+        .padding(DGSpace.s3)
+        .dgTile(radius: DGRadius.md)
     }
 }
 

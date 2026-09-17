@@ -6,6 +6,9 @@ import Foundation
 enum DebugRoute: String, CaseIterable {
     case home, workout, rest, library, exerciseDetail, builder, summary, history, backfill
     case keypad, effort, swap, newExercise
+    /// The redesigned workout sheets: the three-field set keypad, the exercise "…" actions and
+    /// the finish prompt.
+    case setKeypad, exerciseActions, finish
 
     static var fromLaunchArguments: DebugRoute? {
         #if DEBUG

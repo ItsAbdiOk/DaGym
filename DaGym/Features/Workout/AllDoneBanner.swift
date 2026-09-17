@@ -11,7 +11,7 @@ struct AllDoneBanner: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("All done").dgLabel(DGColor.success)
+                Text("All done").dgLabel(DGColor.coralText)
                 Text("\(setsDone) sets logged. Finish now, or keep going?")
                     .font(DGFont.subhead)
                     .foregroundStyle(DGColor.ink2)
@@ -19,24 +19,21 @@ struct AllDoneBanner: View {
             }
             .accessibilityElement(children: .combine)
             DGAdaptiveStack(spacing: DGSpace.s3) {
-                DGPrimaryButton(
-                    title: "Finish", symbol: "checkmark", fill: DGColor.success, height: 44, action: onFinish
-                )
-                Button(action: onKeepGoing) {
-                    Text("Keep going")
-                        .font(DGFont.condensedLabel(15))
-                        .foregroundStyle(DGColor.ink1)
+                Button(action: onFinish) {
+                    Text("Finish")
+                        .font(DGFont.condensedLabel(13.5))
+                        .foregroundStyle(DGColor.inkOnCoral)
                         .frame(maxWidth: .infinity)
                         .frame(minHeight: 44)
-                        .dgGlass(.regular, in: Capsule())
+                        .background(
+                            DGColor.coral, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
+                        )
                 }
                 .buttonStyle(.dgControl)
+                WorkoutPillButton(title: "Keep going", style: .ink, radius: DGRadius.sm, action: onKeepGoing)
             }
         }
-        .dgCard(
-            radius: DGRadius.md, fill: DGColor.success.opacity(0.12),
-            stroke: DGColor.success.opacity(0.35), padding: DGSpace.s4
-        )
+        .dgCard(radius: DGRadius.lg, padding: DGSpace.s4)
         .accessibilityIdentifier("workout.allDone")
     }
 }
