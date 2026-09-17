@@ -15,6 +15,8 @@ struct ProgressHubSummary {
     struct Callout {
         var title: String
         var detail: String
+        /// What "Fix" writes into the coach's composer: the title as a question.
+        var question: String { CoachChatQuestion.coverage(finding: title) }
     }
 
     var thisWeekCount = 0

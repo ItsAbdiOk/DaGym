@@ -97,6 +97,9 @@ struct YouHubView: View {
 /// Where the hub can push. `screen` builds the destination lazily so the hub itself stays cheap.
 enum YouDestination: Hashable {
     case progress, history, muscles, body, coach, settings, library, equipment, gymCard, insights
+    /// The coach with a question already in the composer (`CoachChatLaunch.prefilled`) — how
+    /// Progress's coverage "Fix" and an Insights card's "Ask the coach" hand a finding over.
+    case coachQuestion(String)
 
     static let gridOrder: [YouDestination] = [.progress, .history, .muscles, .body, .coach, .settings]
     static let rowOrder: [YouDestination] = [.library, .equipment, .gymCard]
@@ -113,6 +116,7 @@ enum YouDestination: Hashable {
         case .equipment: "Equipment profiles"
         case .gymCard: "Gym card"
         case .insights: "Insights"
+        case .coachQuestion: "Coach"
         }
     }
 
@@ -128,6 +132,7 @@ enum YouDestination: Hashable {
         case .equipment: "shippingbox.fill"
         case .gymCard: "barcode"
         case .insights: "lightbulb.fill"
+        case .coachQuestion: "bubble.left.fill"
         }
     }
 
@@ -143,6 +148,7 @@ enum YouDestination: Hashable {
         case .equipment: A11yID.youEquipment
         case .gymCard: A11yID.youGymCard
         case .insights: A11yID.youInsights
+        case .coachQuestion: A11yID.youCoach
         }
     }
 
@@ -158,6 +164,7 @@ enum YouDestination: Hashable {
         case .equipment: EquipmentProfilesScreen()
         case .gymCard: GymCardSheet(isPushed: true)
         case .insights: InsightsScreen()
+        case .coachQuestion(let question): CoachChatScreen(launch: .prefilled(question: question))
         }
     }
 }

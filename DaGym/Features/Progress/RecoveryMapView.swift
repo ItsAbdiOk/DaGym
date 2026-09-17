@@ -29,6 +29,8 @@ struct RecoveryMapView: View {
     /// opening the screen costs what it always did.
     @State private var balance: WorkoutStore.BodySeriesBundle?
     @State private var strength: [Muscle: [MuscleStrength.Entry]] = [:]
+    /// A question a Balance row handed to the coach; pushing it opens the chat with it written.
+    @State private var coachQuestion: String?
 
     init(initialMode: MuscleMapMode = .fatigue) {
         self.initialMode = initialMode
@@ -45,7 +47,8 @@ struct RecoveryMapView: View {
                     switch mode {
                     case .balance:
                         BalanceMapSection(
-                            bundle: balance, snapshot: snapshot, window: $horizon, hardOnly: $hardOnly
+                            bundle: balance, snapshot: snapshot, window: $horizon, hardOnly: $hardOnly,
+                            onAskCoach: { coachQuestion = $0 }
                         )
                     case .fatigue:
                         healthContextCard
@@ -66,11 +69,20 @@ struct RecoveryMapView: View {
         .sheet(item: $selected) { muscle in
             MuscleDetailSheet(recovery: muscle)
         }
+        // Its own destination rather than a `YouDestination`, because Home opens this screen
+        // in a sheet with a stack of its own.
+        .navigationDestination(isPresented: coachQuestionBinding) {
+            CoachChatScreen(launch: coachQuestion.map { .prefilled(question: $0) })
+        }
         .sheet(
             isPresented: $isShowingHealthSettings,
             onDismiss: { Task { await refresh() } },
             content: { HealthSettingsView() }
         )
+    }
+
+    private var coachQuestionBinding: Binding<Bool> {
+        Binding(get: { coachQuestion != nil }, set: { if !$0 { coachQuestion = nil } })
     }
 
     private func refresh() async {
@@ -118,7 +130,7 @@ struct RecoveryMapView: View {
         case .balance:
             MuscleMapHeroCard(
                 model: .balance(bundle: balance, snapshot: snapshot, horizon: horizon, hardOnly: hardOnly),
-                onSelect: selectMuscle
+                onSelect: selectMuscle, onAskCoach: { coachQuestion = $0 }
             )
         case .fatigue:
             MuscleMapHeroCard(model: .recovery(snapshot: snapshot, ramp: ramp), onSelect: selectMuscle)

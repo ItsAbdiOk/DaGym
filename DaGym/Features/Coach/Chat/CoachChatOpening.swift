@@ -52,4 +52,26 @@ enum CoachChatOpening {
     }
 
     static let reviewChip = "Review my week"
+
+    /// What the composer holds when the screen opens: the question a "Fix" or "Ask the coach"
+    /// button carried in, left for the lifter to edit or send; nothing for every other launch.
+    static func prefilledInput(for launch: CoachChatLaunch?) -> String? {
+        if case .prefilled(let question)? = launch { return question }
+        return nil
+    }
+}
+
+/// How the coach chat was opened: on the newest thread, on a week review to start or resume,
+/// or on the newest thread with a question already in the composer (not sent — the lifter
+/// reads it, edits it if they like, and sends it themselves).
+enum CoachChatLaunch: Identifiable, Equatable {
+    case weekReview(weekEnding: Date, threadID: UUID?)
+    case prefilled(question: String)
+
+    var id: String {
+        switch self {
+        case .weekReview(let weekEnding, _): "weekReview:\(weekEnding.timeIntervalSince1970)"
+        case .prefilled(let question): "prefilled:\(question)"
+        }
+    }
 }

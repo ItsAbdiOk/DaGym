@@ -8,7 +8,8 @@ import SwiftUI
 /// Home and Train still open. `CoachChatEngine` owns the conversation; this screen owns what
 /// it alone knows — which draft cards were applied or discarded, the undo toast, the banner.
 struct CoachChatScreen: View {
-    /// nil opens the newest thread; a week review opens (or starts) that week's review thread.
+    /// nil opens the newest thread; a week review opens (or starts) that week's review thread;
+    /// a prefilled question opens the newest thread with it in the composer, focused, unsent.
     var launch: CoachChatLaunch?
     /// True inside a full-screen cover: adds Close, since there is no system back button.
     var isPresentedModally = false

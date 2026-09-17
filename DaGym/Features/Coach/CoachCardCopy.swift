@@ -40,6 +40,16 @@ enum CoachCardCopy {
         }
     }
 
+    /// The one button on a card whose action is `.none`: "Ask the coach" where the chat can
+    /// take the finding further (a coverage gap, a stalled lift, a falling e1RM — the rules
+    /// `CoachChatQuestion.forCard` writes a question for), "Got it" where there is nothing to
+    /// ask (a PR, a milestone, a note).
+    static func singleActionLabel(for card: CoachCard) -> String {
+        CoachChatQuestion.forCard(card) == nil ? "Got it" : askCoachLabel
+    }
+
+    static let askCoachLabel = "Ask the coach"
+
     /// What the action button actually does for this card — honest either way: a deload and
     /// the training-review changes are applied for real (`WorkoutStore.applyCoachDeload`,
     /// `applyReviewChange`) and undoable from the toast; everything else is recorded but left

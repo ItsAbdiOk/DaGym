@@ -114,8 +114,9 @@ private struct MuscleTileView: View {
     }
 }
 
-/// The tinted coverage callout with its accent "Fix" pill. Fix goes to the coach, whose
-/// coverage-gap card carries the same finding with the evidence behind it.
+/// The tinted coverage callout with its accent "Fix" pill. Fix opens the coach with the finding
+/// already written as a question ("Biceps have had 4 sets in 14 days. What should I add?"),
+/// focused and unsent, so the answer starts from this screen's own words.
 private struct ProgressCallout: View {
     var callout: ProgressHubSummary.Callout
 
@@ -131,7 +132,7 @@ private struct ProgressCallout: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
-            NavigationLink(value: YouDestination.coach) {
+            NavigationLink(value: YouDestination.coachQuestion(callout.question)) {
                 Text("Fix")
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(DGColor.inkOnCoral)
