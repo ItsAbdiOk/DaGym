@@ -360,7 +360,8 @@ private extension RootView {
                 HomeView(
                     routine: routine, nextSessionText: nextSessionText, onStart: startFromScheduledRoutine,
                     onFreestyle: startFreestyle, onBackfill: { showingBackfill = true },
-                    onSeeRecovery: { showRecovery = true }, onOpenBody: { showingBody = true }
+                    onSeeRecovery: { showRecovery = true }, onOpenBody: { showingBody = true },
+                    onShowTrain: { tab = .train }
                 )
                 .environment(\.isTabVisible, isVisible(.today))
             } label: { tabLabel(.today) }

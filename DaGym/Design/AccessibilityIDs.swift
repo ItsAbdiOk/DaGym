@@ -10,6 +10,8 @@ enum A11yID {
     static let homeFreestyle = "home.freestyle"
     static let homeWeekReview = "home.weekReview"
     static let homeStartFab = "home.startFab"
+    static let homeStartMore = "home.startMore"
+    static let homeGymCard = "home.gymCard"
 
     static let tabToday = "tab.today"
     static let tabTrain = "tab.train"

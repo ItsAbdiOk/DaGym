@@ -22,6 +22,9 @@ struct HomeSnapshot {
     /// False when the store has no routines at all (deleted, or a corrupted seed) — Home shows
     /// the starter-plan empty state instead of a scheduled/rest-day card (OpenGym parity 52).
     var hasAnyRoutines: Bool = true
+    /// Up to three routine names other than today's, for the start sheet's "Pick another
+    /// routine" row — enough to say what is there without listing the whole Train tab.
+    var otherRoutineNames: [String] = []
     /// Latest bodyweight reading, for Home's bodyweight tile (OpenGym parity 50).
     var bodyweightKg: Double?
     /// `bodyweightKg` minus the latest reading from 30 days before `now`; nil when there isn't
@@ -54,8 +57,9 @@ struct HomeSnapshot {
         // slots), so going through them cost this pass four extra fetches per refresh.
         let schedule = store.schedule()
         let routines = store.routines()
+        let today = todaysRoutine(schedule: schedule, routines: routines, calendar: calendar, now: now)
         return HomeSnapshot(
-            routine: todaysRoutine(schedule: schedule, routines: routines, calendar: calendar, now: now),
+            routine: today,
             hasSchedule: !schedule.days.isEmpty || !schedule.overrides.isEmpty,
             nextSessionText: nextSessionText(
                 nextSession(schedule: schedule, routines: routines, calendar: calendar, now: now)
@@ -72,6 +76,7 @@ struct HomeSnapshot {
                 calendar: calendar
             ),
             hasAnyRoutines: !routines.isEmpty,
+            otherRoutineNames: routines.lazy.filter { $0.id != today?.id }.prefix(3).map(\.name),
             bodyweightKg: latest?.bodyweightKg,
             bodyweightDeltaKg: bodyweightDelta
         )

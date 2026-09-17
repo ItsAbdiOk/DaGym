@@ -2,8 +2,9 @@ import GymCore
 import SwiftData
 import SwiftUI
 
-/// Home / Today — the app's landing screen. Shows the scheduled routine,
-/// weekly goal, streak and recovery snapshot, all computed from real workout history.
+/// Home / Today — the app's landing screen. The redesign's hero card (today's routine or the
+/// rest day), the week / bodyweight tiles, the recovery row and the coach's nudges, all
+/// computed from real workout history. The streak moved to the You tab with the redesign.
 struct HomeView: View {
     var routine: RoutineInfo?
     /// "Next: Pull B · Thursday" for the rest-day card, from `WorkoutStore.nextSession()`.
@@ -14,18 +15,23 @@ struct HomeView: View {
     var onBackfill: () -> Void
     var onSeeRecovery: () -> Void
     var onOpenBody: () -> Void
+    /// "Pick another routine" in the start sheet switches the shell to the Train tab.
+    var onShowTrain: () -> Void
 
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
-    @State private var streakCurrent = 0
-    @State private var streakLongest = 0
     @State private var thisWeekCount = 0
     @State private var recoveryMap: [Muscle: Double] = [:]
-    @State private var showingSettings = false
+    @State private var showingGymCard = false
+    @State private var showingStartSheet = false
+    /// The start sheet's rows dismiss first and act on `onDismiss`, so the coach chat (a
+    /// full-screen cover) never tries to present on top of a sheet that is still going away.
+    @State private var pendingStartAction: (() -> Void)?
     @State private var askingCoach = false
     @State private var deloadSuggestion: DeloadSuggestionInfo?
     @State private var hasSchedule = true
     @State private var hasAnyRoutines = true
+    @State private var otherRoutineNames: [String] = []
     @State private var bodyweightKg: Double?
     @State private var bodyweightDeltaKg: Double?
 
@@ -33,45 +39,28 @@ struct HomeView: View {
         ZStack {
             AmbientWash()
             ScrollView {
-                VStack(alignment: .leading, spacing: DGSpace.s6) {
+                VStack(alignment: .leading, spacing: DGSpace.s3) {
                     header
                     if preferences.sampleDataMode {
                         SampleDataBanner(onClear: clearSampleData)
                     }
-                    if !hasAnyRoutines {
-                        StarterPlanCard(
-                            onPick: pickStarterPlan, onAskCoach: { askingCoach = true },
-                            onFreestyle: onFreestyle
-                        )
-                    } else if let routine {
-                        ScheduledCard(
-                            routine: routine, isScheduled: hasSchedule, onStart: onStart,
-                            onFreestyle: onFreestyle, onBackfill: onBackfill
-                        )
-                    } else {
-                        RestDayCard(
-                            nextSessionText: nextSessionText, onFreestyle: onFreestyle, onBackfill: onBackfill
-                        )
+                    heroCard
+                    HStack(spacing: 10) {
+                        WeekTile(done: thisWeekCount, total: preferences.weeklyGoal)
+                        BodyweightTile(kg: bodyweightKg, deltaKg: bodyweightDeltaKg, onTap: onOpenBody)
                     }
-                    DGAdaptiveStack(verticalAlignment: .top, spacing: DGSpace.s4) {
-                        WeeklyGoalCard(done: thisWeekCount, total: preferences.weeklyGoal)
-                        StreakCard(current: streakCurrent, longest: streakLongest)
-                    }
-                    RecoveryCard(map: recoveryMap, onSeeRecovery: onSeeRecovery)
-                    WeekReviewCard()
-                    BodyweightTile(kg: bodyweightKg, deltaKg: bodyweightDeltaKg, onTap: onOpenBody)
+                    .fixedSize(horizontal: false, vertical: true)
+                    RecoveryRow(map: recoveryMap, onSeeRecovery: onSeeRecovery)
                     if let deloadSuggestion {
-                        WhyCard(
-                            title: "Why a deload?", message: deloadSuggestion.reason,
-                            primary: "Plan a deload week", secondary: "Not now",
-                            labelColor: DGColor.warning,
-                            onPrimary: planDeload, onSecondary: snoozeDeload
+                        DeloadStrip(
+                            reason: deloadSuggestion.reason, onPlan: planDeload, onSnooze: snoozeDeload
                         )
                     }
+                    WeekReviewCard()
                 }
                 .padding(.horizontal, DGSpace.s4)
-                .padding(.top, DGSpace.s3)
-                .padding(.bottom, DGSpace.s6)
+                // Clears the floating tab bar and the FAB `RootView` draws over this tab.
+                .padding(.bottom, 110)
             }
         }
         .dgWarmHaptics()
@@ -79,23 +68,60 @@ struct HomeView: View {
         .refreshOnStoreChange(refresh)
         .onChange(of: preferences.weeklyGoal) { refresh() }
         .onChange(of: preferences.weekStartsMonday) { refresh() }
-        .sheet(isPresented: $showingSettings) { SettingsView() }
+        .sheet(isPresented: $showingGymCard) { GymCardSheet() }
+        .sheet(isPresented: $showingStartSheet, onDismiss: runPendingStartAction) {
+            StartSomethingElseSheet(
+                routineNames: otherRoutineNames,
+                onFreestyle: { deferStart(onFreestyle) },
+                onBackfill: { deferStart(onBackfill) },
+                onPickRoutine: { deferStart(onShowTrain) },
+                onAskCoach: { deferStart { askingCoach = true } }
+            )
+        }
         .askCoach(on: $askingCoach)
     }
 
+    @ViewBuilder private var heroCard: some View {
+        if !hasAnyRoutines {
+            StarterPlanCard(
+                onPick: pickStarterPlan, onAskCoach: { askingCoach = true }, onFreestyle: onFreestyle
+            )
+        } else if let routine {
+            HomeHeroCard(
+                variant: .scheduled(routine: routine, isScheduled: hasSchedule),
+                onPrimary: onStart, onMore: { showingStartSheet = true }, onBodyMap: onSeeRecovery
+            )
+        } else {
+            HomeHeroCard(
+                variant: .rest(nextSessionText: nextSessionText),
+                onPrimary: onFreestyle, onMore: { showingStartSheet = true }, onBodyMap: onSeeRecovery
+            )
+        }
+    }
+
     /// The scheduled routine itself comes from `RootView` (it owns "Start"); everything else
-    /// is one `HomeSnapshot` pass so the numbers agree with the widget and the Progress tab.
+    /// is one `HomeSnapshot` pass so the numbers agree with the widget and the You tab.
     private func refresh() {
         let snapshot = HomeSnapshot.make(store: store, preferences: preferences)
-        streakCurrent = snapshot.streakCurrent
-        streakLongest = snapshot.streakLongest
         thisWeekCount = snapshot.thisWeekCount
         recoveryMap = snapshot.recoveryMap
         deloadSuggestion = snapshot.deloadSuggestion
         hasSchedule = snapshot.hasSchedule
         hasAnyRoutines = snapshot.hasAnyRoutines
+        otherRoutineNames = snapshot.otherRoutineNames
         bodyweightKg = snapshot.bodyweightKg
         bodyweightDeltaKg = snapshot.bodyweightDeltaKg
+    }
+
+    private func deferStart(_ action: @escaping () -> Void) {
+        pendingStartAction = action
+        showingStartSheet = false
+    }
+
+    private func runPendingStartAction() {
+        let action = pendingStartAction
+        pendingStartAction = nil
+        action?()
     }
 
     /// Builds and starts `kind`'s starter program in one tap (Home's empty-state card) —
@@ -124,222 +150,39 @@ struct HomeView: View {
 
     private var header: some View {
         HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: DGSpace.s1) {
-                Text(Self.todayLabel).dgLabel()
+            VStack(alignment: .leading, spacing: 5) {
+                Text(Self.todayLabel)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(DGColor.ink3)
                 Text("Today")
                     .font(DGFont.title1)
                     .foregroundStyle(DGColor.ink1)
             }
             Spacer()
-            DGIconButton(symbol: "gearshape", accessibilityLabel: "Settings") { showingSettings = true }
+            DGIconButton(symbol: "barcode", size: 38, accessibilityLabel: "Gym card") {
+                showingGymCard = true
+            }
+            .accessibilityIdentifier(A11yID.homeGymCard)
+            .padding(.top, 6)
         }
+        .padding(.horizontal, DGSpace.s1)
+        .padding(.bottom, DGSpace.s2)
     }
 
-    private static var todayLabel: String {
+    private static var todayLabel: String { todayFormatter.string(from: Date()) }
+
+    private static let todayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE d MMMM"
-        return formatter.string(from: Date()).uppercased()
-    }
-}
-
-/// Coral-outlined card for the day's scheduled routine.
-private struct ScheduledCard: View {
-    var routine: RoutineInfo
-    var isScheduled = true
-    var onStart: () -> Void
-    var onFreestyle: () -> Void
-    var onBackfill: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: DGSpace.s1) {
-                    Text(scheduledLabel).dgLabel(DGColor.coralText)
-                    Text(routine.name)
-                        .font(DGFont.title2)
-                        .foregroundStyle(DGColor.ink1)
-                    Text(
-                        "\(routine.exercises.count) exercises · \(routine.setCount) sets"
-                            + " · ~\(routine.estimatedMinutes) min"
-                    )
-                    .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.ink3)
-                }
-                .accessibilityElement(children: .combine)
-                Spacer()
-                BodyMapPair(intensity: routine.hitMap, height: 44)
-            }
-            HStack(spacing: DGSpace.s3) {
-                DGPrimaryButton(title: "Start", symbol: "play.fill", action: onStart)
-                    .accessibilityIdentifier(A11yID.homeStart)
-                DGIconButton(
-                    symbol: "plus", size: 52,
-                    accessibilityLabel: "Start freestyle workout", action: onFreestyle
-                )
-                .accessibilityIdentifier(A11yID.homeFreestyle)
-                DGIconButton(
-                    symbol: "calendar", size: 52, accessibilityLabel: "Log a past workout", action: onBackfill
-                )
-            }
-        }
-        .padding(DGSpace.s5)
-        .background(DGColor.coralWash, in: RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
-                .strokeBorder(DGColor.coral, lineWidth: 1)
-        }
-    }
-
-    private var scheduledLabel: String {
-        let base = isScheduled ? "Scheduled" : "Suggested"
-        guard let weekLabel = routine.weekLabel, !weekLabel.isEmpty else { return base }
-        return "\(base) · \(weekLabel)"
-    }
-}
-
-/// Coral-outlined card shown when nothing is scheduled today.
-private struct RestDayCard: View {
-    var nextSessionText: String?
-    var onFreestyle: () -> Void
-    var onBackfill: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            Text(HomeSnapshot.restDayHeadline).dgLabel(DGColor.coralText)
-            Text(nextSessionText ?? "Nothing scheduled")
-                .font(DGFont.title2)
-                .foregroundStyle(DGColor.ink1)
-            Text("No routine scheduled today. Start a freestyle workout whenever you're ready.")
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink3)
-            DGAdaptiveStack(spacing: DGSpace.s3) {
-                DGPrimaryButton(title: "Start a Freestyle Workout", symbol: "plus", action: onFreestyle)
-                    .accessibilityIdentifier(A11yID.homeStart)
-                DGIconButton(
-                    symbol: "calendar", size: 52, accessibilityLabel: "Log a past workout", action: onBackfill
-                )
-            }
-        }
-        .padding(DGSpace.s5)
-        .background(DGColor.coralWash, in: RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
-                .strokeBorder(DGColor.coral, lineWidth: 1)
-        }
-    }
-}
-
-/// Coral-outlined empty state offering the starter programs, shown instead of the
-/// scheduled/rest-day card when the store has no routines at all (OpenGym parity 52).
-private struct WeeklyGoalCard: View {
-    var done: Int
-    var total: Int
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            Text("Weekly Goal").dgLabel()
-            HStack(alignment: .lastTextBaseline, spacing: 2) {
-                Text("\(done)")
-                    .dgMetric(DGFont.metricM, tracking: -0.5)
-                    .foregroundStyle(DGColor.ink1)
-                Text("/ \(total)")
-                    .font(DGFont.subhead)
-                    .foregroundStyle(DGColor.ink3)
-            }
-            HStack(spacing: 4) {
-                ForEach(0..<total, id: \.self) { index in
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(index < done ? DGColor.coral : DGColor.surface3)
-                        .frame(height: 4)
-                }
-            }
-            .accessibilityHidden(true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(DGSpace.s4)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Weekly goal, \(done) of \(total) workouts")
-        .background(DGColor.surface1, in: RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
-                .strokeBorder(DGColor.hairline, lineWidth: 1)
-        }
-    }
-}
-
-/// Half-width gold "streak" card.
-private struct StreakCard: View {
-    var current: Int
-    var longest: Int
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            Text("Streak").dgLabel()
-            HStack(alignment: .lastTextBaseline, spacing: 4) {
-                Text("\(current)")
-                    .dgMetric(DGFont.metricM, tracking: -0.5)
-                    .foregroundStyle(DGColor.prGoldText)
-                Text(current == 1 ? "week" : "weeks")
-                    .font(DGFont.subhead)
-                    .foregroundStyle(DGColor.ink3)
-            }
-            Text("Longest: \(longest) \(longest == 1 ? "week" : "weeks")")
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink3)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(DGSpace.s4)
-        .accessibilityElement(children: .combine)
-        .background(
-            DGColor.prGold.opacity(0.10), in: RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
-                .strokeBorder(DGColor.prGold.opacity(0.35), lineWidth: 1)
-        }
-    }
-}
-
-/// Recovery snapshot with a "see map" link.
-private struct RecoveryCard: View {
-    var map: [Muscle: Double]
-    var onSeeRecovery: () -> Void
-
-    private var headline: (title: String, body: String) { Recovery.headline(map: map) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            HStack {
-                Text("Recovery").dgLabel()
-                Spacer()
-                Button("See Map", action: onSeeRecovery)
-                    .buttonStyle(.dgControl)
-                    .font(DGFont.condensedLabel(12))
-                    .foregroundStyle(DGColor.coralText)
-            }
-            DGAdaptiveStack(verticalAlignment: .top, spacing: DGSpace.s4) {
-                BodyMapPair(mode: .recovery, intensity: map, height: 56)
-                VStack(alignment: .leading, spacing: DGSpace.s1) {
-                    Text(headline.title)
-                        .font(DGFont.title3)
-                        .foregroundStyle(DGColor.ink1)
-                    Text(headline.body)
-                        .font(DGFont.subhead)
-                        .foregroundStyle(DGColor.ink3)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .accessibilityElement(children: .combine)
-            }
-        }
-        .dgCard()
-    }
+        return formatter
+    }()
 }
 
 #Preview {
     if let container = try? ModelContainer.dagym(inMemory: true) {
         HomeView(
-            routine: SampleData.pushA,
-            onStart: {}, onFreestyle: {}, onBackfill: {}, onSeeRecovery: {}, onOpenBody: {}
+            routine: SampleData.pushA, onStart: {}, onFreestyle: {}, onBackfill: {},
+            onSeeRecovery: {}, onOpenBody: {}, onShowTrain: {}
         )
         .environment(WorkoutStore(context: container.mainContext))
         .environment(Preferences())
@@ -351,8 +194,8 @@ private struct RecoveryCard: View {
 #Preview("Rest day") {
     if let container = try? ModelContainer.dagym(inMemory: true) {
         HomeView(
-            routine: nil, nextSessionText: "Next: Pull B · Thursday",
-            onStart: {}, onFreestyle: {}, onBackfill: {}, onSeeRecovery: {}, onOpenBody: {}
+            routine: nil, nextSessionText: "Next: Pull B · Thursday", onStart: {}, onFreestyle: {},
+            onBackfill: {}, onSeeRecovery: {}, onOpenBody: {}, onShowTrain: {}
         )
         .environment(WorkoutStore(context: container.mainContext))
         .environment(Preferences())
