@@ -116,7 +116,7 @@ struct CoachReviewRow: View {
     private var tint: Color {
         switch review?.verdict {
         case .agreed: DGColor.success
-        case .alternative: DGColor.aiVioletText
+        case .alternative: DGColor.coralText
         case .failed, nil: DGColor.ink4
         }
     }
@@ -129,14 +129,12 @@ struct CoachUserBubble: View {
         HStack {
             Spacer(minLength: DGSpace.s10)
             Text(text)
-                .font(DGFont.body)
+                .font(DGFont.subhead)
                 .foregroundStyle(DGColor.inkOnCoral)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, DGSpace.s4)
-                .padding(.vertical, DGSpace.s3)
-                .background(
-                    DGColor.coral, in: RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
-                )
+                .padding(.horizontal, 15)
+                .padding(.vertical, 13)
+                .background(DGColor.coral, in: CoachBubbleShape(tail: .trailing))
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("You: \(text)")
@@ -161,11 +159,11 @@ struct CoachAssistantBubble: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: DGSpace.s2) {
-                CoachFoldedText(text: text, canFold: canFold, isExpanded: $isExpanded)
+                CoachFoldedText(text: text, canFold: canFold, isExpanded: $isExpanded, font: DGFont.subhead)
                 if text.isEmpty, !isStopped {
                     // The reply hasn't started arriving yet; three dots rather than an empty card.
                     Text("…")
-                        .font(DGFont.body)
+                        .font(DGFont.subhead)
                         .foregroundStyle(DGColor.ink4)
                         .accessibilityLabel("Coach is thinking")
                 }
@@ -175,14 +173,15 @@ struct CoachAssistantBubble: View {
                         .foregroundStyle(DGColor.ink4)
                 }
             }
-            .padding(DGSpace.s4)
-            .dgCard(padding: 0)
+            .padding(.horizontal, 15)
+            .padding(.vertical, 13)
+            .coachBubble()
             .contextMenu {
                 if !text.isEmpty {
                     CoachChatSaveMenu(targets: saveTargets(), onCopy: onCopy, onSave: onSave)
                 }
             }
-            Spacer(minLength: DGSpace.s8)
+            Spacer(minLength: DGSpace.s10)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Coach")
@@ -208,7 +207,7 @@ struct CoachToolChip: View {
                 .tracking(0.8)
                 .lineLimit(1)
         }
-        .foregroundStyle(failed ? DGColor.warning : DGColor.aiVioletText)
+        .foregroundStyle(failed ? DGColor.warning : DGColor.coralText)
         .padding(.horizontal, DGSpace.s3)
         .frame(minHeight: 28)
         .background(Capsule().fill(DGColor.surface2).overlay(Capsule().strokeBorder(DGColor.hairline)))
@@ -239,7 +238,7 @@ struct CoachThinkingRow: View {
         HStack(spacing: DGSpace.s2) {
             ProgressView()
                 .controlSize(.small)
-                .tint(DGColor.aiVioletText)
+                .tint(DGColor.coralText)
             Text("Thinking…")
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)

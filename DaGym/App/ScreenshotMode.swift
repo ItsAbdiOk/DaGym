@@ -18,6 +18,8 @@ enum ScreenshotScreen: String, CaseIterable {
     /// The cloud coach over the Coach tab, on a canned thread (`ScreenshotCoachChat`): the
     /// answer with its routine card, and the two-card second-opinion moment.
     case coachChat, coachReview, coachProgram, gymCard
+    /// The chat on an empty thread: the opening bubble built from the week and the prompt chips.
+    case coachEmpty
 
     static var fromLaunchArguments: ScreenshotScreen? {
         let args = ProcessInfo.processInfo.arguments
@@ -357,12 +359,11 @@ private struct ScreenshotScreenView: View {
         case .settingsData:
             RootView().sheet(isPresented: .constant(true)) { ScreenshotDataSettingsView() }
         case .coach:
-            tabbed(.you) { CoachView() }
-        case .coachChat, .coachReview, .coachProgram:
+            tabbed(.you) { NavigationStack { InsightsScreen() } }
+        case .coachChat, .coachReview, .coachProgram, .coachEmpty:
             // The chat and program shots are the card's rows and reasons; the review shot is
             // two cards side by side, which only fit closed.
-            tabbed(.you) { CoachView() }
-                .fullScreenCover(isPresented: .constant(true)) { CoachChatView() }
+            tabbed(.you) { NavigationStack { CoachChatScreen() } }
                 .environment(\.coachDraftCardsExpanded, screen != .coachReview)
         }
     }

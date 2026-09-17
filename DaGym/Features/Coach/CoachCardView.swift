@@ -1,40 +1,52 @@
 import GymCore
 import SwiftUI
 
-/// One `CoachCard`: severity, title, one-sentence body, evidence collapsed behind a "Why"
-/// disclosure, and Approve/Dismiss. See `CoachView` for the screen this tiles into.
+/// One `CoachCard` as the Insights screen draws it: a kicker with the severity dot
+/// ("WARNING · DELOAD OVERDUE"), the title, the one-sentence claim, a "Why?" box with the
+/// evidence, a line on what the action really does, then the action next to "Not now".
+/// See `InsightsScreen` for the screen this tiles into.
 struct CoachCardView: View {
     var card: CoachCard
-    var isExpanded: Bool
     var formatWeight: (Double) -> String
-    var onToggle: () -> Void
     var onApprove: () -> Void
     var onDismiss: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            header
-            Text(card.body)
-                .font(DGFont.subhead)
-                .foregroundStyle(DGColor.ink2)
-                .fixedSize(horizontal: false, vertical: true)
-            whyDisclosure
-            actionNote
-            actions
-        }
-        .dgCard(padding: DGSpace.s4)
-    }
-
-    private var header: some View {
-        HStack(alignment: .top, spacing: DGSpace.s2) {
-            // Severity is the dot's colour *and* its shape: a triangle for a warning, a filled
-            // circle for a notice, a ring for information — so it survives colour-blindness.
-            severityGlyph
-                .padding(.top, 6)
+        VStack(alignment: .leading, spacing: 0) {
+            kicker
             Text(card.title)
                 .font(DGFont.title3)
                 .foregroundStyle(DGColor.ink1)
-            Spacer(minLength: DGSpace.s2)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 11)
+            Text(card.body)
+                .font(DGFont.subhead)
+                .foregroundStyle(DGColor.ink3)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 7)
+            if !card.evidence.isEmpty {
+                whyBox.padding(.top, DGSpace.s3)
+            }
+            if let note = CoachCardCopy.actionNote(for: card.suggestedAction, formatWeight: formatWeight) {
+                Text(note)
+                    .font(DGFont.caption)
+                    .fontWeight(.regular)
+                    .foregroundStyle(DGColor.ink4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, DGSpace.s2)
+            }
+            actions.padding(.top, DGSpace.s3)
+        }
+        .dgCard(radius: 20, padding: DGSpace.s4)
+    }
+
+    private var kicker: some View {
+        HStack(spacing: DGSpace.s2) {
+            // Severity is the dot's colour *and* its shape: a triangle for a warning, a filled
+            // circle for a notice, a ring for information — so it survives colour-blindness.
+            severityGlyph
+            Text("\(Self.severityWord(card.severity)) · \(CoachCardCopy.kicker(for: card.rule))")
+                .dgLabel()
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(Self.severityWord(card.severity)): \(card.title)")
@@ -58,7 +70,7 @@ struct CoachCardView: View {
         switch card.severity {
         case .warning: DGColor.danger
         case .notice: DGColor.warning
-        case .info: DGColor.info
+        case .info: DGColor.success
         }
     }
 
@@ -70,63 +82,30 @@ struct CoachCardView: View {
         }
     }
 
-    @ViewBuilder
-    private var whyDisclosure: some View {
-        if !card.evidence.isEmpty {
-            Button(action: onToggle) {
-                HStack(spacing: DGSpace.s1) {
-                    Text(isExpanded ? "Hide why" : "Why?")
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
-                }
-                .font(DGFont.condensedLabel(12))
-                // Not `aiVioletText`: that violet is the app's AI accent, and this screen's own
-                // header says these checks are rule-based and nothing is sent anywhere.
+    /// The evidence as one line, "e1RM 96 → 93 kg · weekly volume +18%" — each item is still
+    /// its own VoiceOver element so the list reads "Volume: 120" then "Sets: 5".
+    private var whyBox: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("Why?")
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundStyle(DGColor.ink2)
+            Text(card.evidence.map { "\($0.label) \(format($0.value))" }.joined(separator: " · "))
+                .font(.system(size: 12.5))
                 .foregroundStyle(DGColor.ink3)
-            }
-            .buttonStyle(.dgControl)
-            .accessibilityLabel(isExpanded ? "Hide evidence" : "Show evidence")
-
-            if isExpanded {
-                VStack(alignment: .leading, spacing: DGSpace.s1) {
-                    ForEach(Array(card.evidence.enumerated()), id: \.offset) { _, item in
-                        HStack {
-                            Text(item.label)
-                                .font(DGFont.footnote)
-                                .foregroundStyle(DGColor.ink3)
-                            Spacer(minLength: DGSpace.s2)
-                            Text(format(item.value))
-                                .font(DGFont.footnote)
-                                .foregroundStyle(DGColor.ink1)
-                        }
-                        // One element per row, so the list reads "Volume: 120" then "Sets: 5"
-                        // rather than one run-on sentence.
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("\(item.label): \(format(item.value))")
-                    }
-                }
-                .padding(DGSpace.s3)
-                .background(
-                    DGColor.surface2, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(
+                    card.evidence.map { "\($0.label): \(format($0.value))" }.joined(separator: ", ")
                 )
-            }
         }
-    }
-
-    /// What Approve actually does for this card's suggested action — honest either way: a deload
-    /// is applied for real, everything else is recorded but left for the lifter to act on
-    /// themselves (see `CoachView.approve(_:)`).
-    @ViewBuilder
-    private var actionNote: some View {
-        if let note = actionNoteText(for: card.suggestedAction) {
-            Text(note)
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink4)
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .background(DGColor.ink1.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     /// Informational cards (`.none`) get one button, not two. An "Approve" that did nothing but
-    /// record agreement sat next to "Dismiss" looking like a choice with consequences and wasn't
+    /// record agreement sat next to "Not now" looking like a choice with consequences and wasn't
     /// one; "Got it" says what the tap does.
     private var hasApprovableAction: Bool {
         if case .none = card.suggestedAction { return false }
@@ -135,75 +114,30 @@ struct CoachCardView: View {
 
     private var actions: some View {
         HStack(spacing: DGSpace.s2) {
-            Button(hasApprovableAction ? "Dismiss" : "Got it") { onDismiss() }
-                .buttonStyle(.dgControl)
-                .font(DGFont.condensedLabel(13))
-                .foregroundStyle(DGColor.ink2)
-                .padding(.horizontal, DGSpace.s3)
-                .frame(minHeight: 36)
-                .background(DGColor.surface3, in: Capsule())
-                .accessibilityLabel("Dismiss, \(card.title)")
             if hasApprovableAction {
-                Button("Approve") { onApprove() }
-                    .buttonStyle(.dgControl)
-                    .font(DGFont.condensedLabel(13))
-                    .foregroundStyle(DGColor.inkOnCoral)
-                    .padding(.horizontal, DGSpace.s3)
-                    .frame(minHeight: 36)
-                    .background(DGColor.coral, in: Capsule())
-                    .accessibilityLabel("Approve, \(card.title)")
+                Button(action: onApprove) {
+                    Text(CoachCardCopy.primaryLabel(for: card.suggestedAction, formatWeight: formatWeight))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(DGColor.inkOnCoral)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .background(DGColor.coral, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.dgControl)
+                .accessibilityLabel("Approve, \(card.title)")
             }
-            Spacer()
-        }
-    }
-
-    private func actionNoteText(for action: CoachSuggestedAction) -> String? {
-        switch action {
-        case .deloadExercise(let exerciseName, _, let toWeightKg):
-            // Says exactly what is written, and nothing that isn't: the target weight changes,
-            // the set count doesn't, and it takes effect the next time this lift comes up.
-            return "Approve sets \(exerciseName)'s target weight to \(formatWeight(toWeightKg)) in "
-                + "your plan, so that's what your next session starts from. Your set count and "
-                + "rep targets don't change, and you can undo it."
-        case .substituteExercise(_, _, let candidateName):
-            return "Approve just records your decision — to make the swap, tap the set's swap "
-                + "button next time you train it and pick \(candidateName)."
-        case .addSession(let weekday):
-            return "Approve just records your decision — add \(weekday.displayName) from Schedule."
-        case .restMuscle(let muscle):
-            return "Approve just records your decision — ease off \(muscle.displayName) yourself "
-                + "for a day or two."
-        case .easeBackIn(let loadFraction):
-            let percent = Int((loadFraction * 100).rounded())
-            return "Approve just records your decision — start your next session around "
-                + "\(percent)% of your usual weight."
-        case .addExercise, .replaceExercise, .changeRepRange, .changeProgressionRule, .moveRestDay:
-            return reviewActionNoteText(for: action)
-        case .none:
-            return nil
-        }
-    }
-
-    /// The training-review actions (`CoachReviewSection`): each one is applied for real by
-    /// `WorkoutStore.applyReviewChange`, and each is undoable from the toast.
-    private func reviewActionNoteText(for action: CoachSuggestedAction) -> String? {
-        switch action {
-        case .addExercise(_, let exerciseName):
-            return "Approve adds \(exerciseName) (3 × 8) to the routine that already trains its "
-                + "muscles most. You can undo it."
-        case .replaceExercise(_, let exerciseName, _, let withName):
-            return "Approve swaps \(exerciseName) for \(withName) in every routine that programmes "
-                + "it. Progress on \(exerciseName) is kept. You can undo it."
-        case .changeRepRange(_, let exerciseName, let low, let high):
-            return "Approve sets \(exerciseName)'s working sets to \(low)–\(high) reps in your plan. "
-                + "You can undo it."
-        case .changeProgressionRule(_, let exerciseName, let rule):
-            return "Approve puts \(exerciseName) on \(rule.displayName) progression. You can undo it."
-        case .moveRestDay(let from, let to):
-            return "Approve moves \(from.displayName)'s session to \(to.displayName) in your "
-                + "schedule. You can undo it."
-        case .deloadExercise, .substituteExercise, .addSession, .restMuscle, .easeBackIn, .none:
-            return nil
+            Button(action: onDismiss) {
+                Text(hasApprovableAction ? "Not now" : "Got it")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(DGColor.ink1)
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .background(
+                        DGColor.ink1.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    )
+            }
+            .buttonStyle(.dgControl)
+            .accessibilityLabel("Dismiss, \(card.title)")
         }
     }
 
