@@ -27,6 +27,7 @@ struct CoachDraftCard: View {
     var keepsReasoning: Binding<Bool>?
 
     @Environment(\.coachDraftCardsExpanded) private var expandsByDefault
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// nil until the lifter taps Details; until then the environment says how the card starts.
     @State private var isExpanded: Bool?
     /// Rows whose reason is shown in full rather than clipped to two lines.
@@ -210,7 +211,7 @@ struct CoachDraftCard: View {
         .accessibilityLabel(row.detail.map { "\(row.title): \($0)" } ?? row.title)
         if let reason = row.reason {
             Button {
-                withAnimation(DGMotion.standard) {
+                withAnimation(DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion)) {
                     if !openReasons.insert(row.id).inserted { openReasons.remove(row.id) }
                 }
             } label: {

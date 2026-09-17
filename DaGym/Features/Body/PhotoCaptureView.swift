@@ -22,6 +22,7 @@ struct PhotoCaptureView: View {
     @State private var capturedImage: UIImage?
     @State private var bodyweightText = ""
     @State private var isSaving = false
+    @FocusState private var bodyweightFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -106,6 +107,15 @@ struct PhotoCaptureView: View {
             Text("Bodyweight (optional)").dgLabel()
             TextField("e.g. 81.4", text: $bodyweightText)
                 .keyboardType(.decimalPad)
+                .focused($bodyweightFocused)
+                // A decimal pad has no return key, so this is the only way to put the
+                // keyboard away without committing the photo.
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") { bodyweightFocused = false }
+                    }
+                }
                 .font(DGFont.body)
                 .foregroundStyle(DGColor.ink1)
                 .padding(DGSpace.s3)

@@ -45,17 +45,22 @@ struct HomeView: View {
                         SampleDataBanner(onClear: clearSampleData)
                     }
                     heroCard
-                    HStack(spacing: 10) {
-                        WeekTile(done: thisWeekCount, total: preferences.weeklyGoal)
-                        BodyweightTile(kg: bodyweightKg, deltaKg: bodyweightDeltaKg, onTap: onOpenBody)
-                    }
-                    .fixedSize(horizontal: false, vertical: true)
-                    RecoveryRow(map: recoveryMap, onSeeRecovery: onSeeRecovery)
+                    // Directly under the hero, not at the foot of the page: the strip's "Plan"
+                    // button sits at the trailing edge, exactly where the floating start
+                    // button lands when the strip is the last card in view.
                     if let deloadSuggestion {
                         DeloadStrip(
                             reason: deloadSuggestion.reason, onPlan: planDeload, onSnooze: snoozeDeload
                         )
                     }
+                    // Side by side normally; one under the other at accessibility sizes, where
+                    // two half-width tiles squeezed "BODYWEIGHT" into mid-word wraps.
+                    DGAdaptiveStack(spacing: 10) {
+                        WeekTile(done: thisWeekCount, total: preferences.weeklyGoal)
+                        BodyweightTile(kg: bodyweightKg, deltaKg: bodyweightDeltaKg, onTap: onOpenBody)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    RecoveryRow(map: recoveryMap, onSeeRecovery: onSeeRecovery)
                     WeekReviewCard()
                 }
                 .padding(.horizontal, DGSpace.s4)

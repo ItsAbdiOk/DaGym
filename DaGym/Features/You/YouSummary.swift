@@ -63,7 +63,9 @@ struct YouWeekCard: View {
     @Environment(Preferences.self) private var preferences
 
     var body: some View {
-        HStack(spacing: DGSpace.s5) {
+        // Metrics beside the ring, or under it at accessibility sizes (the column beside a
+        // 104 pt ring is too narrow for a 50 pt "12 559 kg").
+        DGAdaptiveStack(spacing: DGSpace.s5) {
             ring
             VStack(alignment: .leading, spacing: 13) {
                 metric(
@@ -108,6 +110,8 @@ struct YouWeekCard: View {
                     .font(DGFont.caption)
                     .foregroundStyle(DGColor.ink3)
             }
+            // The ring is a fixed 104 pt, so its caption stops where the kickers do.
+            .dynamicTypeSize(...DGFont.kickerCap)
         }
         .frame(width: 104, height: 104)
         .padding(4)
@@ -127,9 +131,14 @@ struct YouWeekCard: View {
                     Text(trailing)
                         .font(DGFont.caption)
                         .foregroundStyle(trailingTint)
+                        // A delta beside a fixed 20 pt value: chrome, so it stops where the
+                        // kickers do rather than growing to twice the number it qualifies.
+                        .dynamicTypeSize(...DGFont.kickerCap)
                 }
             }
         }
+        // One VoiceOver stop per metric ("Volume, 12 559 kg, −36%"), not three.
+        .accessibilityElement(children: .combine)
     }
 
     private static func signed(_ value: Double, suffix: String, decimals: Int = 0) -> String {

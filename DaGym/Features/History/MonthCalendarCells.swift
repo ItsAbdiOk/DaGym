@@ -61,12 +61,15 @@ struct MonthCalendarDayCell: View {
         DGColor.coral.opacity(0.8), DGColor.coral
     ]
 
-    private var fill: Color {
-        day.isToday ? Color(hex: 0x1C1917) : Self.ramp[level]
+    // Today is the ink-on-page inversion: ink fill, page-coloured number. Both tokens flip
+    // with the scheme, so in dark mode the cell is bone rather than a near-black square lost
+    // against the card.
+    var fill: Color {
+        day.isToday ? DGColor.ink1 : Self.ramp[level]
     }
 
-    private var ink: Color {
-        if day.isToday { return .white }
+    var ink: Color {
+        if day.isToday { return DGColor.bgBase }
         return level >= 3 ? DGColor.inkOnCoral : DGColor.ink1
     }
 }
