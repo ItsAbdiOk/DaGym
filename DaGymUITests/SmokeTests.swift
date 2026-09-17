@@ -20,6 +20,19 @@ final class SmokeTests: XCTestCase {
         return app.tabBars.buttons[title]
     }
 
+    /// Progress, Library and Coach are one push deep from the You tab now: open the tab, then
+    /// tap the hub tile/row carrying `destinationID`.
+    private func openFromYou(_ app: XCUIApplication, destinationID: String, title: String) {
+        let youTab = tabButton(app, id: A11yID.tabYou, title: "You")
+        XCTAssertTrue(youTab.waitForExistence(timeout: defaultTimeout), "tab.you never appeared")
+        youTab.tap()
+        let destination = app.descendants(matching: .any)[destinationID]
+        XCTAssertTrue(
+            destination.waitForExistence(timeout: defaultTimeout), "\(destinationID) never appeared on You"
+        )
+        destination.tap()
+    }
+
     private func launchApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-dgUITest"]
@@ -68,11 +81,7 @@ final class SmokeTests: XCTestCase {
         )
         summaryDone.tap()
 
-        let progressTab = tabButton(app, id: A11yID.tabProgress, title: "Progress")
-        XCTAssertTrue(
-            progressTab.waitForExistence(timeout: defaultTimeout), "tab.progress never appeared"
-        )
-        progressTab.tap()
+        openFromYou(app, destinationID: A11yID.youHistory, title: "History")
 
         // SwiftUI's `List` can be backed by either a table or a collection
         // view depending on OS version and style, so match by identifier
@@ -91,9 +100,7 @@ final class SmokeTests: XCTestCase {
     func testLibrarySearchFindsSeededExercise() {
         let app = launchApp()
 
-        let libraryTab = tabButton(app, id: A11yID.tabLibrary, title: "Library")
-        XCTAssertTrue(libraryTab.waitForExistence(timeout: defaultTimeout), "tab.library never appeared")
-        libraryTab.tap()
+        openFromYou(app, destinationID: A11yID.youLibrary, title: "Exercise library")
 
         // The library uses the system `.searchable` field, which XCUITest exposes as a
         // search field rather than a text field and which carries no custom identifier.
@@ -110,17 +117,17 @@ final class SmokeTests: XCTestCase {
         XCTAssertTrue(benchCell.waitForExistence(timeout: 5), "No cell containing \"Bench\" appeared")
     }
 
-    /// The Routines tab lists the Push/Pull/Legs trio the UI-test store seeds (a real install ships none).
+    /// The Train tab lists the Push/Pull/Legs trio the UI-test store seeds (a real install ships none).
     func testRoutinesTabShowsStarterRoutines() {
         let app = launchApp()
 
-        let routinesTab = tabButton(app, id: A11yID.tabRoutines, title: "Routines")
+        let trainTab = tabButton(app, id: A11yID.tabTrain, title: "Train")
         XCTAssertTrue(
-            routinesTab.waitForExistence(timeout: defaultTimeout), "tab.routines never appeared"
+            trainTab.waitForExistence(timeout: defaultTimeout), "tab.train never appeared"
         )
-        routinesTab.tap()
+        trainTab.tap()
 
-        for name in ["PUSH A", "PULL B", "LEGS"] {
+        for name in ["Push A", "Pull B", "Legs"] {
             let text = app.staticTexts.matching(
                 NSPredicate(format: "label CONTAINS[c] %@", name)
             ).firstMatch

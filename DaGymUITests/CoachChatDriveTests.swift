@@ -28,10 +28,12 @@ final class CoachChatDriveTests: XCTestCase {
         app.launchArguments = ["-dgUITest", "-dgCoachTrace", "-dgOpenRouterKey", key]
         app.launch()
 
-        let coachTab = app.buttons["tab.coach"].exists
-            ? app.buttons["tab.coach"] : app.tabBars.buttons["Coach"]
-        XCTAssertTrue(coachTab.waitForExistence(timeout: 45))
-        coachTab.tap()
+        let youTab = app.buttons["tab.you"].exists ? app.buttons["tab.you"] : app.tabBars.buttons["You"]
+        XCTAssertTrue(youTab.waitForExistence(timeout: 45))
+        youTab.tap()
+        let coachTile = app.descendants(matching: .any)["you.coach"]
+        XCTAssertTrue(coachTile.waitForExistence(timeout: 45), "you.coach tile")
+        coachTile.tap()
         let entry = app.buttons["coach.chat.entry"]
         XCTAssertTrue(entry.waitForExistence(timeout: 45), "entry card")
         entry.tap()
