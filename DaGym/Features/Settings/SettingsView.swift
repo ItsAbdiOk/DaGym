@@ -83,10 +83,14 @@ struct SettingsView: View {
         NavigationLink(value: destination) {
             HStack(spacing: DGSpace.s3) {
                 SettingsIconSquare(symbol: destination.symbol)
-                Text(destination.title).font(DGFont.subhead).foregroundStyle(DGColor.ink1)
-                Spacer(minLength: DGSpace.s2)
-                if let value {
-                    Text(value).font(DGFont.subhead).foregroundStyle(DGColor.ink3).lineLimit(1)
+                // Title and value side by side, or the value under the title at accessibility
+                // sizes — squeezed beside a 50 pt title it truncated to "Gen…".
+                DGAdaptiveStack(spacing: DGSpace.s2) {
+                    Text(destination.title).font(DGFont.subhead).foregroundStyle(DGColor.ink1)
+                    Spacer(minLength: DGSpace.s2)
+                    if let value {
+                        Text(value).font(DGFont.subhead).foregroundStyle(DGColor.ink3).lineLimit(1)
+                    }
                 }
                 SettingsChevron()
             }

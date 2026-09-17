@@ -115,7 +115,9 @@ struct OnboardingFlow: View {
             }
         }
         .padding(.horizontal, DGSpace.s4)
-        .frame(height: 44)
+        // A minimum, not a fixed height: a 50 pt "Skip" at the largest type setting would
+        // otherwise spill out of the bar and over the status area.
+        .frame(minHeight: 44)
     }
 
     private var skipIdentifier: String {

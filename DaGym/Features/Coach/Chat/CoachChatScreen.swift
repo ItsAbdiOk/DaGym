@@ -73,7 +73,7 @@ struct CoachChatScreen: View {
             }
         }
         .navigationTitle("Coach")
-        .toolbar(.hidden, for: .tabBar)
+        .dgHidesTabBarForInput()
         .navigationSubtitle(subtitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

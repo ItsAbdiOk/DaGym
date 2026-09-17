@@ -41,15 +41,21 @@ enum DGFont {
     /// 11 pt / 600, uppercase, tracked — section kickers ("THIS WEEK", "HITS").
     static let label = Font.system(.caption, design: .default, weight: .semibold)
     static let tabLabel = Font.system(.caption2, design: .default, weight: .semibold)
+    /// Where `dgLabel` (section kickers, tile captions) stops scaling — see `dgLabel`.
+    static let kickerCap = DynamicTypeSize.accessibility1
 }
 
 extension View {
-    /// Uppercase condensed micro-label with the +12 % tracking from the spec.
+    /// Uppercase condensed micro-label with the +12 % tracking from the spec. A kicker is
+    /// chrome, not prose: it stops growing at `.accessibility1` (about 2× its 11 pt), where
+    /// `.caption` alone would reach 43 pt at the largest setting and "BODYWEIGHT" wrapped
+    /// mid-word above a number a third its size.
     func dgLabel(_ color: Color = DGColor.ink3) -> some View {
         font(DGFont.label)
             .tracking(0.7)
             .textCase(.uppercase)
             .foregroundStyle(color)
+            .dynamicTypeSize(...DGFont.kickerCap)
     }
 
     /// Tabular, tightly tracked hero/metric number.

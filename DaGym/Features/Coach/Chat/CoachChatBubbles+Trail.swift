@@ -58,6 +58,7 @@ struct CoachToolTrailBubble: View {
     var lines: [CoachChatTranscript.ToolLine]
     var isThinking: Bool
     @State private var shimmer = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack {
@@ -93,8 +94,9 @@ struct CoachToolTrailBubble: View {
                 isThinking ? .easeInOut(duration: 0.65).repeatForever(autoreverses: true) : .default,
                 value: shimmer
             )
-            .onAppear { shimmer = isThinking }
-            .onChange(of: isThinking) { _, thinking in shimmer = thinking }
+            // Reduce Motion: no pulse — the "thinking" bubble simply shows at full opacity.
+            .onAppear { shimmer = isThinking && !reduceMotion }
+            .onChange(of: isThinking) { _, thinking in shimmer = thinking && !reduceMotion }
             Spacer(minLength: DGSpace.s10)
         }
         .accessibilityElement(children: .contain)

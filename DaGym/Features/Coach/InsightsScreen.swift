@@ -48,7 +48,7 @@ struct InsightsScreen: View {
             }
         }
         .navigationTitle("Insights")
-        .toolbar(.hidden, for: .tabBar)
+        .dgHidesTabBarForInput()
         .navigationBarTitleDisplayMode(.inline)
         .dgUndoToast($undoAction)
         .task { refresh() }

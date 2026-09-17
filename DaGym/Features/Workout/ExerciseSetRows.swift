@@ -66,6 +66,10 @@ struct ExerciseSetRows: View {
         .padding(.horizontal, DGSpace.s1)
         .padding(.bottom, DGSpace.s2)
         .dgLabel()
+        // The columns are fixed widths (a 26 pt "Set"), so at accessibility sizes the words
+        // shrink to fit rather than stacking one letter per line.
+        .lineLimit(1)
+        .minimumScaleFactor(0.55)
         .dgDenseType()
         .accessibilityHidden(true)
     }

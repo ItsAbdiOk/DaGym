@@ -90,3 +90,14 @@ extension View {
         modifier(DGAwareTransition(moving: moving))
     }
 }
+
+extension View {
+    /// The one rule for the system tab bar on a pushed screen: a screen with a text input at
+    /// the bottom (the coach chat's bar, Insights' "Ask" field) hides it, because a bar
+    /// floating over a keyboard-anchored field is two controls fighting for the same edge.
+    /// Every other pushed screen keeps it, so a lifter can hop tabs from three levels deep.
+    /// Only these two call sites hide the bar; anything new should go through here.
+    func dgHidesTabBarForInput() -> some View {
+        toolbar(.hidden, for: .tabBar)
+    }
+}

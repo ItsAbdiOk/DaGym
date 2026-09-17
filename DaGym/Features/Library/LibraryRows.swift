@@ -57,22 +57,27 @@ struct LibraryRow: View {
     var isLast = false
 
     @Environment(Preferences.self) private var preferences
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         HStack(spacing: DGSpace.s3) {
             ExerciseThumbnail(exercise: exercise)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(exercise.name)
-                    .font(DGFont.subhead)
-                    .foregroundStyle(DGColor.ink1)
-                    .lineLimit(1)
-                Text(exercise.muscleLine)
-                    .font(DGFont.caption.weight(.regular))
-                    .foregroundStyle(DGColor.ink3)
-                    .lineLimit(1)
+            // The 1RM figure sits beside the name, or under it at accessibility sizes — beside
+            // a 50 pt name it left room for three letters ("Bar…").
+            DGAdaptiveStack(spacing: DGSpace.s2) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(exercise.name)
+                        .font(DGFont.subhead)
+                        .foregroundStyle(DGColor.ink1)
+                        .lineLimit(Self.nameLineLimit(dynamicTypeSize))
+                    Text(exercise.muscleLine)
+                        .font(DGFont.caption.weight(.regular))
+                        .foregroundStyle(DGColor.ink3)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: DGSpace.s2)
+                accessory
             }
-            Spacer(minLength: DGSpace.s2)
-            accessory
             if exercise.isFavorite {
                 Image(systemName: "star.fill")
                     .font(.system(size: 13, weight: .semibold))
@@ -92,6 +97,11 @@ struct LibraryRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(exercise.isFavorite ? "\(exercise.name), favourite" : exercise.name)
         .accessibilityValue(accessibilityValue)
+    }
+
+    /// One line normally; at accessibility sizes a 50 pt name gets a second before "Barbell Be…".
+    static func nameLineLimit(_ size: DynamicTypeSize) -> Int {
+        size.dgStacks ? 2 : 1
     }
 
     private var accessibilityValue: String {

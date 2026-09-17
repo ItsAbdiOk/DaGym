@@ -19,6 +19,7 @@ struct DebriefCard: View {
     @State private var isHidden = false
     /// Drives the skeleton's shimmer while the model writes.
     @State private var shimmer = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if !isHidden {
@@ -112,7 +113,8 @@ struct DebriefCard: View {
         }
         .opacity(shimmer ? 0.45 : 1)
         .animation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true), value: shimmer)
-        .onAppear { shimmer = true }
+        // Reduce Motion: the bars sit still at the dimmed opacity rather than pulsing.
+        .onAppear { shimmer = !reduceMotion }
         .accessibilityLabel("Writing the debrief")
     }
 
