@@ -83,11 +83,16 @@ xcrun simctl bootstatus "$UDID" -b >/dev/null 2>&1 || true
 # once granted they never show again on that simulator, so a second run takes a different
 # path (and waits 8 s for a sheet that never comes). Reset so every run is the first run.
 xcrun simctl privacy "$UDID" reset all dev.abdirahmanmohamed.dagym >/dev/null 2>&1 || true
-# Both iOS bundles in ONE invocation: each xcodebuild re-checks the whole build graph and
-# re-installs the host, so a second invocation cost ~30–60 s for nothing.
 echo "  $SIM"
-run_xctest "app + database tests, UI smoke test" DaGym "$UDID" ios \
-    -only-testing:DaGymTests -only-testing:DaGymUITests
+run_xctest "app + database tests" DaGym "$UDID" ios -only-testing:DaGymTests
+# The UI bundle runs in its own invocation, on a rebooted simulator. Straight after the hosted
+# run, the UI runner intermittently never gets its "AX loaded" notification and fails before a
+# single test (three pushes in a row on 17 Sep; every suite passed alone). The reboot costs
+# ~15 s plus the second build-graph check — cheaper than a bounced push.
+xcrun simctl shutdown "$UDID" >/dev/null 2>&1 || true
+xcrun simctl boot "$UDID" >/dev/null 2>&1 || true
+xcrun simctl bootstatus "$UDID" -b >/dev/null 2>&1 || true
+run_xctest "UI smoke tests" DaGym "$UDID" ios-ui -only-testing:DaGymUITests
 
 # Watch bundle (prescription parity, wrist-finish persistence, haptic/crown tables). The watch
 # app already *built* above (embedded in DaGym), so this only catches behaviour breaks.
