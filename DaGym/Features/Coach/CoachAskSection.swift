@@ -34,9 +34,9 @@ struct CoachAskSection: View {
                 Button { askTask = Task { await ask() } } label: {
                     Image(systemName: isAsking ? "ellipsis" : "arrow.up")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DGColor.inkOnCoral)
                         .frame(width: 44, height: 44)
-                        .background(DGColor.aiViolet, in: Circle())
+                        .background(DGColor.coral, in: Circle())
                 }
                 .buttonStyle(.dgControl)
                 .disabled(isAsking || question.trimmingCharacters(in: .whitespaces).isEmpty)

@@ -60,7 +60,7 @@ struct CoachDraftReviewStrip: View {
     private var tint: Color {
         switch strip {
         case .agreed: DGColor.success
-        case .alternative: DGColor.aiVioletText
+        case .alternative: DGColor.coralText
         case .failed: DGColor.ink4
         }
     }

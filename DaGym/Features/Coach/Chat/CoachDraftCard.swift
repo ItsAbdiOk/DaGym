@@ -41,7 +41,7 @@ struct CoachDraftCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.leading, DGSpace.s3)
                     .overlay(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 1).fill(DGColor.aiViolet).frame(width: 2)
+                        RoundedRectangle(cornerRadius: 1).fill(DGColor.coral).frame(width: 2)
                     }
                     .accessibilityLabel("Reviewer's reasoning: \(rationale)")
                     .accessibilityIdentifier(A11yID.coachChatDraftRationale)
@@ -62,44 +62,62 @@ struct CoachDraftCard: View {
                 actions
             }
         }
-        .dgCard(padding: DGSpace.s4)
+        .dgCard(radius: 18, padding: 15)
         .contextMenu {
             CoachChatSaveMenu(targets: saveTargets, onCopy: onCopy, onSave: onSave)
         }
         .accessibilityIdentifier(A11yID.coachChatDraftCard)
     }
 
+    /// "PROPOSAL" tag, then the kind and — with a second opinion on — whose card this is; the
+    /// summary as the title and the counts under it, the way the prototype's proposal card reads.
     private var header: some View {
-        HStack(alignment: .top, spacing: DGSpace.s2) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(DGColor.aiVioletText)
-                .padding(.top, 3)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: DGSpace.s1) {
-                HStack(spacing: DGSpace.s2) {
-                    Text(kindLabel)
-                        .font(DGFont.condensedLabel(11))
-                        .foregroundStyle(DGColor.ink4)
-                    if let originLabel {
-                        Text(originLabel)
-                            .font(DGFont.condensedLabel(11))
-                            .foregroundStyle(DGColor.aiVioletText)
-                            .padding(.horizontal, DGSpace.s2)
-                            .frame(minHeight: 18)
-                            .background(Capsule().fill(DGColor.surface2))
-                            .accessibilityIdentifier(A11yID.coachChatDraftOrigin)
-                    }
-                }
-                Text(draft.summary)
-                    .font(DGFont.title3)
-                    .foregroundStyle(DGColor.ink1)
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 7) {
+                Text("Proposal")
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(0.5)
+                    .textCase(.uppercase)
+                    .foregroundStyle(DGColor.ink3)
+                    .padding(.horizontal, 7)
+                    .frame(minHeight: 18)
+                    .background(
+                        DGColor.ink1.opacity(0.08), in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    )
+                Text(originLabel.map { "\(kindLabel) · \($0)" } ?? kindLabel)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(DGColor.ink3)
+                    .lineLimit(1)
+                    .accessibilityIdentifier(originLabel == nil ? "" : A11yID.coachChatDraftOrigin)
             }
-            Spacer(minLength: DGSpace.s2)
+            Text(draft.summary)
+                .font(DGFont.title3)
+                .foregroundStyle(DGColor.ink1)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 11)
+            if let counts = countLine {
+                Text(counts)
+                    .font(.system(size: 12.5))
+                    .monospacedDigit()
+                    .foregroundStyle(DGColor.ink3)
+                    .padding(.top, 5)
+            }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(headerAccessibilityLabel)
+    }
+
+    /// "6 exercises · 23 sets" for a routine, "3 routines · 14 exercises" for a program.
+    private var countLine: String? {
+        switch draft {
+        case .routine(let proposal):
+            CoachDraftDetail.countLine(proposal)
+        case .program(let proposal) where !proposal.usesTemplate:
+            "\(proposal.routines.count) routines · "
+                + "\(proposal.routines.reduce(0) { $0 + $1.exercises.count }) exercises"
+        default:
+            nil
+        }
     }
 
     private var headerAccessibilityLabel: String {
@@ -224,27 +242,27 @@ struct CoachDraftCard: View {
     }
 
     private var actions: some View {
-        HStack(spacing: DGSpace.s3) {
+        HStack(spacing: DGSpace.s2) {
             Button(action: onApply) {
                 Text("Apply")
-                    .font(DGFont.condensedLabel(13))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(DGColor.inkOnCoral)
-                    .padding(.horizontal, DGSpace.s4)
-                    .frame(minHeight: DGTap.min)
-                    .background(DGColor.coral, in: Capsule())
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .background(DGColor.coral, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             .buttonStyle(.dgControl)
             .accessibilityIdentifier(A11yID.coachChatDraftApply)
             Button(action: onDiscard) {
                 Text("Discard")
-                    .font(DGFont.condensedLabel(13))
-                    .foregroundStyle(DGColor.ink2)
-                    .padding(.horizontal, DGSpace.s4)
-                    .frame(minHeight: DGTap.min)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(DGColor.ink1)
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .background(
+                        DGColor.ink1.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    )
             }
             .buttonStyle(.dgControl)
             .accessibilityIdentifier(A11yID.coachChatDraftDiscard)
-            Spacer()
         }
     }
 
@@ -255,16 +273,6 @@ struct CoachDraftCard: View {
         case .schedule: "Proposed schedule"
         case .deload: "Proposed deload"
         case .swap: "Proposed swap"
-        }
-    }
-
-    private var symbol: String {
-        switch draft {
-        case .routine: "list.bullet.rectangle"
-        case .program: "calendar.badge.plus"
-        case .schedule: "calendar"
-        case .deload: "arrow.down.right"
-        case .swap: "arrow.left.arrow.right"
         }
     }
 }

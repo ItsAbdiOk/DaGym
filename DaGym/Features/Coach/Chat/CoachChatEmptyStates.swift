@@ -1,77 +1,79 @@
 import SwiftUI
 
-/// The chat screen before it can send: no key, or a key without consent. Both point at
-/// Settings, where the key sheet and the consent screen live.
+/// The chat screen before it can send: no key, or a key without consent. Drawn in the
+/// transcript's own voice — one coach bubble saying what's missing and a pill that opens
+/// Settings, where the key sheet and the consent screen live — so the screen never advertises
+/// a coach that can't answer, and never looks like a different app than the chat it becomes.
 struct CoachChatSetupState: View {
     var hasKey: Bool
     var onOpenSettings: () -> Void
 
     var body: some View {
-        VStack {
-            Spacer()
-            EmptyState(
-                symbol: "key",
-                title: "Set Up Your Coach",
-                message: hasKey
-                    ? "Agree to what's sent in Settings before the coach can read your training."
-                    : "Add your OpenRouter API key in Settings. Your key stays in the Keychain and "
-                        + "nothing is sent until you ask a question.",
-                action: "Open Settings", onAction: onOpenSettings
-            )
-            .padding(.horizontal, DGSpace.s6)
-            Spacer()
-        }
-    }
-}
-
-/// An empty thread's opening: three prompts to tap, and a line on how proposals arrive.
-struct CoachChatSuggestedPromptsView: View {
-    var onPick: (String) -> Void
-
-    var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DGSpace.s3) {
-                Text("Try asking").dgLabel()
-                ForEach(CoachChatSuggestedPrompts.all, id: \.self) { prompt in
-                    Button {
-                        onPick(prompt)
-                    } label: {
-                        HStack {
-                            Text(prompt)
-                                .font(DGFont.body)
-                                .foregroundStyle(DGColor.ink1)
-                                .multilineTextAlignment(.leading)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Spacer(minLength: DGSpace.s2)
-                            Image(systemName: "arrow.up.right")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(DGColor.aiVioletText)
-                                .accessibilityHidden(true)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .dgCard(padding: DGSpace.s4)
-                    }
-                    .buttonStyle(.dgControl)
-                    .accessibilityIdentifier(A11yID.coachChatSuggestedPrompt)
+                CoachChatOpeningBubble(text: message)
+                Button(action: onOpenSettings) {
+                    Text("Open Settings")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(DGColor.inkOnCoral)
+                        .padding(.horizontal, DGSpace.s5)
+                        .frame(minHeight: 40)
+                        .background(DGColor.coral, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-                Text("The coach reads your log through tools and cites what it used. Proposals arrive as "
-                    + "cards you apply or discard — nothing changes until you tap Apply.")
+                .buttonStyle(.dgControl)
+                Text("Your key stays in the Keychain and nothing is sent until you ask a question.")
                     .font(DGFont.footnote)
                     .foregroundStyle(DGColor.ink4)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, DGSpace.s2)
             }
             .padding(.horizontal, DGSpace.s4)
-            .padding(.top, DGSpace.s5)
+            .padding(.top, DGSpace.s4)
         }
-        .scrollDismissesKeyboard(.interactively)
+    }
+
+    private var message: String {
+        hasKey
+            ? "Agree to what's sent in Settings before I can read your training."
+            : "Ask anything about your training and get routines built for you. Add your OpenRouter "
+                + "key in Settings to start."
+    }
+}
+
+/// The coach's first bubble on an empty thread — the week so far from the real recap, or the
+/// setup line above. Tapping it puts the cursor in the input: it is the one control the
+/// screen's UI test reaches for first (`coach.chat.entry`), and a bubble that asks a question
+/// should be where the answer starts.
+struct CoachChatOpeningBubble: View {
+    var text: String
+    var onTap: () -> Void = {}
+
+    var body: some View {
+        HStack {
+            Button(action: onTap) {
+                Text(text)
+                    .font(DGFont.subhead)
+                    .foregroundStyle(DGColor.ink1)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 15)
+                    .padding(.vertical, 13)
+                    .coachBubble()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Coach: \(text)")
+            .accessibilityIdentifier(A11yID.coachChatEntry)
+            Spacer(minLength: DGSpace.s10)
+        }
     }
 }
 
 #Preview {
     VStack {
         CoachChatSetupState(hasKey: false, onOpenSettings: {})
-        CoachChatSuggestedPromptsView(onPick: { _ in })
+        CoachChatOpeningBubble(
+            text: "Your week is done: 3 of 4 sessions, 47,200 kg of volume, one PR. Want the review?"
+        )
+        .padding(.horizontal, DGSpace.s4)
     }
     .background(AmbientWash())
 }

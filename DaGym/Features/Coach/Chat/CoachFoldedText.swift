@@ -35,7 +35,7 @@ struct CoachFoldedText: View {
                             .font(.system(size: 10, weight: .semibold))
                     }
                     .font(DGFont.condensedLabel(12))
-                    .foregroundStyle(DGColor.aiVioletText)
+                    .foregroundStyle(DGColor.coralText)
                     .frame(minHeight: DGTap.min)
                 }
                 .buttonStyle(.dgControl)
