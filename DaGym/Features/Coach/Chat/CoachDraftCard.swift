@@ -54,8 +54,6 @@ struct CoachDraftCard: View {
             if let caption = state.caption {
                 Text(caption)
                     .font(DGFont.condensedLabel(12))
-                    .tracking(1.0)
-                    .textCase(.uppercase)
                     .foregroundStyle(state == .applied ? DGColor.success : DGColor.ink4)
             } else {
                 if let keepsReasoning {
@@ -82,14 +80,10 @@ struct CoachDraftCard: View {
                 HStack(spacing: DGSpace.s2) {
                     Text(kindLabel)
                         .font(DGFont.condensedLabel(11))
-                        .tracking(1.0)
-                        .textCase(.uppercase)
                         .foregroundStyle(DGColor.ink4)
                     if let originLabel {
                         Text(originLabel)
                             .font(DGFont.condensedLabel(11))
-                            .tracking(1.0)
-                            .textCase(.uppercase)
                             .foregroundStyle(DGColor.aiVioletText)
                             .padding(.horizontal, DGSpace.s2)
                             .frame(minHeight: 18)
@@ -128,8 +122,6 @@ struct CoachDraftCard: View {
                     .font(.system(size: 10, weight: .semibold))
             }
             .font(DGFont.condensedLabel(12))
-            .tracking(1.0)
-            .textCase(.uppercase)
             .foregroundStyle(DGColor.ink3)
         }
         .buttonStyle(.dgControl)
@@ -236,8 +228,6 @@ struct CoachDraftCard: View {
             Button(action: onApply) {
                 Text("Apply")
                     .font(DGFont.condensedLabel(13))
-                    .tracking(1.2)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.inkOnCoral)
                     .padding(.horizontal, DGSpace.s4)
                     .frame(minHeight: DGTap.min)
@@ -248,8 +238,6 @@ struct CoachDraftCard: View {
             Button(action: onDiscard) {
                 Text("Discard")
                     .font(DGFont.condensedLabel(13))
-                    .tracking(1.2)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink2)
                     .padding(.horizontal, DGSpace.s4)
                     .frame(minHeight: DGTap.min)

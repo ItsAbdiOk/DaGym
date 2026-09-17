@@ -47,7 +47,6 @@ struct RestPill: View {
             Button("Skip", action: onSkip)
                 .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(13))
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.inkOnCoral)
                 .padding(.horizontal, DGSpace.s4)
                 .frame(minHeight: 44)

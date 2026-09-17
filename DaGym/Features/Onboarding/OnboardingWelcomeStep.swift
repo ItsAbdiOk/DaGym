@@ -30,7 +30,6 @@ struct OnboardingWelcomeStep: View {
             VStack(spacing: DGSpace.s3) {
                 Text("DaGym")
                     .font(DGFont.title1)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                     .accessibilityIdentifier(A11yID.onboardingStep("welcome"))
                 Text("The whole app. No account, no ads, no subscription, nothing held back.")
@@ -57,7 +56,6 @@ struct OnboardingWelcomeStep: View {
                 Button("Skip and start lifting", action: onSkip)
                     .buttonStyle(.dgControl)
                     .font(DGFont.condensedLabel(13))
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink3)
                     .accessibilityIdentifier(A11yID.onboardingSkipAll)
                 Button(action: onExploreSampleData) {
@@ -70,7 +68,6 @@ struct OnboardingWelcomeStep: View {
                 }
                 .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(13))
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink4)
             }
             .disabled(isSeeding)

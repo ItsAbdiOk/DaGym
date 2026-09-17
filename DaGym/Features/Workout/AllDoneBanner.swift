@@ -25,8 +25,6 @@ struct AllDoneBanner: View {
                 Button(action: onKeepGoing) {
                     Text("Keep going")
                         .font(DGFont.condensedLabel(15))
-                        .tracking(1.5)
-                        .textCase(.uppercase)
                         .foregroundStyle(DGColor.ink1)
                         .frame(maxWidth: .infinity)
                         .frame(minHeight: 44)

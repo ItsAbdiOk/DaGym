@@ -67,7 +67,6 @@ struct BodyView: View {
         VStack(alignment: .leading, spacing: DGSpace.s1) {
             Text("Body")
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Text("Bodyweight, trend and Apple Health sync.")
                 .font(DGFont.footnote)
@@ -147,8 +146,6 @@ struct BodyView: View {
                         Image(systemName: "heart.fill").font(.system(size: 14, weight: .semibold))
                         Text(isSyncing ? "Syncing…" : "Sync")
                             .font(DGFont.condensedLabel(13))
-                            .tracking(1.2)
-                            .textCase(.uppercase)
                     }
                     .foregroundStyle(DGColor.ink1)
                     .frame(minHeight: 52)

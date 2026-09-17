@@ -70,7 +70,6 @@ struct OneRepMaxCalculatorView: View {
         HStack {
             Text("1RM Calculator")
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             DGIconButton(symbol: "xmark", size: 36, accessibilityLabel: "Close") { dismiss() }

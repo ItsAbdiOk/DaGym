@@ -83,7 +83,6 @@ struct ListExerciseSection: View {
         HStack(spacing: DGSpace.s2) {
             Text(entry.exercise.name)
                 .font(DGFont.title3)
-                .textCase(.uppercase)
                 .foregroundStyle(isOnDeck ? DGColor.coralText : DGColor.ink1)
                 .lineLimit(2)
             if isOnDeck {

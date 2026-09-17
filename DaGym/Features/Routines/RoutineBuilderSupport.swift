@@ -121,8 +121,6 @@ struct AddExerciseButton: View {
                 Image(systemName: "plus").font(.system(size: 14, weight: .bold))
                 Text("Add Exercise")
                     .font(DGFont.condensedLabel(14))
-                    .tracking(1.2)
-                    .textCase(.uppercase)
             }
             .foregroundStyle(DGColor.ink2)
             .frame(maxWidth: .infinity)

@@ -325,8 +325,6 @@ private struct MetricSegmentToggle: View {
                 } label: {
                     Text(option.title)
                         .font(DGFont.condensedLabel(12))
-                        .tracking(1.2)
-                        .textCase(.uppercase)
                         .foregroundStyle(selected ? DGColor.coralText : DGColor.ink3)
                         .frame(maxWidth: .infinity)
                         .frame(minHeight: 32)

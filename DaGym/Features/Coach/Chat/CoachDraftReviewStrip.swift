@@ -14,8 +14,6 @@ struct CoachDraftReviewStrip: View {
                     .accessibilityHidden(true)
                 Text(strip.title)
                     .font(DGFont.condensedLabel(12))
-                    .tracking(1.0)
-                    .textCase(.uppercase)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .foregroundStyle(tint)

@@ -82,7 +82,6 @@ struct CoachReviewRow: View {
                     Text(CoachReviewCopy.transcriptLine(for: review))
                         .font(DGFont.condensedLabel(12))
                         .tracking(0.8)
-                        .textCase(.uppercase)
                 }
                 if !text.isEmpty {
                     CoachFoldedText(
@@ -173,8 +172,6 @@ struct CoachAssistantBubble: View {
                 if isStopped {
                     Text("Stopped")
                         .font(DGFont.condensedLabel(11))
-                        .tracking(1.0)
-                        .textCase(.uppercase)
                         .foregroundStyle(DGColor.ink4)
                 }
             }
@@ -209,7 +206,6 @@ struct CoachToolChip: View {
             Text(count > 1 ? "\(label) ×\(count)" : label)
                 .font(DGFont.condensedLabel(12))
                 .tracking(0.8)
-                .textCase(.uppercase)
                 .lineLimit(1)
         }
         .foregroundStyle(failed ? DGColor.warning : DGColor.aiVioletText)

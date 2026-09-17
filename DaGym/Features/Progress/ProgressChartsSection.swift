@@ -53,7 +53,6 @@ struct ProgressChartsSection: View {
         DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s3) {
             Text("Progress")
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             HStack(spacing: DGSpace.s3) {

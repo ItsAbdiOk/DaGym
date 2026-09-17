@@ -40,8 +40,6 @@ struct GymCardWalletRow: View {
                 } label: {
                     Label("Open in Wallet", systemImage: "wallet.pass")
                         .font(DGFont.condensedLabel(13))
-                        .tracking(1.2)
-                        .textCase(.uppercase)
                         .foregroundStyle(DGColor.coralText)
                         .frame(height: DGTap.min)
                 }

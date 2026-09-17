@@ -72,7 +72,6 @@ struct MonthCalendarSheet: View {
             Spacer()
             Text(Self.monthLabel(month))
                 .font(DGFont.title3)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             DGIconButton(symbol: "chevron.right", size: 36, accessibilityLabel: "Next month") {
@@ -126,7 +125,6 @@ struct MonthCalendarSheet: View {
             Text(Self.dayLabel(day.date)).dgLabel()
             Text(day.title ?? "Nothing logged")
                 .font(DGFont.title3)
-                .textCase(.uppercase)
                 .foregroundStyle(day.title == nil ? DGColor.ink3 : DGColor.ink1)
             if let moveDate {
                 movePicker(day, newDate: moveDate)
@@ -188,8 +186,6 @@ struct MonthCalendarSheet: View {
         Button(action: action) {
             Text(title)
                 .font(DGFont.condensedLabel(15))
-                .tracking(1.5)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 52)

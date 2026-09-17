@@ -108,8 +108,6 @@ struct RoutineBuilderView: View {
                     .font(.system(size: 13, weight: .semibold))
                 Text("Reorder")
                     .font(DGFont.condensedLabel(14))
-                    .tracking(1.2)
-                    .textCase(.uppercase)
             }
             .foregroundStyle(DGColor.ink2)
             .frame(maxWidth: .infinity)
@@ -127,7 +125,6 @@ struct RoutineBuilderView: View {
             Spacer()
             Text(routineID == nil ? "New Routine" : "Edit Routine")
                 .font(DGFont.title3)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             if let routineID {

@@ -43,7 +43,6 @@ struct ConsistencyView: View {
     private var header: some View {
         Text("Consistency")
             .font(DGFont.title1)
-            .textCase(.uppercase)
             .foregroundStyle(DGColor.ink1)
     }
 

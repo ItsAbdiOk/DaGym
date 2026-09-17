@@ -122,8 +122,6 @@ struct LibraryView: View {
                     .accessibilityHidden(true)
                 Text("Explore by muscle")
                     .font(DGFont.condensedLabel(14))
-                    .tracking(1.2)
-                    .textCase(.uppercase)
                 Spacer()
                 Image(systemName: showingMuscleMap ? "chevron.up" : "chevron.down")
                     .font(.system(size: 12, weight: .semibold))

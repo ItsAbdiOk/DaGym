@@ -15,10 +15,10 @@ enum DGAccent: String, CaseIterable, Codable, Hashable {
 
     var displayName: String {
         switch self {
-        case .coral: "Coral"
-        case .ember: "Ember"
-        case .lime: "Lime"
-        case .ice: "Ice"
+        case .coral: "Terracotta"
+        case .ember: "Ink"
+        case .lime: "Green"
+        case .ice: "Blue"
         case .violet: "Violet"
         }
     }
@@ -37,17 +37,17 @@ enum DGAccent: String, CaseIterable, Codable, Hashable {
     func baseHex(dark: Bool) -> UInt32 {
         switch self {
         case .coral:
-            // Shipped brand colour — exact hex the app has always used, unchanged either way.
-            0xF4705C
+            // Terracotta — the redesign's brand colour (`--ac` in the design prototype).
+            dark ? 0xC96A42 : 0xB4552F
         case .ember:
-            dark ? 0xF2883C : 0xD9701F
+            // "Ink": the near-black accent. Flips to bone in dark mode so buttons stay visible.
+            dark ? 0xF1ECE4 : 0x1C1917
         case .lime:
-            dark ? 0x9BD75E : 0x7CBA3E
+            dark ? 0x5AA97A : 0x3D8A5F
         case .ice:
-            dark ? 0x58C4E8 : 0x2F9CC4
+            dark ? 0x5A93D3 : 0x2F6FB4
         case .violet:
-            // Dark stop reuses the existing `aiViolet` hue so the AI-badge and accent never clash.
-            dark ? 0x7B8CFF : 0x5A67D9
+            dark ? 0x9B7AD3 : 0x7A52B4
         }
     }
 
@@ -56,27 +56,32 @@ enum DGAccent: String, CaseIterable, Codable, Hashable {
     func text(dark: Bool) -> Color {
         switch self {
         case .coral:
-            Color(hex: dark ? 0xFF8F7A : 0xB83E2A)
+            Color(hex: dark ? 0xE59470 : 0x9A4524)
         case .ember:
-            Color(hex: dark ? 0xFFA666 : 0xA85A16)
+            Color(hex: dark ? 0xF1ECE4 : 0x1C1917)
         case .lime:
-            Color(hex: dark ? 0xB7E888 : 0x4C7A1E)
+            Color(hex: dark ? 0x8CCBA3 : 0x2D6B49)
         case .ice:
-            Color(hex: dark ? 0x7ED3F0 : 0x155E77)
+            Color(hex: dark ? 0x8FB8E8 : 0x255C99)
         case .violet:
-            Color(hex: dark ? 0x9CA8FF : 0x3B49C0)
+            Color(hex: dark ? 0xBDA3E6 : 0x63409A)
         }
+    }
+
+    /// Text/glyph colour on top of `base(dark:)`.
+    func onAccent(dark: Bool) -> Color {
+        self == .ember && dark ? Color(hex: 0x1C1917) : .white
     }
 
     /// Pressed/active state (`coralPress`'s role): one fixed darker stop, same in both schemes —
     /// mirrors how the shipped `coralPress` never forked by scheme either.
     var press: Color {
         switch self {
-        case .coral: Color(hex: 0xD9503B)
-        case .ember: Color(hex: 0xC96B22)
-        case .lime: Color(hex: 0x74A83E)
-        case .ice: Color(hex: 0x2F92B8)
-        case .violet: Color(hex: 0x5566D9)
+        case .coral: Color(hex: 0x8F4021)
+        case .ember: Color(hex: 0x3A3532)
+        case .lime: Color(hex: 0x2D6B49)
+        case .ice: Color(hex: 0x255C99)
+        case .violet: Color(hex: 0x63409A)
         }
     }
 }
@@ -99,21 +104,23 @@ enum DGColor {
     nonisolated(unsafe) static var current: DGAccent = .coral
 
     // MARK: Surfaces
-    static let bgSunken = dynamic(dark: 0x060607, light: 0xE8E6E1)
-    static let bgBase = dynamic(dark: 0x0B0B0C, light: 0xF4F3F0)
-    static let surface1 = dynamic(dark: 0x16161A, light: 0xFFFFFF)
-    static let surface2 = dynamic(dark: 0x202027, light: 0xFAF9F7)
-    static let surface3 = dynamic(dark: 0x2A2A33, light: 0xEDEBE6)
+    // Warm stone neutrals from the design prototype (`#f6f3ef` page, `#e8e4dd` behind sheets).
+    static let bgSunken = dynamic(dark: 0x0D0C0B, light: 0xE8E4DD)
+    static let bgBase = dynamic(dark: 0x151311, light: 0xF6F3EF)
+    static let surface1 = dynamic(dark: 0x201D1A, light: 0xFFFFFF)
+    static let surface2 = dynamic(dark: 0x292522, light: 0xFBF9F6)
+    static let surface3 = dynamic(dark: 0x342F2A, light: 0xEFEBE5)
 
     // MARK: Ink
-    static let ink1 = dynamic(dark: 0xF6F5F2, light: 0x121213)
+    // `#1c1917` ink; the prototype's secondary text is the same ink at 62–70 %.
+    static let ink1 = dynamic(dark: 0xF5F1EC, light: 0x1C1917)
     /// 82 % — body copy on glass.
-    static let ink2 = dynamic(dark: 0xF6F5F2, light: 0x121213, alpha: 0.82)
+    static let ink2 = dynamic(dark: 0xF5F1EC, light: 0x1C1917, alpha: 0.82)
     /// 66 % — labels, secondary rows.
-    static let ink3 = dynamic(dark: 0xF6F5F2, light: 0x121213, alpha: 0.66)
+    static let ink3 = dynamic(dark: 0xF5F1EC, light: 0x1C1917, alpha: 0.66)
     /// 46 % — decoration only, never text under 13 pt.
-    static let ink4 = dynamic(dark: 0xF6F5F2, light: 0x121213, alpha: 0.46)
-    static let hairline = dynamic(dark: 0xFFFFFF, light: 0x121213, alpha: 0.09)
+    static let ink4 = dynamic(dark: 0xF5F1EC, light: 0x1C1917, alpha: 0.46)
+    static let hairline = dynamic(dark: 0xFFFFFF, light: 0x1C1917, alpha: 0.12)
 
     // MARK: Brand
     // "coral" is the historical name; it now resolves from the active `DGAccent` (`current`,
@@ -126,7 +133,9 @@ enum DGColor {
     static var coral: Color { cached(.base) { accentAware { $0.base(dark: $1) } } }
     static var coralPress: Color { current.press }
     static var coralWash: Color { cached(.wash) { coral.opacity(0.14) } }
-    static let inkOnCoral = Color(hex: 0x2B0C07)
+    /// Text on a filled accent button — white on terracotta, ink on the bone "Ink" accent in
+    /// dark mode.
+    static var inkOnCoral: Color { cached(.onAccent) { accentAware { $0.onAccent(dark: $1) } } }
     /// Coral as small text: steps down in light mode for 4.5:1 contrast.
     static var coralText: Color { cached(.text) { accentAware { $0.text(dark: $1) } } }
 
@@ -223,7 +232,7 @@ enum DGColor {
     /// accent every read is the same value and SwiftUI's diffing can short-circuit. A `Mutex`,
     /// not `nonisolated(unsafe)`: unlike `current`, a dictionary can't tolerate a torn write.
     private enum AccentSlot: Hashable {
-        case base, text, wash, hit22, hit46, hit72
+        case base, text, wash, onAccent, hit22, hit46, hit72
     }
 
     private static let accentCache = Mutex<[DGAccent: [AccentSlot: Color]]>([:])

@@ -104,7 +104,6 @@ struct WorkoutDetailView: View {
             HStack {
                 Text(detail.title)
                     .font(DGFont.title1)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 if detail.isBackfilled {
                     DGTag(text: "Backfilled", tint: DGColor.infoText, wash: DGColor.info.opacity(0.16))
@@ -137,7 +136,6 @@ struct WorkoutDetailView: View {
             RoutineGlyph(symbolName: glyph.symbolName, tint: glyph.tint, size: 28)
             Text(glyph.name)
                 .font(DGFont.title3)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink2)
         }
     }
@@ -222,7 +220,6 @@ private struct ExerciseEntryCard: View {
             HStack {
                 Text(entry.exercise.name)
                     .font(DGFont.title3)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Spacer()
                 Text(HistoryView.pluralized(entry.sets.count, "set")).dgLabel()

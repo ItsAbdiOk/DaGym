@@ -16,7 +16,6 @@ struct AddRoutineSheet: View {
                 .padding(.top, DGSpace.s2)
             Text("Add routine")
                 .font(DGFont.title2)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if routines.isEmpty {
@@ -51,7 +50,6 @@ struct AddRoutineSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(routine.name)
                         .font(DGFont.title3)
-                        .textCase(.uppercase)
                         .foregroundStyle(DGColor.ink1)
                     Text(summary(routine))
                         .font(DGFont.footnote)

@@ -31,7 +31,6 @@ struct CoachReviewSection: View {
                 }
                     .buttonStyle(.dgControl)
                     .font(DGFont.condensedLabel(13))
-                    .textCase(.uppercase)
                     .foregroundStyle(.white)
                     .padding(.horizontal, DGSpace.s3)
                     .frame(minHeight: 36)

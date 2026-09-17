@@ -19,8 +19,6 @@ struct DGPrimaryButton: View {
                 }
                 Text(title)
                     .font(DGFont.condensedLabel(15))
-                    .tracking(1.5)
-                    .textCase(.uppercase)
             }
             .foregroundStyle(ink)
             .frame(maxWidth: .infinity)
@@ -78,8 +76,6 @@ struct DGChip: View {
                 }
             }
             .font(DGFont.condensedLabel(12))
-            .tracking(1.2)
-            .textCase(.uppercase)
             .foregroundStyle(selected ? selectedInk : DGColor.ink2)
             .padding(.horizontal, 14)
             .frame(minHeight: 36)
@@ -111,7 +107,6 @@ struct DGTag: View {
         Text(text)
             .font(DGFont.condensedLabel(11))
             .tracking(0.8)
-            .textCase(.uppercase)
             .foregroundStyle(tint)
             .padding(.horizontal, 8)
             .frame(minHeight: 24)
@@ -210,7 +205,6 @@ struct WhyCard: View {
                         Button(primary) { onPrimary?() }
                             .buttonStyle(.plain)
                             .font(DGFont.condensedLabel(13))
-                            .textCase(.uppercase)
                             .foregroundStyle(DGColor.inkOnCoral)
                             .padding(.horizontal, 14).frame(minHeight: 34)
                             .background(DGColor.aiViolet, in: Capsule())
@@ -219,7 +213,6 @@ struct WhyCard: View {
                         Button(secondary) { onSecondary?() }
                             .buttonStyle(.plain)
                             .font(DGFont.condensedLabel(13))
-                            .textCase(.uppercase)
                             .foregroundStyle(DGColor.ink2)
                             .padding(.horizontal, 14).frame(minHeight: 34)
                             .background(DGColor.surface3, in: Capsule())
@@ -267,7 +260,6 @@ struct EmptyState: View {
             }
             Text(title)
                 .font(DGFont.title2)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Text(message)
                 .font(DGFont.subhead)
@@ -283,8 +275,6 @@ struct EmptyState: View {
                 Button { onSecondaryAction?() } label: {
                     Text(secondaryAction)
                         .font(DGFont.condensedLabel(13))
-                        .tracking(1.2)
-                        .textCase(.uppercase)
                         .foregroundStyle(DGColor.ink1)
                         .padding(.horizontal, DGSpace.s4)
                         .frame(minHeight: 40)
@@ -299,10 +289,9 @@ struct EmptyState: View {
 }
 
 extension DGFont {
-    /// Condensed bold at an arbitrary size for buttons, chips and badges. Scales with
-    /// Dynamic Type on the chrome curve (`.title3`, about 2.2× at the largest accessibility
-    /// size) — see the note on `DGFont`.
+    /// Semibold SF at an arbitrary size for buttons, chips and badges (the name predates the
+    /// move to system type). Scales with Dynamic Type on the chrome curve (`.title3`).
     static func condensedLabel(_ size: CGFloat) -> Font {
-        Font.custom(Family.condensedBold, size: size, relativeTo: .title3)
+        Font.system(size: size, weight: .semibold)
     }
 }

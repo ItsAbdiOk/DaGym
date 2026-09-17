@@ -323,27 +323,27 @@ private struct ScreenshotScreenView: View {
                 WorkoutSummaryView(summary: summary, title: session.title, onDone: {})
             }
         case .progress:
-            tabbed(.progress) { HistoryTabView() }
+            tabbed(.you) { HistoryTabView() }
         case .chart:
-            tabbed(.progress) { HistoryTabView() }.sheet(isPresented: .constant(true)) { ProgressScreen() }
+            tabbed(.you) { HistoryTabView() }.sheet(isPresented: .constant(true)) { ProgressScreen() }
         case .records:
-            tabbed(.progress) { NavigationStack { PersonalRecordsView() } }
+            tabbed(.you) { NavigationStack { PersonalRecordsView() } }
         case .consistency:
-            tabbed(.progress) { NavigationStack { ConsistencyView() } }
+            tabbed(.you) { NavigationStack { ConsistencyView() } }
         case .milestones:
-            tabbed(.progress) { NavigationStack { MilestonesView() } }
+            tabbed(.you) { NavigationStack { MilestonesView() } }
         case .recovery:
             RootView().sheet(isPresented: .constant(true)) { RecoveryMapView() }
         case .body:
             RootView().sheet(isPresented: .constant(true)) { BodyView() }
         case .routines:
-            tabbed(.routines) { RoutinesTabView(onStart: { _ in }) }
+            tabbed(.train) { RoutinesTabView(onStart: { _ in }) }
         case .builder:
             RoutineBuilderView(routineID: store.routines().first { $0.name == "Push A" }?.id, onDone: {})
         case .library:
-            tabbed(.library) { LibraryView() }
+            tabbed(.you) { LibraryView() }
         case .exerciseDetail:
-            tabbed(.library) {
+            tabbed(.you) {
                 NavigationStack {
                     if let bench = ScreenshotMode.benchPress(in: store) {
                         ExerciseDetailView(exercise: bench)
@@ -357,11 +357,11 @@ private struct ScreenshotScreenView: View {
         case .settingsData:
             RootView().sheet(isPresented: .constant(true)) { ScreenshotDataSettingsView() }
         case .coach:
-            tabbed(.coach) { CoachView() }
+            tabbed(.you) { CoachView() }
         case .coachChat, .coachReview, .coachProgram:
             // The chat and program shots are the card's rows and reasons; the review shot is
             // two cards side by side, which only fit closed.
-            tabbed(.coach) { CoachView() }
+            tabbed(.you) { CoachView() }
                 .fullScreenCover(isPresented: .constant(true)) { CoachChatView() }
                 .environment(\.coachDraftCardsExpanded, screen != .coachReview)
         }
@@ -372,7 +372,7 @@ private struct ScreenshotScreenView: View {
         _ selected: DGTab, @ViewBuilder content: @escaping () -> Content
     ) -> some View {
         TabView(selection: .constant(selected)) {
-            ForEach([DGTab.today, .routines, .progress, .library, .coach], id: \.self) { tab in
+            ForEach(DGTab.allCases, id: \.self) { tab in
                 Tab(value: tab) {
                     if tab == selected { content() } else { AmbientWash() }
                 } label: {
@@ -396,7 +396,6 @@ private struct ScreenshotDataSettingsView: View {
                 VStack(alignment: .leading, spacing: DGSpace.s6) {
                     Text("Settings")
                         .font(DGFont.title1)
-                        .textCase(.uppercase)
                         .foregroundStyle(DGColor.ink1)
                     ICloudSettingsSection()
                     DataSettingsSection()

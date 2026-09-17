@@ -58,7 +58,6 @@ struct VoiceReviewCard: View {
                 Button("Discard", role: .cancel, action: onDismiss)
                     .buttonStyle(.plain)
                     .font(DGFont.condensedLabel(13))
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink2)
                     .padding(.horizontal, DGSpace.s4)
                     .frame(minHeight: 44)

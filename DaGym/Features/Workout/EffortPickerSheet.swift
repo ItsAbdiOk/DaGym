@@ -17,7 +17,6 @@ struct EffortPickerSheet: View {
         VStack(alignment: .leading, spacing: DGSpace.s5) {
             Text("How hard was it?")
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             scaleToggle
             VStack(spacing: DGSpace.s2) {

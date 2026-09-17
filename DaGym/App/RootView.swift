@@ -4,7 +4,7 @@ import SwiftData
 import SwiftUI
 import os
 
-/// App shell: switches between the five tabs and presents the active
+/// App shell: switches between the three tabs and presents the active
 /// workout (and its summary) full-screen when a session is started.
 struct RootView: View {
     @Environment(WorkoutStore.self) private var store
@@ -364,22 +364,29 @@ private extension RootView {
                 )
                 .environment(\.isTabVisible, isVisible(.today))
             } label: { tabLabel(.today) }
-            Tab(value: DGTab.routines) {
+            Tab(value: DGTab.train) {
                 RoutinesTabView(onStart: startWorkout)
-                    .environment(\.isTabVisible, isVisible(.routines))
-            } label: { tabLabel(.routines) }
-            Tab(value: DGTab.progress) {
-                HistoryTabView().environment(\.isTabVisible, isVisible(.progress))
-            } label: { tabLabel(.progress) }
-            Tab(value: DGTab.library) {
-                LibraryView().environment(\.isTabVisible, isVisible(.library))
-            } label: { tabLabel(.library) }
-            Tab(value: DGTab.coach) {
-                CoachView().environment(\.isTabVisible, isVisible(.coach))
-            } label: { tabLabel(.coach) }
+                    .environment(\.isTabVisible, isVisible(.train))
+            } label: { tabLabel(.train) }
+            Tab(value: DGTab.you) {
+                YouHubView(onShowTrain: { tab = .train })
+                    .environment(\.isTabVisible, isVisible(.you))
+            } label: { tabLabel(.you) }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .tint(DGColor.coral) // the system bar's selected tint follows the accent theme
+        .overlay(alignment: .bottomTrailing) { startFab }
+    }
+
+    /// The prototype's floating "play" button: one tap starts today's routine (or a freestyle
+    /// session on a rest day) from Today and Train. Hidden on You, where nothing is startable.
+    @ViewBuilder private var startFab: some View {
+        if tab != .you {
+            StartFAB(action: { routine == nil ? startFreestyle() : startFromScheduledRoutine() })
+                .padding(.trailing, DGSpace.s5)
+                .padding(.bottom, 74)
+                .transition(.scale.combined(with: .opacity))
+        }
     }
 
     /// A tab is "visible" only when it is selected and nothing covers it: the active-workout

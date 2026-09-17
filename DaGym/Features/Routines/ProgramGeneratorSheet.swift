@@ -166,7 +166,6 @@ struct ProgramGeneratorSheet: View {
         VStack(alignment: .leading, spacing: DGSpace.s4) {
             Text(preview.draft.name)
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Text("\(preview.template.splitName) · \(preview.template.weeks) weeks, last week deload · "
                 + preview.template.rule.displayName)
@@ -200,7 +199,6 @@ struct ProgramGeneratorSheet: View {
             Button("Back to the questions") { self.preview = nil }
                 .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(13))
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink3)
                 .frame(maxWidth: .infinity)
         }

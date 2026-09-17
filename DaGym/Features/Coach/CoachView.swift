@@ -83,7 +83,6 @@ struct CoachView: View {
         VStack(alignment: .leading, spacing: DGSpace.s2) {
             Text("Coach")
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Text(
                 coach.isUsingLanguageModel

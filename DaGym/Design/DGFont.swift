@@ -11,6 +11,9 @@ import SwiftUI
 /// because a 48 pt number or an uppercase tracked label at 3× no longer fits any row it lives
 /// in, and the system's own chrome (tab bars, nav buttons) scales the same restrained way.
 enum DGFont {
+    /// Kept for the share card and any custom-size caller; the app's own type is SF system
+    /// (the redesign prototype is set entirely in `-apple-system`). Barlow stays bundled so the
+    /// exported story card keeps its display face.
     enum Family {
         static let condensedSemiBold = "BarlowCondensed-SemiBold"
         static let condensedBold = "BarlowCondensed-Bold"
@@ -21,43 +24,36 @@ enum DGFont {
         static let bold = "Barlow-Bold"
     }
 
-    /// 48/48 · 800 · −3 % — hero numbers.
-    static let metricXL = Font.custom(Family.condensedExtraBold, size: 48, relativeTo: .largeTitle)
-    /// 34/36 · 800 · −2 % — timer, elapsed.
-    static let metricL = Font.custom(Family.condensedExtraBold, size: 34, relativeTo: .largeTitle)
-    /// 24/26 · 700 — set-row weight and reps.
-    static let metricM = Font.custom(Family.condensedBold, size: 24, relativeTo: .largeTitle)
-    /// 28/34 · 700 — screen title.
-    static let title1 = Font.custom(Family.condensedBold, size: 28, relativeTo: .largeTitle)
-    /// 22/28 · 700 — card title.
-    static let title2 = Font.custom(Family.condensedBold, size: 22, relativeTo: .largeTitle)
-    /// 17/22 · 600 — row title.
-    static let title3 = Font.custom(Family.condensedSemiBold, size: 17, relativeTo: .headline)
-    /// 16/22 · 500 — prose.
-    static let body = Font.custom(Family.medium, size: 16, relativeTo: .body)
-    /// 14/19 · 500.
-    static let subhead = Font.custom(Family.medium, size: 14, relativeTo: .subheadline)
-    /// 13/17 · 500.
-    static let footnote = Font.custom(Family.medium, size: 13, relativeTo: .footnote)
-    /// 11/14 · 600.
-    static let caption = Font.custom(Family.semiBold, size: 11, relativeTo: .caption)
-    /// Barlow Condensed 12/12 · +12 % tracking, uppercase — micro labels.
-    static let label = Font.custom(Family.condensedBold, size: 12, relativeTo: .title3)
-    /// 10 pt condensed — tab bar labels.
-    static let tabLabel = Font.custom(Family.condensedBold, size: 10, relativeTo: .largeTitle)
+    // Metrics: bold SF with tabular digits (`dgMetric` adds `monospacedDigit`).
+    static let metricXL = Font.system(size: 44, weight: .bold)
+    static let metricL = Font.system(.largeTitle, design: .default, weight: .bold)
+    static let metricM = Font.system(.title2, design: .default, weight: .bold)
+    /// 33 pt / 700 — the tab screens' large title ("Today", "Train", "You").
+    static let title1 = Font.system(.largeTitle, design: .default, weight: .bold)
+    /// 25 pt / 700 — the hero card title ("Push · Heavy").
+    static let title2 = Font.system(.title2, design: .default, weight: .bold)
+    /// 17 pt / 600 — row and card headings.
+    static let title3 = Font.system(.headline, design: .default, weight: .semibold)
+    static let body = Font.system(.body, design: .default, weight: .regular)
+    static let subhead = Font.system(.subheadline, design: .default, weight: .regular)
+    static let footnote = Font.system(.footnote, design: .default, weight: .regular)
+    static let caption = Font.system(.caption, design: .default, weight: .semibold)
+    /// 11 pt / 600, uppercase, tracked — section kickers ("THIS WEEK", "HITS").
+    static let label = Font.system(.caption, design: .default, weight: .semibold)
+    static let tabLabel = Font.system(.caption2, design: .default, weight: .semibold)
 }
 
 extension View {
     /// Uppercase condensed micro-label with the +12 % tracking from the spec.
     func dgLabel(_ color: Color = DGColor.ink3) -> some View {
         font(DGFont.label)
-            .tracking(1.4)
+            .tracking(0.7)
             .textCase(.uppercase)
             .foregroundStyle(color)
     }
 
     /// Tabular, tightly tracked hero/metric number.
-    func dgMetric(_ font: Font, tracking: CGFloat = -1) -> some View {
+    func dgMetric(_ font: Font, tracking: CGFloat = -0.5) -> some View {
         self.font(font)
             .monospacedDigit()
             .tracking(tracking)

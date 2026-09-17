@@ -55,7 +55,6 @@ struct ProgramsView: View {
             Spacer()
             Text("Programs")
                 .font(DGFont.title2)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             DGIconButton(symbol: "plus", accessibilityLabel: "New program") { showingNew = true }
@@ -125,7 +124,6 @@ private struct ProgramCard: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(program.name)
                     .font(DGFont.title3)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Spacer()
                 if program.isActive { Text("Active").dgLabel(DGColor.coralText) }

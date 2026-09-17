@@ -53,7 +53,6 @@ struct TimedHoldCard: View {
             Button(action: onPauseResume) {
                 Text(hold.isPaused ? "Resume" : "Pause")
                     .font(DGFont.condensedLabel(13))
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 44)
@@ -63,7 +62,6 @@ struct TimedHoldCard: View {
             Button(action: onStop) {
                 Text("Stop")
                     .font(DGFont.condensedLabel(13))
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.inkOnCoral)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 44)
@@ -125,7 +123,6 @@ struct TimedSetRow: View {
                 Button(action: onStart) {
                     Text("Start")
                         .font(DGFont.condensedLabel(12))
-                        .textCase(.uppercase)
                         .foregroundStyle(isCurrent ? DGColor.inkOnCoral : DGColor.ink1)
                         .padding(.horizontal, DGSpace.s3)
                         .frame(minHeight: 36)

@@ -19,7 +19,6 @@ struct CollapsedExerciseRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.exercise.name)
                     .font(DGFont.title3)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Text(summaryLine)
                     .font(DGFont.footnote)
@@ -32,7 +31,6 @@ struct CollapsedExerciseRow: View {
                 } label: {
                     Text("Start")
                         .font(DGFont.condensedLabel(12))
-                        .textCase(.uppercase)
                         .foregroundStyle(DGColor.ink1)
                         .padding(.horizontal, DGSpace.s3)
                         .frame(minHeight: 36)

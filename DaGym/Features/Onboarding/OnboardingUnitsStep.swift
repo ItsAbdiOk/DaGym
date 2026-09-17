@@ -11,7 +11,6 @@ struct OnboardingUnitsStep: View {
         VStack(alignment: .leading, spacing: DGSpace.s6) {
             Text("How do you\nmeasure things?")
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
                 .accessibilityIdentifier(A11yID.onboardingStep("units"))
             VStack(alignment: .leading, spacing: DGSpace.s2) {

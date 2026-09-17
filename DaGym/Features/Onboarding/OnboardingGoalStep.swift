@@ -12,7 +12,6 @@ struct OnboardingGoalStep: View {
         VStack(alignment: .leading, spacing: DGSpace.s6) {
             Text("What's your\nmain goal?")
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
                 .accessibilityIdentifier(A11yID.onboardingStep("goal"))
             VStack(spacing: DGSpace.s3) {

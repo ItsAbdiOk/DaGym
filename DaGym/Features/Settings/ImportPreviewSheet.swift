@@ -41,7 +41,6 @@ struct ImportPreviewSheet: View {
         VStack(alignment: .leading, spacing: DGSpace.s2) {
             Text("Import Backup")
                 .font(DGFont.title2)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Text("Exported \(document.exportedAt.formatted(date: .abbreviated, time: .shortened))")
                 .font(DGFont.subhead)
@@ -80,8 +79,6 @@ struct ImportPreviewSheet: View {
             Button("Cancel", action: onCancel)
                 .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(15))
-                .tracking(1.5)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink3)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 52)

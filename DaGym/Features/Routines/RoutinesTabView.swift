@@ -68,7 +68,6 @@ struct RoutinesTabView: View {
         DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
             Text("Routines")
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             HStack(spacing: DGSpace.s2) {
@@ -90,7 +89,7 @@ struct RoutinesTabView: View {
             HStack(spacing: 6) {
                 Image(systemName: "calendar.badge.clock").accessibilityHidden(true)
                     .font(.system(size: 13, weight: .semibold))
-                Text("Programs").font(DGFont.condensedLabel(13)).tracking(1.2).textCase(.uppercase)
+                Text("Programs").font(DGFont.condensedLabel(13))
             }
             .foregroundStyle(DGColor.ink1)
             .padding(.horizontal, DGSpace.s3)
@@ -194,7 +193,6 @@ private struct RoutineCard: View {
                 RoutineGlyph(symbolName: routine.symbolName, tint: routine.tint, size: 32)
                 Text(routine.name)
                     .font(DGFont.title2)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Spacer()
                 // Leaves room for the share button `RoutinesTabView` overlays in the top-right.
@@ -233,8 +231,6 @@ private struct RoutineStartPill: View {
         Button("Start", action: action)
             .buttonStyle(.dgControl)
             .font(DGFont.condensedLabel(13))
-            .tracking(1.2)
-            .textCase(.uppercase)
             .foregroundStyle(DGColor.inkOnCoral)
             .padding(.horizontal, DGSpace.s4)
             .frame(minHeight: 36)

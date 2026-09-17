@@ -334,7 +334,7 @@ private struct WorkoutActionBar: View {
             HStack(spacing: 6) {
                 Image(systemName: symbol).font(.system(size: 14, weight: .bold))
                     .accessibilityHidden(true)
-                Text(title).font(DGFont.condensedLabel(13)).textCase(.uppercase)
+                Text(title).font(DGFont.condensedLabel(13))
             }
             .foregroundStyle(tint)
             .frame(maxWidth: .infinity)

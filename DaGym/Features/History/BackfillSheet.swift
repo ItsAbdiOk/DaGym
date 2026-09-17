@@ -41,7 +41,6 @@ struct BackfillSheet: View {
             VStack(alignment: .leading, spacing: DGSpace.s2) {
                 Text("Log a Past Workout")
                     .font(DGFont.title2)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Text("Pick when it happened; you'll fill in the sets next.")
                     .font(DGFont.subhead)
@@ -55,8 +54,6 @@ struct BackfillSheet: View {
                 } label: {
                     Text("Freestyle")
                         .font(DGFont.condensedLabel(15))
-                        .tracking(1.5)
-                        .textCase(.uppercase)
                         .foregroundStyle(DGColor.ink1)
                         .frame(maxWidth: .infinity)
                         .frame(minHeight: 52)
@@ -125,8 +122,6 @@ struct BackfillSheet: View {
             } label: {
                 Text("Use a Routine")
                     .font(DGFont.condensedLabel(15))
-                    .tracking(1.5)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.inkOnCoral)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 52)

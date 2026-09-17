@@ -40,7 +40,6 @@ struct PersonalRecordsView: View {
         VStack(alignment: .leading, spacing: DGSpace.s1) {
             Text("Records")
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.prGoldText)
             Text("Your best lift of every kind, per exercise.")
                 .font(DGFont.footnote)
@@ -57,7 +56,6 @@ private struct ExerciseRecordsCard: View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
             Text(group.exerciseName)
                 .font(DGFont.title3)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             VStack(spacing: DGSpace.s2) {
                 ForEach(group.records) { record in

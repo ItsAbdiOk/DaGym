@@ -28,7 +28,6 @@ struct CoachChatConsentSheet: View {
             VStack(alignment: .leading, spacing: DGSpace.s3) {
                 Text("Before You Chat")
                     .font(DGFont.title2)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Text(Self.statement)
                     .font(DGFont.body)

@@ -27,7 +27,6 @@ struct PlateChip: View {
                 Text(text)
                     .font(DGFont.condensedLabel(12))
                     .tracking(0.8)
-                    .textCase(.uppercase)
             }
             .foregroundStyle(Self.isLoadable(result) ? DGColor.ink2 : DGColor.danger)
             .padding(.horizontal, DGSpace.s3)

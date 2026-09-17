@@ -11,7 +11,6 @@ struct OnboardingNotificationsStep: View {
         VStack(alignment: .leading, spacing: DGSpace.s6) {
             Text("Turn on\nnotifications?")
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
                 .accessibilityIdentifier(A11yID.onboardingStep("notifications"))
             Label("Rest timer only, never nagging", systemImage: "bell.fill")
@@ -29,7 +28,6 @@ struct OnboardingNotificationsStep: View {
                 Button("Skip", action: onSkip)
                     .buttonStyle(.dgControl)
                     .font(DGFont.condensedLabel(13))
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink3)
                     .accessibilityIdentifier(A11yID.onboardingSkip)
             }

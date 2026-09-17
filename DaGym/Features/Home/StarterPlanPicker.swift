@@ -53,7 +53,6 @@ struct StarterPlanPickerSheet: View {
             VStack(alignment: .leading, spacing: DGSpace.s1) {
                 Text("Pick a Starter Plan")
                     .font(DGFont.title2)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Text("Its routines are added to this tab and the program starts today. "
                     + "Edit any of them afterwards.")

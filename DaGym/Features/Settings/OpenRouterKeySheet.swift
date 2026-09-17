@@ -19,7 +19,6 @@ struct OpenRouterKeySheet: View {
             VStack(alignment: .leading, spacing: DGSpace.s2) {
                 Text("OpenRouter API Key")
                     .font(DGFont.title2)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Text(
                     "From openrouter.ai → Keys. Stored in the Keychain and sent only to OpenRouter, "

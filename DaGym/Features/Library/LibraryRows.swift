@@ -57,7 +57,6 @@ struct LibraryRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(exercise.name)
                         .font(DGFont.title3)
-                        .textCase(.uppercase)
                         .foregroundStyle(DGColor.ink1)
                         .lineLimit(1)
                     Text(exercise.muscleLine)

@@ -17,7 +17,6 @@ struct StarterPlanCard: View {
             Text("Get Started").dgLabel(DGColor.coralText)
             Text("Pick a Starter Plan")
                 .font(DGFont.title2)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Text("No routines yet. Ask the coach to build one for you, or choose a program and DaGym "
                 + "schedules the rest.")
@@ -56,8 +55,6 @@ struct SampleDataBanner: View {
             Button("Clear", action: onClear)
                 .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(12))
-                .tracking(1.2)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.coralText)
         }
         .padding(.horizontal, DGSpace.s4)

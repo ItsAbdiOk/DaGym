@@ -52,8 +52,6 @@ private struct UndoToast: View {
             Button(action: onUndo) {
                 Text("Undo")
                     .font(DGFont.condensedLabel(13))
-                    .tracking(1.2)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.coralText)
                     .frame(minWidth: DGTap.min, minHeight: DGTap.min)
             }

@@ -131,8 +131,6 @@ struct MachinesCard: View {
     private func groupLabel(_ type: String) -> some View {
         Text(EquipmentOption(rawValue: type)?.title ?? type)
             .font(DGFont.condensedLabel(12))
-            .tracking(1.2)
-            .textCase(.uppercase)
             .foregroundStyle(DGColor.ink4)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, DGSpace.s5)

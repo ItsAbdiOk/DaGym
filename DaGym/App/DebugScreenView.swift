@@ -40,7 +40,7 @@ struct DebugScreenView: View {
         case .rest:
             ActiveWorkoutView(session: session, onFinish: { _ in })
         case .library:
-            tabbed(.library) { LibraryView() }
+            tabbed(.you) { LibraryView() }
         case .exerciseDetail:
             NavigationStack { ExerciseDetailView(exercise: SampleData.bench) }
         case .builder:
@@ -48,7 +48,7 @@ struct DebugScreenView: View {
         case .summary:
             WorkoutSummaryView(summary: debugSummary, title: session.title, onDone: {})
         case .history:
-            tabbed(.progress) { HistoryTabView() }
+            tabbed(.you) { HistoryTabView() }
         case .backfill:
             sheetHost {
                 BackfillSheet(
@@ -86,10 +86,8 @@ struct DebugScreenView: View {
     ) -> some View {
         TabView(selection: .constant(selected)) {
             Tab(value: DGTab.today) { slot(.today, selected, content) } label: { label(.today) }
-            Tab(value: DGTab.routines) { slot(.routines, selected, content) } label: { label(.routines) }
-            Tab(value: DGTab.progress) { slot(.progress, selected, content) } label: { label(.progress) }
-            Tab(value: DGTab.library) { slot(.library, selected, content) } label: { label(.library) }
-            Tab(value: DGTab.coach) { slot(.coach, selected, content) } label: { label(.coach) }
+            Tab(value: DGTab.train) { slot(.train, selected, content) } label: { label(.train) }
+            Tab(value: DGTab.you) { slot(.you, selected, content) } label: { label(.you) }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
     }

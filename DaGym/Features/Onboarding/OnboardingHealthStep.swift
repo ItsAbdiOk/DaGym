@@ -15,7 +15,6 @@ struct OnboardingHealthStep: View {
         VStack(alignment: .leading, spacing: DGSpace.s6) {
             Text("Connect\nApple Health?")
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
                 .accessibilityIdentifier(A11yID.onboardingStep("health"))
             Label("Bodyweight in, workouts out", systemImage: "heart.fill")
@@ -34,7 +33,6 @@ struct OnboardingHealthStep: View {
                 Button("Skip", action: onSkip)
                     .buttonStyle(.dgControl)
                     .font(DGFont.condensedLabel(13))
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink3)
                     .accessibilityIdentifier(A11yID.onboardingSkip)
             }

@@ -29,7 +29,6 @@ struct SwapExerciseSheet: View {
         VStack(alignment: .leading, spacing: DGSpace.s5) {
             Text("Swap \(exercise.name)")
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             reasonChips
             reasonField
@@ -38,7 +37,6 @@ struct SwapExerciseSheet: View {
             Button("Search the library instead") { showingLibrary = true }
                 .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(13))
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink3)
                 .frame(maxWidth: .infinity)
         }
@@ -224,7 +222,6 @@ private struct CandidateRow: View {
             Button("Use") { onUse(exercise) }
                 .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(12))
-                .textCase(.uppercase)
                 .foregroundStyle(isPrimary ? .white : DGColor.ink2)
                 .padding(.horizontal, DGSpace.s3)
                 .frame(minHeight: 36)

@@ -52,7 +52,6 @@ struct OnDeckExerciseCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.exercise.name)
                     .font(DGFont.title2)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Text(footnote)
                     .font(DGFont.footnote)

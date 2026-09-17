@@ -48,7 +48,6 @@ struct MilestonesView: View {
         VStack(alignment: .leading, spacing: DGSpace.s1) {
             Text("Milestones")
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Text("\(earned.count) of \(progress.count) earned")
                 .font(DGFont.footnote)

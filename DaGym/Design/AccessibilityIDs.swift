@@ -9,12 +9,23 @@ enum A11yID {
     static let homeStart = "home.start"
     static let homeFreestyle = "home.freestyle"
     static let homeWeekReview = "home.weekReview"
+    static let homeStartFab = "home.startFab"
 
     static let tabToday = "tab.today"
-    static let tabRoutines = "tab.routines"
-    static let tabProgress = "tab.progress"
-    static let tabLibrary = "tab.library"
-    static let tabCoach = "tab.coach"
+    static let tabTrain = "tab.train"
+    static let tabYou = "tab.you"
+
+    // The You hub's destinations (the old Progress / Library / Coach tabs live behind these).
+    static let youProgress = "you.progress"
+    static let youHistory = "you.history"
+    static let youMuscles = "you.muscles"
+    static let youBody = "you.body"
+    static let youCoach = "you.coach"
+    static let youSettings = "you.settings"
+    static let youLibrary = "you.library"
+    static let youEquipment = "you.equipment"
+    static let youGymCard = "you.gymCard"
+    static let youInsights = "you.insights"
 
     static let workoutFinish = "workout.finish"
     static let settingsWorkoutLayout = "settings.workout.layout"

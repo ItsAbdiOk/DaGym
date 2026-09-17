@@ -34,7 +34,6 @@ struct MuscleDetailSheet: View {
         HStack(alignment: .firstTextBaseline) {
             Text(recovery.muscle.displayName)
                 .font(DGFont.title2)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             Text(recovery.workloadLabel)

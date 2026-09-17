@@ -73,8 +73,6 @@ struct DebriefCard: View {
             VStack(alignment: .leading, spacing: DGSpace.s1) {
                 Text(title)
                     .font(DGFont.condensedLabel(12))
-                    .tracking(1.0)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink3)
                 ForEach(Array(claims.enumerated()), id: \.offset) { _, claim in
                     Text("• \(claim.text)")

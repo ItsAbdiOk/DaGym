@@ -97,7 +97,6 @@ struct RecoveryMapView: View {
         VStack(alignment: .leading, spacing: DGSpace.s1) {
             Text(mode.title)
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Text(mode.subtitle(windowDays: WorkoutStore.recoveryWindowDays))
                 .font(DGFont.footnote)

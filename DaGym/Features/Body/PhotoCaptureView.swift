@@ -123,8 +123,6 @@ struct PhotoCaptureView: View {
             } label: {
                 Text("Retake")
                     .font(DGFont.condensedLabel(15))
-                    .tracking(1.2)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink2)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 52)
@@ -179,8 +177,6 @@ private struct LibraryButtonLabel: View {
     var body: some View {
         Text("Choose From Library")
             .font(DGFont.condensedLabel(15))
-            .tracking(1.2)
-            .textCase(.uppercase)
             .foregroundStyle(DGColor.ink1)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 52)

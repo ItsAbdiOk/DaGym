@@ -18,7 +18,6 @@ struct HevyAPIKeySheet: View {
             VStack(alignment: .leading, spacing: DGSpace.s2) {
                 Text("Hevy API Key")
                     .font(DGFont.title2)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Text(
                     "From hevy.app → Settings → API (Hevy Pro). Stored in the Keychain — it's only "

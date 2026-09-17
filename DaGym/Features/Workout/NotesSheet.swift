@@ -38,7 +38,6 @@ struct NotesSheet: View {
                 .accessibilityHidden(true)
             Text(title)
                 .font(DGFont.title2)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if exerciseID != nil { scopeRow }

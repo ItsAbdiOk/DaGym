@@ -46,7 +46,6 @@ struct SettingsView: View {
         HStack {
             Text("Settings")
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             DGIconButton(symbol: "xmark", accessibilityLabel: "Close") { dismiss() }

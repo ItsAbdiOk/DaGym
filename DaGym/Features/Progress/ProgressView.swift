@@ -54,7 +54,6 @@ struct ProgressScreen: View {
         DGAdaptiveStack(verticalAlignment: .center) {
             Text("Progress")
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             HStack(spacing: DGSpace.s3) {
@@ -135,7 +134,6 @@ private struct ExercisePickerRow: View {
             HStack {
                 Text(exercise?.name ?? "Choose Exercise")
                     .font(DGFont.title3)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Spacer()
                 Image(systemName: "chevron.up.chevron.down").accessibilityHidden(true)

@@ -63,22 +63,31 @@ extension View {
     }
 }
 
-/// Resting, opaque card (elev-1). For reading surfaces.
+/// The reading card from the redesign prototype: frosted white over the ambient wash
+/// (`rgba(255,255,255,.66)`, a bright half-point edge, a soft warm drop shadow). Dark mode is
+/// the same recipe on a low white fill so the wash still shows through.
 struct DGCardModifier: ViewModifier {
     var radius: CGFloat = DGRadius.lg
     var fill: Color = DGColor.surface1
     var stroke: Color = DGColor.hairline
     var padding: CGFloat = DGSpace.s5
+    @Environment(\.colorScheme) private var scheme
 
     func body(content: Content) -> some View {
+        let dark = scheme == .dark
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        let cardFill: Color = fill == DGColor.surface1
+            ? .white.opacity(dark ? 0.07 : 0.66) : fill
+        let edge: Color = stroke == DGColor.hairline
+            ? .white.opacity(dark ? 0.12 : 0.9) : stroke
         content
             .padding(padding)
-            .background(fill, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .strokeBorder(stroke, lineWidth: 1)
+            .background {
+                shape.fill(cardFill)
+                    .background(.ultraThinMaterial, in: shape)
             }
-            .shadow(color: .black.opacity(0.34), radius: 1, y: 1)
+            .overlay { shape.strokeBorder(edge, lineWidth: 0.5) }
+            .shadow(color: Color(hex: 0x3C2814).opacity(dark ? 0.35 : 0.10), radius: 17, y: 7)
     }
 }
 
@@ -93,34 +102,39 @@ extension View {
     }
 }
 
-/// The ambient three-stop wash the glass refracts: ember top-right, violet
-/// mid-left, green bottom. Sits under the scroll view, never per card.
+/// The ambient wash the cards frost over — three blurred blobs from the prototype: the accent
+/// top-right, a cool teal mid-left and a pale green bottom-right. Sits under the scroll view,
+/// never per card.
 struct AmbientWash: View {
-    /// 0…1 — more ember as session volume climbs.
+    /// 0…1 — more accent as session volume climbs.
     var heat: Double = 0.5
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         let dark = scheme == .dark
-        let base = DGColor.bgBase
-        let ember = DGColor.coral.opacity(dark ? 0.16 + 0.18 * heat : 0.10 + 0.14 * heat)
-        let violet = DGColor.aiViolet.opacity(dark ? 0.12 : 0.08)
-        let green = DGColor.success.opacity(dark ? 0.10 : 0.06)
-        ZStack {
-            base
-            MeshGradient(
-                width: 3, height: 3,
-                points: [
-                    [0, 0], [0.5, 0], [1, 0],
-                    [0, 0.5], [0.5, 0.5], [1, 0.5],
-                    [0, 1], [0.5, 1], [1, 1]
-                ],
-                colors: [
-                    .clear, .clear, ember,
-                    violet, .clear, .clear,
-                    .clear, green, .clear
-                ]
-            )
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            ZStack {
+                DGColor.bgBase
+                Circle()
+                    .fill(DGColor.coral)
+                    .frame(width: 340, height: 340)
+                    .blur(radius: 90)
+                    .opacity(dark ? 0.22 + 0.12 * heat : 0.24 + 0.12 * heat)
+                    .position(x: width + 80, y: 60)
+                Circle()
+                    .fill(Color(hex: 0x9FD3DA))
+                    .frame(width: 300, height: 300)
+                    .blur(radius: 95)
+                    .opacity(dark ? 0.16 : 0.5)
+                    .position(x: 20, y: 480)
+                Circle()
+                    .fill(Color(hex: 0xCBDDB4))
+                    .frame(width: 300, height: 300)
+                    .blur(radius: 95)
+                    .opacity(dark ? 0.14 : 0.45)
+                    .position(x: width + 90, y: proxy.size.height + 80)
+            }
         }
         .ignoresSafeArea()
     }

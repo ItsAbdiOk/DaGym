@@ -74,7 +74,6 @@ struct ImportCSVPreviewSheet: View {
         VStack(alignment: .leading, spacing: DGSpace.s2) {
             Text("Import from \(preview.source.displayName)")
                 .font(DGFont.title2)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Text("Nothing is imported until you confirm")
                 .font(DGFont.subhead)
@@ -149,8 +148,6 @@ struct ImportCSVPreviewSheet: View {
             Button("Cancel", action: onCancel)
                 .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(15))
-                .tracking(1.5)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink3)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 52)

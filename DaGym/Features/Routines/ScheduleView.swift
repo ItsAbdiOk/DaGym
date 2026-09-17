@@ -50,7 +50,6 @@ struct ScheduleView: View {
             Spacer()
             Text("Schedule")
                 .font(DGFont.title3)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             Color.clear.frame(width: 44, height: 1)
@@ -257,8 +256,6 @@ private struct ThisWeekRow: View {
                 Button("Move…", action: onMove)
                     .buttonStyle(.dgControl)
                     .font(DGFont.condensedLabel(12))
-                    .tracking(1.2)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.coralText)
             }
         }
@@ -303,7 +300,6 @@ private struct MoveSessionSheet: View {
             VStack(alignment: .leading, spacing: DGSpace.s1) {
                 Text("Move Session")
                     .font(DGFont.title2)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Text("Move \(request.routineName) to a new date. The original day becomes a rest day.")
                     .font(DGFont.subhead)

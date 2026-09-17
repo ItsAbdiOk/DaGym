@@ -27,8 +27,6 @@ struct CoachChatErrorBanner: View {
                     Button { onAction(action) } label: {
                         Text(title)
                             .font(DGFont.condensedLabel(12))
-                            .tracking(1.2)
-                            .textCase(.uppercase)
                             .foregroundStyle(DGColor.coralText)
                             .frame(minHeight: DGTap.min)
                     }

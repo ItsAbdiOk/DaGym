@@ -45,7 +45,6 @@ struct WorkoutSummaryView: View {
             Text("Session complete").dgLabel()
             Text(title)
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
         }
         .frame(maxWidth: .infinity)
@@ -154,7 +153,6 @@ private struct PRCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(titleText)
                     .font(DGFont.title3)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.prGoldText)
                 Text(detailText)
                     .font(DGFont.footnote)
@@ -199,7 +197,6 @@ private struct MilestoneUnlockedCard: View {
             VStack(alignment: .leading, spacing: DGSpace.s1) {
                 Text(titleText)
                     .font(DGFont.title3)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.prGoldText)
                 ForEach(achievements) { achievement in
                     Text("\(achievement.title) · \(achievement.line)")

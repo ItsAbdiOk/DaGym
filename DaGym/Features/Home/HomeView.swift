@@ -128,7 +128,6 @@ struct HomeView: View {
                 Text(Self.todayLabel).dgLabel()
                 Text("Today")
                     .font(DGFont.title1)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
             }
             Spacer()
@@ -158,7 +157,6 @@ private struct ScheduledCard: View {
                     Text(scheduledLabel).dgLabel(DGColor.coralText)
                     Text(routine.name)
                         .font(DGFont.title2)
-                        .textCase(.uppercase)
                         .foregroundStyle(DGColor.ink1)
                     Text(
                         "\(routine.exercises.count) exercises · \(routine.setCount) sets"
@@ -210,7 +208,6 @@ private struct RestDayCard: View {
             Text(HomeSnapshot.restDayHeadline).dgLabel(DGColor.coralText)
             Text(nextSessionText ?? "Nothing scheduled")
                 .font(DGFont.title2)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Text("No routine scheduled today. Start a freestyle workout whenever you're ready.")
                 .font(DGFont.footnote)
@@ -318,8 +315,6 @@ private struct RecoveryCard: View {
                 Button("See Map", action: onSeeRecovery)
                     .buttonStyle(.dgControl)
                     .font(DGFont.condensedLabel(12))
-                    .tracking(1.2)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.coralText)
             }
             DGAdaptiveStack(verticalAlignment: .top, spacing: DGSpace.s4) {

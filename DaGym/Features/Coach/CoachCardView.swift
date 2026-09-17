@@ -80,8 +80,6 @@ struct CoachCardView: View {
                         .font(.system(size: 10, weight: .semibold))
                 }
                 .font(DGFont.condensedLabel(12))
-                .tracking(1.0)
-                .textCase(.uppercase)
                 // Not `aiVioletText`: that violet is the app's AI accent, and this screen's own
                 // header says these checks are rule-based and nothing is sent anywhere.
                 .foregroundStyle(DGColor.ink3)
@@ -140,7 +138,6 @@ struct CoachCardView: View {
             Button(hasApprovableAction ? "Dismiss" : "Got it") { onDismiss() }
                 .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(13))
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink2)
                 .padding(.horizontal, DGSpace.s3)
                 .frame(minHeight: 36)
@@ -150,7 +147,6 @@ struct CoachCardView: View {
                 Button("Approve") { onApprove() }
                     .buttonStyle(.dgControl)
                     .font(DGFont.condensedLabel(13))
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.inkOnCoral)
                     .padding(.horizontal, DGSpace.s3)
                     .frame(minHeight: 36)

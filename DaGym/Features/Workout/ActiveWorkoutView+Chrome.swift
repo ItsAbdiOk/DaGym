@@ -63,7 +63,6 @@ extension ActiveWorkoutView {
                 Text(startedAtLabel).dgLabel()
                 Text(session.title)
                     .font(DGFont.title1)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
             }
             Spacer(minLength: DGSpace.s2)
@@ -132,7 +131,6 @@ extension ActiveWorkoutView {
         HStack(spacing: DGSpace.s3) {
             Text(session.title)
                 .font(DGFont.title3)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
                 .lineLimit(1)
             Spacer(minLength: DGSpace.s2)
@@ -144,7 +142,6 @@ extension ActiveWorkoutView {
             Button("Finish") { showFinishConfirm = true }
                 .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(13))
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.inkOnCoral)
                 .padding(.horizontal, DGSpace.s3)
                 .frame(minHeight: 36)

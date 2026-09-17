@@ -53,7 +53,6 @@ struct StrengthMapSection: View {
                 VStack(alignment: .leading, spacing: DGSpace.s1) {
                     Text(muscle.displayName)
                         .font(DGFont.title3)
-                        .textCase(.uppercase)
                         .foregroundStyle(DGColor.ink1)
                     ForEach(top[muscle] ?? []) { entry in
                         HStack {

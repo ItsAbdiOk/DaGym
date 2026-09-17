@@ -143,8 +143,6 @@ struct HistoryView: View {
                 Image(systemName: "clock.arrow.circlepath").font(.system(size: 15, weight: .bold))
                 Text("Log a Past Workout")
                     .font(DGFont.condensedLabel(14))
-                    .tracking(1.4)
-                    .textCase(.uppercase)
             }
             .foregroundStyle(DGColor.coralText)
             .frame(minHeight: 52)
@@ -218,7 +216,6 @@ private struct RecordCard: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(record.title)
                     .font(DGFont.title3)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                 Spacer()
                 // `Text(_:format:)` caches its formatter; a `DateFormatter` per row did not.

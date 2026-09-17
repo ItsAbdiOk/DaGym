@@ -108,7 +108,6 @@ extension ExerciseDetailView {
             HStack(alignment: .top) {
                 Text(exercise.name)
                     .font(DGFont.title1)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                     .lineLimit(2)
                 Spacer()

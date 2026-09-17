@@ -15,7 +15,6 @@ struct OnboardingBodyweightStep: View {
         VStack(alignment: .leading, spacing: DGSpace.s6) {
             Text("What do\nyou weigh?")
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
                 .accessibilityIdentifier(A11yID.onboardingStep("bodyweight"))
             Text("Optional — powers your bodyweight chart. Log it any time from Settings instead.")
@@ -31,7 +30,6 @@ struct OnboardingBodyweightStep: View {
                 Button("Skip", action: onSkip)
                     .buttonStyle(.dgControl)
                     .font(DGFont.condensedLabel(13))
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink3)
                     .accessibilityIdentifier(A11yID.onboardingSkip)
             }

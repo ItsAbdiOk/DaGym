@@ -75,7 +75,6 @@ struct AddToRoutineSheet: View {
                 VStack(alignment: .leading, spacing: DGSpace.s4) {
                     Text("Add To Routine")
                         .font(DGFont.title2)
-                        .textCase(.uppercase)
                         .foregroundStyle(DGColor.ink1)
                     VStack(spacing: 0) {
                         ForEach(routines) { routine in
@@ -205,20 +204,15 @@ struct EditExerciseSheet: View {
             Button("Cancel") { dismiss() }
                 .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(13))
-                .tracking(1.2)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink3)
             Spacer()
             Text("Edit Exercise")
                 .font(DGFont.title3)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             Button("Save", action: save)
                 .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(13))
-                .tracking(1.2)
-                .textCase(.uppercase)
                 .foregroundStyle(canSave ? DGColor.coralText : DGColor.ink4)
                 .disabled(!canSave)
         }

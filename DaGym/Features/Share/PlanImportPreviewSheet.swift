@@ -44,7 +44,6 @@ struct PlanImportPreviewSheet: View {
         VStack(alignment: .leading, spacing: DGSpace.s2) {
             Text(document.program != nil ? "Import Program" : "Import Routine")
                 .font(DGFont.title2)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Text(subtitle)
                 .font(DGFont.subhead)
@@ -88,8 +87,6 @@ struct PlanImportPreviewSheet: View {
             Button("Cancel", action: onCancel)
                 .buttonStyle(.dgControl)
                 .font(DGFont.condensedLabel(15))
-                .tracking(1.5)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink3)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 52)

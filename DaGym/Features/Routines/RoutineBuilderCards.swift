@@ -18,7 +18,6 @@ struct NameCard: View {
                 Text("Name").dgLabel()
                 TextField("Routine name", text: $name)
                     .font(DGFont.title2)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                     .textFieldStyle(.plain)
             }
@@ -95,7 +94,6 @@ struct BuilderExerciseCard: View {
             }
             Text(item.exercise.name)
                 .font(DGFont.title3)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             Button(action: onToggleSuperset) {

@@ -87,7 +87,6 @@ struct GymCardSheet: View {
         HStack {
             Text("Gym Card")
                 .font(DGFont.title1)
-                .textCase(.uppercase)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             DGIconButton(symbol: "xmark", size: 36, accessibilityLabel: "Close") { dismiss() }
@@ -219,7 +218,6 @@ private struct GymCardFace: View {
             HStack {
                 Text(card.name)
                     .font(DGFont.title2)
-                    .textCase(.uppercase)
                     .foregroundStyle(DGColor.ink1)
                     .lineLimit(2)
                 Spacer()
@@ -303,8 +301,6 @@ private struct SecondaryLabel: View {
             Image(systemName: symbol).font(.system(size: 14, weight: .semibold))
             Text(title)
                 .font(DGFont.condensedLabel(13))
-                .tracking(1.2)
-                .textCase(.uppercase)
         }
         .foregroundStyle(DGColor.ink1)
         .frame(maxWidth: .infinity)
