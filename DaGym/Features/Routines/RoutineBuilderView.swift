@@ -27,7 +27,7 @@ struct RoutineBuilderView: View {
 
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
-    @State private var name = "New Routine"
+    @State private var name = "New routine"
     @State private var items: [EditableExercise] = []
     @State private var showingPicker = false
     @State private var showingReorder = false
@@ -45,7 +45,7 @@ struct RoutineBuilderView: View {
         return ZStack {
             AmbientWash()
             ScrollView {
-                VStack(alignment: .leading, spacing: DGSpace.s6) {
+                VStack(alignment: .leading, spacing: DGSpace.s3) {
                     navRow
                     NameCard(
                         name: $name, hitMap: hitMap,
@@ -84,7 +84,7 @@ struct RoutineBuilderView: View {
                 }
                 .padding(.horizontal, DGSpace.s4)
                 .padding(.top, DGSpace.s3)
-                .padding(.bottom, 100)
+                .padding(.bottom, 110)
             }
             // A card let go between cards, or over the header, still ends its lift.
             .onDrop(of: [.text], isTargeted: nil) { _ in
@@ -107,12 +107,14 @@ struct RoutineBuilderView: View {
                 Image(systemName: "arrow.up.arrow.down").accessibilityHidden(true)
                     .font(.system(size: 13, weight: .semibold))
                 Text("Reorder")
-                    .font(DGFont.condensedLabel(14))
+                    .font(.system(size: 13, weight: .semibold))
             }
-            .foregroundStyle(DGColor.ink2)
+            .foregroundStyle(DGColor.ink1)
             .frame(maxWidth: .infinity)
-            .frame(minHeight: 44)
-            .dgGlass(.thin, radius: DGRadius.lg)
+            .frame(minHeight: 40)
+            .background(
+                DGColor.ink1.opacity(0.055), in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+            )
         }
         .buttonStyle(.dgCard)
     }
@@ -121,9 +123,10 @@ struct RoutineBuilderView: View {
         HStack {
             Button("Cancel", action: onDone)
                 .buttonStyle(.dgControl)
-                .dgLabel()
+                .font(.system(size: 15))
+                .foregroundStyle(DGColor.ink2)
             Spacer()
-            Text(routineID == nil ? "New Routine" : "Edit Routine")
+            Text(routineID == nil ? "New routine" : "Edit routine")
                 .font(DGFont.title3)
                 .foregroundStyle(DGColor.ink1)
             Spacer()
@@ -136,7 +139,8 @@ struct RoutineBuilderView: View {
             }
             Button("Save", action: save)
                 .buttonStyle(.dgControl)
-                .dgLabel(DGColor.coralText)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(DGColor.coralText)
                 .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }

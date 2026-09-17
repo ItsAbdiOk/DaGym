@@ -97,6 +97,11 @@ enum A11yID {
     static let historyRow0 = "history.row.0"
     static let historyNote = "history.note"
     static let routinesStarterPlan = "routines.starterPlan"
+    /// `label` is the `TrainSegment` raw value ("Routines" / "Programs" / "Schedule").
+    static func trainSegment(_ label: String) -> String { "train.segment.\(label.lowercased())" }
+    static let trainNewRoutine = "train.newRoutine"
+    static let trainLibrary = "train.library"
+    static let trainCoachProgram = "train.coachProgram"
     /// `name` is the `StarterProgramKind` raw value ("Push/Pull/Legs").
     static func starterPlan(_ name: String) -> String { "starterPlan.\(name)" }
 

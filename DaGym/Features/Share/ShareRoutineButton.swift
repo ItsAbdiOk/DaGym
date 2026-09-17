@@ -14,6 +14,9 @@ struct ShareRoutineButton: View {
     @Environment(Preferences.self) private var preferences
     var title: String
     var makeDocument: (_ includeWeights: Bool) -> PlanDocument?
+    /// Nil draws the share glyph; a string draws the redesign's quiet full-width button (the
+    /// active program card's "Share" beside "Stop").
+    var pillTitle: String?
 
     var body: some View {
         Menu {
@@ -24,10 +27,22 @@ struct ShareRoutineButton: View {
                 pdfDocument: makeDocument(true), unit: preferences.weightUnit
             )
         } label: {
-            Image(systemName: "square.and.arrow.up")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(DGColor.ink2)
-                .frame(width: DGTap.min, height: DGTap.min)
+            if let pillTitle {
+                Text(pillTitle)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(DGColor.ink1)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 40)
+                    .background(
+                        DGColor.ink1.opacity(0.055),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    )
+            } else {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(DGColor.ink2)
+                    .frame(width: DGTap.min, height: DGTap.min)
+            }
         }
         .accessibilityLabel("Share \(title)")
     }

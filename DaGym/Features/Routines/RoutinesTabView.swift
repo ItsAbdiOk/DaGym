@@ -2,8 +2,10 @@ import GymCore
 import SwiftData
 import SwiftUI
 
-/// Routines tab — a card per saved routine with a "start" pill, a "+" to
-/// create a new one, and tap-to-edit navigation into the builder.
+/// The Train tab: a "Train" title over a three-way switch — Routines (a card per saved routine
+/// with a Start pill), Programs (`ProgramsView`) and Schedule (`ScheduleView`). Train is a root
+/// tab, so it keeps its own `NavigationStack`: the builder, the exercise library and Settings
+/// push onto it.
 struct RoutinesTabView: View {
     var onStart: (RoutineInfo) -> Void
 
@@ -11,6 +13,7 @@ struct RoutinesTabView: View {
     @State private var routines: [RoutineInfo] = []
     @State private var activeProfile: EquipmentProfileInfo?
     @State private var path = NavigationPath()
+    @State private var segment = TrainSegment.initial
     @State private var askingCoach = false
     /// The "Load a starter plan" sheet — the same `StarterPlanList` Home's empty-state card shows.
     @State private var pickingStarterPlan = false
@@ -18,8 +21,6 @@ struct RoutinesTabView: View {
     private enum Destination: Hashable {
         case edit(UUID)
         case new
-        case schedule
-        case programs
     }
 
     var body: some View {
@@ -27,32 +28,37 @@ struct RoutinesTabView: View {
             ZStack {
                 AmbientWash()
                 ScrollView {
-                    VStack(alignment: .leading, spacing: DGSpace.s5) {
-                        header
-                        list
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Train")
+                            .font(DGFont.title1)
+                            .foregroundStyle(DGColor.ink1)
+                            .padding(.horizontal, DGSpace.s1)
+                        TrainSegmentControl(selection: $segment)
+                        content
                     }
                     .padding(.horizontal, DGSpace.s4)
                     .padding(.top, DGSpace.s3)
-                    .padding(.bottom, DGSpace.s6)
+                    .padding(.bottom, 110)
                 }
             }
-            .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Destination.self) { destination in
-                // Each destination draws its own Cancel/Done row, so the system bar (and its
-                // back button) would only double up.
+                // The builder draws its own Cancel/Save row, so the system bar (and its back
+                // button) would only double up.
                 Group {
                     switch destination {
                     case .edit(let id):
                         RoutineBuilderView(routineID: id, onDone: pop)
                     case .new:
                         RoutineBuilderView(routineID: nil, onDone: pop)
-                    case .schedule:
-                        ScheduleView(onDone: pop)
-                    case .programs:
-                        ProgramsView(onDone: pop)
                     }
                 }
                 .toolbar(.hidden, for: .navigationBar)
+            }
+            // The Schedule segment's library row and its "Settings → Calendar" link reuse the
+            // You hub's destinations, so the same screen is one push deep from either tab.
+            .navigationDestination(for: YouDestination.self) { destination in
+                destination.screen
             }
             .task { refresh() }
             .refreshOnStoreChange(refresh)
@@ -64,82 +70,62 @@ struct RoutinesTabView: View {
         .dgWarmHaptics()
     }
 
-    private var header: some View {
-        DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
-            Text("Routines")
-                .font(DGFont.title1)
-                .foregroundStyle(DGColor.ink1)
-            Spacer()
-            HStack(spacing: DGSpace.s2) {
-                programsButton
-                DGIconButton(symbol: "calendar", accessibilityLabel: "Schedule") {
-                    path.append(Destination.schedule)
-                }
-                DGIconButton(symbol: "plus", accessibilityLabel: "New routine") {
-                    path.append(Destination.new)
-                }
-            }
-            // The buttons keep their width; the title is what wraps.
-            .fixedSize(horizontal: true, vertical: false)
+    @ViewBuilder
+    private var content: some View {
+        switch segment {
+        case .routines:
+            routineList
+        case .programs:
+            ProgramsView()
+        case .schedule:
+            ScheduleView(onPush: { path.append($0) })
         }
-    }
-
-    private var programsButton: some View {
-        Button { path.append(Destination.programs) } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "calendar.badge.clock").accessibilityHidden(true)
-                    .font(.system(size: 13, weight: .semibold))
-                Text("Programs").font(DGFont.condensedLabel(13))
-            }
-            .foregroundStyle(DGColor.ink1)
-            .padding(.horizontal, DGSpace.s3)
-            .frame(minHeight: 36)
-            .dgGlass(.regular, in: Capsule())
-        }
-        .buttonStyle(.dgControl)
     }
 
     @ViewBuilder
-    private var list: some View {
+    private var routineList: some View {
         if routines.isEmpty {
-            // The app ships no routines. The two real paths: the coach builds one from a
-            // sentence, or a starter plan seeds its routines and starts the program (the same
-            // picker Home's empty card shows); "+" above builds one by hand.
+            // The app ships no routines. The real paths: build one by hand, let the coach build
+            // one from a sentence, or adopt a starter plan (the same picker Home's empty card
+            // shows) which seeds its routines and starts the program.
             EmptyState(
-                symbol: "dumbbell", title: "No Routines Yet",
-                message: "Ask the coach to build one for you, load a starter plan, "
-                    + "or tap + to build your own.",
-                action: "Ask the Coach", onAction: { askingCoach = true },
-                secondaryAction: "Load a starter plan", onSecondaryAction: { pickingStarterPlan = true }
+                symbol: "dumbbell", title: "No routines yet",
+                message: "Build one, let the coach write one for you, or load a starter plan.",
+                action: "New routine", onAction: { path.append(Destination.new) },
+                secondaryAction: "Let the coach build one", onSecondaryAction: { askingCoach = true }
             )
-            .accessibilityIdentifier(A11yID.routinesStarterPlan)
+            .accessibilityIdentifier(A11yID.trainNewRoutine)
+            Button("Load a starter plan") { pickingStarterPlan = true }
+                .buttonStyle(.dgControl)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(DGColor.coralText)
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier(A11yID.routinesStarterPlan)
         } else {
-            ForEach(routines) { routine in
-                // Share and Start sit *over* the card button, never inside its label: a button
-                // nested in a button is undefined for hit-testing and unreachable for VoiceOver.
-                Button { path.append(Destination.edit(routine.id)) } label: {
-                    RoutineCard(
-                        routine: routine, missingEquipment: missingEquipment(for: routine),
-                        profileName: activeProfile?.name ?? ""
-                    )
-                }
-                .buttonStyle(.dgCard)
-                .contextMenu {
-                    Button("Copy", systemImage: "doc.on.doc") { duplicate(routine) }
-                    Button("Delete", systemImage: "trash", role: .destructive) { delete(routine) }
-                }
-                .overlay(alignment: .topTrailing) {
-                    ShareRoutineButton(title: routine.name) { includeWeights in
-                        PlanShareService.exportRoutine(
-                            id: routine.id, context: store.context, includeWeights: includeWeights
+            VStack(spacing: 10) {
+                ForEach(routines) { routine in
+                    // Start sits *over* the card button, never inside its label: a button nested
+                    // in a button is undefined for hit-testing and unreachable for VoiceOver.
+                    Button { path.append(Destination.edit(routine.id)) } label: {
+                        RoutineCard(
+                            routine: routine, missingEquipment: missingEquipment(for: routine),
+                            profileName: activeProfile?.name ?? ""
                         )
                     }
-                    .padding(DGSpace.s3)
+                    .buttonStyle(.dgCard)
+                    .contextMenu {
+                        Button("Edit", systemImage: "pencil") { path.append(Destination.edit(routine.id)) }
+                        Button("Duplicate", systemImage: "doc.on.doc") { duplicate(routine) }
+                        Button("Delete", systemImage: "trash", role: .destructive) { delete(routine) }
+                    }
+                    .overlay(alignment: .topTrailing) {
+                        RoutineStartPill(routineName: routine.name) { onStart(routine) }
+                            .padding(15)
+                    }
                 }
-                .overlay(alignment: .bottomTrailing) {
-                    RoutineStartPill(routineName: routine.name) { onStart(routine) }
-                        .padding(DGSpace.s5)
-                }
+                TrainDashedButton(title: "New routine") { path.append(Destination.new) }
+                    .padding(.top, 2)
+                    .accessibilityIdentifier(A11yID.trainNewRoutine)
             }
         }
     }
@@ -180,75 +166,85 @@ struct RoutinesTabView: View {
     }
 }
 
-/// One routine card: glyph, name, estimate, exercise line, top muscle tags, an equipment
-/// badge when the active profile can't cover it, and a coral "start" pill.
+/// One routine card from the prototype: a tinted glyph square, name over "58 min · 6
+/// exercises · 22 sets", the exercise names as one dim line, and — when the active equipment
+/// profile can't cover it — a warm "Needs a leg press — not in Home" badge. The Start pill's
+/// footprint is reserved top-right; `RoutinesTabView` overlays the live button.
 private struct RoutineCard: View {
     var routine: RoutineInfo
     var missingEquipment: [String] = []
     var profileName = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
+        VStack(alignment: .leading, spacing: 11) {
             HStack(alignment: .center, spacing: DGSpace.s3) {
-                RoutineGlyph(symbolName: routine.symbolName, tint: routine.tint, size: 32)
-                Text(routine.name)
-                    .font(DGFont.title2)
-                    .foregroundStyle(DGColor.ink1)
-                Spacer()
-                // Leaves room for the share button `RoutinesTabView` overlays in the top-right.
-                Text("~\(routine.estimatedMinutes) MIN").dgLabel()
-                    .padding(.trailing, DGTap.min - DGSpace.s3)
+                RoutineGlyph(symbolName: routine.symbolName, tint: routine.tint, size: 40, filled: true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(routine.name)
+                        .font(DGFont.title3)
+                        .foregroundStyle(DGColor.ink1)
+                        .lineLimit(1)
+                    Text(meta)
+                        .font(DGFont.footnote)
+                        .foregroundStyle(DGColor.ink3)
+                        .monospacedDigit()
+                }
+                Spacer(minLength: DGSpace.s2)
+                RoutineStartPill(routineName: routine.name, action: {}).hidden()
             }
             .accessibilityElement(children: .combine)
             Text(exerciseNames)
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
-                .lineLimit(2)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
             if !missingEquipment.isEmpty {
                 equipmentBadge
             }
-            DGAdaptiveStack(spacing: DGSpace.s2) {
-                ForEach(topMuscles) { muscle in
-                    DGTag(text: muscle.displayName)
-                }
-                Spacer(minLength: DGSpace.s2)
-                // Reserves the pill's footprint; the live button is overlaid by the list.
-                RoutineStartPill(routineName: routine.name, action: {}).hidden()
-            }
         }
-        .dgCard()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dgCard(radius: DGRadius.lg, padding: 15)
     }
 
+    private var meta: String {
+        let exercises = routine.exercises.count == 1 ? "1 exercise" : "\(routine.exercises.count) exercises"
+        let sets = routine.setCount == 1 ? "1 set" : "\(routine.setCount) sets"
+        return "\(routine.estimatedMinutes) min · \(exercises) · \(sets)"
+    }
 }
 
-/// The coral "Start" pill on a routine card, overlaid by `RoutinesTabView` so it is a sibling
+/// The accent "Start" pill on a routine card, overlaid by `RoutinesTabView` so it is a sibling
 /// of the card button rather than a button inside a button.
 private struct RoutineStartPill: View {
     var routineName: String
     var action: () -> Void
 
     var body: some View {
-        Button("Start", action: action)
-            .buttonStyle(.dgControl)
-            .font(DGFont.condensedLabel(13))
-            .foregroundStyle(DGColor.inkOnCoral)
-            .padding(.horizontal, DGSpace.s4)
-            .frame(minHeight: 36)
-            .background(DGColor.coral, in: Capsule())
-            .accessibilityLabel("Start \(routineName)")
+        Button(action: action) {
+            Text("Start")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(DGColor.inkOnCoral)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 32)
+                .background(DGColor.coral, in: Capsule())
+        }
+        .buttonStyle(.dgControl)
+        .accessibilityLabel("Start \(routineName)")
     }
 }
 
 extension RoutineCard {
+    /// Amber on a warm wash — `prGoldText` is the one amber token stepped for small text.
     private var equipmentBadge: some View {
-        HStack(spacing: DGSpace.s2) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 11, weight: .semibold))
-                .accessibilityHidden(true)
+        HStack(spacing: 6) {
+            Circle().fill(DGColor.warning).frame(width: 6, height: 6)
             Text("Needs \(missingNames) — not in \(profileName)")
-                .font(DGFont.footnote)
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(DGColor.prGoldText)
         }
-        .foregroundStyle(DGColor.warning)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        .background(DGColor.warning.opacity(0.13), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .accessibilityLabel("Needs \(missingNames), not in the \(profileName) profile")
     }
 
@@ -256,8 +252,19 @@ extension RoutineCard {
     private var missingNames: String { missingEquipment.joined(separator: ", ") }
 
     private var exerciseNames: String { routine.exercises.map(\.name).joined(separator: " · ") }
-    private var topMuscles: [Muscle] {
-        routine.hitMap.sorted { $0.value > $1.value }.prefix(3).map(\.key)
+}
+
+extension TrainSegment {
+    /// The segment the tab opens on. `-dgTrainSegment programs` (screenshot mode only) lets the
+    /// App Store screenshot build and a UI test land on Programs or Schedule directly.
+    static var initial: TrainSegment {
+        guard LaunchFlags.isScreenshotting else { return .routines }
+        let args = ProcessInfo.processInfo.arguments
+        guard let index = args.firstIndex(of: "-dgTrainSegment"), index + 1 < args.count else {
+            return .routines
+        }
+        let wanted = args[index + 1].lowercased()
+        return TrainSegment.allCases.first { $0.rawValue.lowercased() == wanted } ?? .routines
     }
 }
 

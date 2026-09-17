@@ -38,7 +38,7 @@ struct ReorderDraftSheet: View {
         VStack(alignment: .leading, spacing: 2) {
             if unit.count > 1 { Text("Superset").dgLabel(DGColor.setSuperset) }
             ForEach(unit, id: \.self) { index in
-                Text(items[index].exercise.name.uppercased())
+                Text(items[index].exercise.name)
                     .font(DGFont.title3)
                     .foregroundStyle(DGColor.ink1)
             }
@@ -118,18 +118,18 @@ struct AddExerciseButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: DGSpace.s2) {
-                Image(systemName: "plus").font(.system(size: 14, weight: .bold))
-                Text("Add Exercise")
-                    .font(DGFont.condensedLabel(14))
+                Image(systemName: "plus").font(.system(size: 13, weight: .bold))
+                Text("Add exercise")
+                    .font(.system(size: 13.5, weight: .semibold))
             }
-            .foregroundStyle(DGColor.ink2)
+            .foregroundStyle(DGColor.ink3)
             .frame(maxWidth: .infinity)
-            .frame(minHeight: 56)
-            .dgGlass(.thin, radius: DGRadius.lg)
+            .frame(minHeight: 46)
             .overlay {
-                RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
-                    .strokeBorder(DGColor.hairline, style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(DGColor.ink1.opacity(0.22), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
             }
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.dgCard)
     }

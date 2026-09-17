@@ -51,15 +51,19 @@ struct RoutineGlyph: View {
     var symbolName: String
     var tint: String
     var size: CGFloat = 36
+    /// The redesign's routine card draws the symbol white on a solid tint square; everywhere
+    /// else keeps the tint-on-wash drawing.
+    var filled = false
 
     var body: some View {
         let color = RoutineTint.named(tint).color
         Image(systemName: symbolName)
             .font(.system(size: size * 0.45, weight: .semibold))
-            .foregroundStyle(color)
+            .foregroundStyle(filled ? .white : color)
             .frame(width: size, height: size)
             .background(
-                color.opacity(0.16), in: RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
+                filled ? color : color.opacity(0.16),
+                in: RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
             )
             .accessibilityHidden(true)
     }

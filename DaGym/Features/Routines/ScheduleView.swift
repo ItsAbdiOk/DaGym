@@ -2,14 +2,15 @@ import GymCore
 import SwiftData
 import SwiftUI
 
-/// "Schedule" — an ordered list of routines per weekday (a "Push A + Arms" day
-/// merges them in order when started), plus a look-ahead strip for moving an
-/// individual session to another date. Reachable from the calendar icon in
-/// `RoutinesTabView`'s header (plan.md §6.1). Saves after every change and,
-/// when `Preferences.calendarSyncEnabled` is on, mirrors the plan onto the
-/// "DaGym" calendar via `CalendarSyncService` (plan.md §6.8).
+/// The Schedule segment of the Train tab: one row per weekday of the current training week —
+/// the day, the routines planned on it (a "Push A + Arms" day merges them in order when
+/// started) or "Rest", and an accent "Move" / "Add" that opens the day's editor. Under it, a
+/// footnote saying what calendar sync is actually doing, and the row into the exercise
+/// library. Saves after every change and, when `Preferences.calendarSyncEnabled` is on,
+/// mirrors the plan onto the "DaGym" calendar via `CalendarSyncService` (plan.md §6.8).
 struct ScheduleView: View {
-    var onDone: () -> Void
+    /// Pushes a You-hub destination (the library row, the "Settings" link) onto Train's stack.
+    var onPush: (YouDestination) -> Void
 
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
@@ -17,23 +18,32 @@ struct ScheduleView: View {
     @State private var schedule = WeeklySchedule()
     @State private var moveRequest: MoveRequest?
     @State private var syncProblem: String?
+    @State private var exerciseCount = 0
+    @State private var customCount = 0
 
     var body: some View {
-        ZStack {
-            AmbientWash()
-            ScrollView {
-                VStack(alignment: .leading, spacing: DGSpace.s6) {
-                    navRow
-                    weekdayCard
-                    thisWeekCard
-                    footnote
+        VStack(alignment: .leading, spacing: 0) {
+            TrainRowGroup {
+                ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                    let weekday = orderedWeekdays[index]
+                    ScheduleDayRow(
+                        date: date, weekday: weekday, isToday: date == today,
+                        isLast: index == weekDates.count - 1, routines: routines,
+                        planned: routines(on: date), templateIDs: schedule.dayRoutines[weekday] ?? [],
+                        onToggle: { toggle($0, on: weekday) },
+                        onRest: { rest(weekday) },
+                        onMove: date >= today ? { beginMove(date: date) } : nil
+                    )
                 }
-                .padding(.horizontal, DGSpace.s4)
-                .padding(.top, DGSpace.s3)
-                .padding(.bottom, 100)
             }
+            footnote
+                .padding(.horizontal, DGSpace.s1)
+                .padding(.top, 10)
+            libraryRow
+                .padding(.top, DGSpace.s4)
         }
         .task { refresh() }
+        .refreshOnStoreChange(refresh)
         .sheet(item: $moveRequest) { request in
             MoveSessionSheet(
                 request: request, calendar: preferences.trainingCalendar,
@@ -42,61 +52,66 @@ struct ScheduleView: View {
         }
     }
 
-    private var navRow: some View {
-        HStack {
-            Button("Close", action: onDone)
-                .buttonStyle(.dgControl)
-                .dgLabel()
-            Spacer()
-            Text("Schedule")
-                .font(DGFont.title3)
-                .foregroundStyle(DGColor.ink1)
-            Spacer()
-            Color.clear.frame(width: 44, height: 1)
-        }
-    }
-
-    private var weekdayCard: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            Text("Weekly Plan").dgLabel()
-            VStack(spacing: 0) {
-                ForEach(Array(orderedWeekdays.enumerated()), id: \.element) { index, weekday in
-                    WeekdayRow(
-                        weekday: weekday, routines: routines,
-                        selectedRoutineIDs: schedule.dayRoutines[weekday] ?? [],
-                        onToggle: { toggle($0, on: weekday) }, onRest: { rest(weekday) }
-                    )
-                    if index != orderedWeekdays.count - 1 {
-                        Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
-                    }
-                }
-            }
-            .dgCard(padding: 0)
-        }
-    }
-
-    private var thisWeekCard: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            Text("This Week").dgLabel()
-            VStack(spacing: 0) {
-                ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                    ThisWeekRow(date: date, routines: routines(on: date), onMove: { beginMove(date: date) })
-                    if index != weekDates.count - 1 {
-                        Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
-                    }
-                }
-            }
-            .dgCard(padding: 0)
-        }
-    }
-
-    /// Says what actually happened. It used to claim "Synced to your \"DaGym\" calendar."
-    /// whenever the toggle was on — including when calendar access had been denied and every
-    /// sync was failing silently behind a `try?`.
+    /// Says what actually happened. It used to claim the plan was synced whenever the toggle
+    /// was on — including when calendar access had been denied and every sync was failing
+    /// silently behind a `try?`.
+    @ViewBuilder
     private var footnote: some View {
-        Text(footnoteText)
-            .font(DGFont.footnote)
-            .foregroundStyle(syncProblemMessage == nil ? DGColor.ink4 : DGColor.danger)
+        if let syncProblemMessage {
+            Text(syncProblemMessage)
+                .font(.system(size: 12))
+                .foregroundStyle(DGColor.danger)
+        } else if preferences.calendarSyncEnabled {
+            Text("Calendar sync is on. Sessions land at \(startTime) in your \"DaGym\" calendar.")
+                .font(.system(size: 12))
+                .foregroundStyle(DGColor.ink3)
+        } else {
+            HStack(spacing: 4) {
+                Text("Calendar sync is off.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(DGColor.ink3)
+                Button("Turn it on in Settings") { onPush(.settings) }
+                    .buttonStyle(.dgControl)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(DGColor.coralText)
+            }
+        }
+    }
+
+    /// "Exercise library / 412 exercises · 9 of yours" — pushes `LibraryView`.
+    private var libraryRow: some View {
+        Button { onPush(.library) } label: {
+            HStack(spacing: DGSpace.s3) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Exercise library")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(DGColor.ink1)
+                    Text(libraryMeta)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(DGColor.ink3)
+                }
+                Spacer()
+                TrainChevron()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .dgCard(radius: 16, padding: DGSpace.s4)
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.dgCard)
+        .accessibilityIdentifier(A11yID.trainLibrary)
+    }
+
+    private var libraryMeta: String {
+        let total = exerciseCount == 1 ? "1 exercise" : "\(exerciseCount) exercises"
+        return customCount == 0 ? total : "\(total) · \(customCount) of yours"
+    }
+
+    /// "18:00" in the lifter's locale — `scheduledStartHour` is the hour synced sessions start at.
+    private var startTime: String {
+        let calendar = preferences.trainingCalendar
+        let hour = preferences.scheduledStartHour
+        let date = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: today)
+        return (date ?? today).formatted(.dateTime.hour().minute())
     }
 
     /// This screen's own sync result first; otherwise what the last launch / foreground sync
@@ -105,22 +120,19 @@ struct ScheduleView: View {
         syncProblem ?? CalendarSyncCoordinator.status.problemMessage
     }
 
-    private var footnoteText: String {
-        if let syncProblemMessage { return syncProblemMessage }
-        return preferences.calendarSyncEnabled
-            ? "Synced to your \"DaGym\" calendar."
-            : "Turn on calendar sync in Settings → Calendar to keep these sessions on your calendar."
-    }
-
     private var orderedWeekdays: [Weekday] { Weekday.ordered(mondayFirst: preferences.weekStartsMonday) }
 
-    /// `preferences.trainingCalendar`, like every other schedule read (`UnitEnvironment`'s
-    /// single-calendar rule): only day arithmetic today, but a "this week" check added here
-    /// against `Calendar.current` would put Sunday in the wrong week for a Monday-start lifter.
+    private var today: Date { preferences.trainingCalendar.startOfDay(for: Date()) }
+
+    /// The dates of the current training week in `orderedWeekdays` order — Monday first for a
+    /// Monday-start lifter — read with `preferences.trainingCalendar`, like every other schedule
+    /// read (`UnitEnvironment`'s single-calendar rule), so Sunday lands in the right week.
     private var weekDates: [Date] {
         let calendar = preferences.trainingCalendar
-        let today = calendar.startOfDay(for: Date())
-        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
+        let today = today
+        let interval = calendar.dateInterval(of: .weekOfYear, for: today)
+        let start = interval?.start ?? today
+        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
     }
 
     private func routines(on date: Date) -> [RoutineInfo] {
@@ -131,6 +143,19 @@ struct ScheduleView: View {
     private func refresh() {
         routines = store.routines()
         schedule = store.schedule()
+        exerciseCount = store.fetchCount(Self.liveExercises(customOnly: false))
+        customCount = store.fetchCount(Self.liveExercises(customOnly: true))
+    }
+
+    /// Live rows only — the same `mergedIntoID == nil` rule as `WorkoutStore.isLive` and the
+    /// library's own count — as a predicate so counting never materialises the library.
+    private static func liveExercises(customOnly: Bool) -> FetchDescriptor<ExerciseModel> {
+        if customOnly {
+            return FetchDescriptor<ExerciseModel>(
+                predicate: #Predicate { $0.mergedIntoID == nil && $0.isCustom }
+            )
+        }
+        return FetchDescriptor<ExerciseModel>(predicate: #Predicate { $0.mergedIntoID == nil })
     }
 
     private func toggle(_ routineID: UUID, on weekday: Weekday) {
@@ -183,143 +208,11 @@ struct ScheduleView: View {
 }
 
 /// A pending "move this session to a new date" request, presented as a sheet.
-private struct MoveRequest: Identifiable {
+struct MoveRequest: Identifiable {
     let id = UUID()
     var sourceDate: Date
     var routineIDs: [UUID]
     var routineName: String
-}
-
-/// One weekday row: label plus a menu that ticks routines on and off (in tap order — the
-/// order they merge when the day starts) or clears the day to "Rest".
-private struct WeekdayRow: View {
-    var weekday: Weekday
-    var routines: [RoutineInfo]
-    var selectedRoutineIDs: [UUID]
-    var onToggle: (UUID) -> Void
-    var onRest: () -> Void
-
-    var body: some View {
-        DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
-            Text(weekday.displayName)
-                .font(DGFont.body)
-                .foregroundStyle(DGColor.ink1)
-            Spacer()
-            Menu {
-                Button("Rest") { onRest() }
-                ForEach(routines) { routine in
-                    Toggle(routine.name, isOn: Binding(
-                        get: { selectedRoutineIDs.contains(routine.id) }, set: { _ in onToggle(routine.id) }
-                    ))
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(selectedName)
-                        .font(DGFont.subhead)
-                        .foregroundStyle(selectedRoutineIDs.isEmpty ? DGColor.ink3 : DGColor.ink1)
-                        .lineLimit(2)
-                        .truncationMode(.middle)
-                    Image(systemName: "chevron.up.chevron.down").accessibilityHidden(true)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(DGColor.ink4)
-                }
-            }
-            .accessibilityLabel("\(weekday.displayName), \(selectedName)")
-        }
-        .padding(.horizontal, DGSpace.s5)
-        .frame(minHeight: DGTap.rowHeight)
-    }
-
-    private var selectedName: String {
-        let names = selectedRoutineIDs.compactMap { id in routines.first { $0.id == id } }
-        return names.isEmpty ? "Rest" : RoutineInfo.joinedNames(names)
-    }
-}
-
-/// One "this week" row: date, planned routines (or rest), and a "Move…" action.
-private struct ThisWeekRow: View {
-    var date: Date
-    var routines: [RoutineInfo]
-    var onMove: () -> Void
-
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(Self.dayLabel(date)).dgLabel()
-                Text(routines.isEmpty ? "Rest" : RoutineInfo.joinedNames(routines))
-                    .font(DGFont.subhead)
-                    .foregroundStyle(routines.isEmpty ? DGColor.ink3 : DGColor.ink1)
-            }
-            .accessibilityElement(children: .combine)
-            Spacer()
-            if !routines.isEmpty {
-                Button("Move…", action: onMove)
-                    .buttonStyle(.dgControl)
-                    .font(DGFont.condensedLabel(12))
-                    .foregroundStyle(DGColor.coralText)
-            }
-        }
-        .padding(.horizontal, DGSpace.s5)
-        .frame(minHeight: DGTap.rowHeight)
-    }
-
-    private static let dayLabelFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE d MMM"
-        return formatter
-    }()
-
-    private static func dayLabel(_ date: Date) -> String {
-        dayLabelFormatter.string(from: date).uppercased()
-    }
-}
-
-/// Glass sheet: pick a new date for a planned session.
-private struct MoveSessionSheet: View {
-    var request: MoveRequest
-    var calendar: Calendar
-    var onMove: (Date) -> Void
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var newDate: Date
-
-    init(request: MoveRequest, calendar: Calendar, onMove: @escaping (Date) -> Void) {
-        self.request = request
-        self.calendar = calendar
-        self.onMove = onMove
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: request.sourceDate) ?? request.sourceDate
-        _newDate = State(initialValue: tomorrow)
-    }
-
-    var body: some View {
-        VStack(spacing: DGSpace.s5) {
-            Capsule()
-                .fill(DGColor.ink4)
-                .frame(width: 36, height: 5)
-                .padding(.top, DGSpace.s2)
-            VStack(alignment: .leading, spacing: DGSpace.s1) {
-                Text("Move Session")
-                    .font(DGFont.title2)
-                    .foregroundStyle(DGColor.ink1)
-                Text("Move \(request.routineName) to a new date. The original day becomes a rest day.")
-                    .font(DGFont.subhead)
-                    .foregroundStyle(DGColor.ink3)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            DatePicker("New date", selection: $newDate, displayedComponents: .date)
-                .datePickerStyle(.graphical)
-                .tint(DGColor.coral)
-                .labelsHidden()
-            DGPrimaryButton(title: "Move", action: { onMove(newDate); dismiss() })
-        }
-        .padding(.horizontal, DGSpace.s4)
-        .padding(.bottom, DGSpace.s5)
-        .frame(maxWidth: .infinity, alignment: .top)
-        .background(DGColor.surface1)
-        .clipShape(RoundedRectangle(cornerRadius: DGRadius.sheet, style: .continuous))
-        .presentationDetents([.height(560)])
-        .presentationDragIndicator(.hidden)
-    }
 }
 
 extension RoutineInfo {
@@ -331,9 +224,11 @@ extension RoutineInfo {
 
 #Preview {
     if let container = try? ModelContainer.dagym(inMemory: true) {
-        ScheduleView(onDone: {})
-            .environment(WorkoutStore(context: container.mainContext))
-            .environment(Preferences())
+        ScrollView {
+            ScheduleView(onPush: { _ in }).padding()
+        }
+        .environment(WorkoutStore(context: container.mainContext))
+        .environment(Preferences())
     } else {
         Text("Preview unavailable")
     }
