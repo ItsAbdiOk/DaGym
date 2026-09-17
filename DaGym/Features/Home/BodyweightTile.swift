@@ -107,12 +107,9 @@ struct BodyweightTile: View {
         return "\(sign)\(magnitude) \(preferences.unitSymbol) vs 30 days ago"
     }
 
-    /// Green when the month's change moved toward the goal; otherwise the neutral ink the tile
-    /// always used — moving away is not painted red, the number says it.
-    private var deltaColor: Color {
-        guard let deltaKg, abs(deltaKg) >= BodyweightGoal.flatThresholdKg else { return DGColor.ink3 }
-        return status?.trend == .toward ? DGColor.success : DGColor.ink3
-    }
+    /// The redesign keeps the month's change in neutral ink whichever way it moved — the sign
+    /// says it, and only reaching the goal (`isCelebratory`) earns a colour.
+    private var deltaColor: Color { DGColor.ink3 }
 
     private var accessibilityLabel: String {
         guard let kg else { return "Bodyweight. \(emptyText)" }
