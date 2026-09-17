@@ -2,23 +2,24 @@ import GymCore
 import SwiftData
 import SwiftUI
 
-/// Exercise Detail — stats, an e1RM trend built from real history and
-/// editable reference settings for a single exercise.
+/// Exercise Detail — the illustration, three stat tiles, an e1RM trend built from real history
+/// and a white row group of the exercise's own settings. Pushed from the library, so the name
+/// is the inline title and the system back button reads "‹ Library".
 struct ExerciseDetailView: View {
     @Environment(WorkoutStore.self) private var store
-    // Not private: the display-only computed properties live in ExerciseDetailView+Layout.swift.
+    // Not private: the display and row pieces live in the `+Layout` and `+Rows` files.
     @Environment(Preferences.self) var preferences
     @Environment(\.dismiss) var dismiss
 
     @State var exercise: ExerciseInfo
-    @State private var lastSessions: [String] = []
-    @State private var restSeconds: Int
-    @State private var incrementKg: Double
-    @State private var barTypeKey: String?
+    @State var lastSessions: [String] = []
+    @State var restSeconds: Int
+    @State var incrementKg: Double
+    @State var barTypeKey: String?
     @State var showingCalculator = false
-    @State private var notes: [ExerciseNoteInfo] = []
-    @State private var showingAddToRoutine = false
-    @State private var showingEdit = false
+    @State var notes: [ExerciseNoteInfo] = []
+    @State var showingAddToRoutine = false
+    @State var showingEdit = false
     @State private var confirmingDelete = false
     @State private var routinesUsing: [RoutineInfo] = []
 
@@ -38,7 +39,7 @@ struct ExerciseDetailView: View {
     /// Increment choices in kg, in the lifter's unit: the standard kg microplate steps, or a
     /// lb lifter's own steps (0.5 lb up to a 25 lb jump) converted to kg — offering "5 lb" rather
     /// than kg's 2.5 kg (5.5 lb) rounded through `preferences.formatWeight`.
-    private static func incrementOptions(for unit: WeightUnit) -> [Double] {
+    static func incrementOptions(for unit: WeightUnit) -> [Double] {
         switch unit {
         case .kg: return [0.5, 1, 1.25, 2, 2.5, 5, 10]
         case .lb: return [0.5, 1, 2, 2.5, 5, 10, 25].map(unit.toKg)
@@ -55,32 +56,29 @@ struct ExerciseDetailView: View {
         ZStack {
             AmbientWash()
             ScrollView {
-                VStack(alignment: .leading, spacing: DGSpace.s5) {
-                    topRow
-                    heroArt
-                    titleBlock
+                VStack(alignment: .leading, spacing: DGSpace.s3) {
+                    heroCard
                     statTiles
                     ExerciseChartView(exerciseID: exercise.id)
-                        .dgCard()
-                    oneRepMaxRow
+                        .dgCard(radius: 20, padding: DGSpace.s4)
+                    settingsGroup
+                    customActionsGroup
                     ExerciseTextCard(
-                        title: "Last 3 Sessions", lines: lastSessions, emptyText: "No sessions logged yet.",
+                        title: "Recent sessions", lines: lastSessions, emptyText: "No sessions logged yet.",
                         tint: DGColor.ink1
                     )
-                    ExerciseNotesCard(notes: notes, onDelete: deleteNote)
                     ExerciseInstructionsCard(steps: instructionSteps)
-                    settingsCard
-                    ExerciseActionsCard(
-                        isCustom: exercise.isCustom, onAddToRoutine: { showingAddToRoutine = true },
-                        onEdit: { showingEdit = true }, onDelete: confirmDelete
-                    )
                 }
                 .padding(.horizontal, DGSpace.s4)
-                .padding(.top, DGSpace.s3)
+                .padding(.top, DGSpace.s4)
                 .padding(.bottom, 100)
             }
         }
-        .navigationBarHidden(true)
+        .navigationTitle(exercise.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) { favoriteButton }
+        }
         .task { refresh() }
         .sheet(isPresented: $showingCalculator) {
             OneRepMaxCalculatorView(
@@ -103,35 +101,15 @@ struct ExerciseDetailView: View {
         }
     }
 
-    private var settingsCard: some View {
-        VStack(spacing: 0) {
-            MenuSettingsRow(label: "Rest timer", value: restLabel(restSeconds)) {
-                ForEach(Self.restOptions, id: \.self) { seconds in
-                    Button(restLabel(seconds)) { updateRest(seconds) }
-                }
-            }
-            Divider().overlay(DGColor.hairline)
-            MenuSettingsRow(label: "Bar type", value: BarOption.from(barTypeKey).title) {
-                ForEach(BarOption.allCases) { option in
-                    Button(option.title) { updateBar(option) }
-                }
-            }
-            Divider().overlay(DGColor.hairline)
-            MenuSettingsRow(
-                label: "Weight increment",
-                value: "\(preferences.formatWeight(kg: incrementKg)) \(preferences.unitSymbol)"
-            ) {
-                ForEach(Self.incrementOptions(for: preferences.weightUnit), id: \.self) { increment in
-                    Button("\(preferences.formatWeight(kg: increment)) \(preferences.unitSymbol)") {
-                        updateIncrement(increment)
-                    }
-                }
-            }
+    private var favoriteButton: some View {
+        Button(action: toggleFavorite) {
+            Image(systemName: exercise.isFavorite ? "star.fill" : "star")
+                .foregroundStyle(exercise.isFavorite ? DGColor.prGold : DGColor.coralText)
         }
-        .dgCard(padding: 0)
+        .accessibilityLabel(exercise.isFavorite ? "Remove from favourites" : "Add to favourites")
     }
 
-    private func refresh() {
+    func refresh() {
         if let model = store.fetchExerciseModel(id: exercise.id) {
             exercise = store.exerciseInfo(for: model)
             restSeconds = model.restSeconds
@@ -142,12 +120,12 @@ struct ExerciseDetailView: View {
         notes = store.exerciseNotes(exerciseID: exercise.id)
     }
 
-    private func deleteNote(_ note: ExerciseNoteInfo) {
+    func deleteNote(_ note: ExerciseNoteInfo) {
         store.deleteExerciseNote(id: note.id)
         refresh()
     }
 
-    private func confirmDelete() {
+    func confirmDelete() {
         routinesUsing = store.routinesUsing(exerciseID: exercise.id)
         confirmingDelete = true
     }
@@ -162,21 +140,17 @@ struct ExerciseDetailView: View {
         refresh()
     }
 
-    private func restLabel(_ seconds: Int) -> String {
-        Self.restLabel(seconds, defaultSeconds: preferences.defaultRestSeconds)
-    }
-
-    private func updateRest(_ seconds: Int) {
+    func updateRest(_ seconds: Int) {
         restSeconds = seconds
         persistSettings()
     }
 
-    private func updateBar(_ option: BarOption) {
+    func updateBar(_ option: BarOption) {
         barTypeKey = option.storeValue
         persistSettings()
     }
 
-    private func updateIncrement(_ increment: Double) {
+    func updateIncrement(_ increment: Double) {
         incrementKg = increment
         persistSettings()
     }
@@ -189,47 +163,29 @@ struct ExerciseDetailView: View {
     }
 }
 
-/// "Add to routine…" for every exercise; Edit/Delete only for the lifter's own custom ones.
+/// Edit and Delete for the lifter's own custom exercises, as a row group of their own.
 struct ExerciseActionsCard: View {
-    var isCustom: Bool
-    var onAddToRoutine: () -> Void
     var onEdit: () -> Void
     var onDelete: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            row(
-                title: "Add to routine…", symbol: "plus.circle", tint: DGColor.coralText,
-                action: onAddToRoutine
-            )
-            if isCustom {
-                Divider().overlay(DGColor.hairline)
-                row(title: "Edit exercise", symbol: "pencil", tint: DGColor.ink1, action: onEdit)
-                Divider().overlay(DGColor.hairline)
-                row(title: "Delete exercise", symbol: "trash", tint: DGColor.danger, action: onDelete)
+            DetailRow(label: "Edit exercise", action: onEdit)
+            Button(action: onDelete) {
+                HStack {
+                    Text("Delete exercise")
+                        .font(DGFont.subhead)
+                        .foregroundStyle(DGColor.danger)
+                    Spacer()
+                }
+                .padding(.horizontal, 15)
+                .padding(.vertical, 13)
+                .frame(minHeight: 46)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(DGPressStyle())
         }
-        .dgCard(padding: 0)
-    }
-
-    private func row(title: String, symbol: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack {
-                Image(systemName: symbol)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(tint)
-                Text(title)
-                    .font(DGFont.body)
-                    .foregroundStyle(tint)
-                Spacer()
-                Image(systemName: "chevron.right").accessibilityHidden(true)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(DGColor.ink4)
-            }
-            .padding(.horizontal, DGSpace.s5)
-            .frame(minHeight: DGTap.min)
-        }
-        .buttonStyle(.dgRow)
+        .dgCard(radius: 14, padding: 0)
     }
 
     /// The delete confirmation's message: how many routines lose the exercise.

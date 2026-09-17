@@ -5,8 +5,8 @@ import os
 
 private let signposter = OSSignposter(subsystem: "dev.abdirahmanmohamed.dagym", category: "perf")
 
-/// Exercise Library — search, filter chips and a scrolling list of
-/// exercises grouped under the active filter, driven by the store.
+/// Exercise Library — search, filter chips and a white row group of exercises under the active
+/// filter, driven by the store. Pushed from Train and You, so it has no stack of its own.
 struct LibraryView: View {
     @Environment(WorkoutStore.self) private var store
 
@@ -34,7 +34,7 @@ struct LibraryView: View {
     @State private var includeSecondary = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// The results label's scroll anchor for a body-map tap.
+    /// The row group's scroll anchor for a body-map tap.
     private static let resultsAnchor = "library.results"
 
     var body: some View {
@@ -42,23 +42,22 @@ struct LibraryView: View {
             AmbientWash()
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: DGSpace.s5) {
-                        if let profile, profile.restrictsLibrary {
-                            EquipmentFilterBanner(
-                                profileName: profile.name, hidden: hidden, showingAll: $showAllEquipment
-                            )
-                        }
-                        byMuscleButton
+                    VStack(alignment: .leading, spacing: DGSpace.s3) {
+                        filterChipRow
+                        refineChipRow
                         if showingMuscleMap {
                             LibraryMuscleMapCard(
                                 counts: facets.muscleCounts, selected: selectedMuscle,
                                 includeSecondary: $includeSecondary
                             ) { muscle in select(muscle, scrolling: proxy) }
                         }
-                        muscleChipRow
-                        equipmentChipRow
-                        sectionLabel.id(Self.resultsAnchor)
-                        rows
+                        if let profile, profile.restrictsLibrary {
+                            EquipmentFilterBanner(
+                                profileName: profile.name, hidden: hidden, showingAll: $showAllEquipment
+                            )
+                            .padding(.top, DGSpace.s1)
+                        }
+                        rows.id(Self.resultsAnchor)
                     }
                     .padding(.horizontal, DGSpace.s4)
                     .padding(.top, DGSpace.s3)
@@ -107,91 +106,124 @@ struct LibraryView: View {
         }
     }
 
-    /// Opens the body-map card; the same glass strip as the profile banner so it reads as a
-    /// filter control, not a row.
-    private var byMuscleButton: some View {
+    /// "All" is the absence of every chip on its row: no muscle, not favourites, not mine.
+    private var showingAll: Bool {
+        selectedMuscle == nil && !favoritesOnly && !customOnly
+    }
+
+    /// The prototype's chip row — All · Favourites · every muscle · Mine. A chip that would
+    /// find nothing under every *other* filter is dimmed and disabled; the selected one stays
+    /// live so one tap clears it (`facets` is refreshed with the rows).
+    private var filterChipRow: some View {
+        chipStrip {
+            DGChip(title: "All", selected: showingAll) {
+                selectedMuscle = nil
+                favoritesOnly = false
+                customOnly = false
+            }
+            DGChip(title: "Favourites", selected: favoritesOnly) { favoritesOnly.toggle() }
+            ForEach(Muscle.allCases) { muscle in
+                DGChip(
+                    title: muscle.displayName, selected: selectedMuscle == muscle,
+                    isEmpty: !facets.muscles.contains(muscle)
+                ) {
+                    selectedMuscle = selectedMuscle == muscle ? nil : muscle
+                }
+            }
+            DGChip(title: "Mine", selected: customOnly) { customOnly.toggle() }
+        }
+    }
+
+    /// The second row narrows further: the body-map card's toggle, then equipment.
+    private var refineChipRow: some View {
+        chipStrip {
+            byMuscleChip
+            ForEach(EquipmentOption.allCases) { option in
+                DGChip(
+                    title: option.title, selected: selectedEquipment == option,
+                    isEmpty: !facets.equipment.contains(option.rawValue)
+                ) {
+                    selectedEquipment = selectedEquipment == option ? nil : option
+                }
+            }
+        }
+    }
+
+    /// A horizontal chip strip that scrolls edge to edge under the page gutter.
+    private func chipStrip(@ViewBuilder _ chips: () -> some View) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 7, content: chips)
+                .padding(.horizontal, DGSpace.s4)
+        }
+        .padding(.horizontal, -DGSpace.s4)
+    }
+
+    /// Opens the body-map card; a chip like its neighbours so it reads as a filter control.
+    private var byMuscleChip: some View {
         Button {
             withAnimation(DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion)) {
                 showingMuscleMap.toggle()
             }
         } label: {
-            HStack(spacing: DGSpace.s2) {
+            HStack(spacing: 5) {
                 Image(systemName: "figure.arms.open")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .accessibilityHidden(true)
-                Text("Explore by muscle")
-                    .font(DGFont.condensedLabel(14))
-                Spacer()
+                Text("Body map")
                 Image(systemName: showingMuscleMap ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(DGColor.ink4)
+                    .font(.system(size: 9, weight: .bold))
                     .accessibilityHidden(true)
             }
-            .foregroundStyle(DGColor.ink2)
-            .padding(.horizontal, DGSpace.s3)
-            .frame(minHeight: 44)
-            .dgGlass(.thin, radius: 12)
+            .font(DGFont.condensedLabel(12))
+            .foregroundStyle(showingMuscleMap ? DGColor.inkOnCoral : DGColor.ink2)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 36)
+            .background {
+                if showingMuscleMap {
+                    Capsule().fill(DGColor.coral)
+                } else {
+                    Capsule().fill(DGColor.surface2)
+                        .overlay(Capsule().strokeBorder(DGColor.hairline, lineWidth: 0.5))
+                }
+            }
         }
-        .buttonStyle(.dgCard)
+        .buttonStyle(.dgControl)
         .accessibilityIdentifier(A11yID.libraryByMuscle)
+        .accessibilityLabel("Explore by muscle")
         .accessibilityAddTraits(showingMuscleMap ? .isSelected : [])
         .accessibilityHint(showingMuscleMap ? "Hides the body map" : "Shows a body map to pick a muscle from")
     }
 
-    /// A chip that would find nothing under every *other* filter is dimmed and disabled; the
-    /// selected one stays live so one tap clears it (`facets` is refreshed with the rows).
-    private var muscleChipRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DGSpace.s2) {
-                DGChip(title: "All", selected: selectedMuscle == nil) { selectedMuscle = nil }
-                ForEach(Muscle.allCases) { muscle in
-                    DGChip(
-                        title: muscle.displayName, selected: selectedMuscle == muscle,
-                        isEmpty: !facets.muscles.contains(muscle)
-                    ) {
-                        selectedMuscle = selectedMuscle == muscle ? nil : muscle
-                    }
-                }
-            }
-        }
-    }
-
-    private var equipmentChipRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DGSpace.s2) {
-                ForEach(EquipmentOption.allCases) { option in
-                    DGChip(
-                        title: option.title, selected: selectedEquipment == option,
-                        isEmpty: !facets.equipment.contains(option.rawValue)
-                    ) {
-                        selectedEquipment = selectedEquipment == option ? nil : option
-                    }
-                }
-                DGChip(title: "Favourites", selected: favoritesOnly) { favoritesOnly.toggle() }
-                DGChip(title: "Custom", selected: customOnly) { customOnly.toggle() }
-            }
-        }
-    }
-
-    private var sectionLabel: some View {
-        Text("\(sectionTitle) · \(exercises.count) exercises").dgLabel()
-    }
-
-    private var sectionTitle: String {
-        selectedMuscle?.displayName.uppercased() ?? "ALL"
-    }
-
+    /// The white row group. The rows stay lazy; the card is drawn behind the whole stack so
+    /// hairlines and corners read as one list, as in the prototype.
+    @ViewBuilder
     private var rows: some View {
-        LazyVStack(spacing: DGSpace.s3) {
-            ForEach(exercises) { exercise in
-                NavigationLink(value: exercise) {
-                    LibraryRow(exercise: exercise) { toggleFavorite(exercise.id) }
+        if exercises.isEmpty {
+            EmptyState(
+                symbol: "magnifyingglass", title: "No exercises",
+                message: "Nothing matches these filters. Try another chip or clear the search."
+            )
+            .frame(maxWidth: .infinity)
+            .padding(.top, DGSpace.s6)
+        } else {
+            LazyVStack(spacing: 0) {
+                ForEach(Array(exercises.enumerated()), id: \.element.id) { offset, exercise in
+                    NavigationLink(value: exercise) {
+                        LibraryRow(exercise: exercise, isLast: offset == exercises.count - 1)
+                    }
+                    .buttonStyle(DGPressStyle())
+                    .contextMenu {
+                        Button(
+                            exercise.isFavorite ? "Remove from favourites" : "Add to favourites",
+                            systemImage: exercise.isFavorite ? "star.slash" : "star"
+                        ) { toggleFavorite(exercise.id) }
+                    }
                 }
-                .buttonStyle(.dgCard)
             }
-        }
-        .navigationDestination(for: ExerciseInfo.self) { exercise in
-            ExerciseDetailView(exercise: exercise)
+            .dgCard(radius: 14, padding: 0)
+            .navigationDestination(for: ExerciseInfo.self) { exercise in
+                ExerciseDetailView(exercise: exercise)
+            }
         }
     }
 
@@ -254,7 +286,7 @@ struct LibraryView: View {
         return profile.availability
     }
 
-    /// The save bumps `changeToken`, and this tab is showing, so `reload()` follows on its own.
+    /// The save bumps `changeToken`, and this screen is showing, so `reload()` follows on its own.
     private func toggleFavorite(_ id: UUID) {
         store.toggleFavorite(id: id)
     }
@@ -262,8 +294,10 @@ struct LibraryView: View {
 
 #Preview {
     if let store = PreviewStore.make() {
-        LibraryView()
-            .environment(store)
-            .environment(Preferences())
+        NavigationStack {
+            LibraryView()
+        }
+        .environment(store)
+        .environment(Preferences())
     }
 }

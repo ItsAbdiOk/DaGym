@@ -2,10 +2,17 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
-/// The gym check-in card (features.md adopt 6): a horizontal rail of every saved card, each
-/// regenerated from its payload at full screen brightness so the front-desk scanner reads it
-/// first time. Adding a card scans with the camera, reads a photo, or takes a typed number.
+/// The gym check-in card (features.md adopt 6): a white card with the membership barcode drawn
+/// large and the number under it, regenerated from its payload at full screen brightness so
+/// the front-desk scanner reads it first time; several cards page sideways. Adding a card scans
+/// with the camera, reads a photo, or takes a typed number.
+///
+/// Lives two ways: pushed from the You hub (`isPushed`, no close button — the system back is
+/// the "‹ You"), and as a sheet from Today's barcode button, the Siri intent and the check-in
+/// row, where it wraps itself in a stack for the title and a Done button.
 struct GymCardSheet: View {
+    var isPushed = false
+
     @Environment(WorkoutStore.self) private var store
     @Environment(\.dismiss) private var dismiss
 
@@ -23,24 +30,46 @@ struct GymCardSheet: View {
     @State private var wallet = WalletPassService()
 
     var body: some View {
+        if isPushed {
+            screen
+        } else {
+            NavigationStack {
+                screen.toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                }
+            }
+        }
+    }
+
+    private var screen: some View {
         ZStack {
             AmbientWash()
-            VStack(spacing: DGSpace.s4) {
-                header
-                if cards.isEmpty {
-                    EmptyState(
-                        symbol: "qrcode.viewfinder", title: "No Gym Card Yet",
-                        message: "Scan the barcode on your membership card once and it lives here."
-                    )
-                } else {
-                    rail
+            ScrollView {
+                VStack(spacing: DGSpace.s4) {
+                    if cards.isEmpty {
+                        emptyState
+                    } else {
+                        rail
+                        if let selectedCard, wallet.isAvailable {
+                            GymCardWalletRow(card: selectedCard, service: wallet)
+                        }
+                        Text(Self.footnote)
+                            .font(DGFont.footnote)
+                            .foregroundStyle(DGColor.ink3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, DGSpace.s1)
+                    }
+                    addOptions
                 }
-                addOptions
+                .padding(.horizontal, DGSpace.s4)
+                .padding(.top, DGSpace.s5)
+                .padding(.bottom, DGSpace.s6)
             }
-            .padding(.horizontal, DGSpace.s4)
-            .padding(.top, DGSpace.s3)
-            .padding(.bottom, DGSpace.s6)
         }
+        .navigationTitle("Gym card")
+        .navigationBarTitleDisplayMode(.inline)
         .task { refresh() }
         .onChange(of: store.changeToken) { _, _ in refresh() }
         .onAppear { brightness.raise() }
@@ -54,14 +83,14 @@ struct GymCardSheet: View {
         .onChange(of: pickedItem) { _, item in
             if let item { Task { await readPhoto(item) } }
         }
-        .alert("Name This Card", isPresented: pendingScanBinding, presenting: pendingScan) { scan in
+        .alert("Name this card", isPresented: pendingScanBinding, presenting: pendingScan) { scan in
             TextField("e.g. PureGym", text: $pendingName)
             Button("Save") { saveCard(scan) }
             Button("Cancel", role: .cancel) { pendingScan = nil }
         } message: { scan in
             Text("\(scan.symbology.title) · \(scan.value)")
         }
-        .alert("Enter Card Number", isPresented: $showingManualEntry) {
+        .alert("Enter card number", isPresented: $showingManualEntry) {
             TextField("Membership number", text: $manualValue)
             Button("Next") {
                 pendingScan = PendingScan(value: manualValue, symbology: .code128)
@@ -71,62 +100,87 @@ struct GymCardSheet: View {
         } message: {
             Text("Typed numbers are shown as a Code 128 barcode.")
         }
-        .alert("No Barcode Found", isPresented: $photoFailed) {
+        .alert("No barcode found", isPresented: $photoFailed) {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Try a sharper photo with the whole code in frame, or type the number instead.")
         }
-        .alert("Camera Unavailable", isPresented: scannerFailureBinding, presenting: scannerFailure) { _ in
+        .alert("Camera unavailable", isPresented: scannerFailureBinding, presenting: scannerFailure) { _ in
             Button("OK", role: .cancel) { scannerFailure = nil }
         } message: { reason in
             Text("\(reason) Take a photo of the card or type the number instead.")
         }
     }
 
-    private var header: some View {
-        HStack {
-            Text("Gym Card")
-                .font(DGFont.title1)
-                .foregroundStyle(DGColor.ink1)
-            Spacer()
-            DGIconButton(symbol: "xmark", size: 36, accessibilityLabel: "Close") { dismiss() }
-        }
+    /// The prototype's footnote — what the screen does on its own, and the Siri route in.
+    static let footnote =
+        "Screen brightness is raised while the card is open. Also available from Siri: “Show gym card”."
+
+    private var selectedCard: GymCardInfo? {
+        cards.first { $0.id == selectedID } ?? cards.first
+    }
+
+    private var emptyState: some View {
+        EmptyState(
+            symbol: "barcode.viewfinder", title: "Scan your gym card",
+            message: "Scan the barcode on your membership card once and it lives here, bright enough for the desk scanner."
+        )
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DGSpace.s6)
+        .dgCard(radius: 22)
     }
 
     private var rail: some View {
         TabView(selection: $selectedID) {
             ForEach(cards) { card in
-                GymCardFace(
-                    card: card, wallet: wallet, onRename: { rename(card, to: $0) }, onDelete: { delete(card) }
-                )
-                .tag(Optional(card.id))
-                .padding(.horizontal, DGSpace.s2)
+                GymCardFace(card: card, onRename: { rename(card, to: $0) }, onDelete: { delete(card) })
+                    .tag(Optional(card.id))
+                    .padding(.horizontal, DGSpace.s1)
+                    .padding(.bottom, cards.count > 1 ? DGSpace.s6 : 0)
             }
         }
         .tabViewStyle(.page(indexDisplayMode: cards.count > 1 ? .always : .never))
-        .indexViewStyle(.page(backgroundDisplayMode: .always))
-        // The Wallet row (button + optional note) needs the extra ~90 pt when it can show.
-        .frame(height: wallet.isAvailable ? 490 : 400)
+        .indexViewStyle(.page(backgroundDisplayMode: .never))
+        // A paged TabView has no intrinsic height: the tallest face (a square 2-D code) sets it.
+        .frame(height: railHeight)
+        .padding(.horizontal, -DGSpace.s1)
     }
 
+    private var railHeight: CGFloat {
+        let square = cards.contains { $0.symbology.isTwoDimensional }
+        return (square ? 380 : 260) + (cards.count > 1 ? DGSpace.s6 : 0)
+    }
+
+    /// Scan / photo / typed number. The scan is the primary action before any card exists and
+    /// a quieter "add another" once one does.
     private var addOptions: some View {
         VStack(spacing: DGSpace.s2) {
             if GymCardScannerView.isSupported {
-                DGPrimaryButton(title: "Scan Card", symbol: "camera.viewfinder") { showingScanner = true }
+                if cards.isEmpty {
+                    DGPrimaryButton(title: "Scan card", symbol: "camera.viewfinder") { showingScanner = true }
+                } else {
+                    Button {
+                        showingScanner = true
+                    } label: {
+                        SecondaryLabel(title: "Scan another card", symbol: "camera.viewfinder")
+                    }
+                    .buttonStyle(.dgControl)
+                }
             }
             HStack(spacing: DGSpace.s2) {
                 PhotosPicker(selection: $pickedItem, matching: .images) {
-                    SecondaryLabel(title: "From Photo", symbol: "photo")
+                    SecondaryLabel(title: "From photo", symbol: "photo")
                 }
                 .buttonStyle(.dgControl)
                 Button {
                     showingManualEntry = true
                 } label: {
-                    SecondaryLabel(title: "Type Number", symbol: "keyboard")
+                    SecondaryLabel(title: "Type number", symbol: "keyboard")
                 }
                 .buttonStyle(.dgControl)
             }
         }
+        .padding(.top, cards.isEmpty ? 0 : DGSpace.s2)
     }
 
     private var scannerCover: some View {
@@ -158,7 +212,7 @@ struct GymCardSheet: View {
     private func refresh() {
         cards = store.gymCards()
         if selectedID == nil || !cards.contains(where: { $0.id == selectedID }) {
-            selectedID = store.lastUsedGymCard()?.id
+            selectedID = store.lastUsedGymCard()?.id ?? cards.first?.id
         }
     }
 
@@ -198,100 +252,7 @@ private struct PendingScan: Identifiable {
     var symbology: GymCardSymbology
 }
 
-/// One card in the rail: name, the regenerated code on a white field, the raw value underneath,
-/// and the Wallet controls when a pass can be minted.
-private struct GymCardFace: View {
-    var card: GymCardInfo
-    var wallet: WalletPassService
-    var onRename: (String) -> Void
-    var onDelete: () -> Void
-
-    @State private var renaming = false
-    @State private var newName = ""
-    /// Rendered once per value/symbology via `.task(id:)` — never inside `body`, which re-runs
-    /// on every rail swipe and alert toggle.
-    @State private var rendered: UIImage?
-    @State private var renderFailed = false
-
-    var body: some View {
-        VStack(spacing: DGSpace.s4) {
-            HStack {
-                Text(card.name)
-                    .font(DGFont.title2)
-                    .foregroundStyle(DGColor.ink1)
-                    .lineLimit(2)
-                Spacer()
-                Menu {
-                    Button("Rename", systemImage: "pencil") {
-                        newName = card.name
-                        renaming = true
-                    }
-                    Button("Delete", systemImage: "trash", role: .destructive, action: onDelete)
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(DGColor.ink3)
-                        .frame(width: DGTap.min, height: DGTap.min)
-                }
-                .accessibilityLabel("Card options")
-            }
-            codeImage
-            Text(card.value)
-                .font(DGFont.footnote.monospacedDigit())
-                .foregroundStyle(DGColor.ink3)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Text(card.symbology.title).dgLabel()
-            if wallet.isAvailable {
-                GymCardWalletRow(card: card, service: wallet)
-            }
-        }
-        .dgCard()
-        .task(id: [card.value, card.symbology.rawValue]) {
-            let value = card.value
-            let symbology = card.symbology
-            let image = await Task.detached(priority: .userInitiated) {
-                BarcodeRenderer.image(value: value, symbology: symbology)
-            }.value
-            guard !Task.isCancelled else { return }
-            rendered = image
-            renderFailed = image == nil
-        }
-        .alert("Rename Card", isPresented: $renaming) {
-            TextField("Name", text: $newName)
-            Button("Save") { onRename(newName) }
-            Button("Cancel", role: .cancel) {}
-        }
-    }
-
-    @ViewBuilder
-    private var codeImage: some View {
-        if let image = rendered {
-            Image(uiImage: image)
-                .interpolation(.none)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity)
-                .frame(height: card.symbology.isTwoDimensional ? 220 : 120)
-                .padding(DGSpace.s4)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
-                .accessibilityLabel("\(card.symbology.title) code for \(card.name)")
-        } else if renderFailed {
-            Text("This card's value can't be drawn as a \(card.symbology.title) code.")
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.danger)
-        } else {
-            // First render in flight: hold the code's footprint so the card doesn't jump.
-            Color.white
-                .frame(maxWidth: .infinity)
-                .frame(height: card.symbology.isTwoDimensional ? 220 : 120)
-                .padding(DGSpace.s4)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous))
-        }
-    }
-}
-
-/// Glass secondary button label ("From Photo", "Type Number").
+/// Glass secondary button label ("From photo", "Type number").
 private struct SecondaryLabel: View {
     var title: String
     var symbol: String
