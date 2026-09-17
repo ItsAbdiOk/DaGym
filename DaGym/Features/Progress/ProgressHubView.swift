@@ -14,7 +14,13 @@ struct ProgressHubView: View {
             AmbientWash()
             ScrollView {
                 VStack(alignment: .leading, spacing: DGSpace.s3) {
-                    ProgressRingsCard(summary: summary)
+                    NavigationLink(value: ScreenDestination.thisWeek(.trends)) {
+                        ProgressRingsCard(summary: summary)
+                            .overlay(alignment: .topTrailing) { TrainChevron().padding(DGSpace.s4) }
+                    }
+                    .buttonStyle(.dgCard)
+                    .accessibilityHint("Opens This week")
+                    .accessibilityIdentifier(A11yID.progressRings)
                     muscleTiles
                     Text("Look closer").dgLabel().padding(.top, 6).padding(.horizontal, DGSpace.s1)
                     lookCloser
@@ -37,21 +43,30 @@ struct ProgressHubView: View {
         summary = ProgressHubSummary.make(store: store, preferences: preferences)
     }
 
+    /// Each tile opens the map on *that* muscle's detail; with no muscle to name, the map itself.
     private var muscleTiles: some View {
         DGAdaptiveStack(spacing: 10) {
-            NavigationLink { RecoveryMapView(initialMode: .balance) } label: {
+            NavigationLink(value: Self.muscleDoor(summary.topMuscle)) {
                 MuscleTileView(
                     kicker: "Top muscle", tile: summary.topMuscle, empty: "No sets in the last 7 days"
                 )
             }
             .buttonStyle(.dgCard)
-            NavigationLink { RecoveryMapView(initialMode: .balance) } label: {
+            .accessibilityHint("Opens the muscle map")
+            .accessibilityIdentifier(A11yID.progressTopMuscle)
+            NavigationLink(value: Self.muscleDoor(summary.needsWork)) {
                 MuscleTileView(
                     kicker: "Needs work", tile: summary.needsWork, empty: "Every muscle has seen work"
                 )
             }
             .buttonStyle(.dgCard)
+            .accessibilityHint("Opens the muscle map")
+            .accessibilityIdentifier(A11yID.progressNeedsWork)
         }
+    }
+
+    static func muscleDoor(_ tile: ProgressHubSummary.MuscleTile?) -> ScreenDestination {
+        tile.map { .muscleDetail($0.muscle) } ?? .muscleMap(.balance)
     }
 
     private var lookCloser: some View {
@@ -96,7 +111,11 @@ private struct MuscleTileView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(kicker).dgLabel()
+            HStack {
+                Text(kicker).dgLabel()
+                Spacer(minLength: 0)
+                TrainChevron()
+            }
             Text(tile?.muscle.displayName ?? "—")
                 .font(.system(size: 19, weight: .bold))
                 .foregroundStyle(DGColor.ink1)
@@ -114,22 +133,33 @@ private struct MuscleTileView: View {
     }
 }
 
-/// The tinted coverage callout with its accent "Fix" pill. Fix goes to the coach, whose
-/// coverage-gap card carries the same finding with the evidence behind it.
+/// The tinted coverage callout with its accent "Fix" pill. The words open the muscle map on
+/// the muscle they name; Fix goes to the coach, whose coverage-gap card carries the same
+/// finding with the evidence behind it.
 private struct ProgressCallout: View {
     var callout: ProgressHubSummary.Callout
 
     var body: some View {
         HStack(spacing: DGSpace.s3) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(callout.title)
-                    .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(DGColor.ink1)
-                Text(callout.detail)
-                    .font(.system(size: 13.5))
-                    .foregroundStyle(DGColor.ink2)
+            NavigationLink(value: ScreenDestination.muscleDetail(callout.muscle)) {
+                HStack(spacing: DGSpace.s2) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(callout.title)
+                            .font(.system(size: 13.5, weight: .semibold))
+                            .foregroundStyle(DGColor.ink1)
+                        Text(callout.detail)
+                            .font(.system(size: 13.5))
+                            .foregroundStyle(DGColor.ink2)
+                    }
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    TrainChevron()
+                }
+                .contentShape(Rectangle())
             }
-            .fixedSize(horizontal: false, vertical: true)
+            .buttonStyle(.dgRow)
+            .accessibilityHint("Opens the muscle map")
+            .accessibilityIdentifier(A11yID.progressCallout)
             Spacer(minLength: 0)
             NavigationLink(value: YouDestination.coach) {
                 Text("Fix")

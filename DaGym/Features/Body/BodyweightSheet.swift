@@ -6,8 +6,10 @@ import SwiftUI
 /// Health — plan.md §6.8) and setting the goal weight `BodyView`'s chart draws its goal line
 /// against (`Preferences.bodyweightGoalKg`). Reached from the Body tab and Settings.
 struct BodyweightSheet: View {
-    enum Purpose {
+    enum Purpose: Equatable {
         case log, goal
+        /// Correcting one manual reading from Body's list (`WorkoutStore.updateBodyMeasurement`).
+        case edit(BodyMeasurementInfo)
     }
 
     var purpose: Purpose = .log
@@ -21,7 +23,7 @@ struct BodyweightSheet: View {
 
     var body: some View {
         VStack(spacing: DGSpace.s6) {
-            Text(purpose == .goal ? "Goal Bodyweight" : "Bodyweight").dgLabel()
+            Text(title).dgLabel()
             stepperRow
             Text(preferences.unitSymbol.uppercased()).dgLabel()
             quickSteps
@@ -33,20 +35,45 @@ struct BodyweightSheet: View {
                     .buttonStyle(.dgControl)
                     .dgLabel(DGColor.danger)
             }
+            if case .edit(let reading) = purpose {
+                Button("Delete reading") { deleteReading(reading) }
+                    .buttonStyle(.dgControl)
+                    .dgLabel(DGColor.danger)
+            }
         }
         .padding(.horizontal, DGSpace.s5)
         .padding(.top, DGSpace.s8)
         .padding(.bottom, DGSpace.s4)
-        .presentationDetents([.height(purpose == .goal ? 400 : 360)])
+        .presentationDetents([.height(purpose == .log ? 360 : 400)])
         .presentationDragIndicator(.visible)
         .presentationBackground(DGColor.surface1)
         .task { kg = initialKg }
     }
 
-    /// The current goal when editing it; otherwise the latest reading (a sensible goal start too).
+    private var title: String {
+        switch purpose {
+        case .log: "Bodyweight"
+        case .goal: "Goal Bodyweight"
+        case .edit(let reading): "Reading · \(Self.editDateLabel(reading.date))"
+        }
+    }
+
+    private static let editDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d MMM"
+        return formatter
+    }()
+
+    private static func editDateLabel(_ date: Date) -> String { editDateFormatter.string(from: date) }
+
+    /// The current goal when editing it, the reading's own weight when correcting one;
+    /// otherwise the latest reading (a sensible goal start too).
     private var initialKg: Double {
-        if purpose == .goal, let goal = preferences.bodyweightGoalKg { return goal }
-        return store.latestBodyMeasurement()?.bodyweightKg ?? kg
+        switch purpose {
+        case .goal: return preferences.bodyweightGoalKg ?? store.latestBodyMeasurement()?.bodyweightKg ?? kg
+        case .edit(let reading): return reading.kg
+        case .log: return store.latestBodyMeasurement()?.bodyweightKg ?? kg
+        }
     }
 
     private var stepperRow: some View {
@@ -102,6 +129,8 @@ struct BodyweightSheet: View {
         switch purpose {
         case .goal:
             preferences.bodyweightGoalKg = kg
+        case .edit(let reading):
+            store.updateBodyMeasurement(id: reading.id, kg: kg)
         case .log:
             // The pushed sample carries the measurement's *own* date, not a fresh `Date()` a few
             // milliseconds later: the two used to land at slightly different instants, and the
@@ -117,6 +146,11 @@ struct BodyweightSheet: View {
 
     private func clearGoal() {
         preferences.bodyweightGoalKg = nil
+        dismiss()
+    }
+
+    private func deleteReading(_ reading: BodyMeasurementInfo) {
+        store.deleteBodyMeasurement(id: reading.id)
         dismiss()
     }
 }

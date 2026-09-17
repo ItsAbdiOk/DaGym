@@ -57,33 +57,42 @@ struct YouSummary {
     }()
 }
 
-/// Week ring on the left, three stacked metrics on the right.
+/// Week ring on the left, three stacked metrics on the right. Every number is a door: the ring
+/// to Progress, Volume to This week › Trends, Streak to Consistency, Bodyweight to Body.
 struct YouWeekCard: View {
     let summary: YouSummary
+    var onOpen: (ScreenDestination) -> Void = { _ in }
     @Environment(Preferences.self) private var preferences
 
     var body: some View {
         HStack(spacing: DGSpace.s5) {
-            ring
+            Button { onOpen(.progress) } label: { ring }
+                .buttonStyle(.dgControl)
+                .accessibilityLabel("\(summary.thisWeekCount) of \(summary.weeklyGoal) sessions this week")
+                .accessibilityHint("Opens Progress")
+                .accessibilityIdentifier(A11yID.youRing)
             VStack(alignment: .leading, spacing: 13) {
-                metric(
-                    "Volume",
+                metric(Metric(
+                    label: "Volume",
                     value: preferences.formatVolume(kg: summary.volumeKg) + " " + preferences.unitSymbol,
                     trailing: summary.volumeDeltaPercent.map { Self.signed($0, suffix: "%") },
-                    trailingTint: DGColor.coralText
-                )
-                metric(
-                    "Streak", value: "\(summary.streakCurrent) w",
-                    trailing: "best \(summary.streakLongest)", trailingTint: DGColor.ink3
-                )
-                metric(
-                    "Bodyweight",
+                    trailingTint: DGColor.coralText, destination: .thisWeek(.trends),
+                    hint: "Opens This week", id: A11yID.youVolume
+                ))
+                metric(Metric(
+                    label: "Streak", value: "\(summary.streakCurrent) w",
+                    trailing: "best \(summary.streakLongest)", trailingTint: DGColor.ink3,
+                    destination: .thisWeek(.consistency), hint: "Opens Consistency", id: A11yID.youStreak
+                ))
+                metric(Metric(
+                    label: "Bodyweight",
                     value: summary.bodyweightKg.map { preferences.formatWeight(kg: $0) } ?? "—",
                     trailing: summary.bodyweightDeltaKg.map {
                         Self.signed(preferences.weightUnit.display(kg: $0), suffix: "", decimals: 1)
                     },
-                    trailingTint: DGColor.coralText
-                )
+                    trailingTint: DGColor.coralText, destination: .body, hint: "Opens Body",
+                    id: A11yID.youBodyweight
+                ))
             }
             Spacer(minLength: 0)
         }
@@ -111,25 +120,47 @@ struct YouWeekCard: View {
         }
         .frame(width: 104, height: 104)
         .padding(4)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(summary.thisWeekCount) of \(summary.weeklyGoal) sessions this week")
+        .accessibilityHidden(true)
     }
 
-    private func metric(_ label: String, value: String, trailing: String?, trailingTint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label).dgLabel()
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
-                Text(value)
-                    .font(.system(size: 20, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(DGColor.ink1)
-                if let trailing {
-                    Text(trailing)
-                        .font(DGFont.caption)
-                        .foregroundStyle(trailingTint)
+    /// One metric as a door: label with a small chevron, the value, the delta beside it.
+    private struct Metric {
+        var label: String
+        var value: String
+        var trailing: String?
+        var trailingTint: Color
+        var destination: ScreenDestination
+        var hint: String
+        var id: String
+    }
+
+    private func metric(_ metric: Metric) -> some View {
+        Button { onOpen(metric.destination) } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 4) {
+                    Text(metric.label).dgLabel()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(DGColor.ink1.opacity(0.3))
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text(metric.value)
+                        .font(.system(size: 20, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(DGColor.ink1)
+                    if let trailing = metric.trailing {
+                        Text(trailing)
+                            .font(DGFont.caption)
+                            .foregroundStyle(metric.trailingTint)
+                    }
                 }
             }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.dgRow)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(metric.hint)
+        .accessibilityIdentifier(metric.id)
     }
 
     private static func signed(_ value: Double, suffix: String, decimals: Int = 0) -> String {
@@ -144,28 +175,47 @@ struct YouUpNextCard: View {
     var onView: () -> Void
 
     var body: some View {
-        HStack(spacing: DGSpace.s3) {
-            VStack(alignment: .leading, spacing: 7) {
-                Text("Up next · \(next.weekday)")
-                    .dgLabel(.white.opacity(0.75))
-                Text("\(next.routineName) · \(next.exerciseCount) exercises")
-                    .font(DGFont.title3)
-                    .foregroundStyle(.white)
+        // The whole strip is the door, not just the pill: the View pill is overlaid so it stays
+        // a sibling of the card button rather than a button inside one.
+        Button(action: onView) {
+            HStack(spacing: DGSpace.s3) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Up next · \(next.weekday)")
+                        .dgLabel(.white.opacity(0.75))
+                    Text("\(next.routineName) · \(next.exerciseCount) exercises")
+                        .font(DGFont.title3)
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer()
+                viewPill.hidden()
             }
-            Spacer()
-            Button("View", action: onView)
-                .font(DGFont.caption)
-                .foregroundStyle(Color(hex: 0x1C1917))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(.white, in: Capsule())
-                .buttonStyle(DGPressStyle())
+            .padding(.vertical, 15)
+            .padding(.horizontal, 17)
+            .background(
+                Color(hex: 0x1C1917).opacity(0.94), in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
-        .padding(.vertical, 15)
-        .padding(.horizontal, 17)
-        .background(
-            Color(hex: 0x1C1917).opacity(0.94), in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-        )
+        .buttonStyle(.dgCard)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens the schedule")
+        .accessibilityIdentifier(A11yID.youUpNext)
+        .overlay(alignment: .trailing) {
+            Button(action: onView) { viewPill }
+                .buttonStyle(DGPressStyle())
+                .accessibilityHidden(true)
+                .padding(.trailing, 17)
+        }
+    }
+
+    private var viewPill: some View {
+        Text("View")
+            .font(DGFont.caption)
+            .foregroundStyle(Color(hex: 0x1C1917))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.white, in: Capsule())
     }
 }
 

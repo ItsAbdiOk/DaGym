@@ -135,12 +135,19 @@ extension ActiveWorkoutView {
     }
 
     /// "VOLUME 2.2 t · SETS 4 / 19 · PRS 1" — three flat tiles, kicker over a 15 pt tabular value.
+    /// Mid-workout there is nowhere to go from a number, so a tap says what it is instead.
     var statTiles: some View {
         let volume = Self.volumeTile(kg: session.volumeKg, preferences: preferences)
         return DGAdaptiveStack(spacing: DGSpace.s2, threshold: .accessibility3) {
-            WorkoutStatTile(kicker: "Volume", value: volume.value, suffix: volume.suffix)
-            WorkoutStatTile(kicker: "Sets", value: "\(session.setsDone) / \(session.setsTotal)")
-            WorkoutStatTile(kicker: "PRs", value: "\(session.prCount)")
+            WorkoutStatTile(kicker: "Volume", value: volume.value, suffix: volume.suffix) {
+                statNotice = WorkoutStatTile.explanation(kicker: "Volume")
+            }
+            WorkoutStatTile(kicker: "Sets", value: "\(session.setsDone) / \(session.setsTotal)") {
+                statNotice = WorkoutStatTile.explanation(kicker: "Sets")
+            }
+            WorkoutStatTile(kicker: "PRs", value: "\(session.prCount)") {
+                statNotice = WorkoutStatTile.explanation(kicker: "PRs")
+            }
         }
     }
 
@@ -192,27 +199,45 @@ struct WorkoutStatTile: View {
     var kicker: String
     var value: String
     var suffix: String?
+    /// A tap: the tile has no screen of its own, so it explains itself in a toast.
+    var onTap: () -> Void = {}
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(kicker).dgLabel()
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(value)
-                    .font(.system(size: 15, weight: .semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(DGColor.ink1)
-                if let suffix {
-                    Text(suffix)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(DGColor.ink3)
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(kicker).dgLabel()
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    Text(value)
+                        .font(.system(size: 15, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(DGColor.ink1)
+                    if let suffix {
+                        Text(suffix)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(DGColor.ink3)
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 9)
+            .dgTile(radius: 13)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 11)
-        .padding(.vertical, 9)
-        .dgTile(radius: 13)
+        .buttonStyle(.dgCard)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(value)\(suffix.map { " \($0)" } ?? ""), \(kicker)")
+        .accessibilityHint("Explains this number")
+    }
+
+    /// One line per tile saying how the number is made. Shared by the workout header and the
+    /// summary's tiles, so the two never explain the same figure differently.
+    static func explanation(kicker: String) -> String {
+        switch kicker {
+        case "Volume": "Volume = weight × reps of every completed set"
+        case "Sets": "Sets completed so far, out of every set planned"
+        case "PRs": "Personal records set this session — best weight, reps or estimated 1RM"
+        case "Time": "Time from the first set to Finish, rests included"
+        default: kicker
+        }
     }
 }

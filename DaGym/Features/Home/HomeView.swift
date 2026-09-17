@@ -5,6 +5,8 @@ import SwiftUI
 /// Home / Today — the app's landing screen. The redesign's hero card (today's routine or the
 /// rest day), the week / bodyweight tiles, the recovery row and the coach's nudges, all
 /// computed from real workout history. The streak moved to the You tab with the redesign.
+/// Today is a root tab, so it keeps its own stack: every number here is a door to the screen
+/// that owns it (`ScreenDestination`), pushed in place rather than shown as a sheet.
 struct HomeView: View {
     var routine: RoutineInfo?
     /// "Next: Pull B · Thursday" for the rest-day card, from `WorkoutStore.nextSession()`.
@@ -13,10 +15,9 @@ struct HomeView: View {
     var onStart: () -> Void
     var onFreestyle: () -> Void
     var onBackfill: () -> Void
-    var onSeeRecovery: () -> Void
-    var onOpenBody: () -> Void
-    /// "Pick another routine" in the start sheet switches the shell to the Train tab.
-    var onShowTrain: () -> Void
+    /// Switches the shell to the Train tab on a segment: "Pick another routine" in the start
+    /// sheet wants Routines, the rest-day card's "Up next" line wants Schedule.
+    var onShowTrain: (TrainSegment) -> Void
 
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
@@ -34,34 +35,42 @@ struct HomeView: View {
     @State private var otherRoutineNames: [String] = []
     @State private var bodyweightKg: Double?
     @State private var bodyweightDeltaKg: Double?
+    @State private var path = NavigationPath()
 
     var body: some View {
-        ZStack {
-            AmbientWash()
-            ScrollView {
-                VStack(alignment: .leading, spacing: DGSpace.s3) {
-                    header
-                    if preferences.sampleDataMode {
-                        SampleDataBanner(onClear: clearSampleData)
+        NavigationStack(path: $path) {
+            ZStack {
+                AmbientWash()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: DGSpace.s3) {
+                        header
+                        if preferences.sampleDataMode {
+                            SampleDataBanner(onClear: clearSampleData)
+                        }
+                        heroCard
+                        HStack(spacing: 10) {
+                            WeekTile(done: thisWeekCount, total: preferences.weeklyGoal) {
+                                push(.thisWeek(.trends))
+                            }
+                            BodyweightTile(kg: bodyweightKg, deltaKg: bodyweightDeltaKg) { push(.body) }
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                        RecoveryRow(map: recoveryMap) { push(.muscleMap(.fatigue)) }
+                        if let deloadSuggestion {
+                            DeloadStrip(
+                                reason: deloadSuggestion.reason, onPlan: planDeload, onSnooze: snoozeDeload,
+                                onExplain: { push(.insights) }
+                            )
+                        }
+                        WeekReviewCard()
                     }
-                    heroCard
-                    HStack(spacing: 10) {
-                        WeekTile(done: thisWeekCount, total: preferences.weeklyGoal)
-                        BodyweightTile(kg: bodyweightKg, deltaKg: bodyweightDeltaKg, onTap: onOpenBody)
-                    }
-                    .fixedSize(horizontal: false, vertical: true)
-                    RecoveryRow(map: recoveryMap, onSeeRecovery: onSeeRecovery)
-                    if let deloadSuggestion {
-                        DeloadStrip(
-                            reason: deloadSuggestion.reason, onPlan: planDeload, onSnooze: snoozeDeload
-                        )
-                    }
-                    WeekReviewCard()
+                    .padding(.horizontal, DGSpace.s4)
+                    // Clears the floating tab bar and the FAB `RootView` draws over this tab.
+                    .padding(.bottom, 110)
                 }
-                .padding(.horizontal, DGSpace.s4)
-                // Clears the floating tab bar and the FAB `RootView` draws over this tab.
-                .padding(.bottom, 110)
             }
+            .toolbar(.hidden, for: .navigationBar)
+            .screenDestinations()
         }
         .dgWarmHaptics()
         .task { refresh() }
@@ -74,7 +83,7 @@ struct HomeView: View {
                 routineNames: otherRoutineNames,
                 onFreestyle: { deferStart(onFreestyle) },
                 onBackfill: { deferStart(onBackfill) },
-                onPickRoutine: { deferStart(onShowTrain) },
+                onPickRoutine: { deferStart { onShowTrain(.routines) } },
                 onAskCoach: { deferStart { askingCoach = true } }
             )
         }
@@ -89,14 +98,21 @@ struct HomeView: View {
         } else if let routine {
             HomeHeroCard(
                 variant: .scheduled(routine: routine, isScheduled: hasSchedule),
-                onPrimary: onStart, onMore: { showingStartSheet = true }, onBodyMap: onSeeRecovery
+                onPrimary: onStart, onMore: { showingStartSheet = true },
+                onTitle: { push(.routine(routine.id)) }, onWeekLabel: { onShowTrain(.programs) },
+                onHits: { push(.muscleMap(.balance)) }
             )
         } else {
             HomeHeroCard(
                 variant: .rest(nextSessionText: nextSessionText),
-                onPrimary: onFreestyle, onMore: { showingStartSheet = true }, onBodyMap: onSeeRecovery
+                onPrimary: onFreestyle, onMore: { showingStartSheet = true },
+                onTitle: { onShowTrain(.schedule) }, onWeekLabel: {}, onHits: {}
             )
         }
+    }
+
+    private func push(_ destination: ScreenDestination) {
+        path.append(destination)
     }
 
     /// The scheduled routine itself comes from `RootView` (it owns "Start"); everything else
@@ -150,14 +166,28 @@ struct HomeView: View {
 
     private var header: some View {
         HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(Self.todayLabel)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(DGColor.ink3)
-                Text("Today")
-                    .font(DGFont.title1)
-                    .foregroundStyle(DGColor.ink1)
+            // The date is a door to the month calendar: someone who taps "Wednesday 17
+            // September" expects to see the month.
+            Button { push(.history) } label: {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 4) {
+                        Text(Self.todayLabel)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(DGColor.ink3)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(DGColor.ink1.opacity(0.3))
+                    }
+                    Text("Today")
+                        .font(DGFont.title1)
+                        .foregroundStyle(DGColor.ink1)
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.dgRow)
+            .accessibilityLabel("Today, \(Self.todayLabel)")
+            .accessibilityHint("Opens History")
+            .accessibilityIdentifier(A11yID.homeDate)
             Spacer()
             DGIconButton(symbol: "barcode", size: 38, accessibilityLabel: "Gym card") {
                 showingGymCard = true
@@ -181,8 +211,7 @@ struct HomeView: View {
 #Preview {
     if let container = try? ModelContainer.dagym(inMemory: true) {
         HomeView(
-            routine: SampleData.pushA, onStart: {}, onFreestyle: {}, onBackfill: {},
-            onSeeRecovery: {}, onOpenBody: {}, onShowTrain: {}
+            routine: SampleData.pushA, onStart: {}, onFreestyle: {}, onBackfill: {}, onShowTrain: { _ in }
         )
         .environment(WorkoutStore(context: container.mainContext))
         .environment(Preferences())
@@ -195,7 +224,7 @@ struct HomeView: View {
     if let container = try? ModelContainer.dagym(inMemory: true) {
         HomeView(
             routine: nil, nextSessionText: "Next: Pull B · Thursday", onStart: {}, onFreestyle: {},
-            onBackfill: {}, onSeeRecovery: {}, onOpenBody: {}, onShowTrain: {}
+            onBackfill: {}, onShowTrain: { _ in }
         )
         .environment(WorkoutStore(context: container.mainContext))
         .environment(Preferences())

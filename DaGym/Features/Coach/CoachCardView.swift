@@ -14,19 +14,33 @@ struct CoachCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             kicker
-            Text(card.title)
-                .font(DGFont.title3)
-                .foregroundStyle(DGColor.ink1)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 11)
-            Text(card.body)
-                .font(DGFont.subhead)
-                .foregroundStyle(DGColor.ink3)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 7)
-            if !card.evidence.isEmpty {
-                whyBox.padding(.top, DGSpace.s3)
+            // The claim and its evidence are a door to the screen that proves it (`CoachCardDoor`).
+            NavigationLink(value: CoachCardDoor.destination(for: card)) {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(alignment: .firstTextBaseline, spacing: DGSpace.s2) {
+                        Text(card.title)
+                            .font(DGFont.title3)
+                            .foregroundStyle(DGColor.ink1)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                        TrainChevron()
+                    }
+                    .padding(.top, 11)
+                    Text(card.body)
+                        .font(DGFont.subhead)
+                        .foregroundStyle(DGColor.ink3)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 7)
+                    if !card.evidence.isEmpty {
+                        whyBox.padding(.top, DGSpace.s3)
+                    }
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.dgRow)
+            .accessibilityHint("Opens \(CoachCardDoor.destination(for: card).title)")
             if let note = CoachCardCopy.actionNote(for: card.suggestedAction, formatWeight: formatWeight) {
                 Text(note)
                     .font(DGFont.caption)

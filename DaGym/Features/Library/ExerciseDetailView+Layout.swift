@@ -27,10 +27,22 @@ extension ExerciseDetailView {
     var heroCard: some View {
         VStack(spacing: DGSpace.s3) {
             heroMedia
-            Text(muscleAndEquipmentLine)
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink3)
-                .multilineTextAlignment(.center)
+            // The muscles line is a door to the map, where the same muscles are scored.
+            NavigationLink(value: ScreenDestination.muscleMap(.balance)) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(muscleAndEquipmentLine)
+                        .font(DGFont.footnote)
+                        .foregroundStyle(DGColor.ink3)
+                        .multilineTextAlignment(.center)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(DGColor.ink4)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.dgRow)
+            .accessibilityHint("Opens the muscle map")
+            .accessibilityIdentifier(A11yID.exerciseMuscles)
         }
         .frame(maxWidth: .infinity)
         .dgCard(radius: 20, padding: DGSpace.s4)
@@ -87,12 +99,25 @@ extension ExerciseDetailView {
         return parts.joined(separator: " · ")
     }
 
-    /// Three white tiles: best e1RM · best set · sessions.
-    var statTiles: some View {
+    /// Three white tiles: best e1RM · best set · sessions — each a door to where the number
+    /// comes from (the chart on that metric, or the recent-sessions card).
+    func statTiles(onJump: @escaping (StatDoor) -> Void) -> some View {
         DGAdaptiveStack(spacing: DGSpace.s2, threshold: .accessibility3) {
-            DetailStatTile(value: bestE1RMLabel, label: "Best e1RM")
-            DetailStatTile(value: exercise.bestSet ?? "—", label: "Best set")
-            DetailStatTile(value: "\(exercise.sessions)", label: "Sessions")
+            Button { onJump(.e1rm) } label: {
+                DetailStatTile(value: bestE1RMLabel, label: "Best e1RM")
+            }
+            .buttonStyle(.dgCard)
+            .accessibilityHint("Shows the 1RM chart")
+            Button { onJump(.topSet) } label: {
+                DetailStatTile(value: exercise.bestSet ?? "—", label: "Best set")
+            }
+            .buttonStyle(.dgCard)
+            .accessibilityHint("Shows the top-set chart")
+            Button { onJump(.sessions) } label: {
+                DetailStatTile(value: "\(exercise.sessions)", label: "Sessions")
+            }
+            .buttonStyle(.dgCard)
+            .accessibilityHint("Shows recent sessions")
         }
     }
 }

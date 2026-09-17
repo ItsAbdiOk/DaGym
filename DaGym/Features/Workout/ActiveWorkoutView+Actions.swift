@@ -254,6 +254,18 @@ extension ActiveWorkoutView {
             // Fetched when the sheet is asked for, not in this builder — SwiftUI may evaluate
             // sheet content more than once per presentation.
             AddRoutineSheet(routines: addRoutineChoices) { routine in appendRoutine(id: routine.id) }
+        case .exerciseDetail(let exercise):
+            // The full detail screen in its own stack: history, chart, notes, settings — and
+            // a Done, since a sheet has no back button. Its own pushes resolve here too.
+            NavigationStack {
+                ExerciseDetailView(exercise: exercise)
+                    .screenDestinations()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { activeSheet = nil }
+                        }
+                    }
+            }
         }
     }
 

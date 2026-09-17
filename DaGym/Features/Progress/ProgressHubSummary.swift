@@ -13,6 +13,7 @@ struct ProgressHubSummary {
     }
 
     struct Callout {
+        var muscle: Muscle
         var title: String
         var detail: String
     }
@@ -159,6 +160,7 @@ struct ProgressHubSummary {
         let had = gap.sets == 0 ? "had no sets" : "had \(BalanceMapSection.setsLabel(gap.sets))"
         let verb = gap.muscle.isPlural ? "have" : "has"
         return Callout(
+            muscle: gap.muscle,
             title: "\(gap.muscle.displayName) \(verb) \(had) in \(window) days",
             detail: "A couple of direct sets this week would close it"
         )

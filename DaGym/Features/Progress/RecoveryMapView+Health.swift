@@ -61,24 +61,31 @@ extension RecoveryMapView {
     }
 
     /// "52 / Resting HR" on a low ink wash; the date and 30-day trend go to VoiceOver only.
+    /// Each tile is a door to the Health settings that decide what is read.
     private func healthTile(value: String, label: String, date: Date, trend: String?) -> some View {
-        VStack(spacing: 6) {
-            Text(value)
-                .font(.system(size: 17, weight: .bold))
-                .monospacedDigit()
-                .foregroundStyle(DGColor.ink1)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(label)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(DGColor.ink3)
+        Button { isShowingHealthSettings = true } label: {
+            VStack(spacing: 6) {
+                Text(value)
+                    .font(.system(size: 17, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(DGColor.ink1)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(DGColor.ink3)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 8)
+            .background(
+                DGColor.ink1.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .padding(.horizontal, 8)
-        .background(DGColor.ink1.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .buttonStyle(.dgCard)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(tileAccessibilityLabel(label: label, value: value, date: date, trend: trend))
+        .accessibilityHint("Opens Apple Health settings")
     }
 
     private func tileAccessibilityLabel(label: String, value: String, date: Date, trend: String?) -> String {

@@ -27,9 +27,22 @@ struct EquipmentFilterBanner: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: DGSpace.s1) {
-            sentence
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink3)
+            // The sentence names the profile doing the hiding, so it opens Equipment profiles.
+            NavigationLink(value: ScreenDestination.equipmentProfiles) {
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    sentence
+                        .font(DGFont.footnote)
+                        .foregroundStyle(DGColor.ink3)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(DGColor.ink4)
+                }
+                .multilineTextAlignment(.leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.dgRow)
+            .accessibilityHint("Opens Equipment profiles")
+            .accessibilityIdentifier(A11yID.libraryProfileBanner)
             Button(showingAll ? "Only \(profileName)" : "Show all") { showingAll.toggle() }
                 .buttonStyle(.dgControl)
                 .font(DGFont.footnote.weight(.semibold))
@@ -37,7 +50,6 @@ struct EquipmentFilterBanner: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, DGSpace.s1)
-        .accessibilityElement(children: .combine)
     }
 
     /// The same words `title` returns, with the profile name in bold.

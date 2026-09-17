@@ -16,6 +16,8 @@ struct OnDeckExerciseCard: View {
     var onMore: () -> Void
     var onAddSet: () -> Void
     var onSwap: () -> Void
+    /// The name and the "Last 3" strip open the exercise's detail (history, chart, notes).
+    var onOpenExercise: () -> Void = {}
 
     @Environment(Preferences.self) private var preferences
 
@@ -64,16 +66,30 @@ struct OnDeckExerciseCard: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: DGSpace.s3) {
-            ExerciseThumbnail(exercise: entry.exercise, size: 44)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(entry.exercise.name)
-                    .font(.system(size: 16.5, weight: .semibold))
-                    .foregroundStyle(DGColor.ink1)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(entry.exercise.muscleLine)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(DGColor.ink3)
+            Button(action: onOpenExercise) {
+                HStack(alignment: .top, spacing: DGSpace.s3) {
+                    ExerciseThumbnail(exercise: entry.exercise, size: 44)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(entry.exercise.name)
+                                .font(.system(size: 16.5, weight: .semibold))
+                                .foregroundStyle(DGColor.ink1)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(DGColor.ink4)
+                        }
+                        Text(entry.exercise.muscleLine)
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(DGColor.ink3)
+                    }
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.dgRow)
+            .accessibilityElement(children: .combine)
+            .accessibilityHint("Opens the exercise")
             Spacer(minLength: 0)
             WorkoutRoundButton(
                 symbol: "ellipsis", size: 30, accessibilityLabel: "More options", action: onMore
@@ -135,27 +151,36 @@ struct OnDeckExerciseCard: View {
         return "Set \(step) of \(entry.sets.count) · rest \(rest) · increment \(increment)"
     }
 
+    /// "LAST 3 · 80×8 · 80×8 · 82.5×7 ▁▂▃ ›" — a door to the exercise's full history.
     private var lastSessionsStrip: some View {
-        HStack(spacing: DGSpace.s2) {
-            Text("Last 3").dgLabel()
-            Text(entry.lastSessions.joined(separator: " · "))
-                .font(.system(size: 12, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(DGColor.ink3)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            Spacer(minLength: DGSpace.s2)
-            // The three numbers beside it say the same thing in words.
-            Sparkline(values: entry.sparkline)
-                .frame(width: 46, height: 16)
-                .accessibilityHidden(true)
+        Button(action: onOpenExercise) {
+            HStack(spacing: DGSpace.s2) {
+                Text("Last 3").dgLabel()
+                Text(entry.lastSessions.joined(separator: " · "))
+                    .font(.system(size: 12, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(DGColor.ink3)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: DGSpace.s2)
+                // The three numbers beside it say the same thing in words.
+                Sparkline(values: entry.sparkline)
+                    .frame(width: 46, height: 16)
+                    .accessibilityHidden(true)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(DGColor.ink4)
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 9)
+            .background(
+                DGColor.ink1.opacity(0.045),
+                in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
+            )
         }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 9)
-        .background(
-            DGColor.ink1.opacity(0.045), in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
-        )
+        .buttonStyle(.dgCard)
         .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens the exercise's history")
     }
 }
 

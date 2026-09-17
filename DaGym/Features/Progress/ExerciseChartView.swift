@@ -7,6 +7,14 @@ import SwiftUI
 /// (plan.md §6.4).
 struct ExerciseChartView: View {
     var exerciseID: UUID
+    /// A metric asked for from outside (an Exercise detail stat tile): the chart switches to it
+    /// and clears the request, so the segment toggle keeps working afterwards.
+    @Binding var requestedMetric: Metric?
+
+    init(exerciseID: UUID, requestedMetric: Binding<Metric?> = .constant(nil)) {
+        self.exerciseID = exerciseID
+        _requestedMetric = requestedMetric
+    }
 
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
@@ -68,6 +76,11 @@ struct ExerciseChartView: View {
         .task { refresh() }
         .onChange(of: exerciseID) { _, _ in refresh() }
         .onChange(of: metric) { _, _ in rederive() }
+        .onChange(of: requestedMetric) { _, requested in
+            guard let requested else { return }
+            metric = requested
+            requestedMetric = nil
+        }
         .onChange(of: range) { _, _ in refresh() }
         .onChange(of: repsWeight) { _, _ in refreshRepsOnly() }
     }

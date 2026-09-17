@@ -15,7 +15,11 @@ struct BodyweightTile: View {
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Bodyweight").dgLabel()
+                HStack {
+                    Text("Bodyweight").dgLabel()
+                    Spacer(minLength: 0)
+                    HomeChevron()
+                }
                 HStack(alignment: .lastTextBaseline, spacing: 3) {
                     Text(kg.map { preferences.formatWeight(kg: $0) } ?? "—")
                         .font(.system(size: 24, weight: .bold))
@@ -42,6 +46,7 @@ struct BodyweightTile: View {
         .buttonStyle(DGPressStyle())
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint("Opens Body")
+        .accessibilityIdentifier(A11yID.homeBodyweightTile)
     }
 
     /// "−1.2 · 2.1 to go": the signed 30-day change, then the goal line when there is one.

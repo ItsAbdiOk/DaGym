@@ -14,29 +14,58 @@ struct HomeHeroCard: View {
     var variant: Variant
     var onPrimary: () -> Void
     var onMore: () -> Void
-    var onBodyMap: () -> Void
+    /// The title and meta line: the routine itself (the builder) when one is scheduled, the
+    /// Schedule segment on a rest day — "Next: Pull B · Thursday" is a door to the week plan.
+    var onTitle: () -> Void
+    /// "Week 3 of 8" beside the pill: the program that says so.
+    var onWeekLabel: () -> Void
+    /// The "HITS" muscles and the thumbnail: the muscle map.
+    var onHits: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: DGSpace.s2) {
                 HomeStatusPill(text: pillText)
                 if let weekLabel {
-                    Text(weekLabel)
-                        .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(DGColor.ink3)
+                    Button(action: onWeekLabel) {
+                        HStack(spacing: 3) {
+                            Text(weekLabel)
+                                .font(.system(size: 12.5, weight: .medium))
+                                .foregroundStyle(DGColor.ink3)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(DGColor.ink1.opacity(0.3))
+                        }
+                    }
+                    .buttonStyle(.dgControl)
+                    .accessibilityHint("Opens Programs")
                 }
             }
-            Text(title)
-                .font(.system(size: 25, weight: .bold))
-                .tracking(-0.5)
-                .foregroundStyle(DGColor.ink1)
-                .padding(.top, 14)
-            Text(meta)
-                .font(.system(size: 14))
-                .monospacedDigit()
-                .foregroundStyle(DGColor.ink3)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 7)
+            Button(action: onTitle) {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(alignment: .firstTextBaseline, spacing: DGSpace.s2) {
+                        Text(title)
+                            .font(.system(size: 25, weight: .bold))
+                            .tracking(-0.5)
+                            .foregroundStyle(DGColor.ink1)
+                            .multilineTextAlignment(.leading)
+                        HomeChevron()
+                    }
+                    .padding(.top, 14)
+                    Text(meta)
+                        .font(.system(size: 14))
+                        .monospacedDigit()
+                        .foregroundStyle(DGColor.ink3)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 7)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.dgRow)
+            .accessibilityHint(titleHint)
+            .accessibilityIdentifier(A11yID.homeHeroTitle)
             if case .scheduled(let routine, _) = variant {
                 hits(routine)
             }
@@ -68,37 +97,48 @@ struct HomeHeroCard: View {
         .dgCard(radius: DGRadius.xl)
     }
 
-    /// "HITS" kicker, the named muscles and the thumbnail, under a hairline.
+    /// "HITS" kicker, the named muscles and the thumbnail, under a hairline. The whole strip
+    /// is one door to the muscle map — the words and the figure say the same thing.
     private func hits(_ routine: RoutineInfo) -> some View {
         let lines = HomeHits.lines(summary: routine.hitSummary)
-        return HStack(alignment: .bottom) {
-            VStack(alignment: .leading, spacing: DGSpace.s2) {
-                Text("Hits").dgLabel()
-                Text(lines.named)
-                    .font(.system(size: 13.5, weight: .medium))
-                    .foregroundStyle(DGColor.ink1)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let light = lines.light {
-                    Text(light)
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(DGColor.ink3)
+        return Button(action: onHits) {
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: DGSpace.s2) {
+                    Text("Hits").dgLabel()
+                    Text(lines.named)
+                        .font(.system(size: 13.5, weight: .medium))
+                        .foregroundStyle(DGColor.ink1)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let light = lines.light {
+                        Text(light)
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(DGColor.ink3)
+                    }
                 }
-            }
-            .accessibilityElement(children: .combine)
-            Spacer(minLength: DGSpace.s3)
-            Button(action: onBodyMap) {
+                Spacer(minLength: DGSpace.s3)
                 BodyMapPair(intensity: routine.hitMap, height: 60)
+                HomeChevron()
             }
-            .buttonStyle(DGPressStyle())
-            .accessibilityLabel("Muscle map")
+            .padding(.top, 15)
+            .contentShape(Rectangle())
         }
-        .padding(.top, 15)
-        .padding(.bottom, 0)
+        .buttonStyle(.dgRow)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens the muscle map")
+        .accessibilityIdentifier(A11yID.homeHits)
         .overlay(alignment: .top) { Rectangle().fill(DGColor.hairline).frame(height: 0.5) }
         .padding(.top, 16)
     }
 
     // MARK: Copy
+
+    private var titleHint: String {
+        switch variant {
+        case .scheduled: "Opens the routine"
+        case .rest: "Opens the schedule"
+        }
+    }
 
     private var pillText: String {
         switch variant {
@@ -191,11 +231,11 @@ enum HomeHits {
     VStack(spacing: DGSpace.s3) {
         HomeHeroCard(
             variant: .scheduled(routine: SampleData.pushA, isScheduled: true),
-            onPrimary: {}, onMore: {}, onBodyMap: {}
+            onPrimary: {}, onMore: {}, onTitle: {}, onWeekLabel: {}, onHits: {}
         )
         HomeHeroCard(
             variant: .rest(nextSessionText: "Next: Pull B · Thursday"),
-            onPrimary: {}, onMore: {}, onBodyMap: {}
+            onPrimary: {}, onMore: {}, onTitle: {}, onWeekLabel: {}, onHits: {}
         )
     }
     .padding()

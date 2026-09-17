@@ -19,6 +19,8 @@ struct ExerciseCard: View {
     /// The on-deck card's "Add set" and "Swap" pills.
     var onAddSet: () -> Void = {}
     var onSwap: () -> Void = {}
+    /// The on-deck card's exercise name and "Last 3" strip: the exercise's detail sheet.
+    var onOpenExercise: () -> Void = {}
     var onStartTimed: (UUID) -> Void
     /// A cardio row's time / distance / incline tap: opens the keypad on that field.
     var onTapCardioField: (UUID, ActiveSheet.KeypadField) -> Void = { _, _ in }
@@ -44,7 +46,8 @@ struct ExerciseCard: View {
         } else if isOnDeck {
             OnDeckExerciseCard(
                 entry: entry, layout: layout, inventory: inventory, rows: rows(highlightsCurrent: true),
-                onTapWeight: onTapWeight, onMore: onMore, onAddSet: onAddSet, onSwap: onSwap
+                onTapWeight: onTapWeight, onMore: onMore, onAddSet: onAddSet, onSwap: onSwap,
+                onOpenExercise: onOpenExercise
             )
         } else {
             CollapsedExerciseRow(entry: entry, onStartTimed: onStartTimed)

@@ -7,13 +7,15 @@ import SwiftUI
 /// tab, so it keeps its own `NavigationStack`: the builder, the exercise library and Settings
 /// push onto it.
 struct RoutinesTabView: View {
+    /// Owned by `RootView`, so Today's "Up next" line can land on Schedule and a week label on
+    /// Programs rather than just switching the tab.
+    @Binding var segment: TrainSegment
     var onStart: (RoutineInfo) -> Void
 
     @Environment(WorkoutStore.self) private var store
     @State private var routines: [RoutineInfo] = []
     @State private var activeProfile: EquipmentProfileInfo?
     @State private var path = NavigationPath()
-    @State private var segment = TrainSegment.initial
     @State private var askingCoach = false
     /// The "Load a starter plan" sheet — the same `StarterPlanList` Home's empty-state card shows.
     @State private var pickingStarterPlan = false
@@ -60,6 +62,7 @@ struct RoutinesTabView: View {
             .navigationDestination(for: YouDestination.self) { destination in
                 destination.screen
             }
+            .screenDestinations()
             .task { refresh() }
             .refreshOnStoreChange(refresh)
         }
@@ -76,7 +79,7 @@ struct RoutinesTabView: View {
         case .routines:
             routineList
         case .programs:
-            ProgramsView()
+            ProgramsView(onOpenRoutine: { path.append(Destination.edit($0)) })
         case .schedule:
             ScheduleView(onPush: { path.append($0) })
         }
@@ -121,6 +124,23 @@ struct RoutinesTabView: View {
                     .overlay(alignment: .topTrailing) {
                         RoutineStartPill(routineName: routine.name) { onStart(routine) }
                             .padding(15)
+                    }
+                    // The equipment badge is a door to the profiles that decide it. Overlaid
+                    // for the same reason as Start: a button inside the card button would not
+                    // hit-test. The card draws a hidden twin in the same slot to reserve it.
+                    .overlay(alignment: .bottomLeading) {
+                        let missing = missingEquipment(for: routine)
+                        if !missing.isEmpty {
+                            Button { path.append(ScreenDestination.equipmentProfiles) } label: {
+                                RoutineEquipmentBadge(
+                                    missingNames: missing.joined(separator: ", "),
+                                    profileName: activeProfile?.name ?? ""
+                                )
+                            }
+                            .buttonStyle(.dgControl)
+                            .accessibilityHint("Opens Equipment profiles")
+                            .padding(15)
+                        }
                     }
                 }
                 TrainDashedButton(title: "New routine") { path.append(Destination.new) }
@@ -199,7 +219,8 @@ private struct RoutineCard: View {
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
             if !missingEquipment.isEmpty {
-                equipmentBadge
+                // Reserves the badge's slot; `RoutinesTabView` overlays the live button.
+                RoutineEquipmentBadge(missingNames: missingNames, profileName: profileName).hidden()
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -233,21 +254,31 @@ private struct RoutineStartPill: View {
     }
 }
 
-extension RoutineCard {
-    /// Amber on a warm wash — `prGoldText` is the one amber token stepped for small text.
-    private var equipmentBadge: some View {
+/// "Needs a leg press — not in Home": amber on a warm wash — `prGoldText` is the one amber
+/// token stepped for small text — ending in a chevron, because it opens Equipment profiles.
+private struct RoutineEquipmentBadge: View {
+    var missingNames: String
+    var profileName: String
+
+    var body: some View {
         HStack(spacing: 6) {
             Circle().fill(DGColor.warning).frame(width: 6, height: 6)
             Text("Needs \(missingNames) — not in \(profileName)")
                 .font(.system(size: 11.5, weight: .medium))
                 .foregroundStyle(DGColor.prGoldText)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(DGColor.prGoldText.opacity(0.7))
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 6)
         .background(DGColor.warning.opacity(0.13), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("Needs \(missingNames), not in the \(profileName) profile")
     }
+}
 
+extension RoutineCard {
     /// `missingEquipment` is already display names (`EquipmentNeeds.displayNames`).
     private var missingNames: String { missingEquipment.joined(separator: ", ") }
 
@@ -270,7 +301,7 @@ extension TrainSegment {
 
 #Preview {
     if let container = try? ModelContainer.dagym(inMemory: true) {
-        RoutinesTabView(onStart: { _ in })
+        RoutinesTabView(segment: .constant(.routines), onStart: { _ in })
             .environment(WorkoutStore(context: container.mainContext))
     } else {
         Text("Preview unavailable")

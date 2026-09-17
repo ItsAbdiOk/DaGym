@@ -5,8 +5,8 @@ import SwiftUI
 /// scheduled session, a six-tile "Go to" grid and three setup rows. Everything that used to be
 /// a tab of its own (Progress, Library, Coach) is one push away from here.
 struct YouHubView: View {
-    /// Switches the shell to the Train tab (the dark "Up next" card's View button).
-    var onShowTrain: () -> Void
+    /// Switches the shell to the Train tab (the dark "Up next" card) on a segment.
+    var onShowTrain: (TrainSegment) -> Void
 
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
@@ -20,9 +20,9 @@ struct YouHubView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: DGSpace.s3) {
                         header
-                        YouWeekCard(summary: summary)
+                        YouWeekCard(summary: summary) { path.append($0) }
                         if let next = summary.upNext {
-                            YouUpNextCard(next: next, onView: onShowTrain)
+                            YouUpNextCard(next: next) { onShowTrain(.schedule) }
                         }
                         Text("Go to").dgLabel().padding(.top, DGSpace.s2).padding(.horizontal, DGSpace.s1)
                         goToGrid
@@ -37,6 +37,7 @@ struct YouHubView: View {
             .navigationDestination(for: YouDestination.self) { destination in
                 destination.screen
             }
+            .screenDestinations()
         }
         .task { refresh() }
         .refreshOnStoreChange(refresh)

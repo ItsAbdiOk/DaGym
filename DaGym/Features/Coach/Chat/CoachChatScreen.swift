@@ -23,6 +23,7 @@ struct CoachChatScreen: View {
     @State var cardStates: [Int: CoachDraftCardState] = [:]
     @State var undoAction: UndoAction?
     @State var showingSettings = false
+    @State var showingUsage = false
     /// The last text sent, so a "Retry" on a transport failure can send it again.
     @State var lastSent: String?
     @State var dismissedError: OpenRouterError.Kind?
@@ -74,7 +75,6 @@ struct CoachChatScreen: View {
         }
         .navigationTitle("Coach")
         .toolbar(.hidden, for: .tabBar)
-        .navigationSubtitle(subtitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if isPresentedModally {
@@ -82,6 +82,9 @@ struct CoachChatScreen: View {
                     Button("Close") { dismiss() }.accessibilityIdentifier(A11yID.coachChatClose)
                 }
             }
+            // The title and its subtitle are one door: "Weekly review ready" starts the review,
+            // "$0.14 this month" opens the usage sheet that itemises it.
+            ToolbarItem(placement: .principal) { headerButton }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink("Insights") { InsightsScreen() }
                     .accessibilityIdentifier(A11yID.youInsights)
@@ -91,6 +94,7 @@ struct CoachChatScreen: View {
         .dgUndoToast($undoAction)
         .dgNoticeToast($toast)
         .sheet(isPresented: $showingSettings, onDismiss: refreshHeader) { SettingsView(standalone: true) }
+        .sheet(isPresented: $showingUsage, onDismiss: refreshHeader) { CoachUsageSheet() }
         .task { openLaunch() }
         .refreshOnStoreChange(refreshHeader)
         .onDisappear { engine?.cancel() }
@@ -113,6 +117,38 @@ struct CoachChatScreen: View {
         return CoachChatOpening.subtitle(
             reviewDue: reviewDue, ledger: ledger, now: Date(), calendar: preferences.trainingCalendar
         )
+    }
+
+    /// "Coach" over the subtitle, drawn as the bar's principal item so the pair can be tapped.
+    private var headerButton: some View {
+        Button(action: headerTapped) {
+            VStack(spacing: 1) {
+                Text("Coach")
+                    .font(.headline)
+                    .foregroundStyle(DGColor.ink1)
+                HStack(spacing: 3) {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(DGColor.ink3)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(DGColor.ink4)
+                }
+            }
+        }
+        .buttonStyle(.dgControl)
+        .accessibilityLabel("Coach, \(subtitle)")
+        .accessibilityHint(reviewDue ? "Starts the weekly review" : "Opens usage")
+        .accessibilityIdentifier(A11yID.coachHeader)
+    }
+
+    private func headerTapped() {
+        if reviewDue, isReady, let weekReview {
+            beginWeekReview(weekEnding: weekReview.weekEnding)
+        } else {
+            showingUsage = true
+        }
     }
 
     /// Re-reads what the header and the opening bubble show: the week's status, the recap and

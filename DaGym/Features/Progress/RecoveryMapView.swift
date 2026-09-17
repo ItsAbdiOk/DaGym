@@ -10,6 +10,9 @@ import SwiftUI
 struct RecoveryMapView: View {
     /// Which segment the screen opens on: Home wants Recovery, the Progress hub Balance.
     var initialMode = MuscleMapMode.fatigue
+    /// A muscle whose detail sheet opens as soon as the snapshot is in — the Progress hub's
+    /// "Top muscle" tile and a sets-per-muscle bar land on that muscle, not just the map.
+    var initialMuscle: Muscle?
 
     @Environment(WorkoutStore.self) private var store
     // Not `private`: `RecoveryMapView+Health.swift` (kept separate to stay under the
@@ -20,6 +23,7 @@ struct RecoveryMapView: View {
     @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
     @State private var snapshot = RecoverySnapshot(map: [:], perMuscle: [], untrainedMuscles: [])
     @State private var selected: MuscleRecovery?
+    @State private var didOpenInitialMuscle = false
     @State var recoverySignals: HealthInsightsService.RecoverySignals?
     @State var isShowingHealthSettings = false
     @State private var mode: MuscleMapMode
@@ -30,8 +34,9 @@ struct RecoveryMapView: View {
     @State private var balance: WorkoutStore.BodySeriesBundle?
     @State private var strength: [Muscle: [MuscleStrength.Entry]] = [:]
 
-    init(initialMode: MuscleMapMode = .fatigue) {
+    init(initialMode: MuscleMapMode = .fatigue, initialMuscle: Muscle? = nil) {
         self.initialMode = initialMode
+        self.initialMuscle = initialMuscle
         _mode = State(initialValue: initialMode)
     }
 
@@ -77,6 +82,14 @@ struct RecoveryMapView: View {
         // Same calendar Home and the coach use, so the same muscle can't read two ways.
         snapshot = store.recoverySnapshot(calendar: preferences.trainingCalendar)
         recoverySignals = await healthInsights.recoverySignals()
+        if let initialMuscle, selected == nil, !didOpenInitialMuscle {
+            didOpenInitialMuscle = true
+            // A sheet asked for while the push is still animating is dropped by SwiftUI;
+            // let the screen land first.
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            selectMuscle(initialMuscle)
+        }
     }
 
     /// What `.task(id:)` re-runs `loadMode()` for: a mode switch or a Balance control.
@@ -136,9 +149,11 @@ struct RecoveryMapView: View {
         )
     }
 
+    /// A muscle the snapshot has never seen still gets a sheet — one that says so — rather
+    /// than a tap that does nothing.
     private func selectMuscle(_ muscle: Muscle) {
-        guard let match = snapshot.perMuscle.first(where: { $0.muscle == muscle }) else { return }
-        selected = match
+        selected = snapshot.perMuscle.first(where: { $0.muscle == muscle })
+            ?? MuscleRecovery(muscle: muscle, fatigue: 0, spent: 0, recoveredBy: nil, contributors: [])
     }
 }
 

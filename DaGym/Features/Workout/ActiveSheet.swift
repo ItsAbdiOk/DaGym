@@ -9,6 +9,8 @@ enum ActiveSheet: Identifiable {
     case reorder
     case notes(exerciseID: UUID)
     case addRoutine
+    /// The on-deck exercise's detail (its name or "Last 3" strip tapped).
+    case exerciseDetail(ExerciseInfo)
 
     enum KeypadField: String {
         case weight, reps
@@ -32,6 +34,8 @@ enum ActiveSheet: Identifiable {
             "notes-\(exerciseID)"
         case .addRoutine:
             "add-routine"
+        case .exerciseDetail(let exercise):
+            "exercise-\(exercise.id)"
         }
     }
 }

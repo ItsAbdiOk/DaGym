@@ -14,6 +14,10 @@ struct WorkoutSummaryView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     /// The summary is shown the moment the workout ends, so its date kicker is simply now.
     @State private var shownAt = Date()
+    /// A stat tile's one-line explanation.
+    @State private var notice: String?
+    /// "Muscles hit" tapped: the muscle map, as a sheet since the summary has no stack.
+    @State private var showingMuscleMap = false
 
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -32,7 +36,11 @@ struct WorkoutSummaryView: View {
                     if !summary.achievements.isEmpty {
                         MilestoneUnlockedCard(achievements: summary.achievements)
                     }
-                    MusclesHitCard(musclesHit: summary.musclesHit)
+                    Button { showingMuscleMap = true } label: {
+                        MusclesHitCard(musclesHit: summary.musclesHit)
+                    }
+                    .buttonStyle(.dgCard)
+                    .accessibilityHint("Opens the muscle map")
                     if let facts = summary.debriefFacts {
                         DebriefCard(facts: facts)
                     }
@@ -44,6 +52,18 @@ struct WorkoutSummaryView: View {
             }
         }
         .background(DGColor.bgBase)
+        .dgNoticeToast($notice)
+        .sheet(isPresented: $showingMuscleMap) {
+            NavigationStack {
+                RecoveryMapView(initialMode: .fatigue)
+                    .screenDestinations()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { showingMuscleMap = false }
+                        }
+                    }
+            }
+        }
         .task {
             guard !summary.achievements.isEmpty else { return }
             Haptics.personalRecord()
@@ -66,9 +86,15 @@ struct WorkoutSummaryView: View {
 
     private var statRow: some View {
         DGAdaptiveStack(spacing: DGSpace.s2, threshold: .accessibility3) {
-            SummaryStatTile(value: WorkoutSession.clock(summary.durationSeconds), label: "Time")
-            SummaryStatTile(value: volumeText, label: "Volume")
-            SummaryStatTile(value: "\(summary.setsDone)", label: "Sets")
+            SummaryStatTile(value: WorkoutSession.clock(summary.durationSeconds), label: "Time") {
+                notice = WorkoutStatTile.explanation(kicker: "Time")
+            }
+            SummaryStatTile(value: volumeText, label: "Volume") {
+                notice = WorkoutStatTile.explanation(kicker: "Volume")
+            }
+            SummaryStatTile(value: "\(summary.setsDone)", label: "Sets") {
+                notice = "Sets completed in this workout"
+            }
         }
     }
 
@@ -153,29 +179,35 @@ private struct ShareCardMenuItems: View {
     }
 }
 
-/// A 20 pt bold value over an 11 pt label, centred, on a flat tile.
+/// A 20 pt bold value over an 11 pt label, centred, on a flat tile. The workout is not in
+/// History until Done, so a tap explains the number rather than going somewhere.
 private struct SummaryStatTile: View {
     var value: String
     var label: String
+    var onTap: () -> Void = {}
 
     var body: some View {
-        VStack(spacing: 6) {
-            Text(value)
-                .font(.system(size: 20, weight: .bold))
-                .monospacedDigit()
-                .foregroundStyle(DGColor.ink1)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(label)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(DGColor.ink3)
+        Button(action: onTap) {
+            VStack(spacing: 6) {
+                Text(value)
+                    .font(.system(size: 20, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(DGColor.ink1)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(DGColor.ink3)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, DGSpace.s3)
+            .padding(.vertical, 14)
+            .dgTile(radius: 18, opacity: 0.66)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, DGSpace.s3)
-        .padding(.vertical, 14)
-        .dgTile(radius: 18, opacity: 0.66)
+        .buttonStyle(.dgCard)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(value), \(label)")
+        .accessibilityHint("Explains this number")
     }
 }
 
@@ -288,9 +320,11 @@ private struct MusclesHitCard: View {
                 Text(line)
                     .font(.system(size: 12.5))
                     .foregroundStyle(DGColor.ink3)
+                    .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
+            TrainChevron()
         }
         .padding(DGSpace.s4)
         .dgTile(radius: 20, opacity: 0.66)

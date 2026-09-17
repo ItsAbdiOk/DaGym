@@ -10,6 +10,7 @@ struct CoachChatView: View {
     var body: some View {
         NavigationStack {
             CoachChatScreen(launch: launch, isPresentedModally: true)
+                .screenDestinations()
         }
     }
 }

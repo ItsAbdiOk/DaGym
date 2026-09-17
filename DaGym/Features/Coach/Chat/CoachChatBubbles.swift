@@ -42,8 +42,9 @@ struct CoachChatMessageRow: View {
 }
 
 /// The long-press menu every coach bubble and card shares: Copy, then one "Save as note for
-/// <Exercise>" per exercise the text names, then "Remember this". Each item says where the
-/// text ends up for VoiceOver.
+/// <Exercise>" per exercise the text names, then "Remember this", then "Open <Exercise>" for
+/// each of those exercises — a draft that names Bench Press is a door to Bench Press. Each
+/// item says where the text ends up for VoiceOver.
 struct CoachChatSaveMenu: View {
     var targets: [CoachChatSaveTarget]
     var onCopy: () -> Void
@@ -55,6 +56,27 @@ struct CoachChatSaveMenu: View {
             Button(target.menuLabel, systemImage: target.symbol) { onSave(target) }
                 .accessibilityLabel(target.accessibilityLabel)
         }
+        let exercises = Self.exercises(in: targets)
+        if !exercises.isEmpty {
+            Section {
+                ForEach(exercises, id: \.id) { exercise in
+                    NavigationLink(value: ScreenDestination.exercise(exercise.id)) {
+                        Label("Open \(exercise.name)", systemImage: "dumbbell")
+                    }
+                }
+            }
+        }
+    }
+
+    /// The exercises the targets name, once each, in order.
+    static func exercises(in targets: [CoachChatSaveTarget]) -> [(id: UUID, name: String)] {
+        var seen: Set<UUID> = []
+        var result: [(id: UUID, name: String)] = []
+        for target in targets {
+            guard case .exerciseNote(let id, let name, _) = target, seen.insert(id).inserted else { continue }
+            result.append((id: id, name: name))
+        }
+        return result
     }
 }
 

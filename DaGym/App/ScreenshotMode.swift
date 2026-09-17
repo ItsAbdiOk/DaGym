@@ -342,7 +342,7 @@ private struct ScreenshotScreenView: View {
         case .body:
             tabbed(.you) { NavigationStack { BodyView() } }
         case .routines:
-            tabbed(.train) { RoutinesTabView(onStart: { _ in }) }
+            tabbed(.train) { RoutinesTabView(segment: .constant(.routines), onStart: { _ in }) }
         case .builder:
             RoutineBuilderView(routineID: store.routines().first { $0.name == "Push A" }?.id, onDone: {})
         case .library:

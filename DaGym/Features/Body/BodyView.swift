@@ -20,9 +20,19 @@ struct BodyView: View {
     @State var composition: HealthInsightsService.BodyComposition?
     @State private var isLoggingWeight = false
     @State private var isEditingGoal = false
+    /// A manual reading tapped in the list, opened in the sheet to correct or delete.
+    @State private var editingReading: BodyMeasurementInfo?
     @State private var isSyncing = false
-    @State private var isShowingPhotos = false
+    @State private var photosLaunch: PhotosLaunch?
     @State var isShowingHealthSettings = false
+
+    /// How the photos sheet was opened: which pose to show, and whether to go straight to the
+    /// camera (an empty slot tapped).
+    private struct PhotosLaunch: Identifiable {
+        var pose: ProgressPhotoPose
+        var capture: Bool
+        var id: String { "\(pose.rawValue)-\(capture)" }
+    }
     /// The in-flight `refresh()`; a newer one cancels it so a slow HealthKit answer to an older
     /// save can't land after a newer one.
     @State private var refreshTask: Task<Void, Never>?
@@ -37,7 +47,13 @@ struct BodyView: View {
                         onLog: { isLoggingWeight = true }, onEditGoal: { isEditingGoal = true },
                         onSync: syncWithHealth
                     )
-                    ProgressPhotosCard(onOpen: { isShowingPhotos = true })
+                    ProgressPhotosCard(
+                        onOpen: { photosLaunch = PhotosLaunch(pose: .front, capture: false) },
+                        onCapture: { pose in
+                            let isEmpty = store.latestPhoto(pose: pose) == nil
+                            photosLaunch = PhotosLaunch(pose: pose, capture: isEmpty)
+                        }
+                    )
                     bodyCompositionCard
                     readingsList
                 }
@@ -58,8 +74,11 @@ struct BodyView: View {
             content: { BodyweightSheet() }
         )
         .sheet(isPresented: $isEditingGoal) { BodyweightSheet(purpose: .goal) }
-        .sheet(isPresented: $isShowingPhotos) {
-            PhotoLockGate { ProgressPhotosView() }
+        .sheet(item: $editingReading, onDismiss: scheduleRefresh) { reading in
+            BodyweightSheet(purpose: .edit(reading))
+        }
+        .sheet(item: $photosLaunch) { launch in
+            PhotoLockGate { ProgressPhotosView(initialPose: launch.pose, startsCapturing: launch.capture) }
         }
         .sheet(
             isPresented: $isShowingHealthSettings,
@@ -79,7 +98,10 @@ struct BodyView: View {
         } else {
             TrainRowGroup {
                 ForEach(Array(recent.enumerated()), id: \.element.id) { offset, reading in
-                    MeasurementRow(measurement: reading, isLast: offset == recent.count - 1)
+                    MeasurementRow(
+                        measurement: reading, isLast: offset == recent.count - 1,
+                        onEdit: reading.source == "manual" ? { editingReading = reading } : nil
+                    )
                 }
             }
         }
@@ -116,14 +138,28 @@ struct BodyView: View {
     func displayWeight(_ kg: Double) -> Double { preferences.weightUnit.display(kg: kg) }
 }
 
-/// One reading row: "Today / Manual / 82.4".
+/// One reading row: "Today / Manual / 82.4". A manual reading is a door to correcting it; a
+/// Health one is Health's to change, so it stays a plain row.
 private struct MeasurementRow: View {
     var measurement: BodyMeasurementInfo
     var isLast: Bool
+    var onEdit: (() -> Void)?
 
     @Environment(Preferences.self) private var preferences
 
     var body: some View {
+        if let onEdit {
+            Button(action: onEdit) { content(chevron: true) }
+                .buttonStyle(.dgRow)
+                .accessibilityElement(children: .combine)
+                .accessibilityHint("Edits this reading")
+        } else {
+            content(chevron: false)
+                .accessibilityElement(children: .combine)
+        }
+    }
+
+    private func content(chevron: Bool) -> some View {
         HStack(spacing: DGSpace.s3) {
             Text(Self.dateLabel(measurement.date))
                 .font(.system(size: 15))
@@ -136,12 +172,13 @@ private struct MeasurementRow: View {
                 .font(.system(size: 15, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(DGColor.ink1)
+            if chevron { TrainChevron() }
         }
         .padding(.horizontal, 15)
         .padding(.vertical, 12)
         .frame(minHeight: 44)
+        .contentShape(Rectangle())
         .trainRowDivider(isLast: isLast)
-        .accessibilityElement(children: .combine)
     }
 
     private static let dateFormatter: DateFormatter = {

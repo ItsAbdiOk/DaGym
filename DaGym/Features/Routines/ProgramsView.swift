@@ -7,9 +7,13 @@ import SwiftUI
 /// "Start a new one", and the "Let the coach build a program" card that opens
 /// `ProgramGeneratorSheet`.
 struct ProgramsView: View {
+    /// The active card's routine names open the builder on that routine (Train's own path).
+    var onOpenRoutine: (UUID) -> Void = { _ in }
+
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
     @State private var programs: [ProgramInfo] = []
+    @State private var routineNames: [UUID: String] = [:]
     @State private var showingGenerator = false
     @State private var startingKind: StarterProgramKind?
     @State private var stopping: ProgramInfo?
@@ -18,7 +22,12 @@ struct ProgramsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let active = programs.first(where: \.isActive) {
-                ActiveProgramCard(program: active, onStop: { stopping = active }, onShare: share(active))
+                ActiveProgramCard(
+                    program: active, routines: active.routineIDs.compactMap { id in
+                        routineNames[id].map { (id: id, name: $0) }
+                    },
+                    onStop: { stopping = active }, onShare: share(active), onOpenRoutine: onOpenRoutine
+                )
             }
             if !others.isEmpty {
                 kicker("Your programs")
@@ -125,7 +134,12 @@ struct ProgramsView: View {
 
     /// `preferences.trainingCalendar` carries `weekStartsMonday`, so the week a program says
     /// you're in is the same week the Progress tab and the widget draw.
-    private func refresh() { programs = store.programs(calendar: preferences.trainingCalendar) }
+    private func refresh() {
+        programs = store.programs(calendar: preferences.trainingCalendar)
+        routineNames = Dictionary(
+            store.routines().map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first }
+        )
+    }
 
     /// The one-tap starter path Home and the Routines empty state use (`adoptStarterPlan`):
     /// creates — or reuses — the kind's program and starts it.
@@ -154,8 +168,11 @@ struct ProgramsView: View {
 /// one-segment-per-week bar and Stop / Share.
 private struct ActiveProgramCard: View {
     var program: ProgramInfo
+    /// The program's routines in order, each a door to its builder.
+    var routines: [(id: UUID, name: String)] = []
     var onStop: () -> Void
     var onShare: (Bool) -> PlanDocument?
+    var onOpenRoutine: (UUID) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -175,6 +192,9 @@ private struct ActiveProgramCard: View {
                 .font(.system(size: 19, weight: .semibold))
                 .foregroundStyle(DGColor.ink1)
                 .padding(.top, 12)
+            if !routines.isEmpty {
+                routineChips.padding(.top, 10)
+            }
             ProgramWeekBar(program: program)
                 .padding(.top, 14)
             HStack(spacing: DGSpace.s2) {
@@ -185,6 +205,34 @@ private struct ActiveProgramCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .dgCard(radius: DGRadius.lg, padding: DGSpace.s4)
+    }
+
+    /// "Push A › Pull A › Legs A" as quiet chips: the routines the program runs, each opening
+    /// its builder, so the program is not a name you can only Stop or Share.
+    private var routineChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(routines, id: \.id) { routine in
+                    Button { onOpenRoutine(routine.id) } label: {
+                        HStack(spacing: 3) {
+                            Text(routine.name)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(DGColor.ink2)
+                                .lineLimit(1)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 8.5, weight: .bold))
+                                .foregroundStyle(DGColor.ink4)
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(DGColor.ink1.opacity(0.055), in: Capsule())
+                    }
+                    .buttonStyle(.dgControl)
+                    .accessibilityHint("Opens the routine")
+                }
+            }
+        }
+        .scrollClipDisabled()
     }
 }
 

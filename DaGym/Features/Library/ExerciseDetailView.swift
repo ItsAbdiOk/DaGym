@@ -22,6 +22,10 @@ struct ExerciseDetailView: View {
     @State var showingEdit = false
     @State private var confirmingDelete = false
     @State private var routinesUsing: [RoutineInfo] = []
+    /// A stat tile tapped: the chart below switches to that metric and scrolls into view.
+    @State var requestedMetric: ExerciseChartView.Metric?
+    static let chartAnchor = "exercise.chart"
+    static let sessionsAnchor = "exercise.sessions"
 
     /// Rest choices; `0` is "Default" — follow Settings → Default rest (and the training goal
     /// that set it) rather than pinning this exercise to its own number.
@@ -55,23 +59,28 @@ struct ExerciseDetailView: View {
     var body: some View {
         ZStack {
             AmbientWash()
-            ScrollView {
-                VStack(alignment: .leading, spacing: DGSpace.s3) {
-                    heroCard
-                    statTiles
-                    ExerciseChartView(exerciseID: exercise.id)
-                        .dgCard(radius: 20, padding: DGSpace.s4)
-                    settingsGroup
-                    customActionsGroup
-                    ExerciseTextCard(
-                        title: "Recent sessions", lines: lastSessions, emptyText: "No sessions logged yet.",
-                        tint: DGColor.ink1
-                    )
-                    ExerciseInstructionsCard(steps: instructionSteps)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: DGSpace.s3) {
+                        heroCard
+                        statTiles { jump($0, proxy: proxy) }
+                        ExerciseChartView(exerciseID: exercise.id, requestedMetric: $requestedMetric)
+                            .dgCard(radius: 20, padding: DGSpace.s4)
+                            .id(Self.chartAnchor)
+                        settingsGroup
+                        customActionsGroup
+                        ExerciseTextCard(
+                            title: "Recent sessions", lines: lastSessions,
+                            emptyText: "No sessions logged yet.",
+                            tint: DGColor.ink1
+                        )
+                        .id(Self.sessionsAnchor)
+                        ExerciseInstructionsCard(steps: instructionSteps)
+                    }
+                    .padding(.horizontal, DGSpace.s4)
+                    .padding(.top, DGSpace.s4)
+                    .padding(.bottom, 100)
                 }
-                .padding(.horizontal, DGSpace.s4)
-                .padding(.top, DGSpace.s4)
-                .padding(.bottom, 100)
             }
         }
         .navigationTitle(exercise.name)
@@ -107,6 +116,27 @@ struct ExerciseDetailView: View {
                 .foregroundStyle(exercise.isFavorite ? DGColor.prGold : DGColor.coralText)
         }
         .accessibilityLabel(exercise.isFavorite ? "Remove from favourites" : "Add to favourites")
+    }
+
+    /// Where a stat tile leads: Best e1RM and Best set to the chart on that metric, Sessions to
+    /// the recent-sessions card.
+    enum StatDoor {
+        case e1rm, topSet, sessions
+    }
+
+    private func jump(_ door: StatDoor, proxy: ScrollViewProxy) {
+        withAnimation(DGMotion.standard) {
+            switch door {
+            case .e1rm:
+                requestedMetric = .e1rm
+                proxy.scrollTo(Self.chartAnchor, anchor: .top)
+            case .topSet:
+                requestedMetric = .topSet
+                proxy.scrollTo(Self.chartAnchor, anchor: .top)
+            case .sessions:
+                proxy.scrollTo(Self.sessionsAnchor, anchor: .top)
+            }
+        }
     }
 
     func refresh() {

@@ -10,11 +10,17 @@ struct ProgressPhotosView: View {
     @Environment(Preferences.self) private var preferences
     @Environment(\.dismiss) private var dismiss
 
-    @State private var pose: ProgressPhotoPose = .front
+    @State private var pose: ProgressPhotoPose
     @State private var photos: [ProgressPhotoInfo] = []
-    @State private var isCapturing = false
+    @State private var isCapturing: Bool
     @State private var isComparing = false
     @State private var pendingDelete: ProgressPhotoInfo?
+
+    /// `startsCapturing` opens the camera straight away — an empty slot on the Body card.
+    init(initialPose: ProgressPhotoPose = .front, startsCapturing: Bool = false) {
+        _pose = State(initialValue: initialPose)
+        _isCapturing = State(initialValue: startsCapturing)
+    }
 
     var body: some View {
         NavigationStack {

@@ -20,33 +20,59 @@ struct HistoryView: View {
     var body: some View {
         ZStack {
             AmbientWash()
-            list
+            ScrollViewReader { proxy in
+                list(proxy: proxy)
+            }
         }
         .dgWarmHaptics()
     }
 
-    private var header: some View {
+    private func header(proxy: ScrollViewProxy) -> some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
-            tiles
-            calendar
+            tiles(proxy: proxy)
+            calendar.id(Self.calendarAnchor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var tiles: some View {
+    static let calendarAnchor = "history.calendar"
+    static let listAnchor = "history.listTop"
+
+    /// Three doors: Workouts scrolls to the list, "kg lifted" opens Records (where the tonnage
+    /// came from), This month scrolls to the calendar.
+    private func tiles(proxy: ScrollViewProxy) -> some View {
         DGAdaptiveStack(spacing: DGSpace.s2) {
-            ProgressStatTile(value: "\(workoutsCount)", label: "Workouts")
-            ProgressStatTile(
-                value: preferences.formatVolume(kg: volumeKg), label: "\(preferences.unitSymbol) lifted"
-            )
-            ProgressStatTile(value: "\(thisMonthCount)", label: "This month")
+            Button { scroll(to: Self.listAnchor, proxy: proxy) } label: {
+                ProgressStatTile(value: "\(workoutsCount)", label: "Workouts")
+            }
+            .buttonStyle(.dgCard)
+            .accessibilityHint("Shows the workout list")
+            .accessibilityIdentifier(A11yID.historyTile("Workouts"))
+            NavigationLink(value: ScreenDestination.thisWeek(.records)) {
+                ProgressStatTile(
+                    value: preferences.formatVolume(kg: volumeKg), label: "\(preferences.unitSymbol) lifted"
+                )
+            }
+            .buttonStyle(.dgCard)
+            .accessibilityHint("Opens Records")
+            .accessibilityIdentifier(A11yID.historyTile("lifted"))
+            Button { scroll(to: Self.calendarAnchor, proxy: proxy) } label: {
+                ProgressStatTile(value: "\(thisMonthCount)", label: "This month")
+            }
+            .buttonStyle(.dgCard)
+            .accessibilityHint("Shows the calendar")
+            .accessibilityIdentifier(A11yID.historyTile("This month"))
         }
     }
 
-    private var list: some View {
+    private func scroll(to anchor: String, proxy: ScrollViewProxy) {
+        withAnimation(DGMotion.standard) { proxy.scrollTo(anchor, anchor: .top) }
+    }
+
+    private func list(proxy: ScrollViewProxy) -> some View {
         let firstLabel = groups.first?.label
         return List {
-            header
+            header(proxy: proxy)
                 .padding(.horizontal, DGSpace.s4)
                 .padding(.top, DGSpace.s3)
                 .listRowInsets(EdgeInsets())
@@ -80,6 +106,7 @@ struct HistoryView: View {
                         .padding(.leading, DGSpace.s1)
                         .padding(.top, 6)
                         .padding(.bottom, -1)
+                        .id(group.label == firstLabel ? Self.listAnchor : group.label)
                 }
             }
         }

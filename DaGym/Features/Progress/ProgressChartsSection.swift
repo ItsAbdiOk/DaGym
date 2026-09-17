@@ -7,6 +7,8 @@ import SwiftUI
 struct ProgressChartsSection: View {
     /// Bumped by the owner whenever history changed; the series are re-read on every change.
     var generation = 0
+    /// A delta tile was tapped; the owner scrolls or switches segment (`ThisWeekView.jump`).
+    var onJump: (TrendsDoor) -> Void = { _ in }
 
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
@@ -16,9 +18,11 @@ struct ProgressChartsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
             if let bundle, !bundle.weeklyVolume.isEmpty {
-                ThisWeekStrip(thisWeek: bundle.thisWeek, lastWeek: bundle.lastWeek)
+                ThisWeekStrip(thisWeek: bundle.thisWeek, lastWeek: bundle.lastWeek, onJump: onJump)
                 WeeklyVolumeCard(weeks: bundle.weeklyVolume)
+                    .id(TrendsDoor.volume.anchor)
                 SetsPerMuscleCard(setsPerMuscle: bundle.setsPerMuscle)
+                    .id(TrendsDoor.sets.anchor)
                 // Hidden with effort tracking off, like every other effort surface.
                 if preferences.effortTrackingEnabled, let effort, effort.ratedSets > 0 {
                     EffortCard(bundle: effort)
@@ -44,28 +48,49 @@ struct ProgressChartsSection: View {
 struct ThisWeekStrip: View {
     var thisWeek: WorkoutStore.WeekStats
     var lastWeek: WorkoutStore.WeekStats
+    var onJump: (TrendsDoor) -> Void = { _ in }
 
     @Environment(Preferences.self) private var preferences
 
     var body: some View {
         // Four across normally; a 2×2 grid at accessibility sizes so the numbers keep their font.
+        // Every tile is a door: three to the card that explains it, "Avg time" to History,
+        // where each session's length is.
         DGAdaptiveGrid(columns: 4, spacing: DGSpace.s2) {
-            DeltaStat(
+            tile(
                 value: "\(preferences.formatVolume(kg: thisWeek.volumeKg)) \(preferences.unitSymbol)",
-                label: "Volume", delta: percentDelta(thisWeek.volumeKg, lastWeek.volumeKg)
-            )
-            DeltaStat(
-                value: "\(thisWeek.sets)", label: "Sets", delta: countDelta(thisWeek.sets, lastWeek.sets)
-            )
-            DeltaStat(
+                label: "Volume", delta: percentDelta(thisWeek.volumeKg, lastWeek.volumeKg),
+                hint: "Shows weekly volume"
+            ) { onJump(.volume) }
+            tile(
+                value: "\(thisWeek.sets)", label: "Sets", delta: countDelta(thisWeek.sets, lastWeek.sets),
+                hint: "Shows sets per muscle"
+            ) { onJump(.sets) }
+            tile(
                 value: "\(thisWeek.workouts)", label: "Workouts",
-                delta: countDelta(thisWeek.workouts, lastWeek.workouts)
-            )
-            DeltaStat(
-                value: Self.minutesLabel(thisWeek.avgDurationSeconds), label: "Avg time",
-                delta: minutesDelta(thisWeek.avgDurationSeconds, lastWeek.avgDurationSeconds)
-            )
+                delta: countDelta(thisWeek.workouts, lastWeek.workouts), hint: "Opens Consistency"
+            ) { onJump(.workouts) }
+            NavigationLink(value: ScreenDestination.history) {
+                DeltaStat(
+                    value: Self.minutesLabel(thisWeek.avgDurationSeconds), label: "Avg time",
+                    delta: minutesDelta(thisWeek.avgDurationSeconds, lastWeek.avgDurationSeconds)
+                )
+            }
+            .buttonStyle(.dgCard)
+            .accessibilityHint("Opens History")
+            .accessibilityIdentifier(A11yID.trendsTile("Avg time"))
         }
+    }
+
+    private func tile(
+        value: String, label: String, delta: String?, hint: String, action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            DeltaStat(value: value, label: label, delta: delta)
+        }
+        .buttonStyle(.dgCard)
+        .accessibilityHint(hint)
+        .accessibilityIdentifier(A11yID.trendsTile(label))
     }
 
     /// "54m" — the tile is too narrow for a clock.
@@ -237,37 +262,45 @@ struct SetsPerMuscleCard: View {
     }
 }
 
-/// One "Chest ████ 14" row.
+/// One "Chest ████ 14 ›" row, opening that muscle's detail on the map.
 private struct MuscleBarRow: View {
     var muscle: Muscle
     var sets: Double
     var maxSets: Double
 
     var body: some View {
-        HStack(spacing: 10) {
-            Text(muscle.displayName)
-                .font(.system(size: 12.5))
-                .foregroundStyle(DGColor.ink3)
-                .frame(width: 76, alignment: .leading)
-                .lineLimit(1)
-            GeometryReader { geo in
-                Capsule()
-                    .fill(DGColor.ink1.opacity(0.08))
-                    .overlay(alignment: .leading) {
-                        Capsule()
-                            .fill(fill)
-                            .frame(width: geo.size.width * min(1, sets / max(1, maxSets)))
-                    }
+        NavigationLink(value: ScreenDestination.muscleDetail(muscle)) {
+            HStack(spacing: 10) {
+                Text(muscle.displayName)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(DGColor.ink3)
+                    .frame(width: 76, alignment: .leading)
+                    .lineLimit(1)
+                GeometryReader { geo in
+                    Capsule()
+                        .fill(DGColor.ink1.opacity(0.08))
+                        .overlay(alignment: .leading) {
+                            Capsule()
+                                .fill(fill)
+                                .frame(width: geo.size.width * min(1, sets / max(1, maxSets)))
+                        }
+                }
+                .frame(height: 8)
+                Text(Self.setsLabel(sets))
+                    .font(.system(size: 12, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(DGColor.ink1)
+                    .frame(minWidth: 24, alignment: .trailing)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(DGColor.ink4)
             }
-            .frame(height: 8)
-            Text(Self.setsLabel(sets))
-                .font(.system(size: 12, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(DGColor.ink1)
-                .frame(minWidth: 24, alignment: .trailing)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.dgRow)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(muscle.displayName), \(Self.setsLabel(sets)) sets")
+        .accessibilityHint("Opens the muscle map")
     }
 
     private var fill: Color {

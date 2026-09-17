@@ -5,38 +5,49 @@ import SwiftUI
 /// recovery row and the tinted deload strip. Each is a `.dgCard(radius: 20)` with the
 /// prototype's 15 pt inset rather than the default hero padding.
 
-/// "THIS WEEK · 3 of 4" with one accent segment per workout toward the weekly goal.
+/// "THIS WEEK · 3 of 4" with one accent segment per workout toward the weekly goal, tapping
+/// through to Progress › This week.
 struct WeekTile: View {
     var done: Int
     var total: Int
+    var onTap: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("This week").dgLabel()
-            HStack(alignment: .lastTextBaseline, spacing: 3) {
-                Text("\(done)")
-                    .font(.system(size: 24, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(DGColor.ink1)
-                Text("of \(total)")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(DGColor.ink3)
-            }
-            .padding(.top, 9)
-            HStack(spacing: 4) {
-                ForEach(0..<max(total, 1), id: \.self) { index in
-                    Capsule()
-                        .fill(index < done ? DGColor.coral : DGColor.ink1.opacity(0.14))
-                        .frame(height: 5)
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("This week").dgLabel()
+                    Spacer(minLength: 0)
+                    HomeChevron()
                 }
+                HStack(alignment: .lastTextBaseline, spacing: 3) {
+                    Text("\(done)")
+                        .font(.system(size: 24, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(DGColor.ink1)
+                    Text("of \(total)")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(DGColor.ink3)
+                }
+                .padding(.top, 9)
+                HStack(spacing: 4) {
+                    ForEach(0..<max(total, 1), id: \.self) { index in
+                        Capsule()
+                            .fill(index < done ? DGColor.coral : DGColor.ink1.opacity(0.14))
+                            .frame(height: 5)
+                    }
+                }
+                .padding(.top, 11)
+                .accessibilityHidden(true)
             }
-            .padding(.top, 11)
-            .accessibilityHidden(true)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .dgCard(radius: 20, padding: 15)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .dgCard(radius: 20, padding: 15)
+        .buttonStyle(.dgCard)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("This week, \(done) of \(total) workouts")
+        .accessibilityHint("Opens This week")
+        .accessibilityIdentifier(A11yID.homeWeekTile)
     }
 }
 
@@ -74,6 +85,7 @@ struct RecoveryRow: View {
         .buttonStyle(DGPressStyle())
         .accessibilityElement(children: .combine)
         .accessibilityHint("Opens the muscle map")
+        .accessibilityIdentifier(A11yID.homeRecovery)
     }
 
     /// The most-spent muscle's stop on the recovery ramp, so the dot agrees with the map — and
@@ -96,17 +108,31 @@ struct DeloadStrip: View {
     var reason: String
     var onPlan: () -> Void
     var onSnooze: () -> Void
+    /// The title and reason: Insights, where the same finding sits with its evidence.
+    var onExplain: () -> Void
 
     var body: some View {
         HStack(spacing: DGSpace.s3) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("Deload week suggested")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(DGColor.ink1)
-                Text(reason)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(DGColor.ink3)
-                    .fixedSize(horizontal: false, vertical: true)
+                Button(action: onExplain) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 4) {
+                            Text("Deload week suggested")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(DGColor.ink1)
+                            HomeChevron()
+                        }
+                        Text(reason)
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(DGColor.ink3)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.dgRow)
+                .accessibilityHint("Opens Insights")
+                .accessibilityIdentifier(A11yID.homeDeloadExplain)
                 Button("Not now", action: onSnooze)
                     .buttonStyle(DGPressStyle())
                     .font(.system(size: 12.5, weight: .semibold))
@@ -146,11 +172,13 @@ struct HomeChevron: View {
 #Preview {
     VStack(spacing: DGSpace.s3) {
         HStack(spacing: 10) {
-            WeekTile(done: 3, total: 4)
-            WeekTile(done: 0, total: 3)
+            WeekTile(done: 3, total: 4, onTap: {})
+            WeekTile(done: 0, total: 3, onTap: {})
         }
         RecoveryRow(map: [.quads: 0.7, .chest: 0.1], onSeeRecovery: {})
-        DeloadStrip(reason: "Bench has stalled three sessions running.", onPlan: {}, onSnooze: {})
+        DeloadStrip(
+            reason: "Bench has stalled three sessions running.", onPlan: {}, onSnooze: {}, onExplain: {}
+        )
     }
     .padding()
     .background(AmbientWash())

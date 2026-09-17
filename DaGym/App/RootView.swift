@@ -17,10 +17,11 @@ struct RootView: View {
     @State private var session: WorkoutSession?
     @State private var summaryItem: SummaryPresentation?
     @State private var showingBackfill = false
-    @State private var showRecovery = false
     @State private var showingGymCard = false
-    @State private var showingBody = false
     @State private var showingWeighIn = false
+    /// Which face of Train is showing. Owned here so Today's doors ("Up next" → Schedule,
+    /// "Week 3 of 8" → Programs) can land on a segment, not just the tab.
+    @State private var trainSegment = TrainSegment.initial
     @State private var pendingWorkoutStart: (() -> Void)?
     @State private var pendingPlanImport: PlanDocument?
     @State private var pendingPlanReport: PlanImportReport?
@@ -74,12 +75,6 @@ struct RootView: View {
         }
         .sheet(isPresented: $showingGymCard) {
             GymCardSheet()
-        }
-        .sheet(isPresented: $showRecovery) {
-            NavigationStack { RecoveryMapView() }
-        }
-        .sheet(isPresented: $showingBody) {
-            NavigationStack { BodyView() }
         }
         .sheet(isPresented: $showingWeighIn, onDismiss: runPendingWorkoutStart) {
             BodyweightSheet()
@@ -360,23 +355,28 @@ private extension RootView {
                 HomeView(
                     routine: routine, nextSessionText: nextSessionText, onStart: startFromScheduledRoutine,
                     onFreestyle: startFreestyle, onBackfill: { showingBackfill = true },
-                    onSeeRecovery: { showRecovery = true }, onOpenBody: { showingBody = true },
-                    onShowTrain: { tab = .train }
+                    onShowTrain: showTrain
                 )
                 .environment(\.isTabVisible, isVisible(.today))
             } label: { tabLabel(.today) }
             Tab(value: DGTab.train) {
-                RoutinesTabView(onStart: startWorkout)
+                RoutinesTabView(segment: $trainSegment, onStart: startWorkout)
                     .environment(\.isTabVisible, isVisible(.train))
             } label: { tabLabel(.train) }
             Tab(value: DGTab.you) {
-                YouHubView(onShowTrain: { tab = .train })
+                YouHubView(onShowTrain: showTrain)
                     .environment(\.isTabVisible, isVisible(.you))
             } label: { tabLabel(.you) }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .tint(DGColor.coral) // the system bar's selected tint follows the accent theme
         .overlay(alignment: .bottomTrailing) { startFab }
+    }
+
+    /// Today's and You's cross-tab doors: land on Train showing `segment`.
+    func showTrain(_ segment: TrainSegment) {
+        trainSegment = segment
+        tab = .train
     }
 
     /// The prototype's floating "play" button: one tap starts today's routine (or a freestyle

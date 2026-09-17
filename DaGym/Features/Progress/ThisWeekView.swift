@@ -26,32 +26,52 @@ struct ThisWeekView: View {
     var body: some View {
         ZStack {
             AmbientWash()
-            ScrollView {
-                VStack(alignment: .leading, spacing: DGSpace.s3) {
-                    ProgressSegmentControl(
-                        selection: $segment, title: \.rawValue,
-                        accessibilityID: { A11yID.thisWeekSegment($0.rawValue) },
-                        controlLabel: "This week section"
-                    )
-                    .padding(.bottom, 2)
-                    switch segment {
-                    case .trends:
-                        ProgressChartsSection(generation: generation)
-                    case .records:
-                        RecordsSection(generation: generation)
-                    case .consistency:
-                        ConsistencySection(generation: generation)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: DGSpace.s3) {
+                        ProgressSegmentControl(
+                            selection: $segment, title: \.rawValue,
+                            accessibilityID: { A11yID.thisWeekSegment($0.rawValue) },
+                            controlLabel: "This week section"
+                        )
+                        .padding(.bottom, 2)
+                        switch segment {
+                        case .trends:
+                            ProgressChartsSection(generation: generation) { jump($0, proxy: proxy) }
+                        case .records:
+                            RecordsSection(generation: generation)
+                        case .consistency:
+                            ConsistencySection(generation: generation)
+                        }
                     }
+                    .padding(.horizontal, DGSpace.s4)
+                    .padding(.top, DGSpace.s3)
+                    .padding(.bottom, 110)
                 }
-                .padding(.horizontal, DGSpace.s4)
-                .padding(.top, DGSpace.s3)
-                .padding(.bottom, 110)
             }
         }
         .navigationTitle("This week")
         .navigationBarTitleDisplayMode(.inline)
         .refreshOnStoreChange { generation += 1 }
     }
+
+    /// A Trends tile is a door to the card that explains it: Volume and Sets scroll to their
+    /// charts, Workouts switches to Consistency (the week-by-week count lives there).
+    private func jump(_ door: TrendsDoor, proxy: ScrollViewProxy) {
+        switch door {
+        case .volume, .sets:
+            withAnimation(DGMotion.standard) { proxy.scrollTo(door.anchor, anchor: .top) }
+        case .workouts:
+            withAnimation(DGMotion.standard) { segment = .consistency }
+        }
+    }
+}
+
+/// Where a Trends tile leads. `anchor` is the scroll id of the card it points at.
+enum TrendsDoor: String {
+    case volume, sets, workouts
+
+    var anchor: String { "thisWeek.card.\(rawValue)" }
 }
 
 #Preview {

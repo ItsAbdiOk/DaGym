@@ -111,26 +111,6 @@ struct SetRow: View {
             .accessibilityLabel(SetKindBadge.accessibilityLabel(kind: set.kind, index: badgeIndex))
     }
 
-    /// "Warm-up" over "40 × 10" — the set's kind and last session's numbers for the same slot.
-    private var kindAndPrevious: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(set.kind.displayName)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(set.kind == .working ? DGColor.ink3 : set.kind.color)
-            Text(previousText)
-                .font(.system(size: 12))
-                .monospacedDigit()
-                .foregroundStyle(DGColor.ink3)
-        }
-        .lineLimit(1)
-        .padding(.leading, DGSpace.s1)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityLabel(SetRowAccessibility.previousLabel(
-            weight: set.previousWeightKg.map { preferences.formatWeight(kg: $0) },
-            reps: set.previousReps, unit: preferences.weightUnit.symbol
-        ))
-    }
-
     private var weightCell: some View {
         Button(action: onTapWeight) {
             Text(preferences.formatWeight(kg: set.weightKg))
@@ -290,6 +270,34 @@ struct SetRow: View {
     /// Done rows dim; open rows read at full ink.
     private var valueColor: Color {
         self.set.isDone ? DGColor.ink3 : DGColor.ink1
+    }
+}
+
+extension SetRow {
+    /// "Warm-up" over "40 × 10" — the set's kind and last session's numbers for the same slot.
+    /// Tapping the kind opens the set-type picker the swipe action also reaches.
+    private var kindAndPrevious: some View {
+        Button { showKindPicker = true } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(set.kind.displayName)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(set.kind == .working ? DGColor.ink3 : set.kind.color)
+                Text(previousText)
+                    .font(.system(size: 12))
+                    .monospacedDigit()
+                    .foregroundStyle(DGColor.ink3)
+            }
+            .lineLimit(1)
+            .padding(.leading, DGSpace.s1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.dgRow)
+        .accessibilityLabel(SetRowAccessibility.previousLabel(
+            weight: set.previousWeightKg.map { preferences.formatWeight(kg: $0) },
+            reps: set.previousReps, unit: preferences.weightUnit.symbol
+        ))
+        .accessibilityHint("Changes the set type")
     }
 }
 

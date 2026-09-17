@@ -78,6 +78,31 @@ extension WorkoutStore {
         return fetch(descriptor).compactMap(Self.measurementInfo)
     }
 
+    /// Rewrites one reading's weight (a Body reading row tapped and corrected). Only manual
+    /// rows: a Health-sourced row is Health's to change. Returns false when nothing was edited.
+    @discardableResult
+    func updateBodyMeasurement(id: UUID, kg: Double) -> Bool {
+        guard let model = bodyMeasurement(id: id), model.source == "manual" else { return false }
+        model.bodyweightKg = kg
+        save()
+        return true
+    }
+
+    /// Removes one manual reading. Returns false when it was not found or not manual.
+    @discardableResult
+    func deleteBodyMeasurement(id: UUID) -> Bool {
+        guard let model = bodyMeasurement(id: id), model.source == "manual" else { return false }
+        context.delete(model)
+        save()
+        return true
+    }
+
+    private func bodyMeasurement(id: UUID) -> BodyMeasurementModel? {
+        var descriptor = FetchDescriptor<BodyMeasurementModel>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        return fetchFirst(descriptor)
+    }
+
     private static func measurementInfo(_ model: BodyMeasurementModel) -> BodyMeasurementInfo? {
         guard let kg = model.bodyweightKg else { return nil }
         return BodyMeasurementInfo(id: model.id, date: model.date, kg: kg, source: model.source)

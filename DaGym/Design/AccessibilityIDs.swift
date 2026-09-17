@@ -12,6 +12,33 @@ enum A11yID {
     static let homeStartFab = "home.startFab"
     static let homeStartMore = "home.startMore"
     static let homeGymCard = "home.gymCard"
+    // Today's doors: the date kicker, the hero title, the week / bodyweight tiles, the hits line.
+    static let homeDate = "home.date"
+    static let homeHeroTitle = "home.heroTitle"
+    static let homeHits = "home.hits"
+    static let homeWeekTile = "home.weekTile"
+    static let homeBodyweightTile = "home.bodyweightTile"
+    static let homeRecovery = "home.recovery"
+    static let homeDeloadExplain = "home.deloadExplain"
+    // The You hub's week card doors.
+    static let youRing = "you.ring"
+    static let youVolume = "you.volume"
+    static let youStreak = "you.streak"
+    static let youBodyweight = "you.bodyweight"
+    static let youUpNext = "you.upNext"
+    // Progress hub doors.
+    static let progressRings = "progress.rings"
+    static let progressTopMuscle = "progress.topMuscle"
+    static let progressNeedsWork = "progress.needsWork"
+    static let progressCallout = "progress.callout"
+    // This week / History / Body / Coach / Library / Exercise doors.
+    static func trendsTile(_ label: String) -> String { "thisWeek.tile.\(label.lowercased())" }
+    static func historyTile(_ label: String) -> String { "history.tile.\(label.lowercased())" }
+    static let bodyLatest = "body.latest"
+    static let bodyGoal = "body.goal"
+    static let coachHeader = "coachChat.header"
+    static let libraryProfileBanner = "library.profileBanner"
+    static let exerciseMuscles = "exercise.muscles"
 
     static let tabToday = "tab.today"
     static let tabTrain = "tab.train"

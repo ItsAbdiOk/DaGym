@@ -19,26 +19,43 @@ struct BodyweightCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s4) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 9) {
-                    Text("Latest").dgLabel()
-                    latestValue
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 7) {
-                    if let move = thirtyDayMove {
-                        Text(move)
-                            .font(.system(size: 12.5, weight: .medium))
-                            .monospacedDigit()
-                            .foregroundStyle(DGColor.coralText)
+                // The latest number is a door to logging the next one; the goal line to the goal.
+                Button(action: onLog) {
+                    VStack(alignment: .leading, spacing: 9) {
+                        Text("Latest").dgLabel()
+                        latestValue
                     }
-                    if let goal = toGoal {
-                        Text(goal)
-                            .font(.system(size: 12.5))
-                            .monospacedDigit()
-                            .foregroundStyle(DGColor.ink3)
-                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.dgRow)
                 .accessibilityElement(children: .combine)
+                .accessibilityHint("Logs a reading")
+                .accessibilityIdentifier(A11yID.bodyLatest)
+                Spacer()
+                Button(action: onEditGoal) {
+                    VStack(alignment: .trailing, spacing: 7) {
+                        if let move = thirtyDayMove {
+                            Text(move)
+                                .font(.system(size: 12.5, weight: .medium))
+                                .monospacedDigit()
+                                .foregroundStyle(DGColor.coralText)
+                        }
+                        HStack(spacing: 3) {
+                            Text(toGoal ?? "Set a goal")
+                                .font(.system(size: 12.5))
+                                .monospacedDigit()
+                                .foregroundStyle(DGColor.ink3)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(DGColor.ink4)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.dgRow)
+                .accessibilityElement(children: .combine)
+                .accessibilityHint("Edits the goal")
+                .accessibilityIdentifier(A11yID.bodyGoal)
             }
             if chartPoints.isEmpty {
                 Text("Log your bodyweight to start the trend line.")
@@ -208,22 +225,36 @@ struct ProgressPhotosCard: View {
     @State private var isOnScreen = false
     @State private var cardRefreshTask: Task<Void, Never>?
 
+    /// A slot tapped: the photos screen opens on that pose, straight into the camera when the
+    /// slot is empty.
+    var onCapture: (ProgressPhotoPose) -> Void = { _ in }
+
     var body: some View {
-        Button(action: onOpen) {
-            VStack(alignment: .leading, spacing: DGSpace.s3) {
-                ProgressCardTitle(title: "Progress photos", trailing: "Compare")
-                HStack(spacing: DGSpace.s2) {
-                    ForEach(ProgressPhotoPose.allCases) { pose in slot(pose) }
+        VStack(alignment: .leading, spacing: DGSpace.s3) {
+            Button(action: onOpen) {
+                HStack(spacing: DGSpace.s1) {
+                    ProgressCardTitle(title: "Progress photos", trailing: "Compare")
+                    TrainChevron()
                 }
-                Text(lockLine)
-                    .font(.system(size: 12))
-                    .foregroundStyle(DGColor.ink3)
+                .contentShape(Rectangle())
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .buttonStyle(.dgRow)
+            .accessibilityHint("Opens progress photos")
+            HStack(spacing: DGSpace.s2) {
+                ForEach(ProgressPhotoPose.allCases) { pose in
+                    Button { onCapture(pose) } label: { slot(pose) }
+                        .buttonStyle(.dgControl)
+                        .accessibilityHint(
+                            latest[pose] == nil ? "Takes a \(pose.label) photo" : "Opens photos"
+                        )
+                }
+            }
+            Text(lockLine)
+                .font(.system(size: 12))
+                .foregroundStyle(DGColor.ink3)
         }
-        .buttonStyle(.dgCard)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .dgCard(radius: 20, padding: DGSpace.s4)
-        .accessibilityHint("Opens progress photos")
         .task { await refresh() }
         .onAppear { isOnScreen = true }
         .onDisappear { isOnScreen = false }

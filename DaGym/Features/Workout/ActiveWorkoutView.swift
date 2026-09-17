@@ -33,6 +33,8 @@ struct ActiveWorkoutView: View {
     @State var flashOpacity: Double = 0
     @State var chromeCollapse = ChromeCollapseState()
     @State var undoAction: UndoAction?
+    /// A header stat tile tapped: one line saying what the number is (`WorkoutStatTile.explanation`).
+    @State var statNotice: String?
     /// The "…" menu's one-session layout choice; nil means the saved `Preferences.workoutLayout`.
     /// Deliberately not written back — the default only changes in Settings › Workout.
     @State var layoutOverride: WorkoutLayout?
@@ -82,6 +84,7 @@ struct ActiveWorkoutView: View {
         .dgWarmHaptics()
         .overlay(alignment: .bottom) { bottomChrome }
         .dgUndoToast($undoAction)
+        .dgNoticeToast($statNotice)
         .overlay { Color.white.opacity(flashOpacity).ignoresSafeArea().allowsHitTesting(false) }
         .restLiveActivity(session: session, onSessionMutation: { store.sync(session: session) })
         .task {
@@ -266,6 +269,7 @@ struct ActiveWorkoutView: View {
             onMore: { menuExerciseID = entry.id },
             onAddSet: { addSet(exerciseID: entry.id, kind: .working) },
             onSwap: { activeSheet = .swap(entryID: entry.id, exercise: entry.exercise) },
+            onOpenExercise: { activeSheet = .exerciseDetail(entry.exercise) },
             onStartTimed: { setID in startTimedHold(exerciseID: entry.id, setID: setID) },
             onTapCardioField: { setID, field in
                 activeSheet = .keypad(exerciseID: entry.id, setID: setID, field: field)
