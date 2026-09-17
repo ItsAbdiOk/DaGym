@@ -182,7 +182,8 @@ struct CoachDraftProgramSectionTests {
     @Test("a program card groups exercises under each routine with its counts, never the name twice")
     func programSections() {
         let bench = CoachChatExerciseSpec(
-            exerciseName: "Barbell Bench Press - Medium Grip", sets: [.init(targetReps: 5, targetWeightKg: 90)]
+            exerciseName: "Barbell Bench Press - Medium Grip",
+            sets: [.init(targetReps: 5, targetWeightKg: 90)]
         )
         let push = RoutineProposal(name: "Push A", exercises: [bench, bench])
         let pull = RoutineProposal(name: "Pull B", exercises: [bench])
