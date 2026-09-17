@@ -135,6 +135,9 @@ struct AmbientWash: View {
                     .opacity(dark ? 0.14 : 0.45)
                     .position(x: width + 90, y: proxy.size.height + 80)
             }
+            // Three 90-pt blurs would otherwise be re-filtered every frame of a tab switch or a
+            // scroll; rasterised once per size they're a single texture.
+            .drawingGroup()
         }
         .ignoresSafeArea()
     }

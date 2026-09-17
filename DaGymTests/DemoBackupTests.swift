@@ -75,7 +75,7 @@ struct DemoBackupTests {
 /// current strength block where the bench stalls — enough texture for charts, records,
 /// consistency, recovery and the coach to all have something to say.
 @MainActor
-private struct DemoLifter {
+struct DemoLifter {
     typealias Lift = CoachEvalLift
     typealias Entry = CoachEvalStoreBuilder.Entry
 

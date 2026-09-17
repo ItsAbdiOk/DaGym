@@ -169,7 +169,7 @@ final class OnboardingWalkthroughTests: XCTestCase {
         // Home: the schedule shows the 5-session weekly goal.
         let start = app.buttons[A11yID.homeStart]
         XCTAssertTrue(start.waitForExistence(timeout: timeout), "home.start never appeared after onboarding")
-        let weeklyGoal = element(app, labelled: "Weekly goal, 0 of 5 workouts")
+        let weeklyGoal = element(app, labelled: "This week, 0 of 5 workouts")
         XCTAssertTrue(weeklyGoal.waitForExistence(timeout: timeout), "Home does not show the 5-session goal")
         let homeShot = XCTAttachment(screenshot: app.screenshot())
         homeShot.name = "home-after-onboarding"

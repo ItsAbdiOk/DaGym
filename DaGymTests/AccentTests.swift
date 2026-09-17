@@ -83,17 +83,14 @@ struct AccentTests {
         }
     }
 
-    @Test("coral is pinned to the shipped hex the app has always used")
+    @Test("the default accent is pinned to the redesign's terracotta")
     func coralMatchesShippedHex() throws {
-        // Pins the exact literal so a future accent refactor can't silently drift the default.
-        let shippedCoral = Color(hex: 0xF4705C)
-        #expect(DGAccent.coral.base(dark: true) == shippedCoral)
-        #expect(DGAccent.coral.base(dark: false) == shippedCoral)
-
-        let shippedCoralTextDark = Color(hex: 0xFF8F7A)
-        let shippedCoralTextLight = Color(hex: 0xB83E2A)
-        #expect(DGAccent.coral.text(dark: true) == shippedCoralTextDark)
-        #expect(DGAccent.coral.text(dark: false) == shippedCoralTextLight)
+        // Pins the exact literals (the prototype's `--ac` / `--act`) so a future accent refactor
+        // can't silently drift the default.
+        #expect(DGAccent.coral.base(dark: false) == Color(hex: 0xB4552F))
+        #expect(DGAccent.coral.base(dark: true) == Color(hex: 0xC96A42))
+        #expect(DGAccent.coral.text(dark: false) == Color(hex: 0x9A4524))
+        #expect(DGAccent.coral.text(dark: true) == Color(hex: 0xE59470))
     }
 
     @Test("coral, coralText, coralWash and hitSteps are the same value on every read within one accent")

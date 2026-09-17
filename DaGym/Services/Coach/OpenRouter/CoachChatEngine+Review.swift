@@ -52,13 +52,21 @@ extension CoachChatEngine {
     /// text-only reply, a failure, a cancellation or the round cap.
     private func runReview(_ session: ReviewSession, prompt: String) async -> ReviewOutcome {
         let system = systemPrompt + CoachChatPrompt.reviewerAddendum(drafterName: session.drafterName)
-        var wire: [OpenRouterWire.Message] = [.system(system), .user(prompt)]
+        // Both fixed messages are cache breakpoints: rounds two to four of one review re-read
+        // the prompt and the quoted evidence at the cached rate (Anthropic models honour it;
+        // others ignore the part's `cache_control`).
+        var wire: [OpenRouterWire.Message] = [
+            .system(system).cachedForProvider(), .user(prompt).cachedForProvider()
+        ]
         var outcome = ReviewOutcome()
         for round in 0..<Self.maxReviewRounds {
-            let request = OpenRouterWire.ChatRequest(
+            var request = OpenRouterWire.ChatRequest(
                 model: session.reviewerModelID, messages: wire,
                 tools: reviewerTools.isEmpty ? nil : reviewerTools, maxTokens: configuration.maxTokens
             )
+            // The reviewer checks a plan against quoted numbers; it does not need the drafter's
+            // "high" reasoning budget, and on the reviewer model that budget was most of the bill.
+            request.reasoning = OpenRouterWire.Reasoning(effort: "medium")
             Self.trace("review \(session.reviewIndex) round \(round): \(request.messages.count) messages")
             let reply: Reply
             do {

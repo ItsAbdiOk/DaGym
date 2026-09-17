@@ -113,6 +113,12 @@ final class WorkoutStore {
     /// filled from inside a view's `body`.
     @ObservationIgnored var cachedCatalogue: (token: Int, catalogue: ExerciseCatalogue)?
 
+    /// `deloadSuggestion(...)`'s last answer, keyed by everything it depends on. The deload
+    /// judgement walks every programmed lift's history (~140 ms on a year of training) and
+    /// Home and You both ask for it on every appearance and every store change; between two
+    /// saves on the same day the answer cannot differ.
+    @ObservationIgnored var cachedDeloadSuggestion: DeloadSuggestionMemo?
+
     /// Where the store reads the lifter's units from when a caller doesn't pass one. Defaults to
     /// the same `UserDefaults.standard` keys `Preferences` writes; `DaGymApp` may hand in the
     /// live `Preferences` instead so the two can never disagree. See `WorkoutStore+Units.swift`.

@@ -75,6 +75,12 @@ final class FakeOpenRouterTransport: OpenRouterTransport, Sendable {
         return OpenRouterTransportReply(response: response, lines: stream)
     }
 
+    /// The raw JSON body of the `index`th request, for wire-shape assertions.
+    func requestBody(at index: Int) -> String? {
+        let body = requests.withLock { $0.indices.contains(index) ? $0[index].httpBody : nil }
+        return body.flatMap { String(data: $0, encoding: .utf8) }
+    }
+
     /// The JSON body of the `index`th request, decoded as a `ChatRequest`.
     func chatRequest(at index: Int) -> OpenRouterWire.ChatRequest? {
         let body = requests.withLock { $0.indices.contains(index) ? $0[index].httpBody : nil }

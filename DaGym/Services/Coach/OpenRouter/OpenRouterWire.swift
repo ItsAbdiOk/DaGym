@@ -62,6 +62,11 @@ enum OpenRouterWire {
         var content: String?
         var toolCalls: [ToolCall]?
         var toolCallId: String?
+        /// Anthropic prompt caching through OpenRouter: the message is sent as a text part with
+        /// a `cache_control` breakpoint, so the next round of the same conversation re-reads it
+        /// at the cached-input rate instead of paying full price for the system prompt and the
+        /// quoted evidence again. Only ever set on requests; never decoded, never archived.
+        var cached = false
 
         init(role: Role, content: String?, toolCalls: [ToolCall]? = nil, toolCallId: String? = nil) {
             self.role = role
@@ -83,6 +88,56 @@ enum OpenRouterWire {
             case role, content
             case toolCalls = "tool_calls"
             case toolCallId = "tool_call_id"
+        }
+
+        /// Accepts `content` as a string or as text parts (what `cached` encodes), so a request
+        /// round-trips in tests and any archived transcript still decodes.
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            role = try container.decode(Role.self, forKey: .role)
+            if let parts = try? container.decode([CachedTextPart].self, forKey: .content) {
+                content = parts.map(\.text).joined()
+                cached = true
+            } else {
+                content = try container.decodeIfPresent(String.self, forKey: .content)
+            }
+            toolCalls = try container.decodeIfPresent([ToolCall].self, forKey: .toolCalls)
+            toolCallId = try container.decodeIfPresent(String.self, forKey: .toolCallId)
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(role, forKey: .role)
+            if cached, let content {
+                try container.encode([CachedTextPart(text: content)], forKey: .content)
+            } else {
+                try container.encodeIfPresent(content, forKey: .content)
+            }
+            try container.encodeIfPresent(toolCalls, forKey: .toolCalls)
+            try container.encodeIfPresent(toolCallId, forKey: .toolCallId)
+        }
+
+        /// A `Message` with `cached` set.
+        func cachedForProvider() -> Message {
+            var copy = self
+            copy.cached = true
+            return copy
+        }
+    }
+
+    /// `{"type":"text","text":…,"cache_control":{"type":"ephemeral"}}`.
+    struct CachedTextPart: Codable, Equatable, Sendable {
+        var type = "text"
+        var text: String
+        var cacheControl = CacheControl()
+
+        struct CacheControl: Codable, Equatable, Sendable {
+            var type = "ephemeral"
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case type, text
+            case cacheControl = "cache_control"
         }
     }
 

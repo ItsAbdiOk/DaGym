@@ -137,6 +137,9 @@ struct HomeSnapshotTests {
             snoozedUntil: nil, weeklyGoal: preferences.weeklyGoal, now: now, calendar: calendar
         )
         let delegated = store.queryCount - before
+        // The deload judgement is memoised per change token and day, so the snapshot's own
+        // call below costs nothing; drop it from the delegated count.
+        store.cachedDeloadSuggestion = nil
 
         before = store.queryCount
         _ = HomeSnapshot.make(store: store, preferences: preferences, now: now)

@@ -58,7 +58,8 @@ enum DGAccent: String, CaseIterable, Codable, Hashable {
         case .coral:
             Color(hex: dark ? 0xE59470 : 0x9A4524)
         case .ember:
-            Color(hex: dark ? 0xF1ECE4 : 0x1C1917)
+            // A step softer than the base so small text isn't the same weight as a filled button.
+            Color(hex: dark ? 0xE3DDD4 : 0x3A3532)
         case .lime:
             Color(hex: dark ? 0x8CCBA3 : 0x2D6B49)
         case .ice:

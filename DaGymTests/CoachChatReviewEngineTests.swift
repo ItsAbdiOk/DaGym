@@ -90,6 +90,11 @@ struct CoachChatReviewEngineTests {
         #expect(request.model == Self.reviewer)
         #expect(request.tools?.count == CoachChatToolCatalog.reviewerTools.count)
         #expect(request.messages.map(\.role) == [.system, .user])
+        // Both fixed messages go out as cache breakpoints, and the reviewer thinks at "medium".
+        #expect(request.messages.map(\.cached) == [true, true])
+        #expect(request.reasoning?.effort == "medium")
+        let raw = try #require(transport.requestBody(at: 2))
+        #expect(raw.contains(#""cache_control":{"type":"ephemeral"}"#))
         let system = try #require(request.messages.first?.content)
         #expect(system.hasPrefix("You are a coach."))
         #expect(system.contains("Gemini 3.1 Pro has read the same data"))

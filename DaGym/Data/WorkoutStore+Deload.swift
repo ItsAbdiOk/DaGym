@@ -11,6 +11,14 @@ struct DeloadSuggestionInfo: Hashable {
     var fingerprint: String
 }
 
+/// See `WorkoutStore.cachedDeloadSuggestion`.
+struct DeloadSuggestionMemo {
+    var token: Int
+    var day: Date
+    var weeklyGoal: Int
+    var value: DeloadSuggestionInfo?
+}
+
 extension WorkoutStore {
     /// A suggested deload from stalls, e1RM regression, rising RPE at the same load, or
     /// accumulated hard weeks (plan.md §6.5) — nil when nothing warrants one, the user snoozed it
@@ -26,6 +34,21 @@ extension WorkoutStore {
         snoozedUntil: Date?, weeklyGoal: Int = 4, now: Date = Date(), calendar: Calendar = .current
     ) -> DeloadSuggestionInfo? {
         if let snoozedUntil, snoozedUntil > now { return nil }
+        let day = calendar.startOfDay(for: now)
+        if let memo = cachedDeloadSuggestion, memo.token == changeToken, memo.day == day,
+           memo.weeklyGoal == weeklyGoal {
+            return memo.value
+        }
+        let value = computeDeloadSuggestion(weeklyGoal: weeklyGoal, now: now, calendar: calendar)
+        cachedDeloadSuggestion = DeloadSuggestionMemo(
+            token: changeToken, day: day, weeklyGoal: weeklyGoal, value: value
+        )
+        return value
+    }
+
+    private func computeDeloadSuggestion(
+        weeklyGoal: Int, now: Date, calendar: Calendar
+    ) -> DeloadSuggestionInfo? {
         // Fetched once and shared: `coachLiftSnapshots` would otherwise re-query the whole
         // finished-workout list once per lift.
         let finishedWorkouts = finishedWorkoutModelsNewestFirst()
