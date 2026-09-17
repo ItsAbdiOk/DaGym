@@ -38,64 +38,63 @@ struct LibraryView: View {
     private static let resultsAnchor = "library.results"
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AmbientWash()
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: DGSpace.s5) {
-                            if let profile, profile.restrictsLibrary {
-                                EquipmentFilterBanner(
-                                    profileName: profile.name, hidden: hidden, showingAll: $showAllEquipment
-                                )
-                            }
-                            byMuscleButton
-                            if showingMuscleMap {
-                                LibraryMuscleMapCard(
-                                    counts: facets.muscleCounts, selected: selectedMuscle,
-                                    includeSecondary: $includeSecondary
-                                ) { muscle in select(muscle, scrolling: proxy) }
-                            }
-                            muscleChipRow
-                            equipmentChipRow
-                            sectionLabel.id(Self.resultsAnchor)
-                            rows
+        ZStack {
+            AmbientWash()
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: DGSpace.s5) {
+                        if let profile, profile.restrictsLibrary {
+                            EquipmentFilterBanner(
+                                profileName: profile.name, hidden: hidden, showingAll: $showAllEquipment
+                            )
                         }
-                        .padding(.horizontal, DGSpace.s4)
-                        .padding(.top, DGSpace.s3)
-                        .padding(.bottom, DGSpace.s6)
+                        byMuscleButton
+                        if showingMuscleMap {
+                            LibraryMuscleMapCard(
+                                counts: facets.muscleCounts, selected: selectedMuscle,
+                                includeSecondary: $includeSecondary
+                            ) { muscle in select(muscle, scrolling: proxy) }
+                        }
+                        muscleChipRow
+                        equipmentChipRow
+                        sectionLabel.id(Self.resultsAnchor)
+                        rows
                     }
+                    .padding(.horizontal, DGSpace.s4)
+                    .padding(.top, DGSpace.s3)
+                    .padding(.bottom, DGSpace.s6)
                 }
             }
-            .navigationTitle("Library")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button("New exercise", systemImage: "plus") { showingNewExercise = true }
-                }
-            }
-            .searchable(
-                text: $searchText, placement: searchPlacement, prompt: "Search \(totalCount) exercises"
-            )
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .sheet(isPresented: $showingNewExercise) {
-                NewExerciseSheet { _ in refresh() }
-            }
-            .task { reload() }
-            .refreshOnStoreChange(reload)
-            .onChange(of: showAllEquipment) { _, _ in refresh() }
-            // Debounced: a fast typist's intermediate strings are never filtered at all.
-            .task(id: searchText) {
-                try? await Task.sleep(for: .milliseconds(150))
-                guard !Task.isCancelled else { return }
-                refresh()
-            }
-            .onChange(of: selectedMuscle) { _, _ in refresh() }
-            .onChange(of: selectedEquipment) { _, _ in refresh() }
-            .onChange(of: favoritesOnly) { _, _ in refresh() }
-            .onChange(of: customOnly) { _, _ in refresh() }
-            .onChange(of: includeSecondary) { _, _ in refresh() }
         }
+        .navigationTitle("Library")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("New exercise", systemImage: "plus") { showingNewExercise = true }
+            }
+        }
+        .searchable(
+            text: $searchText, placement: searchPlacement, prompt: "Search \(totalCount) exercises"
+        )
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
+        .sheet(isPresented: $showingNewExercise) {
+            NewExerciseSheet { _ in refresh() }
+        }
+        .task { reload() }
+        .refreshOnStoreChange(reload)
+        .onChange(of: showAllEquipment) { _, _ in refresh() }
+        // Debounced: a fast typist's intermediate strings are never filtered at all.
+        .task(id: searchText) {
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            refresh()
+        }
+        .onChange(of: selectedMuscle) { _, _ in refresh() }
+        .onChange(of: selectedEquipment) { _, _ in refresh() }
+        .onChange(of: favoritesOnly) { _, _ in refresh() }
+        .onChange(of: customOnly) { _, _ in refresh() }
+        .onChange(of: includeSecondary) { _, _ in refresh() }
         .dgWarmHaptics()
     }
 

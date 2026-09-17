@@ -47,13 +47,13 @@ struct ProgramGeneratorSheet: View {
                     .padding(.bottom, DGSpace.s10)
                 }
             }
-            .navigationTitle(preview == nil ? "Build a Program" : "Preview")
+            .navigationTitle(preview == nil ? "Build a program" : "Preview")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             }
         }
-        .presentationBackground(DGColor.surface1)
+        .presentationBackground(DGColor.bgBase)
     }
 
     // MARK: - Questionnaire
@@ -128,7 +128,7 @@ struct ProgramGeneratorSheet: View {
             .accessibilityLabel(label)
             .accessibilityValue(format(value.wrappedValue))
         }
-        .dgCard(padding: 0)
+        .dgCard(radius: 16, padding: 0)
     }
 
     private func chips<Option: Hashable>(
@@ -165,7 +165,7 @@ struct ProgramGeneratorSheet: View {
     private func previewSection(_ preview: Preview) -> some View {
         VStack(alignment: .leading, spacing: DGSpace.s4) {
             Text(preview.draft.name)
-                .font(DGFont.title1)
+                .font(DGFont.title2)
                 .foregroundStyle(DGColor.ink1)
             Text("\(preview.template.splitName) · \(preview.template.weeks) weeks, last week deload · "
                 + preview.template.rule.displayName)
@@ -187,7 +187,7 @@ struct ProgramGeneratorSheet: View {
                         .accessibilityElement(children: .combine)
                     }
                 }
-                .dgCard()
+                .dgCard(radius: 20)
             }
             Text(preview.fromModel
                  ? "Exercises chosen by the on-device model, checked against your equipment and the template."
@@ -198,7 +198,7 @@ struct ProgramGeneratorSheet: View {
                 .accessibilityIdentifier(A11yID.programApply)
             Button("Back to the questions") { self.preview = nil }
                 .buttonStyle(.dgControl)
-                .font(DGFont.condensedLabel(13))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(DGColor.ink3)
                 .frame(maxWidth: .infinity)
         }

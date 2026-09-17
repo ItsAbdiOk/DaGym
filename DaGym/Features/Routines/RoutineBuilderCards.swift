@@ -67,15 +67,14 @@ struct BuilderExerciseCard: View {
             noteField
             progressionOverride
         }
-        .padding(DGSpace.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            isSuperset ? DGColor.aiViolet.opacity(0.08) : DGColor.surface1,
-            in: RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
-        )
+        .dgCard(radius: 20, padding: DGSpace.s4)
         .overlay {
-            RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
-                .strokeBorder(isSuperset ? DGColor.aiViolet.opacity(0.4) : DGColor.hairline, lineWidth: 1)
+            // A superset pair reads as one: the violet edge on both cards is the link.
+            if isSuperset {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(DGColor.aiViolet.opacity(0.5), lineWidth: 1)
+            }
         }
     }
 

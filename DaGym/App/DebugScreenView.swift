@@ -40,7 +40,7 @@ struct DebugScreenView: View {
         case .rest:
             ActiveWorkoutView(session: session, onFinish: { _ in })
         case .library:
-            tabbed(.you) { LibraryView() }
+            tabbed(.you) { NavigationStack { LibraryView() } }
         case .exerciseDetail:
             NavigationStack { ExerciseDetailView(exercise: SampleData.bench) }
         case .builder:

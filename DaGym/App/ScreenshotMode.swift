@@ -78,6 +78,9 @@ enum ScreenshotMode {
         preferences.sampleDataMode = false
         seedBodyweight(store: store, preferences: preferences)
         seedSchedule(store: store)
+        // An active starter program, so the Train tab's Programs segment shows the active card
+        // rather than only the starter list.
+        if store.programs().isEmpty { store.adoptStarterPlan(.pushPullLegs, now: now) }
         // A gym card so the check-in sheet has a barcode and, with the pass identity bundled,
         // an Add to Wallet button under it.
         if store.gymCards().isEmpty {
@@ -341,7 +344,7 @@ private struct ScreenshotScreenView: View {
         case .builder:
             RoutineBuilderView(routineID: store.routines().first { $0.name == "Push A" }?.id, onDone: {})
         case .library:
-            tabbed(.you) { LibraryView() }
+            tabbed(.you) { NavigationStack { LibraryView() } }
         case .exerciseDetail:
             tabbed(.you) {
                 NavigationStack {
