@@ -113,7 +113,7 @@ enum CoachDraftDetail {
             proposal.usesTemplate
                 ? [Row(id: 0, title: "Routines from the \(proposal.goal.displayName.lowercased()) template")]
                 : proposal.routines.enumerated().map { index, routine in
-                    Row(id: index, title: routine.name, detail: routine.summary)
+                    Row(id: index, title: routine.name, detail: Self.countLine(routine))
                 }
         case .schedule(let proposal):
             Weekday.ordered(mondayFirst: true).enumerated().map { index, day in
@@ -131,6 +131,38 @@ enum CoachDraftDetail {
                 Row(id: 1, title: "Add", detail: proposal.toExerciseName ?? "exercise")
             ]
         }
+    }
+
+    /// A program card groups its rows per routine: the routine's name and counts as a heading,
+    /// its exercises under it. Every other draft is one unnamed section.
+    struct Section: Equatable, Sendable, Identifiable {
+        var id: Int
+        var title: String?
+        var subtitle: String?
+        var rows: [Row]
+    }
+
+    static func sections(for draft: CoachChatDraft, formatWeight: (Double) -> String) -> [Section] {
+        guard case .program(let proposal) = draft, !proposal.usesTemplate else {
+            return [Section(id: 0, rows: rows(for: draft, formatWeight: formatWeight))]
+        }
+        return proposal.routines.enumerated().map { index, routine in
+            Section(
+                id: index, title: routine.name, subtitle: countLine(routine),
+                rows: exerciseRows(routine.exercises, formatWeight: formatWeight)
+                    .map { row in
+                        var row = row
+                        row.id += index * 1_000
+                        return row
+                    }
+            )
+        }
+    }
+
+    /// "4 exercises · 14 sets" — the routine's own summary without its name repeated.
+    static func countLine(_ routine: RoutineProposal) -> String {
+        let count = routine.exercises.count
+        return "\(count) \(count == 1 ? "exercise" : "exercises") · \(routine.setCount) sets"
     }
 
     private static func exerciseRows(

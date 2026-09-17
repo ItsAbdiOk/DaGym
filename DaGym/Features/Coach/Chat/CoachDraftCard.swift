@@ -115,7 +115,9 @@ struct CoachDraftCard: View {
 
     private var showsDetails: Bool { isExpanded ?? expandsByDefault }
 
-    private var rows: [CoachDraftDetail.Row] { CoachDraftDetail.rows(for: draft, formatWeight: formatWeight) }
+    private var sections: [CoachDraftDetail.Section] {
+        CoachDraftDetail.sections(for: draft, formatWeight: formatWeight)
+    }
 
     @ViewBuilder
     private var disclosure: some View {
@@ -135,8 +137,13 @@ struct CoachDraftCard: View {
 
         if showsDetails {
             VStack(alignment: .leading, spacing: DGSpace.s1) {
-                ForEach(rows) { row in
-                    detailRow(row)
+                ForEach(sections) { section in
+                    if let title = section.title {
+                        sectionHeader(title, subtitle: section.subtitle, first: section.id == 0)
+                    }
+                    ForEach(section.rows) { row in
+                        detailRow(row)
+                    }
                 }
                 if case .routine(let proposal) = draft, let notes = proposal.notes, !notes.isEmpty {
                     Text(notes)
@@ -149,6 +156,27 @@ struct CoachDraftCard: View {
             .padding(DGSpace.s3)
             .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous))
         }
+    }
+
+    /// One routine inside a program: its name as a heading with the counts beside it, and a
+    /// little air above every heading but the first so the routines read as groups.
+    private func sectionHeader(_ title: String, subtitle: String?, first: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(DGFont.title3)
+                .foregroundStyle(DGColor.ink1)
+            Spacer(minLength: DGSpace.s2)
+            if let subtitle {
+                Text(subtitle)
+                    .font(DGFont.caption)
+                    .foregroundStyle(DGColor.ink3)
+            }
+        }
+        .padding(.top, first ? 0 : DGSpace.s3)
+        .padding(.bottom, DGSpace.s1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(subtitle.map { "\(title), \($0)" } ?? title)
+        .accessibilityAddTraits(.isHeader)
     }
 
     /// Title and set line on one row; the drafter's reason, when it gave one, under them in

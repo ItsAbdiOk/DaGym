@@ -176,3 +176,24 @@ struct CoachChatSupportTests {
         #expect(CoachChatTranscript.latestTurnIDs([]).isEmpty)
     }
 }
+
+@Suite("Coach draft card: program sections")
+struct CoachDraftProgramSectionTests {
+    @Test("a program card groups exercises under each routine with its counts, never the name twice")
+    func programSections() {
+        let bench = CoachChatExerciseSpec(
+            exerciseName: "Barbell Bench Press - Medium Grip", sets: [.init(targetReps: 5, targetWeightKg: 90)]
+        )
+        let push = RoutineProposal(name: "Push A", exercises: [bench, bench])
+        let pull = RoutineProposal(name: "Pull B", exercises: [bench])
+        let draft = CoachChatDraft.program(
+            ProgramProposal(name: "Split", goal: .strength, daysPerWeek: 2, routines: [push, pull])
+        )
+        let sections = CoachDraftDetail.sections(for: draft) { "\($0) kg" }
+        #expect(sections.map(\.title) == ["Push A", "Pull B"])
+        #expect(sections.map(\.subtitle) == ["2 exercises · 2 sets", "1 exercise · 1 sets"])
+        #expect(sections[0].rows.count == 2)
+        #expect(sections[1].rows[0].title.contains("Bench"))
+        #expect(Set(sections.flatMap(\.rows).map(\.id)).count == 3, "row ids stay unique across sections")
+    }
+}
