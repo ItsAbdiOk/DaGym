@@ -60,9 +60,10 @@ protocol SpeechRecognizing: AnyObject {
     /// Starts capturing audio and recognizing speech, returning a stream of transcript updates.
     /// The stream finishes (with an error, if any) when `stopListening()` is called, the
     /// recognizer ends on its own, or the route is lost (e.g. AirPods disconnect mid-hold).
-    /// Throws synchronously if listening can't start at all (no permission, no on-device
-    /// support, audio engine busy) rather than opening a stream that immediately fails.
-    func startListening() throws -> AsyncThrowingStream<SpeechRecognitionEvent, Error>
+    /// Throws if listening can't start at all (no permission, no on-device support, audio
+    /// engine busy) rather than opening a stream that immediately fails. Async because the real
+    /// implementation may wait a beat for a Bluetooth route to settle before installing its tap.
+    func startListening() async throws -> AsyncThrowingStream<SpeechRecognitionEvent, Error>
 
     /// Stops feeding audio to the recognizer but **leaves the recognition task alive** so its
     /// final hypothesis can still arrive. This is what a button *release* calls first: the last

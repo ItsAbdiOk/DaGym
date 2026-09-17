@@ -30,6 +30,12 @@ final class FakeSpeechRecognizer: SpeechRecognizing {
     /// controller's real 0.8 s wait. Set `false` to model a recognizer that is still deciding —
     /// which is the window a second press has to land in to reproduce the re-press race.
     var finishesOnEndAudio = true
+    /// How long `requestAuthorization()` suspends before answering — the system permission
+    /// sheet, during which the gesture holding the button is cancelled and a release arrives.
+    var authorizationDelay: Duration?
+    /// How long `startListening()` suspends before returning its stream — the real recogniser's
+    /// wait for a Bluetooth route to settle.
+    var startDelay: Duration?
 
     private(set) var startListeningCallCount = 0
     private(set) var endAudioCallCount = 0
@@ -45,13 +51,15 @@ final class FakeSpeechRecognizer: SpeechRecognizing {
     }
 
     func requestAuthorization() async -> VoiceAuthorizationStatus {
+        if let authorizationDelay { try? await Task.sleep(for: authorizationDelay) }
         authorizationStatus = authorizationToGrant
         return authorizationStatus
     }
 
-    func startListening() throws -> AsyncThrowingStream<SpeechRecognitionEvent, Error> {
+    func startListening() async throws -> AsyncThrowingStream<SpeechRecognitionEvent, Error> {
         startListeningCallCount += 1
         if let startError { throw startError }
+        if let startDelay { try? await Task.sleep(for: startDelay) }
         let (stream, continuation) = AsyncThrowingStream<SpeechRecognitionEvent, Error>.makeStream()
         self.continuation = continuation
         for event in scriptedEvents { continuation.yield(event) }
