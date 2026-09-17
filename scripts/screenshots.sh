@@ -61,6 +61,7 @@ IPHONE_SHOTS=(
     17-coach:coach
     18-coach-chat:coachChat
     19-coach-review:coachReview
+    20-coach-program:coachProgram
 )
 WATCH_SHOTS=(
     01-home:home

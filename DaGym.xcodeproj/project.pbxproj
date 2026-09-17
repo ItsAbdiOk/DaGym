@@ -713,6 +713,7 @@
 		F1998A00EC007437E3865DA2 /* RoutineModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0554DBEB43BD81AF3BAA6C5 /* RoutineModel.swift */; };
 		F1C96D888BA4482D7EE79471 /* SVGPathCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 395D25DCD54BD4766FAA55D4 /* SVGPathCommand.swift */; };
 		F21D4206F1BD3E031E4DF6D5 /* Barlow-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9C8CC141FAAE481D83886ADA /* Barlow-Bold.ttf */; };
+		F2570779E1513C3ED305238D /* ScreenshotCoachProgram.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDA0D015C78453E495D8F12F /* ScreenshotCoachProgram.swift */; };
 		F28774C2DEA9ADB99E7DA9A1 /* RestState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BCCC94CA0992BCF1C4316AA /* RestState.swift */; };
 		F322FECA366151F68DEEA1AF /* ResumeSheetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0DC9294C59DBDD018EEBB95 /* ResumeSheetTests.swift */; };
 		F34EFBEBAB8ACEA064E01B29 /* NewExerciseSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4439CCD7E47922B8A91E1116 /* NewExerciseSheet.swift */; };
@@ -1411,6 +1412,7 @@
 		DC8B13C43458F813E88FE6C8 /* ProgramModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgramModel.swift; sourceTree = "<group>"; };
 		DCAC50070A02BEDEA497E140 /* ServiceCalendarSyncCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceCalendarSyncCoordinatorTests.swift; sourceTree = "<group>"; };
 		DCD0A9C845172A0831E4534C /* ExerciseModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseModel.swift; sourceTree = "<group>"; };
+		DDA0D015C78453E495D8F12F /* ScreenshotCoachProgram.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotCoachProgram.swift; sourceTree = "<group>"; };
 		DE0FEDE2BEFECFA8255F3E9D /* StarterPlanPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarterPlanPicker.swift; sourceTree = "<group>"; };
 		DF20723D7DF5F11A5DA98B97 /* ExercisePhotoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExercisePhotoView.swift; sourceTree = "<group>"; };
 		DF46833BC92F089D3A59FAB5 /* CoachChatSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachChatSupportTests.swift; sourceTree = "<group>"; };
@@ -2706,6 +2708,7 @@
 				EAF4D75924B68BE913338D55 /* RootView.swift */,
 				1233B5E64534A9E50A8EAE52 /* RootView+Support.swift */,
 				1230EC1FCE8592D3F84D0F13 /* ScreenshotCoachChat.swift */,
+				DDA0D015C78453E495D8F12F /* ScreenshotCoachProgram.swift */,
 				89865FD387D819B8C2A62208 /* ScreenshotMode.swift */,
 			);
 			path = App;
@@ -3658,6 +3661,7 @@
 				BB46987C193E3A47EDB4F33D /* ScheduleModel.swift in Sources */,
 				7F01D03067D752BE89B5EFBC /* ScheduleView.swift in Sources */,
 				A348C5EED88B4AE3F2BF96B2 /* ScreenshotCoachChat.swift in Sources */,
+				F2570779E1513C3ED305238D /* ScreenshotCoachProgram.swift in Sources */,
 				591952DA6F2B31B623DB1A0D /* ScreenshotMode.swift in Sources */,
 				28F17812F1D0D0768776FD33 /* SeedStateModel.swift in Sources */,
 				42AE04C34649D714F00FA7D2 /* SetEntry+Cardio.swift in Sources */,

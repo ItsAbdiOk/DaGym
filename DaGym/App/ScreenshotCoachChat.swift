@@ -38,7 +38,9 @@ enum ScreenshotCoachChat {
     static func chatThread(now: Date) -> CoachChatThread {
         let clock = Clock(start: now.addingTimeInterval(-6 * 60))
         let messages = [CoachChatMessage.user(question, at: clock.next())] + drafterTurn(clock: clock)
-        return thread(messages: messages, drafts: [resetRoutine], origins: [.drafter], reviews: [], now: now)
+        return thread(
+            messages: messages, drafts: [.routine(resetRoutine)], origins: [.drafter], reviews: [], now: now
+        )
     }
 
     /// The same answer, but the reviewer put up its own version: two cards, both still proposed.
@@ -61,13 +63,14 @@ enum ScreenshotCoachChat {
             verdict: .alternative(draftIndex: 1, rationale: alternativeRationale), finishedAt: clock.next()
         )
         return thread(
-            messages: messages, drafts: [resetRoutine, alternativeRoutine], origins: [.drafter, .reviewer],
+            messages: messages, drafts: [.routine(resetRoutine), .routine(alternativeRoutine)],
+            origins: [.drafter, .reviewer],
             reviews: [review], now: now
         )
     }
 
-    private static func thread(
-        messages: [CoachChatMessage], drafts: [RoutineProposal], origins: [CoachChatDraftOrigin],
+    static func thread(
+        messages: [CoachChatMessage], drafts: [CoachChatDraft], origins: [CoachChatDraftOrigin],
         reviews: [CoachChatReview], now: Date
     ) -> CoachChatThread {
         var usage = CoachChatUsage(promptTokens: 12_900, completionTokens: 780)
@@ -77,7 +80,7 @@ enum ScreenshotCoachChat {
         }
         return CoachChatThread(
             id: UUID(), createdAt: messages.first?.sentAt ?? now, updatedAt: messages.last?.sentAt ?? now,
-            messages: messages, drafts: drafts.map(CoachChatDraft.routine), draftOrigins: origins,
+            messages: messages, drafts: drafts, draftOrigins: origins,
             reviews: reviews, usage: usage
         )
     }
@@ -174,7 +177,7 @@ enum ScreenshotCoachChat {
 
     static var drafts: [CoachChatDraft] { [.routine(resetRoutine), .routine(alternativeRoutine)] }
 
-    private static func sets(
+    static func sets(
         _ count: Int, reps: Int, kg: Double? = nil, rpe: Double? = nil
     ) -> [CoachChatSetSpec] {
         Array(repeating: CoachChatSetSpec(targetReps: reps, targetWeightKg: kg, rpe: rpe), count: count)
@@ -193,7 +196,7 @@ enum ScreenshotCoachChat {
     }
 
     /// Timestamps a few seconds apart, so the thread reads as one sitting.
-    private final class Clock {
+    final class Clock {
         private(set) var now: Date
 
         init(start: Date) { now = start }
