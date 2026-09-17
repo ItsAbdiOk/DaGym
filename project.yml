@@ -50,15 +50,23 @@ targets:
           - Resources/ExercisePhotos
       - path: DaGym/Resources/ExercisePhotos
         type: folder
-      # Apple Wallet pass signing identity (Pass Type ID cert + key + WWDR intermediate; see
-      # DaGym/Services/Wallet/WalletPassSigner.swift). Gitignored; Xcode Cloud writes it from the
-      # DAGYM_WALLET_P12_BASE64 secret in ci_scripts/ci_pre_xcodebuild.sh. `optional`: a clone
-      # without it still builds, and "Add to Apple Wallet" hides itself. (A top-level
-      # `resources:` key is not a thing in XcodeGen — it was silently ignored, so no build ever
-      # carried the identity.)
-      - path: Configs/wallet/pass.p12
-        buildPhase: resources
-        optional: true
+    # Apple Wallet pass signing identity (Pass Type ID cert + key + WWDR intermediate; see
+    # DaGym/Services/Wallet/WalletPassSigner.swift). Gitignored; Xcode Cloud writes it from the
+    # DAGYM_WALLET_P12_BASE64 secret in ci_scripts/ci_pre_xcodebuild.sh. Copied by a script,
+    # not listed as a resource: a resource entry — even `optional: true` — fails the build when
+    # the file is absent (Xcode Cloud build 20, every agent worktree), whereas the script just
+    # skips it and "Add to Apple Wallet" hides itself. Runs after compile, before signing.
+    postCompileScripts:
+      - name: Bundle Wallet pass identity (if present)
+        script: |
+          if [ -f "$SRCROOT/Configs/wallet/pass.p12" ]; then
+            cp "$SRCROOT/Configs/wallet/pass.p12" "$BUILT_PRODUCTS_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/pass.p12"
+            echo "Bundled Configs/wallet/pass.p12"
+          else
+            echo "warning: Configs/wallet/pass.p12 not present; Add to Apple Wallet will hide itself"
+          fi
+        outputFiles:
+          - $(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/pass.p12
     dependencies:
       - package: GymCore
         product: GymCore
@@ -195,6 +203,9 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.dagym
         PRODUCT_NAME: DaGym
+        # The Wallet-identity script above reads an undeclared, possibly-absent input; the
+        # sandbox would deny it.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO

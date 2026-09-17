@@ -41,7 +41,6 @@
 		096D99567BBEE0799C807D9B /* WatchSnapshotWriterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15831582D08D745DD880BDC4 /* WatchSnapshotWriterTests.swift */; };
 		099D98FB808E38DA7F0FFD64 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CAF685AA57AB8FDB563F9AD5 /* Assets.xcassets */; };
 		09B732BEFB12FD6AD0B2AFDD /* VoiceLogController+Context.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58028AE9035A3FB4C0A27374 /* VoiceLogController+Context.swift */; };
-		09FA6568BC05E3C8F00D40A7 /* pass.p12 in Resources */ = {isa = PBXBuildFile; fileRef = E884EDFE157A1331DBECE680 /* pass.p12 */; };
 		0A0759727B1904215FD52000 /* ExerciseModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD0A9C845172A0831E4534C /* ExerciseModel.swift */; };
 		0A320826ACFB4949000326DF /* BodyweightTile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F91B8BC4E9E85A53EC6D73E /* BodyweightTile.swift */; };
 		0A6AB4D3BF064736BA449C80 /* WorkoutStore+WorkoutDeletion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C7FCC4BC706ADAE685D471B /* WorkoutStore+WorkoutDeletion.swift */; };
@@ -1500,7 +1499,6 @@
 		E77B0E9C566745F37305A32F /* ParityWorkoutIncrementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParityWorkoutIncrementTests.swift; sourceTree = "<group>"; };
 		E7CEA858FA359B477AA96AB6 /* RecoveryMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecoveryMapView.swift; sourceTree = "<group>"; };
 		E824AA9399F03F1698BF3623 /* PlannedSetModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlannedSetModel.swift; sourceTree = "<group>"; };
-		E884EDFE157A1331DBECE680 /* pass.p12 */ = {isa = PBXFileReference; path = pass.p12; sourceTree = "<group>"; };
 		E8871854F3139116A444D30D /* OpenRouterFakeTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterFakeTransport.swift; sourceTree = "<group>"; };
 		E8C91EFF6A468D0D5BB03E2B /* AllDoneBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllDoneBanner.swift; sourceTree = "<group>"; };
 		E9C7920727A348AB84642DDD /* FeatureHomeImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureHomeImportTests.swift; sourceTree = "<group>"; };
@@ -2414,7 +2412,6 @@
 		AACFC0A8E9E1A8EA5D607775 = {
 			isa = PBXGroup;
 			children = (
-				B2080A49F288BD1A850D66AE /* Configs */,
 				7B0805A6AC6A9E9FEF72E733 /* DaGym */,
 				9444B0C11C83DAD20FA82EDE /* DaGymTests */,
 				82378D3E13E3F5E93D7B21B0 /* DaGymUITests */,
@@ -2478,14 +2475,6 @@
 				5F6533385C7F7031013F5EB2 /* WidgetSnapshotProvider.swift */,
 			);
 			path = DaGymWidgets;
-			sourceTree = "<group>";
-		};
-		B2080A49F288BD1A850D66AE /* Configs */ = {
-			isa = PBXGroup;
-			children = (
-				F4C977391790942C416F25A6 /* wallet */,
-			);
-			path = Configs;
 			sourceTree = "<group>";
 		};
 		B59E9CC68395DC93C9577AA0 /* Intents */ = {
@@ -2846,14 +2835,6 @@
 			path = Settings;
 			sourceTree = "<group>";
 		};
-		F4C977391790942C416F25A6 /* wallet */ = {
-			isa = PBXGroup;
-			children = (
-				E884EDFE157A1331DBECE680 /* pass.p12 */,
-			);
-			path = wallet;
-			sourceTree = "<group>";
-		};
 		F4F2A0280262115A4F0B3079 /* Design */ = {
 			isa = PBXGroup;
 			children = (
@@ -2899,6 +2880,7 @@
 			buildConfigurationList = 83EAEB6ECB8A34ACC4F3938B /* Build configuration list for PBXNativeTarget "DaGym" */;
 			buildPhases = (
 				C27CB8B2E1BFC3B5EA61CD49 /* Sources */,
+				5C3E1CEF23F8A80FBB3A3E30 /* Bundle Wallet pass identity (if present) */,
 				90EF4B451104AABC166F101C /* Resources */,
 				BC5F88364B85986BC04136F6 /* Frameworks */,
 				EDB18E5C9B7BCE02AE767546 /* Embed Foundation Extensions */,
@@ -3116,7 +3098,6 @@
 				2C121B4713B2C9ED7C09F0B4 /* PrivacyInfo.xcprivacy in Resources */,
 				1288AEE88AA0E36F4E3D41A1 /* PrivacyPolicy.md in Resources */,
 				7481ED5EBAB5D0D3B1DA9001 /* exercises.json in Resources */,
-				09FA6568BC05E3C8F00D40A7 /* pass.p12 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3146,6 +3127,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		5C3E1CEF23F8A80FBB3A3E30 /* Bundle Wallet pass identity (if present) */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle Wallet pass identity (if present)";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/pass.p12",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ -f \"$SRCROOT/Configs/wallet/pass.p12\" ]; then\n  cp \"$SRCROOT/Configs/wallet/pass.p12\" \"$BUILT_PRODUCTS_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/pass.p12\"\n  echo \"Bundled Configs/wallet/pass.p12\"\nelse\n  echo \"warning: Configs/wallet/pass.p12 not present; Add to Apple Wallet will hide itself\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		33F59DA6610DD14BA1C0D626 /* Sources */ = {
@@ -4288,6 +4291,7 @@
 				CODE_SIGN_ENTITLEMENTS = DaGym/DaGym.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = DaGym/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -4348,6 +4352,7 @@
 				CODE_SIGN_ENTITLEMENTS = DaGym/DaGym.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = DaGym/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
