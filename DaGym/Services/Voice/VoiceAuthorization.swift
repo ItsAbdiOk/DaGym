@@ -28,11 +28,19 @@ enum VoiceAuthorization {
 
     /// Speech first, then (only if granted) the microphone — asking for the mic when speech was
     /// just denied would show a permission sheet for a feature that can't work anyway.
+    ///
+    /// Both completion closures are `@Sendable` on purpose, and it is load-bearing: neither
+    /// Apple API marks its block Sendable, so a plain closure written inside this `@MainActor`
+    /// type inherits main-actor isolation — and Speech and AVFAudio call these back on their own
+    /// private queues. Under Swift 6 the runtime asserts the isolation at the call
+    /// ("BUG IN CLIENT OF LIBDISPATCH: Block was expected to execute on queue main-thread") and
+    /// the app dies with SIGTRAP the moment the user taps Allow. `@Sendable` makes the closure
+    /// nonisolated; it only resumes a continuation, which is safe from any thread.
     private typealias SpeechContinuation = CheckedContinuation<SFSpeechRecognizerAuthorizationStatus, Never>
 
     static func request() async -> VoiceAuthorizationStatus {
         let speech = await withCheckedContinuation { (continuation: SpeechContinuation) in
-            SFSpeechRecognizer.requestAuthorization { status in
+            SFSpeechRecognizer.requestAuthorization { @Sendable status in
                 continuation.resume(returning: status)
             }
         }
@@ -40,7 +48,7 @@ enum VoiceAuthorization {
             return combined(speech: speech, mic: AVAudioApplication.shared.recordPermission)
         }
         let micGranted = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-            AVAudioApplication.requestRecordPermission { granted in
+            AVAudioApplication.requestRecordPermission { @Sendable granted in
                 continuation.resume(returning: granted)
             }
         }

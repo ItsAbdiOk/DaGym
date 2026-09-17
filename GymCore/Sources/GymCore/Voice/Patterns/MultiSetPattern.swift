@@ -3,6 +3,19 @@ import Foundation
 /// §4.5 pattern 9: "3 sets of 8 at 60", "5 by 5 at 120", "10, 10, 8 at 80" —
 /// each with an optional spoken exercise ("squats five by five at one forty").
 enum MultiSetPattern {
+    /// The most sets one utterance is ever materialised into. One above
+    /// `LogCommandValidator`'s cap of 10, so "a thousand sets of eight" is still *rejected* by
+    /// the validator (`.setsCountOutOfBounds`) rather than silently trimmed to ten — but
+    /// "999999 sets of eight" no longer allocates a million `SetValues` on the way to that
+    /// rejection.
+    static let maxSpokenSets = 11
+
+    /// `Array(repeating:count:)` for a spoken count, clamped to `maxSpokenSets`.
+    static func repeated(_ values: LogSetSpec.SetValues, count: Double) -> [LogSetSpec.SetValues] {
+        let clamped = count.isFinite ? min(max(1, count), Double(maxSpokenSets)) : 1
+        return Array(repeating: values, count: Int(clamped))
+    }
+
     static func match(_ words: [String], context: ParseContext) -> ParseResult? {
         if let result = setsOf(words, context: context) { return result }
         if let result = byForm(words, context: context) { return result }
@@ -16,7 +29,6 @@ enum MultiSetPattern {
         let mentions = NumberScan.scan(words)
         guard let setsMention = mentions.first(where: { $0.range.upperBound == setsIndex }),
               setsIndex + 1 < words.count, words[setsIndex + 1] == "of" else { return nil }
-        let setsCount = max(1, Int(setsMention.value))
 
         let afterOf = setsIndex + 2
         let atIndex = words[afterOf...].firstIndex(of: "at")
@@ -34,7 +46,7 @@ enum MultiSetPattern {
 
         let values = LogSetSpec.SetValues(reps: reps, weightKg: weightKg)
         return result(
-            words, sets: Array(repeating: values, count: setsCount),
+            words, sets: repeated(values, count: setsMention.value),
             confidence: 0.88, pattern: "multiSetOf", context: context
         )
     }
@@ -55,7 +67,7 @@ enum MultiSetPattern {
         }
         let values = LogSetSpec.SetValues(reps: Int(repsMention.value), weightKg: weightKg)
         return result(
-            words, sets: Array(repeating: values, count: max(1, Int(setsMention.value))),
+            words, sets: repeated(values, count: setsMention.value),
             confidence: 0.88, pattern: "multiSetBy", context: context
         )
     }
@@ -78,7 +90,9 @@ enum MultiSetPattern {
         let weightKg = UnitParser.weightKg(
             number: weightMention.value, unit: weightMention.unit, context: context
         )
-        let sets = repsRun.map { LogSetSpec.SetValues(reps: Int($0.value), weightKg: weightKg) }
+        let sets = repsRun.prefix(maxSpokenSets).map {
+            LogSetSpec.SetValues(reps: Int($0.value), weightKg: weightKg)
+        }
         return result(words, sets: sets, confidence: 0.85, pattern: "multiSetSequential", context: context)
     }
 
