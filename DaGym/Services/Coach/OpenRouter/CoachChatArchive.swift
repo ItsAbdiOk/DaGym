@@ -8,13 +8,13 @@ struct CoachChatArchive: Sendable {
     let directory: URL
 
     private static let logger = Logger(subsystem: "dev.abdirahmanmohamed.dagym", category: "coachChat")
-    private static let encoder: JSONEncoder = {
+    static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.sortedKeys]
         return encoder
     }()
-    private static let decoder: JSONDecoder = {
+    static let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return decoder
@@ -48,26 +48,31 @@ struct CoachChatArchive: Sendable {
     /// Every thread in full, newest first — for the usage screen, which needs each one's
     /// usage; the chat itself lists summaries and loads one thread at a time.
     func threads() -> [CoachChatThread] {
+        threadFileURLs()
+            .compactMap(decode(at:))
+            .sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    func threadFileURLs() -> [URL] {
         let urls = (try? FileManager.default.contentsOfDirectory(
             at: directory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
         )) ?? []
-        return urls
-            .filter { $0.pathExtension == "json" }
-            .compactMap(decode(at:))
-            .sorted { $0.updatedAt > $1.updatedAt }
+        return urls.filter { $0.pathExtension == "json" }
     }
 
     func load(id: UUID) -> CoachChatThread? {
         decode(at: fileURL(for: id))
     }
 
-    /// The week-review thread filed under `weekKey` (`CoachWeekReview.weekKey`), if any.
+    /// The week-review thread filed under `weekKey` (`CoachWeekReview.weekKey`), if any: one
+    /// index lookup and one decode, never a scan.
     func weekReviewThread(weekKey: String) -> CoachChatThread? {
-        threads().first { $0.kind == .weekReview && $0.weekReviewKey == weekKey }
+        weekReview(weekKey: weekKey).flatMap { load(id: $0.id) }
     }
 
     private func decode(at url: URL) -> CoachChatThread? {
         guard let data = try? Data(contentsOf: url) else { return nil }
+        Self.decodeCounts.withLock { $0[directory, default: 0] += 1 }
         do {
             return try Self.decoder.decode(CoachChatThread.self, from: data)
         } catch {
@@ -79,17 +84,25 @@ struct CoachChatArchive: Sendable {
 
     // MARK: - Writes
 
+    /// The index is read before the file lands, so a cold-cache rebuild never decodes the thread
+    /// it is about to be told about.
     func save(_ thread: CoachChatThread) throws {
+        var index = index()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let data = try Self.encoder.encode(thread)
         try data.write(to: fileURL(for: thread.id), options: .atomic)
+        index.entries[thread.id.uuidString] = CoachChatArchiveEntry(thread)
+        commit(index)
     }
 
     /// Removing a thread that isn't there is not an error.
     func delete(id: UUID) throws {
         let url = fileURL(for: id)
         guard FileManager.default.fileExists(atPath: url.path) else { return }
+        var index = index()
         try FileManager.default.removeItem(at: url)
+        index.entries[id.uuidString] = nil
+        commit(index)
     }
 
     func fileURL(for id: UUID) -> URL {

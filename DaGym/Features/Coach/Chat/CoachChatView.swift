@@ -30,6 +30,8 @@ struct CoachChatView: View {
     @State private var toast: String?
     /// The lifter's library, read once per open so each bubble can say which exercises it names.
     @State private var library: [SubstitutionCandidate] = []
+    /// Each bubble's save targets, scanned when its menu first opens and kept while its text holds.
+    @State private var saveTargetCache = CoachChatSaveTargetCache()
     /// Draft cards whose "Keep the coach's reasoning" switch the lifter turned off.
     @State private var reasoningOff: Set<Int> = []
 
@@ -142,7 +144,7 @@ struct CoachChatView: View {
                 message: message, review: review(for: message), canFold: canFold,
                 isExpanded: isExpandedBinding(for: message.id),
                 onCopy: { copy(CoachMarkdown.plainText(message.text)) },
-                saveTargets: CoachChatSaveTargets.forReply(message.text, library: library), onSave: save
+                saveTargets: { saveTargetCache.targets(for: message, library: library) }, onSave: save
             )
         }
     }
@@ -212,6 +214,7 @@ struct CoachChatView: View {
         engine?.cancel()
         engine = CoachChatEngineFactory.make(thread: thread, store: store, preferences: preferences)
         library = store.substitutionCandidates()
+        saveTargetCache.reset()
         cardStates = [:]
         reasoningOff = []
         expandedMessageIDs = []

@@ -4,6 +4,7 @@ import SwiftUI
 /// What Home's week-review card knows: the week under review, whether a check-in is due, and
 /// the thread's headline once the coach has replied. Pure over `(store, preferences, archive,
 /// now)` like `HomeSnapshot`, with the chat's readiness injected so a test needs no Keychain.
+/// Reads the archive's index only, never a transcript: Home refreshes on every store change.
 struct WeekReviewState: Equatable {
     var weekEnding: Date
     var status: CoachWeekReview.Status
@@ -22,7 +23,7 @@ struct WeekReviewState: Equatable {
         let calendar = preferences.trainingCalendar
         let weekEnding = CoachWeekReview.weekEnding(now: now, calendar: calendar)
         let weekKey = DateKey.string(for: weekEnding, calendar: calendar)
-        let thread = isConfigured ? archive?.weekReviewThread(weekKey: weekKey) : nil
+        let thread = isConfigured ? archive?.weekReview(weekKey: weekKey) : nil
         let count = CoachWeekReview.workoutCount(
             dates: store.workoutDates(), weekEnding: weekEnding, calendar: calendar
         )
