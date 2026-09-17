@@ -78,6 +78,36 @@ extension WorkoutStore {
         return fetch(descriptor).compactMap(Self.measurementInfo)
     }
 
+    /// Deletes one reading and returns what it was, for an undo toast; nil when no such row. The
+    /// Body screen's rows swipe to this. A `"health"` row is only ever a leftover from the build
+    /// that copied Health in (see `logBodyweight`), so deleting one here never touches Health.
+    @discardableResult
+    func deleteBodyMeasurement(id: UUID) -> BodyMeasurementInfo? {
+        var descriptor = FetchDescriptor<BodyMeasurementModel>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        guard let model = fetchFirst(descriptor) else { return nil }
+        let snapshot = BodyMeasurementInfo(
+            id: model.id, date: model.date, kg: model.bodyweightKg ?? 0, source: model.source
+        )
+        context.delete(model)
+        save()
+        return snapshot
+    }
+
+    /// Puts a deleted reading back with the same id, date and source. A no-op if a reading with
+    /// that id exists again — the undo toast can only fire once, but a double tap should not
+    /// log the weight twice.
+    func restoreBodyMeasurement(_ snapshot: BodyMeasurementInfo) {
+        let id = snapshot.id
+        var descriptor = FetchDescriptor<BodyMeasurementModel>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        guard fetchFirst(descriptor) == nil else { return }
+        context.insert(BodyMeasurementModel(
+            id: snapshot.id, date: snapshot.date, bodyweightKg: snapshot.kg, source: snapshot.source
+        ))
+        save()
+    }
+
     private static func measurementInfo(_ model: BodyMeasurementModel) -> BodyMeasurementInfo? {
         guard let kg = model.bodyweightKg else { return nil }
         return BodyMeasurementInfo(id: model.id, date: model.date, kg: kg, source: model.source)

@@ -26,6 +26,10 @@ struct BodyView: View {
     /// The in-flight `refresh()`; a newer one cancels it so a slow HealthKit answer to an older
     /// save can't land after a newer one.
     @State private var refreshTask: Task<Void, Never>?
+    /// The last deleted reading's undo, shown as the bottom toast.
+    @State private var undo: UndoAction?
+    /// The reading whose swipe actions are open, if any — one row at a time.
+    @State private var openSwipeID: UUID?
 
     var body: some View {
         ZStack {
@@ -48,6 +52,7 @@ struct BodyView: View {
         }
         .navigationTitle("Body")
         .navigationBarTitleDisplayMode(.inline)
+        .dgUndoToast($undo)
         .task { await refresh() }
         // Every store save bumps `changeToken`; only re-query Health while we're on screen.
         .onChange(of: store.changeToken) { if scenePhase == .active { scheduleRefresh() } }
@@ -79,9 +84,29 @@ struct BodyView: View {
         } else {
             TrainRowGroup {
                 ForEach(Array(recent.enumerated()), id: \.element.id) { offset, reading in
-                    MeasurementRow(measurement: reading, isLast: offset == recent.count - 1)
+                    MeasurementRow(
+                        measurement: reading, isLast: offset == recent.count - 1,
+                        isSwipeOpen: swipeBinding(for: reading.id),
+                        onDelete: { deleteReading(reading.id) }
+                    )
                 }
             }
+        }
+    }
+
+    private func swipeBinding(for id: UUID) -> Binding<Bool> {
+        Binding(get: { openSwipeID == id }, set: { openSwipeID = $0 ? id : nil })
+    }
+
+    /// Swipe-to-delete on a reading, with the same undo toast History gives a deleted workout.
+    /// The list re-reads at once; the chart follows on the store's change token.
+    private func deleteReading(_ id: UUID) {
+        openSwipeID = nil
+        guard let snapshot = store.deleteBodyMeasurement(id: id) else { return }
+        recent = store.recentBodyMeasurements()
+        undo = UndoAction(message: "Deleted reading") {
+            store.restoreBodyMeasurement(snapshot)
+            recent = store.recentBodyMeasurements()
         }
     }
 
@@ -116,14 +141,39 @@ struct BodyView: View {
     func displayWeight(_ kg: Double) -> Double { preferences.weightUnit.display(kg: kg) }
 }
 
-/// One reading row: "Today / Manual / 82.4".
+/// One reading row: "Today / Manual / 82.4". Swipes left to reveal Delete — the rows sit in a
+/// plain `VStack`, not a `List`, so this is `SwipeToRevealRow` like a set row, not `.swipeActions`.
 private struct MeasurementRow: View {
     var measurement: BodyMeasurementInfo
     var isLast: Bool
+    @Binding var isSwipeOpen: Bool
+    var onDelete: () -> Void
 
     @Environment(Preferences.self) private var preferences
 
+    private static let deleteWidth: CGFloat = 64
+
     var body: some View {
+        SwipeToRevealRow(actionsWidth: Self.deleteWidth, isOpen: $isSwipeOpen) {
+            content
+        } actions: {
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: Self.deleteWidth)
+                    .frame(maxHeight: .infinity)
+                    .background(DGColor.danger)
+            }
+            .buttonStyle(.dgControl)
+            .accessibilityLabel("Delete reading")
+        }
+        .contextMenu {
+            Button("Delete reading", systemImage: "trash", role: .destructive, action: onDelete)
+        }
+    }
+
+    private var content: some View {
         HStack(spacing: DGSpace.s3) {
             Text(Self.dateLabel(measurement.date))
                 .font(.system(size: 15))
@@ -140,6 +190,7 @@ private struct MeasurementRow: View {
         .padding(.horizontal, 15)
         .padding(.vertical, 12)
         .frame(minHeight: 44)
+        .contentShape(Rectangle())
         .trainRowDivider(isLast: isLast)
         .accessibilityElement(children: .combine)
     }
