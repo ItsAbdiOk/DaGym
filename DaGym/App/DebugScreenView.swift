@@ -50,7 +50,7 @@ struct DebugScreenView: View {
         case .summary:
             WorkoutSummaryView(summary: debugSummary, title: session.title, onDone: {})
         case .history:
-            tabbed(.you) { HistoryTabView() }
+            tabbed(.you) { NavigationStack { HistoryTabView() } }
         case .backfill:
             sheetHost {
                 BackfillSheet(

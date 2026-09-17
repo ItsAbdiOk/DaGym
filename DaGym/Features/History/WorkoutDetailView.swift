@@ -39,14 +39,14 @@ extension WorkoutDetail {
     }
 }
 
-/// Detail for one finished workout: title, time range, stats and a card per exercise with its
-/// logged sets — read-only except the session note, which opens `NotesSheet` on tap.
+/// Detail for one finished workout: the title in the bar, time range, four stat tiles and a
+/// white row group per exercise with its logged sets — read-only except the session note,
+/// which opens `NotesSheet` on tap.
 struct WorkoutDetailView: View {
     var workoutID: UUID
 
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
-    @Environment(\.dismiss) private var dismiss
     @State private var detail: WorkoutDetail?
     @State private var isEditingNote = false
 
@@ -55,8 +55,7 @@ struct WorkoutDetailView: View {
             AmbientWash()
             ScrollView {
                 if let detail {
-                    VStack(alignment: .leading, spacing: DGSpace.s5) {
-                        topRow
+                    VStack(alignment: .leading, spacing: DGSpace.s3) {
                         titleBlock(detail)
                         statRow(detail)
                         ForEach(detail.exerciseGroups) { group in
@@ -69,11 +68,12 @@ struct WorkoutDetailView: View {
                     }
                     .padding(.horizontal, DGSpace.s4)
                     .padding(.top, DGSpace.s3)
-                    .padding(.bottom, 100)
+                    .padding(.bottom, 110)
                 }
             }
         }
-        .navigationBarHidden(true)
+        .navigationTitle(detail?.title ?? "Workout")
+        .navigationBarTitleDisplayMode(.inline)
         .task { refresh() }
         // A note saved here bumps `changeToken`; so does a delete or an import elsewhere.
         .refreshOnStoreChange(refresh)
@@ -85,48 +85,30 @@ struct WorkoutDetailView: View {
         }
     }
 
-    private var topRow: some View {
-        Button {
-            dismiss()
-        } label: {
-            HStack(spacing: DGSpace.s1) {
-                Image(systemName: "chevron.left").accessibilityHidden(true)
-                    .font(.system(size: 13, weight: .semibold))
-                Text("History").dgLabel()
-            }
-            .foregroundStyle(DGColor.ink3)
-        }
-        .buttonStyle(.dgControl)
-    }
-
     private func titleBlock(_ detail: WorkoutDetail) -> some View {
-        VStack(alignment: .leading, spacing: DGSpace.s1) {
-            HStack {
-                Text(detail.title)
-                    .font(DGFont.title1)
-                    .foregroundStyle(DGColor.ink1)
-                if detail.isBackfilled {
-                    DGTag(text: "Backfilled", tint: DGColor.infoText, wash: DGColor.info.opacity(0.16))
-                }
-            }
+        HStack(spacing: DGSpace.s2) {
             Text(Self.dateRangeLine(detail))
                 .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
+            if detail.isBackfilled {
+                DGTag(text: "Backfilled", tint: DGColor.infoText, wash: DGColor.info.opacity(0.16))
+            }
         }
+        .padding(.horizontal, DGSpace.s1)
     }
 
     private func statRow(_ detail: WorkoutDetail) -> some View {
-        DGAdaptiveStack(spacing: DGSpace.s3, threshold: .accessibility3) {
-            StatTile(value: "\(detail.durationMinutes)", label: "Minutes").dgCard(radius: 14)
-            StatTile(value: volumeText(detail), label: "Volume").dgCard(radius: 14)
-            StatTile(value: "\(detail.setsDone)", label: "Sets").dgCard(radius: 14)
-            StatTile(value: "\(detail.prCount)", label: "PRs", tint: DGColor.prGoldText).dgCard(radius: 14)
+        DGAdaptiveGrid(columns: 4, spacing: DGSpace.s2) {
+            ProgressStatTile(value: "\(detail.durationMinutes)", label: "Minutes")
+            ProgressStatTile(value: volumeText(detail), label: preferences.unitSymbol)
+            ProgressStatTile(value: "\(detail.setsDone)", label: "Sets")
+            ProgressStatTile(value: "\(detail.prCount)", label: detail.prCount == 1 ? "PR" : "PRs")
         }
     }
 
     /// Tonnage, with "· 5.0 km" beside it once the workout had a run in it.
     private func volumeText(_ detail: WorkoutDetail) -> String {
-        let volume = preferences.formatWeight(kg: detail.volumeKg)
+        let volume = preferences.formatVolume(kg: detail.volumeKg)
         guard detail.distanceMeters > 0 else { return volume }
         return "\(volume) · \(preferences.formatDistance(meters: detail.distanceMeters, decimals: 1))"
     }
@@ -138,6 +120,8 @@ struct WorkoutDetailView: View {
                 .font(DGFont.title3)
                 .foregroundStyle(DGColor.ink2)
         }
+        .padding(.top, DGSpace.s2)
+        .padding(.horizontal, DGSpace.s1)
     }
 
     private func refresh() {
@@ -154,19 +138,19 @@ struct WorkoutDetailView: View {
                 notesCardContent(detail)
             }
             .buttonStyle(.dgCard)
-            .dgCard()
+            .dgCard(radius: 20, padding: DGSpace.s4)
             .accessibilityLabel(detail.notes.isEmpty ? "Add a note" : "Notes, \(detail.notes)")
             .accessibilityHint("Edits the session note")
             .accessibilityIdentifier(A11yID.historyNote)
         } else {
-            notesCardContent(detail).dgCard()
+            notesCardContent(detail).dgCard(radius: 20, padding: DGSpace.s4)
         }
     }
 
     private func notesCardContent(_ detail: WorkoutDetail) -> some View {
         HStack(alignment: .top, spacing: DGSpace.s3) {
             VStack(alignment: .leading, spacing: DGSpace.s2) {
-                Text("Notes").dgLabel()
+                ProgressCardTitle(title: "Notes")
                 if detail.notes.isEmpty {
                     Text("Add a note")
                         .font(DGFont.body)
@@ -204,33 +188,39 @@ struct WorkoutDetailView: View {
     }()
 
     private static func dateRangeLine(_ detail: WorkoutDetail) -> String {
-        let dayText = dayFormatter.string(from: detail.startedAt).uppercased()
+        let dayText = dayFormatter.string(from: detail.startedAt)
         let start = timeFormatter.string(from: detail.startedAt)
         guard let endedAt = detail.endedAt else { return "\(dayText) · \(start)" }
         return "\(dayText) · \(start)–\(timeFormatter.string(from: endedAt))"
     }
 }
 
-/// One exercise's read-only set list, matching the active-workout set row look.
+/// One exercise's read-only set list: the exercise name as the group's first row, then one
+/// hairlined row per set.
 private struct ExerciseEntryCard: View {
     var entry: WorkoutExerciseEntry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
+        TrainRowGroup {
             HStack {
                 Text(entry.exercise.name)
-                    .font(DGFont.title3)
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(DGColor.ink1)
                 Spacer()
-                Text(HistoryView.pluralized(entry.sets.count, "set")).dgLabel()
+                Text(HistoryView.pluralized(entry.sets.count, "set"))
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(DGColor.ink3)
             }
-            VStack(spacing: DGSpace.s2) {
-                ForEach(Array(entry.sets.enumerated()), id: \.element.id) { index, set in
-                    ReadOnlySetRow(set: set, index: index + 1, isCardio: entry.isCardio)
-                }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 12)
+            .trainRowDivider(isLast: entry.sets.isEmpty)
+            ForEach(Array(entry.sets.enumerated()), id: \.element.id) { index, set in
+                ReadOnlySetRow(
+                    set: set, index: index + 1, isCardio: entry.isCardio,
+                    isLast: index == entry.sets.count - 1
+                )
             }
         }
-        .dgCard()
     }
 }
 
@@ -239,6 +229,7 @@ private struct ReadOnlySetRow: View {
     var set: SetEntry
     var index: Int
     var isCardio = false
+    var isLast = false
 
     @Environment(Preferences.self) private var preferences
 
@@ -252,7 +243,8 @@ private struct ReadOnlySetRow: View {
         HStack(spacing: DGSpace.s3) {
             SetKindBadge(kind: set.kind, index: index)
             Text(line)
-                .font(DGFont.body)
+                .font(.system(size: 15))
+                .monospacedDigit()
                 .foregroundStyle(DGColor.ink1)
             Spacer()
             // `effortTrackingEnabled` promises the effort column is hidden *everywhere*; this
@@ -267,7 +259,9 @@ private struct ReadOnlySetRow: View {
                     .accessibilityLabel("Effort \(effort.displayValue(scale: preferences.effortScale))")
             }
         }
-        .frame(minHeight: 44)
+        .padding(.horizontal, 15)
+        .frame(minHeight: 46)
+        .trainRowDivider(isLast: isLast)
         .accessibilityElement(children: .combine)
     }
 }

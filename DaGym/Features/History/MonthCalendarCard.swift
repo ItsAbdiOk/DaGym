@@ -2,10 +2,10 @@ import GymCore
 import SwiftData
 import SwiftUI
 
-/// Month grid from History: trained days filled, planned days ringed, rescheduled ones marked
-/// with an arrow. Tapping a trained day opens its detail; any other day offers Move Session
-/// (when something is planned) or Log a Past Workout (when the day isn't in the future).
-struct MonthCalendarSheet: View {
+/// The month grid on the History page: trained days tinted by tonnage, planned days dashed,
+/// today ringed. Tapping a day opens a panel under the grid — View workout for a trained day,
+/// Move session when something is planned, Log a past workout when the day isn't in the future.
+struct MonthCalendarCard: View {
     var records: [WorkoutRecord]
     var schedule: WeeklySchedule
     var routines: [RoutineInfo]
@@ -15,7 +15,6 @@ struct MonthCalendarSheet: View {
     var onMove: (Date, Date, [UUID]) -> Void
 
     @Environment(Preferences.self) private var preferences
-    @Environment(\.dismiss) private var dismiss
     @State private var month = Date()
     /// Rebuilt only when the month or the inputs change — as a computed property it regrouped
     /// every record and looked up 30 schedule days on every tap of a day cell.
@@ -23,30 +22,21 @@ struct MonthCalendarSheet: View {
     @State private var selected: MonthCalendarDay?
     @State private var moveDate: Date?
 
-    private static let columns = Array(repeating: GridItem(.flexible(), spacing: DGSpace.s1), count: 7)
+    private static let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 7)
 
     var body: some View {
-        VStack(spacing: DGSpace.s4) {
-            Capsule()
-                .fill(DGColor.ink4)
-                .frame(width: 36, height: 5)
-                .padding(.top, DGSpace.s2)
+        VStack(spacing: 14) {
             monthHeader
-            weekdayLabels
-            grid
+            VStack(spacing: 8) {
+                weekdayLabels
+                grid
+            }
             legend
             if let selected {
                 dayPanel(selected)
             }
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, DGSpace.s4)
-        .padding(.bottom, DGSpace.s5)
-        .frame(maxWidth: .infinity, alignment: .top)
-        .background(DGColor.surface1)
-        .clipShape(RoundedRectangle(cornerRadius: DGRadius.sheet, style: .continuous))
-        .presentationDetents([.large])
-        .presentationDragIndicator(.hidden)
+        .dgCard(radius: 24, padding: 18)
         .dgAnimation(DGMotion.standard, value: selected)
         .onAppear(perform: rebuildModel)
         .onChange(of: month) { _, _ in rebuildModel() }
@@ -65,25 +55,36 @@ struct MonthCalendarSheet: View {
     }
 
     private var monthHeader: some View {
-        HStack {
-            DGIconButton(symbol: "chevron.left", size: 36, accessibilityLabel: "Previous month") {
-                shift(by: -1)
-            }
-            Spacer()
+        HStack(spacing: DGSpace.s3) {
             Text(Self.monthLabel(month))
-                .font(DGFont.title3)
+                .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(DGColor.ink1)
             Spacer()
-            DGIconButton(symbol: "chevron.right", size: 36, accessibilityLabel: "Next month") {
-                shift(by: 1)
-            }
+            monthButton("chevron.left", label: "Previous month") { shift(by: -1) }
+            monthButton("chevron.right", label: "Next month") { shift(by: 1) }
         }
+    }
+
+    private func monthButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(DGColor.ink3)
+                .frame(width: 30, height: 30)
+                .background(DGColor.ink1.opacity(0.06), in: Circle())
+        }
+        .buttonStyle(.dgControl)
+        .accessibilityLabel(label)
     }
 
     private var weekdayLabels: some View {
         LazyVGrid(columns: Self.columns, spacing: 0) {
             ForEach(Weekday.ordered(mondayFirst: preferences.weekStartsMonday), id: \.self) { weekday in
-                Text(weekday.shortLabel).dgLabel().frame(maxWidth: .infinity)
+                Text(String(weekday.shortLabel.prefix(1)))
+                    .font(.system(size: 10.5, weight: .bold))
+                    .tracking(0.4)
+                    .foregroundStyle(DGColor.ink3)
+                    .frame(maxWidth: .infinity)
             }
         }
     }
@@ -93,15 +94,15 @@ struct MonthCalendarSheet: View {
         let current = model ?? MonthCalendarModel(
             month: month, records: records, schedule: schedule, routines: routines, calendar: calendar
         )
-        LazyVGrid(columns: Self.columns, spacing: DGSpace.s1) {
+        LazyVGrid(columns: Self.columns, spacing: 6) {
             ForEach(0..<current.leadingBlanks, id: \.self) { _ in
-                Color.clear.frame(height: 44)
+                Color.clear.aspectRatio(1, contentMode: .fit)
             }
             ForEach(current.days) { day in
                 Button {
                     select(day)
                 } label: {
-                    MonthCalendarDayCell(day: day, isSelected: day == selected)
+                    MonthCalendarDayCell(day: day, maxLoadKg: current.maxLoadKg, isSelected: day == selected)
                 }
                 .buttonStyle(.dgControl)
                 .accessibilityLabel(Self.accessibilityLabel(day))
@@ -110,13 +111,17 @@ struct MonthCalendarSheet: View {
     }
 
     private var legend: some View {
-        HStack(spacing: DGSpace.s4) {
-            MonthCalendarLegendDot(kind: .filled, label: "Trained")
-            MonthCalendarLegendDot(kind: .ring, label: "Planned")
-            MonthCalendarLegendDot(kind: .arrow, label: "Moved")
+        HStack(spacing: 7) {
+            Text("Lighter").font(.system(size: 11, weight: .semibold)).foregroundStyle(DGColor.ink3)
+            ForEach(Array(MonthCalendarDayCell.ramp.dropFirst().enumerated()), id: \.offset) { _, tint in
+                MonthCalendarLegendDot(kind: .filled(tint), label: "")
+            }
+            Text("Heavier").font(.system(size: 11, weight: .semibold)).foregroundStyle(DGColor.ink3)
             Spacer()
+            MonthCalendarLegendDot(kind: .dashed, label: "Planned")
         }
-        .padding(.top, DGSpace.s1)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Lighter to heavier tint by tonnage; dashed means planned")
     }
 
     @ViewBuilder
@@ -133,28 +138,22 @@ struct MonthCalendarSheet: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .dgCard()
+        .padding(.top, 4)
     }
 
     @ViewBuilder
     private func actions(_ day: MonthCalendarDay) -> some View {
-        HStack(spacing: DGSpace.s3) {
+        HStack(spacing: DGSpace.s2) {
             if let workoutID = day.workoutID {
-                DGPrimaryButton(title: "View Workout") {
-                    dismiss()
-                    onOpenWorkout(workoutID)
-                }
+                accentButton("View workout") { onOpenWorkout(workoutID) }
             } else {
                 if !day.plannedRoutineIDs.isEmpty {
-                    glassButton("Move Session") {
+                    TrainQuietButton(title: "Move session") {
                         moveDate = calendar.date(byAdding: .day, value: 1, to: day.date) ?? day.date
                     }
                 }
                 if day.isPast || day.isToday {
-                    DGPrimaryButton(title: "Log a Past Workout") {
-                        dismiss()
-                        onBackfill(day.date)
-                    }
+                    accentButton("Log a past workout") { onBackfill(day.date) }
                 }
             }
         }
@@ -171,9 +170,9 @@ struct MonthCalendarSheet: View {
             .tint(DGColor.coral)
             .font(DGFont.body)
             .foregroundStyle(DGColor.ink1)
-            HStack(spacing: DGSpace.s3) {
-                glassButton("Cancel") { moveDate = nil }
-                DGPrimaryButton(title: "Move") {
+            HStack(spacing: DGSpace.s2) {
+                TrainQuietButton(title: "Cancel") { moveDate = nil }
+                accentButton("Move") {
                     onMove(day.date, newDate, day.plannedRoutineIDs)
                     moveDate = nil
                     selected = nil
@@ -182,14 +181,15 @@ struct MonthCalendarSheet: View {
         }
     }
 
-    private func glassButton(_ title: String, action: @escaping () -> Void) -> some View {
+    /// The prototype's filled accent button inside a card: 13.5/600 on the accent, radius 14.
+    private func accentButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(DGFont.condensedLabel(15))
-                .foregroundStyle(DGColor.ink1)
+                .font(.system(size: 13.5, weight: .semibold))
+                .foregroundStyle(DGColor.inkOnCoral)
                 .frame(maxWidth: .infinity)
-                .frame(minHeight: 52)
-                .dgGlass(.regular, radius: DGRadius.lg)
+                .frame(minHeight: 44)
+                .background(DGColor.coral, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.dgControl)
     }
@@ -223,11 +223,11 @@ struct MonthCalendarSheet: View {
     }
 
     private static func dayLabel(_ date: Date) -> String {
-        dayFormatter.string(from: date).uppercased()
+        dayFormatter.string(from: date)
     }
 
     private static func accessibilityLabel(_ day: MonthCalendarDay) -> String {
-        let base = dayLabel(day.date).capitalized
+        let base = dayLabel(day.date)
         switch day.state {
         case .trained(_, let title): return "\(base), trained, \(title)"
         case .planned(_, let title, let rescheduled):
@@ -238,13 +238,13 @@ struct MonthCalendarSheet: View {
 }
 
 #Preview {
-    Color.black
-        .ignoresSafeArea()
-        .sheet(isPresented: .constant(true)) {
-            MonthCalendarSheet(
-                records: SampleData.history, schedule: WeeklySchedule(), routines: [SampleData.pushA],
-                onOpenWorkout: { _ in }, onBackfill: { _ in }, onMove: { _, _, _ in }
-            )
-            .environment(Preferences())
-        }
+    ZStack {
+        AmbientWash()
+        MonthCalendarCard(
+            records: SampleData.history, schedule: WeeklySchedule(), routines: [SampleData.pushA],
+            onOpenWorkout: { _ in }, onBackfill: { _ in }, onMove: { _, _, _ in }
+        )
+        .padding()
+    }
+    .environment(Preferences())
 }

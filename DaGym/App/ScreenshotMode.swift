@@ -328,9 +328,9 @@ private struct ScreenshotScreenView: View {
                 WorkoutSummaryView(summary: summary, title: session.title, onDone: {})
             }
         case .progress:
-            tabbed(.you) { HistoryTabView() }
+            tabbed(.you) { NavigationStack { ProgressHubView() } }
         case .chart:
-            tabbed(.you) { HistoryTabView() }.sheet(isPresented: .constant(true)) { ProgressScreen() }
+            tabbed(.you) { NavigationStack { ProgressScreen() } }
         case .records:
             tabbed(.you) { NavigationStack { PersonalRecordsView() } }
         case .consistency:
@@ -338,9 +338,9 @@ private struct ScreenshotScreenView: View {
         case .milestones:
             tabbed(.you) { NavigationStack { MilestonesView() } }
         case .recovery:
-            RootView().sheet(isPresented: .constant(true)) { RecoveryMapView() }
+            tabbed(.you) { NavigationStack { RecoveryMapView() } }
         case .body:
-            RootView().sheet(isPresented: .constant(true)) { BodyView() }
+            tabbed(.you) { NavigationStack { BodyView() } }
         case .routines:
             tabbed(.train) { RoutinesTabView(onStart: { _ in }) }
         case .builder:

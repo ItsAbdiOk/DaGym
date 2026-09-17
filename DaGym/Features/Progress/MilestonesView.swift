@@ -2,9 +2,12 @@ import GymCore
 import SwiftData
 import SwiftUI
 
-/// Milestones — a grid of every bronze/silver/gold tier the app tracks (plan.md §6.4, §7),
-/// earned ones up top in their tier colour, locked ones with a progress bar to the next tier.
-struct MilestonesView: View {
+/// Milestones as a card: "14 of 32 earned", then one row per milestone — a tinted trophy
+/// circle (tier colour once earned, a low ink while locked), the title over a progress bar to
+/// the next tier, and the percentage. Earned ones first. Tapping a row opens every tier.
+struct MilestonesCard: View {
+    var generation = 0
+
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
     @State private var progress: [MilestoneProgress] = []
@@ -12,30 +15,23 @@ struct MilestonesView: View {
     @State private var selected: MilestoneProgress?
 
     var body: some View {
-        ZStack {
-            AmbientWash()
-            ScrollView {
-                VStack(alignment: .leading, spacing: DGSpace.s6) {
-                    header
-                    VStack(spacing: DGSpace.s3) {
-                        ForEach(earned) { item in
-                            MilestoneCard(
-                                item: item, earnedLine: earnedLine(for: item), unit: preferences.weightUnit
-                            ) { selected = item }
-                        }
-                        ForEach(locked) { item in
-                            MilestoneCard(
-                                item: item, earnedLine: nil, unit: preferences.weightUnit
-                            ) { selected = item }
-                        }
-                    }
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                ProgressCardTitle(title: "Milestones")
+                Text("\(earned.count) of \(progress.count) earned")
+                    .font(.system(size: 12.5))
+                    .monospacedDigit()
+                    .foregroundStyle(DGColor.ink3)
+            }
+            VStack(spacing: 10) {
+                ForEach(earned + locked) { item in
+                    MilestoneRow(item: item, subtitle: subtitle(for: item)) { selected = item }
                 }
-                .padding(.horizontal, DGSpace.s4)
-                .padding(.top, DGSpace.s3)
-                .padding(.bottom, DGSpace.s8)
             }
         }
-        .task { refresh() }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dgCard(radius: 20, padding: DGSpace.s4)
+        .task(id: generation) { refresh() }
         .sheet(item: $selected) { item in
             MilestoneDetailSheet(
                 item: item, achievements: achievements.filter { $0.milestoneID == item.id },
@@ -44,28 +40,38 @@ struct MilestonesView: View {
         }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s1) {
-            Text("Milestones")
-                .font(DGFont.title1)
-                .foregroundStyle(DGColor.ink1)
-            Text("\(earned.count) of \(progress.count) earned")
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink3)
-        }
-    }
-
     private var earned: [MilestoneProgress] { progress.filter { $0.currentTier != nil } }
     private var locked: [MilestoneProgress] { progress.filter { $0.currentTier == nil } }
 
-    private func earnedLine(for item: MilestoneProgress) -> String? {
+    private func subtitle(for item: MilestoneProgress) -> String {
         achievements.first { $0.milestoneID == item.id && $0.tier == item.currentTier }?.line
+            ?? MilestoneCopy.lockedSubtitle(
+                metric: item.definition.metric, nextThreshold: item.nextThreshold,
+                unit: preferences.weightUnit
+            )
     }
 
     private func refresh() {
         let weeklyGoal = preferences.weeklyGoal
         progress = store.milestoneProgress(weeklyGoal: weeklyGoal, calendar: preferences.trainingCalendar)
         achievements = store.achievements()
+    }
+}
+
+/// Milestones as a pushed screen of its own (the Progress hub's row, the screenshot list).
+struct MilestonesView: View {
+    var body: some View {
+        ZStack {
+            AmbientWash()
+            ScrollView {
+                MilestonesCard()
+                    .padding(.horizontal, DGSpace.s4)
+                    .padding(.top, DGSpace.s3)
+                    .padding(.bottom, DGSpace.s8)
+            }
+        }
+        .navigationTitle("Milestones")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -99,91 +105,68 @@ enum MilestoneCopy {
     }
 }
 
-/// One milestone card: tier badge (earned) or a lock (locked), title, subtitle, progress bar.
-private struct MilestoneCard: View {
+/// One milestone row: trophy circle, title, subtitle, progress bar, percent.
+private struct MilestoneRow: View {
     var item: MilestoneProgress
-    var earnedLine: String?
-    var unit: WeightUnit
+    var subtitle: String
     var onTap: () -> Void
 
     var body: some View {
         Button(action: onTap) {
-            HStack(alignment: .top, spacing: DGSpace.s3) {
-                badge
-                VStack(alignment: .leading, spacing: DGSpace.s1) {
-                    Text(item.definition.title.uppercased())
-                        .font(DGFont.title3)
-                        .foregroundStyle(item.currentTier != nil ? tierColor : DGColor.ink1)
-                    Text(earnedLine ?? lockedSubtitle)
-                        .font(DGFont.footnote)
+            HStack(spacing: 11) {
+                Circle()
+                    .fill(tierColor)
+                    .frame(width: 34, height: 34)
+                    .overlay {
+                        Image(systemName: item.currentTier != nil ? "trophy.fill" : "lock.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(item.currentTier != nil ? .white : DGColor.ink3)
+                    }
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.definition.title)
+                        .font(.system(size: 13.5, weight: .semibold))
+                        .foregroundStyle(DGColor.ink1)
+                    Text(subtitle)
+                        .font(.system(size: 11.5))
                         .foregroundStyle(DGColor.ink3)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if item.currentTier == nil || item.nextThreshold != nil { progressBar }
+                        .lineLimit(1)
+                    progressBar
                 }
-                Spacer(minLength: 0)
+                Text("\(Int((item.progress * 100).rounded()))%")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(DGColor.ink3)
             }
-            .padding(DGSpace.s4)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(cardFill, in: RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: DGRadius.lg, style: .continuous)
-                    .strokeBorder(cardStroke, lineWidth: 1)
-            }
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.dgCard)
+        .buttonStyle(.dgRow)
         .accessibilityElement(children: .combine)
         // The bar is hidden; say what it shows.
         .accessibilityValue("\(Int((item.progress * 100).rounded())) percent to next tier")
     }
 
-    private var badge: some View {
-        RoundedRectangle(cornerRadius: DGRadius.sm, style: .continuous)
-            .fill(item.currentTier != nil ? tierColor : DGColor.surface3)
-            .frame(width: 44, height: 44)
-            .overlay {
-                Image(systemName: item.currentTier != nil ? "star.fill" : "lock.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(item.currentTier != nil ? DGColor.inkOnCoral : DGColor.ink3)
-            }
-            .accessibilityHidden(true)
-    }
-
     private var progressBar: some View {
         GeometryReader { geo in
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .fill(DGColor.surface3)
+            Capsule()
+                .fill(DGColor.ink1.opacity(0.09))
                 .overlay(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    Capsule()
                         .fill(item.currentTier != nil ? tierColor : DGColor.coral)
                         .frame(width: geo.size.width * item.progress)
                 }
         }
-        .frame(height: 6)
-        .padding(.top, 2)
+        .frame(height: 5)
         .accessibilityHidden(true)
-    }
-
-    private var lockedSubtitle: String {
-        MilestoneCopy.lockedSubtitle(
-            metric: item.definition.metric, nextThreshold: item.nextThreshold, unit: unit
-        )
     }
 
     private var tierColor: Color {
         switch item.currentTier {
-        case .bronze: return DGColor.prGoldDeep
-        case .silver: return DGColor.ink3
-        case .gold: return DGColor.prGold
-        case nil: return DGColor.ink3
+        case .bronze: DGColor.prGoldDeep
+        case .silver: DGColor.ink3
+        case .gold: DGColor.prGold
+        case nil: DGColor.ink1.opacity(0.08)
         }
-    }
-
-    private var cardFill: Color {
-        item.currentTier != nil ? tierColor.opacity(0.10) : DGColor.surface2
-    }
-
-    private var cardStroke: Color {
-        item.currentTier != nil ? tierColor.opacity(0.35) : DGColor.hairline
     }
 }
 

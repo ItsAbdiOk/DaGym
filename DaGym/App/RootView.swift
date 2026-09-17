@@ -76,10 +76,10 @@ struct RootView: View {
             GymCardSheet()
         }
         .sheet(isPresented: $showRecovery) {
-            RecoveryMapView()
+            NavigationStack { RecoveryMapView() }
         }
         .sheet(isPresented: $showingBody) {
-            BodyView()
+            NavigationStack { BodyView() }
         }
         .sheet(isPresented: $showingWeighIn, onDismiss: runPendingWorkoutStart) {
             BodyweightSheet()

@@ -18,6 +18,8 @@ struct MonthCalendarDay: Identifiable, Hashable {
     let state: State
     let isToday: Bool
     let isPast: Bool
+    /// Tonnage logged that day, for the calendar's lighter → heavier tint; 0 on a free day.
+    var loadKg: Double = 0
 
     var workoutID: UUID? {
         if case .trained(let id, _) = state { return id }
@@ -66,8 +68,10 @@ struct MonthCalendarModel: Hashable {
             guard let date = calendar.date(byAdding: .day, value: offset, to: start) else { return nil }
             let key = DateKey.string(for: date, calendar: calendar)
             let state: MonthCalendarDay.State
+            var loadKg = 0.0
             if let record = trained[key]?.min(by: { $0.date < $1.date }) {
                 state = .trained(workoutID: record.id, title: record.title)
+                loadKg = trained[key]?.reduce(0) { $0 + $1.volumeKg } ?? 0
             } else {
                 let ids = schedule.routineIDs(on: date, calendar: calendar)
                 let planned = ids.compactMap { id in routines.first { $0.id == id } }
@@ -82,10 +86,13 @@ struct MonthCalendarModel: Hashable {
             }
             return MonthCalendarDay(
                 key: key, date: date, dayNumber: offset + 1, state: state,
-                isToday: calendar.isDate(date, inSameDayAs: today), isPast: date < today
+                isToday: calendar.isDate(date, inSameDayAs: today), isPast: date < today, loadKg: loadKg
             )
         }
     }
+
+    /// The month's heaviest day — the top of the calendar's tint ramp.
+    var maxLoadKg: Double { days.map(\.loadKg).max() ?? 0 }
 
     var trainedCount: Int { days.filter { $0.workoutID != nil }.count }
     var plannedCount: Int { days.filter { !$0.plannedRoutineIDs.isEmpty }.count }

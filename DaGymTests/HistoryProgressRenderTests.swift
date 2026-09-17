@@ -122,4 +122,78 @@ struct HistoryProgressRenderTests {
         #expect(first.id == date)
         #expect(first.id == second.id)
     }
+
+    // MARK: - Month calendar load tint
+
+    @Test("a day is tinted lighter to heavier as a share of the month's heaviest day")
+    func calendarLoadLevelQuartiles() {
+        #expect(MonthCalendarDayCell.loadLevel(loadKg: 0, maxLoadKg: 8000) == 0)
+        #expect(MonthCalendarDayCell.loadLevel(loadKg: 500, maxLoadKg: 0) == 0)
+        #expect(MonthCalendarDayCell.loadLevel(loadKg: 1000, maxLoadKg: 8000) == 1)
+        #expect(MonthCalendarDayCell.loadLevel(loadKg: 3000, maxLoadKg: 8000) == 2)
+        #expect(MonthCalendarDayCell.loadLevel(loadKg: 5000, maxLoadKg: 8000) == 3)
+        #expect(MonthCalendarDayCell.loadLevel(loadKg: 8000, maxLoadKg: 8000) == 4)
+    }
+
+    @Test("the month model carries each trained day's tonnage and the month's heaviest")
+    func monthModelLoad() {
+        let now = Self.date(14, month: 1)
+        var heavy = Self.record("Heavy", day: 5, month: 1)
+        heavy.volumeKg = 6000
+        let model = MonthCalendarModel(
+            month: now, records: [heavy, Self.record("Light", day: 9, month: 1)], schedule: WeeklySchedule(),
+            routines: [], calendar: Self.calendar(), now: now
+        )
+        let byDay = Dictionary(uniqueKeysWithValues: model.days.map { ($0.dayNumber, $0) })
+        #expect(byDay[5]?.loadKg == 6000)
+        #expect(byDay[9]?.loadKg == 1000)
+        #expect(byDay[10]?.loadKg == 0)
+        #expect(model.maxLoadKg == 6000)
+    }
+
+    // MARK: - Progress hub
+
+    @Test("the coverage split counts muscles at the coach floor as on target, the rest as behind")
+    func coverageSplit() {
+        let floor = TrainingConstants.coachMinSetsPerMuscleInWindow
+        let snapshot = RecoverySnapshot(
+            map: [:], perMuscle: [], untrainedMuscles: [],
+            detrainedMuscles: [
+                MuscleRetention(muscle: .calves, retention: 0.7, lastTrained: Self.date(1, month: 1))
+            ]
+        )
+        let sets: [Muscle: Double] = [.chest: floor + 2, .biceps: floor - 1, .quads: floor]
+        let split = ProgressHubSummary.coverageSplit(setsPerMuscle: sets, snapshot: snapshot)
+        #expect(split.onTarget == 2)
+        // Biceps under the floor, calves trained once but with nothing in the window.
+        #expect(split.behind == 2)
+        let gap = ProgressHubSummary.widestGap(setsPerMuscle: sets, snapshot: snapshot)
+        #expect(gap?.muscle == .calves)
+        #expect(gap?.sets == 0)
+    }
+
+    @Test("needs work prefers the longest-idle muscle, then the widest coverage gap")
+    func needsWorkFallbacks() {
+        let now = Self.date(14, month: 1)
+        let idle = RecoverySnapshot(
+            map: [:], perMuscle: [], untrainedMuscles: [],
+            detrainedMuscles: [
+                MuscleRetention(muscle: .calves, retention: 0.7, lastTrained: Self.date(5, month: 1))
+            ]
+        )
+        let gap = ProgressHubSummary.CoverageGap(muscle: .biceps, sets: 2)
+        #expect(ProgressHubSummary.needsWork(snapshot: idle, gap: gap, now: now)?.muscle == .calves)
+        #expect(ProgressHubSummary.needsWork(snapshot: idle, gap: gap, now: now)?.detail == "9 days idle")
+        let fresh = RecoverySnapshot(map: [:], perMuscle: [], untrainedMuscles: [])
+        let fromGap = ProgressHubSummary.needsWork(snapshot: fresh, gap: gap, now: now)
+        #expect(fromGap?.muscle == .biceps)
+        #expect(fromGap?.detail == "2 sets in 14 days")
+        #expect(ProgressHubSummary.needsWork(snapshot: fresh, gap: nil, now: now) == nil)
+    }
+
+    @Test("the average-time tile prints whole minutes")
+    func minutesLabel() {
+        #expect(ThisWeekStrip.minutesLabel(3_240) == "54m")
+        #expect(ThisWeekStrip.minutesLabel(59) == "0m")
+    }
 }

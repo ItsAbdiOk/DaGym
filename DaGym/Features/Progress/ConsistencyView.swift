@@ -2,9 +2,11 @@ import GymCore
 import OSLog
 import SwiftUI
 
-/// The Consistency screen (plan.md §6.4): current/longest streak, a GitHub-style 12-month
-/// heatmap shaded by sets or minutes, and a Weekly Recap card with week-over-week deltas.
-struct ConsistencyView: View {
+/// The Consistency face of "This week": current/longest streak tiles, a GitHub-style 12-month
+/// heatmap shaded by sets or minutes, and the weekly recap with week-over-week deltas.
+struct ConsistencySection: View {
+    var generation = 0
+
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
 
@@ -20,36 +22,21 @@ struct ConsistencyView: View {
     private static let signposter = OSSignposter(subsystem: "dev.abdirahmanmohamed.dagym", category: "perf")
 
     var body: some View {
-        ZStack {
-            AmbientWash()
-            ScrollView {
-                VStack(alignment: .leading, spacing: DGSpace.s6) {
-                    header
-                    streakTiles
-                    HeatmapCard(
-                        grid: grid, monthLabels: monthLabels, maxMinutes: maxMinutes,
-                        shadeBySets: $shadeBySets, selectedCell: $selectedCell
-                    )
-                    if let recap { WeeklyRecapCard(recap: recap, preferences: preferences) }
-                }
-                .padding(.horizontal, DGSpace.s4)
-                .padding(.top, DGSpace.s3)
-                .padding(.bottom, DGSpace.s8)
-            }
+        VStack(alignment: .leading, spacing: DGSpace.s3) {
+            streakTiles
+            HeatmapCard(
+                grid: grid, monthLabels: monthLabels, maxMinutes: maxMinutes,
+                shadeBySets: $shadeBySets, selectedCell: $selectedCell
+            )
+            if let recap { WeeklyRecapCard(recap: recap, preferences: preferences) }
         }
-        .task { refresh() }
-    }
-
-    private var header: some View {
-        Text("Consistency")
-            .font(DGFont.title1)
-            .foregroundStyle(DGColor.ink1)
+        .task(id: generation) { refresh() }
     }
 
     private var streakTiles: some View {
-        DGAdaptiveStack(spacing: DGSpace.s3) {
-            StreakTile(title: "Current Streak", value: streak.current, tint: DGColor.prGoldText, gold: true)
-            StreakTile(title: "Longest", value: streak.longest, tint: DGColor.ink1, gold: false)
+        DGAdaptiveStack(spacing: DGSpace.s2) {
+            StreakTile(value: streak.current, label: "Week streak")
+            StreakTile(value: streak.longest, label: "Longest")
         }
     }
 
@@ -69,31 +56,42 @@ struct ConsistencyView: View {
     }
 }
 
-/// "Current Streak" (gold-tinted, matches PR chrome) or "Longest" glass tile.
+/// Consistency as a pushed screen of its own (the screenshot list still opens it).
+struct ConsistencyView: View {
+    var body: some View {
+        ZStack {
+            AmbientWash()
+            ScrollView {
+                ConsistencySection()
+                    .padding(.horizontal, DGSpace.s4)
+                    .padding(.top, DGSpace.s3)
+                    .padding(.bottom, DGSpace.s8)
+            }
+        }
+        .navigationTitle("Consistency")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// "7 / Week streak" — a centred white tile.
 private struct StreakTile: View {
-    var title: String
     var value: Int
-    var tint: Color
-    var gold: Bool
+    var label: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s2) {
-            Text(title).dgLabel(gold ? DGColor.prGoldText : DGColor.ink3)
-            HStack(alignment: .firstTextBaseline, spacing: DGSpace.s1) {
-                Text("\(value)").dgMetric(DGFont.metricL).foregroundStyle(tint)
-                Text(value == 1 ? "week" : "weeks").dgLabel()
-            }
+        VStack(spacing: 6) {
+            Text("\(value)")
+                .font(.system(size: 26, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(DGColor.ink1)
+            Text(label)
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(DGColor.ink3)
         }
-        .accessibilityElement(children: .combine)
-        .padding(DGSpace.s4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .dgGlass(.regular, radius: DGRadius.md)
-        .overlay {
-            if gold {
-                RoundedRectangle(cornerRadius: DGRadius.md, style: .continuous)
-                    .strokeBorder(DGColor.prGold.opacity(0.4), lineWidth: 1)
-            }
-        }
+        .frame(maxWidth: .infinity)
+        .dgCard(radius: 18, padding: DGSpace.s4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label), \(value) \(value == 1 ? "week" : "weeks")")
     }
 }
 
@@ -130,8 +128,7 @@ struct HeatmapCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s4) {
             HStack {
-                Text("12 Months").dgLabel()
-                Spacer()
+                ProgressCardTitle(title: "Last 12 months")
                 DGChip(title: "Sets", selected: shadeBySets) { shadeBySets = true }
                 DGChip(title: "Time", selected: !shadeBySets) { shadeBySets = false }
             }
@@ -164,7 +161,7 @@ struct HeatmapCard: View {
                     .foregroundStyle(DGColor.ink2)
             }
         }
-        .dgCard()
+        .dgCard(radius: 20, padding: DGSpace.s4)
     }
 
     private var monthHeader: some View {
@@ -235,13 +232,13 @@ struct HeatmapCard: View {
     /// on hue discrimination.
     private var legend: some View {
         HStack(spacing: DGSpace.s1) {
-            Text("None").dgLabel()
+            Text("Less").font(.system(size: 11, weight: .medium)).foregroundStyle(DGColor.ink3)
             ForEach(Array(ramp.enumerated()), id: \.offset) { _, tint in
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
                     .fill(tint)
-                    .frame(width: Self.squareSize, height: Self.squareSize)
+                    .frame(width: 12, height: 12)
             }
-            Text("4+ Sets").dgLabel()
+            Text("More").font(.system(size: 11, weight: .medium)).foregroundStyle(DGColor.ink3)
         }
     }
 
@@ -263,7 +260,7 @@ struct WeeklyRecapCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s4) {
-            Text("Weekly Recap").dgLabel()
+            ProgressCardTitle(title: "Weekly recap")
             DGAdaptiveStack(spacing: DGSpace.s4) {
                 metric(
                     value: preferences.formatVolume(kg: recap.volumeKg),
@@ -281,7 +278,7 @@ struct WeeklyRecapCard: View {
                 )
             }
         }
-        .dgCard()
+        .dgCard(radius: 20, padding: DGSpace.s4)
     }
 
     private var percentDelta: (text: String, good: Bool)? {
@@ -305,7 +302,7 @@ struct WeeklyRecapCard: View {
                 if let delta {
                     Text(delta.text)
                         .font(DGFont.caption)
-                        .foregroundStyle(delta.good ? DGColor.success : DGColor.danger)
+                        .foregroundStyle(delta.good ? DGColor.coralText : DGColor.ink3)
                 }
             }
             Text(unit).font(DGFont.footnote).foregroundStyle(DGColor.ink3)
@@ -325,7 +322,7 @@ struct WeeklyRecapCard: View {
 
 #Preview {
     if let store = PreviewStore.make() {
-        ConsistencyView()
+        NavigationStack { ConsistencyView() }
             .environment(store)
             .environment(Preferences())
     }

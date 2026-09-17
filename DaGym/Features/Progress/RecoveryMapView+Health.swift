@@ -1,44 +1,43 @@
 import SwiftUI
 
-/// `RecoveryMapView`'s Apple Health context card — resting heart rate, HRV and last night's
-/// sleep, shown alongside the muscle recovery map as plain information, never a readiness score
-/// or a training recommendation. Split out of `RecoveryMapView.swift` to stay under the
-/// type-body-length lint limit; relies on members that file deliberately left non-`private`
-/// (`preferences`, `healthInsights`, `recoverySignals`, `isShowingHealthSettings`) since
-/// `private` is file-scoped and this is a separate file.
+/// `RecoveryMapView`'s "Apple Health context" card — resting heart rate, HRV and last night's
+/// sleep as three tiles, shown alongside the recovery map as plain information, never a
+/// readiness score or a training recommendation. Split out of `RecoveryMapView.swift` to stay
+/// under the type-body-length lint limit; relies on members that file deliberately left
+/// non-`private` (`preferences`, `healthInsights`, `recoverySignals`, `isShowingHealthSettings`)
+/// since `private` is file-scoped and this is a separate file.
 extension RecoveryMapView {
     @ViewBuilder
     var healthContextCard: some View {
         if let recoverySignals {
             VStack(alignment: .leading, spacing: DGSpace.s3) {
-                Text("Health").dgLabel()
-                VStack(spacing: DGSpace.s2) {
+                ProgressCardTitle(title: "Apple Health context")
+                HStack(spacing: DGSpace.s2) {
                     if let rhr = recoverySignals.restingHeartRate {
                         let average = recoverySignals.restingHeartRateAverage30Day
-                        healthRow(
-                            title: "Resting Heart Rate", value: "\(Int(rhr.value.rounded())) bpm",
-                            date: rhr.date, trend: trendText(current: rhr.value, average: average)
+                        healthTile(
+                            value: "\(Int(rhr.value.rounded()))", label: "Resting HR", date: rhr.date,
+                            trend: trendText(current: rhr.value, average: average)
                         )
                     }
                     if let hrv = recoverySignals.hrv {
-                        let average = recoverySignals.hrvAverage30Day
-                        healthRow(
-                            title: "Heart Rate Variability", value: "\(Int(hrv.value.rounded())) ms",
-                            date: hrv.date, trend: trendText(current: hrv.value, average: average)
+                        healthTile(
+                            value: "\(Int(hrv.value.rounded())) ms", label: "HRV", date: hrv.date,
+                            trend: trendText(current: hrv.value, average: recoverySignals.hrvAverage30Day)
                         )
                     }
                     if let sleep = recoverySignals.sleep {
-                        healthRow(
-                            title: "Last Night's Sleep", value: Self.sleepLabel(sleep), date: sleep.end,
-                            trend: nil
+                        healthTile(
+                            value: Self.sleepLabel(sleep), label: "Last night", date: sleep.end, trend: nil
                         )
                     }
                 }
-                Text("Context only — not a readiness score.")
+                Text("Context only, not advice.")
                     .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.ink4)
+                    .foregroundStyle(DGColor.ink3)
             }
-            .dgCard()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .dgCard(radius: 20, padding: DGSpace.s4)
         } else if healthInsights.shouldOfferPermissionCheck(
             toggleOn: preferences.healthReadRecovery, hasData: false
         ) {
@@ -61,30 +60,31 @@ extension RecoveryMapView {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func healthRow(title: String, value: String, date: Date, trend: String?) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(DGFont.body).foregroundStyle(DGColor.ink1)
-                Text(Self.dateLabel(date)).font(DGFont.footnote).foregroundStyle(DGColor.ink4)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(value).font(DGFont.title3).foregroundStyle(DGColor.ink1)
-                if let trend {
-                    Text(trend).font(DGFont.footnote).foregroundStyle(DGColor.ink3)
-                }
-            }
+    /// "52 / Resting HR" on a low ink wash; the date and 30-day trend go to VoiceOver only.
+    private func healthTile(value: String, label: String, date: Date, trend: String?) -> some View {
+        VStack(spacing: 6) {
+            Text(value)
+                .font(.system(size: 17, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(DGColor.ink1)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(DGColor.ink3)
         }
-        .padding(.horizontal, DGSpace.s4)
-        .frame(minHeight: DGTap.min)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 8)
+        .background(DGColor.ink1.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(rowAccessibilityLabel(title: title, value: value, date: date, trend: trend))
+        .accessibilityLabel(tileAccessibilityLabel(label: label, value: value, date: date, trend: trend))
     }
 
-    private func rowAccessibilityLabel(title: String, value: String, date: Date, trend: String?) -> String {
-        var label = "\(title): \(value), \(Self.dateLabel(date))"
-        if let trend { label += ", \(trend)" }
-        return label
+    private func tileAccessibilityLabel(label: String, value: String, date: Date, trend: String?) -> String {
+        var text = "\(label): \(value), \(Self.dateLabel(date))"
+        if let trend { text += ", \(trend)" }
+        return text
     }
 
     /// Strictly descriptive: "up/down from your 30-day average", never a judgment call. Nil when

@@ -148,9 +148,9 @@ enum YouDestination: Hashable {
 
     @MainActor @ViewBuilder var screen: some View {
         switch self {
-        case .progress: HistoryTabView()
+        case .progress: ProgressHubView()
         case .history: HistoryTabView()
-        case .muscles: RecoveryMapView()
+        case .muscles: RecoveryMapView(initialMode: .balance)
         case .body: BodyView()
         case .coach: CoachChatScreen()
         case .settings: SettingsView()

@@ -113,6 +113,13 @@ enum A11yID {
     static let recoveryMode = "recovery.mode"
     static let recoveryHardSets = "recovery.hardSets"
     static let recoveryWindow = "recovery.window"
+    /// `label` is the `MuscleMapMode` title ("Balance" / "Recovery" / "Strength").
+    static func recoverySegment(_ label: String) -> String { "recovery.segment.\(label.lowercased())" }
+    /// `label` is the `ThisWeekSegment` raw value ("Trends" / "Records" / "Consistency").
+    static func thisWeekSegment(_ label: String) -> String { "thisWeek.segment.\(label.lowercased())" }
+    static let historyLog = "history.log"
+    static let bodyLogReading = "body.logReading"
+    static let bodyEditGoal = "body.editGoal"
 
     static let onboardingNext = "onboarding.next"
     static let onboardingSkip = "onboarding.skip"

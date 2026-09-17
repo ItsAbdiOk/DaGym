@@ -11,7 +11,7 @@ extension BodyView {
     var bodyCompositionCard: some View {
         if let composition {
             VStack(alignment: .leading, spacing: DGSpace.s3) {
-                Text("Body Composition").dgLabel()
+                ProgressCardTitle(title: "Body composition")
                 Text("From Apple Health.").font(DGFont.footnote).foregroundStyle(DGColor.ink4)
                 HStack(spacing: DGSpace.s2) {
                     if let bodyFat = composition.bodyFat {
@@ -34,7 +34,7 @@ extension BodyView {
                 }
                 compositionTrend(composition)
             }
-            .dgCard()
+            .dgCard(radius: 20, padding: DGSpace.s4)
         } else if healthInsights.shouldOfferPermissionCheck(
             toggleOn: preferences.healthReadBodyComposition, hasData: false
         ) {
@@ -59,7 +59,7 @@ extension BodyView {
     }
 
     private func compositionTile(value: String, label: String, date: Date) -> some View {
-        StatTile(value: value, label: label)
+        ProgressStatTile(value: value, label: label)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(label) \(value), measured \(Self.longDateLabel(date))")
     }
