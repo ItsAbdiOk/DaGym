@@ -87,8 +87,8 @@ public enum CoachChatPrompt {
         against what they have been recovering from, progression and rep targets against their history, \
         starting weights against their recent working weights, and whether it actually answers what \
         they asked. The data \(drafterName) read this turn is quoted at the end of the message: work \
-        from it. Call a tool only for something that is not there — one or two reads at most, never \
-        a re-run of what is quoted. Then do exactly one of two things: call \
+        from it. Call a tool only for something that is not there — two reads at most (a third is \
+        refused), never a re-run of what is quoted. Then do exactly one of two things: call \
         agree_with_proposal with the reasons it is sound (name the two or three things you checked), or \
         call the matching propose_* tool with your own version and say, in one short paragraph, what you \
         changed and why. Do not both agree and propose. Do not rewrite for taste — change only what the \
@@ -141,8 +141,10 @@ public enum CoachChatPrompt {
             + "(the lift, the dates, the numbers). No lectures. In a proposed routine, put that line in "
             + "each exercise's `reason` so it shows on the card.",
         "When you make a proposal, the card carries the plan and each exercise's reason. Your reply "
-            + "is then at most three short sentences: the one thing in the data that drove it, and what "
-            + "to look at. Never list the days, exercises or weights the card already shows."
+            + "is then at most two sentences and under 40 words: the one thing in the data that drove "
+            + "it, and what to watch. No opener ('Great question', 'This is a great time to…'), no "
+            + "summary of the card, no closing invitation ('take a look', 'let me know'). Never list "
+            + "the days, exercises or weights the card already shows."
     ]
 
     /// What each read tool is for, so the model reaches for the right one first.

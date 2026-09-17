@@ -10,7 +10,10 @@ import GymCore
 /// index, and the outcome is a `CoachChatReview`. A reviewer that fails leaves the drafter's
 /// card untouched.
 extension CoachChatEngine {
-    static let maxReviewRounds = 6
+    static let maxReviewRounds = 4
+    /// Reads the reviewer may make on top of the quoted evidence. The addendum says "one or two";
+    /// this is what makes it true — the third read gets a refusal and a nudge to decide.
+    static let maxReviewerReads = 2
 
     /// Reviews every draft the drafter added this turn, in order. Stops at the first
     /// cancellation; the review under way is recorded as failed so the card says why.
@@ -89,6 +92,22 @@ extension CoachChatEngine {
         _ call: OpenRouterWire.ToolCall, session: ReviewSession, outcome: inout ReviewOutcome
     ) async -> String {
         guard call.function.name == CoachChatToolName.agreeWithProposal.rawValue else {
+            let isRead = CoachChatToolName(rawValue: call.function.name)?.isProposal != true
+            if isRead {
+                outcome.reads += 1
+                if outcome.reads > Self.maxReviewerReads {
+                    let chipIndex = messages.count
+                    var chip = CoachChatMessage.tool(call.function.name, at: clock())
+                    chip.text = "\(session.shortName) · \(chip.text)"
+                    chip.reviewIndex = session.reviewIndex
+                    appendMessage(chip)
+                    markToolError(at: chipIndex)
+                    return Self.errorJSON(
+                        "Read budget spent: the drafter's evidence is quoted in the message above. Decide "
+                            + "now — call agree_with_proposal, or propose_* with your version."
+                    )
+                }
+            }
             let draftsBefore = drafts.count
             let content = await execute(
                 call, origin: .reviewer, reviewIndex: session.reviewIndex, chipPrefix: session.shortName
@@ -154,8 +173,8 @@ extension CoachChatEngine {
 
     /// Per-result and total caps on the evidence quoted to the reviewer. A muscle-volume read
     /// is a few hundred bytes; a 60-row exercise search is the one that needs trimming.
-    static let evidenceResultCap = 3_000
-    static let evidenceTotalCap = 48_000
+    static let evidenceResultCap = 2_000
+    static let evidenceTotalCap = 24_000
 
     /// The drafter's tool calls and results from one turn, paired up and trimmed, so the
     /// reviewer checks the same numbers instead of paying to fetch them again.
@@ -209,6 +228,8 @@ extension CoachChatEngine {
         var lastText = ""
         var failure: String?
         var stopped = false
+        /// Read tools called so far (`maxReviewerReads`).
+        var reads = 0
 
         var hasVerdict: Bool { agreement != nil || alternativeIndex != nil }
 

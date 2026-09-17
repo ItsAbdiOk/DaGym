@@ -175,6 +175,35 @@ struct CoachChatReviewEngineTests {
         #expect(saved == engine.snapshot())
     }
 
+    @Test("a reviewer's third read is refused and it is told to decide")
+    func readBudget() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let archive = CoachChatArchive(directory: directory)
+        let read = #"{\"exercise_name\":\"Bench Press\"}"#
+        let agree = #"{\"reasons\":[\"Volume matches the last 4 weeks\"],\"confidence\":\"high\"}"#
+        let transport = Fake(Self.drafterReplies + [
+            Self.reply(calls: [
+                ("call_r1", "get_exercise_history", read), ("call_r2", "get_exercise_history", read),
+                ("call_r3", "get_exercise_history", read)
+            ]),
+            Self.reply(calls: [("call_r4", "agree_with_proposal", agree)])
+        ])
+        let executor = makeExecutor()
+        let engine = engine(transport, executor: executor, archive: archive)
+        await engine.send("Build me a push day")
+
+        // Two reads ran; the third never reached the executor and came back as a refusal.
+        #expect(executor.calls.map(\.name) == [
+            "propose_routine", "get_exercise_history", "get_exercise_history"
+        ])
+        let second = try #require(transport.chatRequest(at: 3))
+        let refusal = second.messages.last { $0.role == .tool }
+        #expect(refusal?.content?.contains("Read budget spent") == true)
+        #expect(engine.reviews.count == 1)
+        if case .agreed = engine.reviews[0].verdict {} else { Issue.record("expected agreement") }
+    }
+
     @Test("a reviewer transport error is a failed review and a muted note; the drafter's card stands")
     func transportError() async throws {
         let transport = Fake(Self.drafterReplies + [
