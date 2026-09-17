@@ -44,10 +44,10 @@ struct CoachChatSettingsCard: View {
             CoachChatSettingsDivider()
             caption(costHint).accessibilityIdentifier(A11yID.coachCostHint)
             CoachChatSettingsDivider()
-            navigationRow(label: "Coach usage", value: "Tokens and cost", action: { showingUsage = true })
+            navigationRow(label: "Usage", value: "Tokens and cost", action: { showingUsage = true })
                 .accessibilityIdentifier(A11yID.coachUsageRow)
             CoachChatSettingsDivider()
-            navigationRow(label: "Coach memory", value: "What it remembers", action: { showingMemory = true })
+            navigationRow(label: "Memory", value: "What it remembers", action: { showingMemory = true })
                 .accessibilityIdentifier(A11yID.coachMemoryRow)
             if hasKey {
                 CoachChatSettingsDivider()
@@ -100,7 +100,7 @@ struct CoachChatSettingsCard: View {
     private var consentRow: some View {
         DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Sending your data").font(DGFont.subhead).foregroundStyle(DGColor.ink1)
+                Text("Data sharing consent").font(DGFont.subhead).foregroundStyle(DGColor.ink1)
                 Text(preferences.coachChatConsentGiven ? "Agreed" : "Not yet agreed")
                     .font(DGFont.footnote)
                     .foregroundStyle(preferences.coachChatConsentGiven ? DGColor.success : DGColor.ink3)

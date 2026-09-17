@@ -3,6 +3,9 @@ import SwiftUI
 /// Settings › Display: the accent swatches and appearance, then the screen-awake, photo-lock
 /// and colour-blind-heatmap toggles, then the body figure (plan.md Phase 8).
 struct DisplaySettingsSection: View {
+    /// The design's swatch order: terracotta first, ink last.
+    static let swatchOrder: [DGAccent] = [.coral, .ice, .lime, .violet, .ember]
+
     @Environment(Preferences.self) private var preferences
 
     var body: some View {
@@ -51,7 +54,7 @@ struct DisplaySettingsSection: View {
     private var accentRow: some View {
         SettingsRow(label: "Accent") {
             HStack(spacing: DGSpace.s2) {
-                ForEach(DGAccent.allCases, id: \.self) { accent in
+                ForEach(Self.swatchOrder, id: \.self) { accent in
                     AccentSwatch(accent: accent, isSelected: preferences.accent == accent) {
                         preferences.accent = accent
                     }
