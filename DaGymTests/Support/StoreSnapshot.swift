@@ -13,7 +13,7 @@ import Testing
 struct StoreSnapshot {
     /// Every snapshot on disk, oldest build first. Add the new sha here after producing its
     /// fixture (see the top of `UpgradePathTests.swift`).
-    nonisolated static let shas = ["0bf5773", "5c7ce8d"]
+    nonisolated static let shas = ["0bf5773", "5c7ce8d", "9279515"]
 
     /// The counts and values the writer recorded; keys match `expected.json`.
     struct Expected: Decodable {

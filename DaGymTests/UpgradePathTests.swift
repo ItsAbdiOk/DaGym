@@ -27,6 +27,11 @@ import Testing
 //      /tmp/dagym-snap-out-<sha>
 //   If a step uses an API the old build lacks (say `Preferences(suite:)`), adapt the throwaway
 //   test to that build; the harness only needs the store file and the JSON.
+//   Builds from 9279515 on ship no starter routines: replace `createProgram` + `startProgram`
+//   with `store.adoptStarterPlan(.upperLower, now: now)` (the picker's one tap), rename and
+//   edit two of the sample-data trio ("Pull B", "Legs") instead of Full Body B / 5×5 A, and
+//   seed one starter nobody uses (`RoutineSeeder.seedStarters(["Full Body C"], store:)`) so
+//   the prune still has a candidate; `prunedNames` is then just that one.
 //
 // The throwaway test (paste as-is, then fix whatever that build's API renamed):
 //
@@ -169,10 +174,13 @@ struct UpgradePathTests {
         let context = container.mainContext
         let store = try snapshot.makeStore(container)
 
-        // What the old build left: its seed version, its (wrong) v5 tags, no totals stamped.
+        // What the old build left: its seed version, its (wrong) v5 tags when it predates the
+        // v6 refresh, no totals stamped.
         #expect(SeedState.row(in: context).exerciseSeedVersion == expected.exerciseSeedVersion)
-        #expect(try Self.exercise("Reverse_Machine_Flyes", in: context).primaryMuscles == ["chest"])
-        #expect(try Self.exercise("Pec_Deck", in: context).equipment == "bodyweight")
+        if expected.exerciseSeedVersion < 6 {
+            #expect(try Self.exercise("Reverse_Machine_Flyes", in: context).primaryMuscles == ["chest"])
+            #expect(try Self.exercise("Pec_Deck", in: context).equipment == "bodyweight")
+        }
         let unstamped = try context.fetch(FetchDescriptor<WorkoutModel>())
         #expect(unstamped.allSatisfy { !$0.hasStampedTotals })
 
@@ -204,10 +212,14 @@ struct UpgradePathTests {
         #expect(store.programs().first?.routineIDs.count == 4)
 
         // Untouched starters pruned; the ran, scheduled, programmed, renamed and edited ones kept.
+        // A build that ships no routines (9279515 on) has only what the sample data and the
+        // starter picker seeded, so the kept list is shorter and the pruned one can be empty.
         let live = store.routines().map(\.name).sorted()
         #expect(live == expected.keptRoutineNames)
         #expect(Set(live).isDisjoint(with: expected.prunedRoutineNames))
         #expect(preferences.starterRoutinesPruned)
+        #expect(try context.fetchCount(FetchDescriptor<RoutineModel>())
+            == expected.routines - expected.prunedRoutineNames.count)
 
         // Totals stamped on every finished workout, and they add up to what the sets say.
         let workouts = try context.fetch(FetchDescriptor<WorkoutModel>())
