@@ -37,7 +37,10 @@ final class RestAlertPlayer {
         isEngineConfigured = true
         let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)
         let tone = tone
-        let node = AVAudioSourceNode { _, _, frameCount, audioBufferList in
+        // `@Sendable` keeps the render block nonisolated: AVFAudio marks it non-Sendable, so a
+        // plain closure here would inherit this class's main-actor isolation and Swift 6's
+        // runtime check would trap on the realtime thread (see `VoiceAuthorization.request()`).
+        let node = AVAudioSourceNode { @Sendable _, _, frameCount, audioBufferList in
             tone.render(frameCount: frameCount, into: audioBufferList)
         }
         engine.attach(node)
