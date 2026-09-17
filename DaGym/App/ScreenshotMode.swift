@@ -17,7 +17,7 @@ enum ScreenshotScreen: String, CaseIterable {
     case library, exerciseDetail, settings, settingsData, milestones, body, coach, summary
     /// The cloud coach over the Coach tab, on a canned thread (`ScreenshotCoachChat`): the
     /// answer with its routine card, and the two-card second-opinion moment.
-    case coachChat, coachReview, coachProgram
+    case coachChat, coachReview, coachProgram, gymCard
 
     static var fromLaunchArguments: ScreenshotScreen? {
         let args = ProcessInfo.processInfo.arguments
@@ -78,6 +78,11 @@ enum ScreenshotMode {
         preferences.sampleDataMode = false
         seedBodyweight(store: store, preferences: preferences)
         seedSchedule(store: store)
+        // A gym card so the check-in sheet has a barcode and, with the pass identity bundled,
+        // an Add to Wallet button under it.
+        if store.gymCards().isEmpty {
+            _ = store.addGymCard(name: "PureGym", value: "8412 3395 0071", symbology: .code128)
+        }
         if let bench = benchPress(in: store), !bench.isFavorite { store.toggleFavorite(id: bench.id) }
         seedMilestones(store: store, preferences: preferences)
     }
@@ -347,6 +352,8 @@ private struct ScreenshotScreenView: View {
             }
         case .settings:
             RootView().sheet(isPresented: .constant(true)) { SettingsView() }
+        case .gymCard:
+            RootView().sheet(isPresented: .constant(true)) { GymCardSheet() }
         case .settingsData:
             RootView().sheet(isPresented: .constant(true)) { ScreenshotDataSettingsView() }
         case .coach:

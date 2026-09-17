@@ -50,13 +50,14 @@ targets:
           - Resources/ExercisePhotos
       - path: DaGym/Resources/ExercisePhotos
         type: folder
-    resources:
-      - path: DaGym/PrivacyInfo.xcprivacy
       # Apple Wallet pass signing identity (Pass Type ID cert + key + WWDR intermediate; see
       # DaGym/Services/Wallet/WalletPassSigner.swift). Gitignored; Xcode Cloud writes it from the
       # DAGYM_WALLET_P12_BASE64 secret in ci_scripts/ci_pre_xcodebuild.sh. `optional`: a clone
-      # without it still builds, and "Add to Apple Wallet" hides itself.
+      # without it still builds, and "Add to Apple Wallet" hides itself. (A top-level
+      # `resources:` key is not a thing in XcodeGen — it was silently ignored, so no build ever
+      # carried the identity.)
       - path: Configs/wallet/pass.p12
+        buildPhase: resources
         optional: true
     dependencies:
       - package: GymCore
