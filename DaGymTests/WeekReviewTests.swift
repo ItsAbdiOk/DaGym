@@ -114,6 +114,8 @@ struct WeekReviewTests {
             store: fixture.store, preferences: preferences, archive: archive, isConfigured: true, now: sunday
         )
         #expect(state.headline == "Bench moved from 77.5 to 80 kg.")
+        // Home refreshes on every store change; the card must never decode a transcript.
+        #expect(archive.decodeCount == 0)
         #expect(archive.list().first?.title == "Week review · 2026-09-20")
     }
 
