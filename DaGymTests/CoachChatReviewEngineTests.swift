@@ -245,3 +245,46 @@ struct CoachChatReviewEngineTests {
         #expect(thread.origin(ofDraft: 0) == .drafter)
     }
 }
+
+@MainActor
+@Suite("Coach chat engine: reviewer evidence")
+struct CoachChatReviewEvidenceTests {
+    private func call(_ id: String, _ name: String, _ args: String) -> OpenRouterWire.ToolCall {
+        OpenRouterWire.ToolCall(id: id, function: OpenRouterWire.FunctionCall(name: name, arguments: args))
+    }
+
+    @Test("the drafter's calls and results are paired, in order, and quoted to the reviewer")
+    func pairsCallsWithResults() throws {
+        let turn: [OpenRouterWire.Message] = [
+            .user("make me a routine"),
+            .assistant(nil, toolCalls: [
+                call("c1", "get_profile", "{}"), call("c2", "get_recovery", "{\"days\":7}")
+            ]),
+            .tool(callID: "c1", content: "{\"days\":3}"),
+            .tool(callID: "c2", content: "{\"chest\":0.2}"),
+            .assistant("Here you go.")
+        ]
+        let block = CoachChatEngine.evidenceBlock(from: turn)
+        #expect(block.contains("• get_profile {}\n{\"days\":3}"))
+        #expect(block.contains("• get_recovery {\"days\":7}\n{\"chest\":0.2}"))
+        let prompt = try CoachChatEngine.reviewPrompt(
+            request: "make me a routine", drafterText: "Here you go.", drafterName: "Gemini",
+            draft: .routine(RoutineProposal(name: "Push A", exercises: [])), evidence: block
+        )
+        #expect(prompt.contains("What Gemini read this turn"))
+    }
+
+    @Test("a huge result is trimmed and the block stops at its total cap")
+    func caps() {
+        let big = String(repeating: "x", count: 10_000)
+        var turn: [OpenRouterWire.Message] = []
+        for index in 0..<30 {
+            turn.append(.assistant(nil, toolCalls: [call("c\(index)", "search_exercises", "{}")]))
+            turn.append(.tool(callID: "c\(index)", content: big))
+        }
+        let block = CoachChatEngine.evidenceBlock(from: turn)
+        #expect(block.contains("…[trimmed]"))
+        #expect(block.count <= CoachChatEngine.evidenceTotalCap)
+        #expect(!block.contains(String(repeating: "x", count: 3_001)))
+    }
+}

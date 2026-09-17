@@ -7,7 +7,10 @@ extension CoachChatEngine {
         switch error.kind {
         case .missingKey: "No OpenRouter key is set — add one in Settings › Coach."
         case .unauthorized: "OpenRouter rejected the key. Check it in Settings › Coach."
-        case .insufficientCredits: "The OpenRouter account is out of credit."
+        case .insufficientCredits:
+            "No credit for this request — OpenRouter said: \(error.detail) If you pay through a "
+                + "provider key under Integrations on openrouter.ai, that provider's balance is the one "
+                + "that ran out; top it up or remove the integration to use your OpenRouter balance."
         case .rateLimited: "OpenRouter is rate-limiting this key. Try again in a moment."
         case .badRequest: "The model rejected that request. \(error.detail)"
         case .server: "OpenRouter had a server error. Try again."

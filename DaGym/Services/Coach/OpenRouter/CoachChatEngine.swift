@@ -115,10 +115,13 @@ final class CoachChatEngine {
         messages.append(.user(trimmed, at: clock()))
         wire.append(.user(trimmed))
         let draftBase = drafts.count
+        let wireBase = wire.count
         let task = Task {
             let finished = await runTurn()
             guard finished, configuration.reviewerModelID != nil else { return }
-            await reviewNewDrafts(from: draftBase, request: trimmed)
+            // The reviewer gets what the drafter read this turn, so it checks rather than re-reads.
+            let evidence = Self.evidenceBlock(from: Array(wire[wireBase...]))
+            await reviewNewDrafts(from: draftBase, request: trimmed, evidence: evidence)
         }
         turn = task
         await task.value

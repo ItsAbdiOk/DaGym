@@ -14,17 +14,17 @@ extension CoachChatEngine {
 
     /// Reviews every draft the drafter added this turn, in order. Stops at the first
     /// cancellation; the review under way is recorded as failed so the card says why.
-    func reviewNewDrafts(from draftBase: Int, request: String) async {
+    func reviewNewDrafts(from draftBase: Int, request: String, evidence: String) async {
         let drafterText = messages.last { $0.role == .assistant && $0.isNote != true }?.text ?? ""
         for index in draftBase..<drafts.count where origin(ofDraft: index) == .drafter {
             if Task.isCancelled { return }
-            await review(draftIndex: index, request: request, drafterText: drafterText)
+            await review(draftIndex: index, request: request, drafterText: drafterText, evidence: evidence)
         }
     }
 
     /// One review: request → tool rounds → verdict. `request` is the lifter's message that led
     /// to the draft and `drafterText` the drafter's closing words, both quoted to the reviewer.
-    func review(draftIndex: Int, request: String, drafterText: String) async {
+    func review(draftIndex: Int, request: String, drafterText: String, evidence: String = "") async {
         guard let session = ReviewSession(configuration: configuration, reviewIndex: reviews.count) else {
             return
         }
@@ -36,7 +36,7 @@ extension CoachChatEngine {
         let verdict: CoachChatReview.Verdict
         if let prompt = try? Self.reviewPrompt(
             request: request, drafterText: drafterText, drafterName: session.drafterName,
-            draft: drafts[draftIndex]
+            draft: drafts[draftIndex], evidence: evidence
         ) {
             verdict = await runReview(session, prompt: prompt).verdict
         } else {
@@ -140,12 +140,44 @@ extension CoachChatEngine {
 
     /// What the reviewer is asked: the lifter's words, the drafter's words, the proposal.
     static func reviewPrompt(
-        request: String, drafterText: String, drafterName: String, draft: CoachChatDraft
+        request: String, drafterText: String, drafterName: String, draft: CoachChatDraft,
+        evidence: String = ""
     ) throws -> String {
         var parts = ["The lifter asked:\n\(request)"]
         if !drafterText.isEmpty { parts.append("\(drafterName) said:\n\(drafterText)") }
         parts.append("Proposal (JSON):\n\(try draft.proposalJSON())")
+        if !evidence.isEmpty {
+            parts.append("What \(drafterName) read this turn (tool call → result):\n\(evidence)")
+        }
         return parts.joined(separator: "\n\n")
+    }
+
+    /// Per-result and total caps on the evidence quoted to the reviewer. A muscle-volume read
+    /// is a few hundred bytes; a 60-row exercise search is the one that needs trimming.
+    static let evidenceResultCap = 3_000
+    static let evidenceTotalCap = 48_000
+
+    /// The drafter's tool calls and results from one turn, paired up and trimmed, so the
+    /// reviewer checks the same numbers instead of paying to fetch them again.
+    static func evidenceBlock(from turn: [OpenRouterWire.Message]) -> String {
+        var calls: [String: String] = [:]
+        for message in turn where message.role == .assistant {
+            for call in message.toolCalls ?? [] {
+                calls[call.id] = "\(call.function.name) \(call.function.arguments)"
+            }
+        }
+        var block = ""
+        for message in turn where message.role == .tool {
+            guard let id = message.toolCallId, let call = calls[id] else { continue }
+            var result = message.content ?? ""
+            if result.count > evidenceResultCap {
+                result = String(result.prefix(evidenceResultCap)) + " …[trimmed]"
+            }
+            let entry = "• \(call)\n\(result)\n"
+            guard block.count + entry.count <= evidenceTotalCap else { break }
+            block += entry
+        }
+        return block
     }
 
     /// The names one review runs under; nil when the second opinion is off.

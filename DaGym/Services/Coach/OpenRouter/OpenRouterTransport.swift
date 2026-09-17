@@ -10,8 +10,9 @@ enum OpenRouterError: Error, Sendable {
     case unauthorized
     /// 429 — `retryAfter` in seconds when the server said.
     case rateLimited(retryAfter: TimeInterval?)
-    /// 402 — the OpenRouter account has no credit left.
-    case insufficientCredits
+    /// 402 — no credit for this request, with the server's message: OpenRouter's own balance,
+    /// or (with a provider key connected under Integrations) that provider's balance.
+    case insufficientCredits(String)
     /// Any other 4xx, with the server's message.
     case badRequest(String)
     /// 5xx from OpenRouter or the upstream provider.
@@ -41,8 +42,10 @@ enum OpenRouterError: Error, Sendable {
 
     /// The provider's own words for a rejected request; empty for the other cases.
     var detail: String {
-        if case .badRequest(let message) = self { return message }
-        return ""
+        switch self {
+        case .badRequest(let message), .insufficientCredits(let message): message
+        default: ""
+        }
     }
 
     /// One line for os.Logger — the key is never part of any case, so nothing here is secret.
@@ -51,7 +54,7 @@ enum OpenRouterError: Error, Sendable {
         case .missingKey: "missing key"
         case .unauthorized: "unauthorized"
         case .rateLimited(let retryAfter): "rate limited (retry after \(retryAfter ?? 0)s)"
-        case .insufficientCredits: "insufficient credits"
+        case .insufficientCredits(let message): "insufficient credits: \(message)"
         case .badRequest(let message): "bad request: \(message)"
         case .server(let status): "server error \(status)"
         case .network(let error): "network: \(error.localizedDescription)"
@@ -63,7 +66,7 @@ enum OpenRouterError: Error, Sendable {
     static func from(status: Int, message: String?, retryAfter: TimeInterval?) -> OpenRouterError {
         switch status {
         case 401: .unauthorized
-        case 402: .insufficientCredits
+        case 402: .insufficientCredits(message ?? "OpenRouter returned 402.")
         case 429: .rateLimited(retryAfter: retryAfter)
         case 500...: .server(status)
         default: .badRequest(message ?? "OpenRouter returned \(status).")

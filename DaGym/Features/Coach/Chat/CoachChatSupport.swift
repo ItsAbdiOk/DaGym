@@ -50,10 +50,11 @@ enum CoachChatErrorCopy {
                     ?? "The model is rate-limited. Try again in a moment.",
                 action: .retry, actionTitle: "Retry"
             )
-        case .insufficientCredits:
+        case .insufficientCredits(let detail):
             Banner(
                 title: "Out of credit",
-                message: "Your OpenRouter account has no credit left. Top up at openrouter.ai to continue.",
+                message: "OpenRouter said: \(detail) Top up at openrouter.ai — or, if you pay through a "
+                    + "provider key under Integrations, that provider's balance.",
                 action: .openOpenRouter, actionTitle: "Open openrouter.ai"
             )
         case .badRequest(let message):

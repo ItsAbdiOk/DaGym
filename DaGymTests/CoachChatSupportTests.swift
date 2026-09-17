@@ -14,7 +14,7 @@ struct CoachChatSupportTests {
             (.missingKey, .openSettings),
             (.unauthorized, .openSettings),
             (.rateLimited(retryAfter: nil), .retry),
-            (.insufficientCredits, .openOpenRouter),
+            (.insufficientCredits("Insufficient credits"), .openOpenRouter),
             (.badRequest("nope"), nil),
             (.server(503), .retry),
             (.network(URLError(.notConnectedToInternet)), .retry),
