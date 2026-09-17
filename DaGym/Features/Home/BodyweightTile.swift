@@ -1,10 +1,10 @@
 import GymCore
 import SwiftUI
 
-/// Latest bodyweight + change vs 30 days ago, tapping through to `BodyView` (OpenGym parity 50).
-/// With a goal set on the Body tab (`Preferences.bodyweightGoalKg`) the value line adds
-/// "· 2.1 to go" and the delta is coloured by whether it moved toward the goal; without one
-/// the tile is exactly as before. Health-derived readings are only ever read here.
+/// Latest bodyweight + change vs 30 days ago as a half-width tile, tapping through to
+/// `BodyView` (OpenGym parity 50). With a goal set on the Body tab (`Preferences.bodyweightGoalKg`)
+/// the bottom line adds "· 2.1 to go" and is coloured by whether the month moved toward the
+/// goal; without one it is just the delta. Health-derived readings are only ever read here.
 struct BodyweightTile: View {
     var kg: Double?
     var deltaKg: Double?
@@ -14,45 +14,47 @@ struct BodyweightTile: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: DGSpace.s4) {
-                VStack(alignment: .leading, spacing: DGSpace.s1) {
-                    Text("Bodyweight").dgLabel()
-                    if let kg {
-                        valueLine(kg: kg)
-                        Text(deltaText)
-                            .font(DGFont.footnote)
-                            .foregroundStyle(deltaColor)
-                    } else {
-                        Text(emptyText)
-                            .font(DGFont.footnote)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Bodyweight").dgLabel()
+                HStack(alignment: .lastTextBaseline, spacing: 3) {
+                    Text(kg.map { preferences.formatWeight(kg: $0) } ?? "—")
+                        .font(.system(size: 24, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(DGColor.ink1)
+                    if kg != nil {
+                        Text(preferences.unitSymbol)
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(DGColor.ink3)
                     }
                 }
-                Spacer()
-                Image(systemName: "chevron.right").accessibilityHidden(true)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(DGColor.ink4)
+                .padding(.top, 9)
+                Text(kg == nil ? emptyText : compactLine)
+                    .font(.system(size: 12))
+                    .monospacedDigit()
+                    .foregroundStyle(kg == nil ? DGColor.ink3 : lineColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .padding(.top, 11)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .dgCard(radius: 20, padding: 15)
         }
-        .buttonStyle(.dgCard)
-        .dgCard()
+        .buttonStyle(DGPressStyle())
         .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint("Opens Body")
     }
 
-    private func valueLine(kg: Double) -> some View {
-        HStack(alignment: .lastTextBaseline, spacing: 4) {
-            Text(preferences.formatWeight(kg: kg))
-                .dgMetric(DGFont.metricM)
-                .foregroundStyle(DGColor.ink1)
-            Text(preferences.unitSymbol)
-                .font(DGFont.subhead)
-                .foregroundStyle(DGColor.ink3)
-            if let goalLine {
-                Text("· \(goalLine.text)")
-                    .font(DGFont.subhead)
-                    .foregroundStyle(goalLine.color)
-            }
+    /// "−1.2 · 2.1 to go": the signed 30-day change, then the goal line when there is one.
+    private var compactLine: String {
+        var parts: [String] = []
+        if let deltaKg, abs(deltaKg) >= BodyweightGoal.flatThresholdKg {
+            let sign = deltaKg > 0 ? "+" : "−"
+            parts.append("\(sign)\(preferences.formatWeight(kg: abs(deltaKg)))")
+        } else if deltaKg != nil {
+            parts.append("No change")
         }
+        if let goalLine { parts.append(goalLine.text) }
+        return parts.isEmpty ? "Latest reading" : parts.joined(separator: " · ")
     }
 
     // MARK: Goal
@@ -61,9 +63,13 @@ struct BodyweightTile: View {
         Self.status(kg: kg, deltaKg: deltaKg, preferences: preferences)
     }
 
-    private var goalLine: (text: String, color: Color)? {
-        guard let line = Self.goalLine(kg: kg, deltaKg: deltaKg, preferences: preferences) else { return nil }
-        return (line.text, line.isCelebratory ? DGColor.success : DGColor.ink3)
+    private var goalLine: (text: String, isCelebratory: Bool)? {
+        Self.goalLine(kg: kg, deltaKg: deltaKg, preferences: preferences)
+    }
+
+    /// Green the month the goal lands or while the change heads toward it; otherwise ink.
+    private var lineColor: Color {
+        goalLine?.isCelebratory == true ? DGColor.success : deltaColor
     }
 
     static func status(kg: Double?, deltaKg: Double?, preferences: Preferences) -> BodyweightGoal.Status? {
@@ -88,9 +94,8 @@ struct BodyweightTile: View {
     }
 
     private var emptyText: String {
-        guard let goalKg = preferences.bodyweightGoalKg else { return "Log your weight to see it here" }
-        let goal = "\(preferences.formatWeight(kg: goalKg)) \(preferences.unitSymbol)"
-        return "Log your weight to track it against \(goal)"
+        guard let goalKg = preferences.bodyweightGoalKg else { return "Log your weight" }
+        return "Goal \(preferences.formatWeight(kg: goalKg)) \(preferences.unitSymbol)"
     }
 
     private var deltaText: String {
@@ -105,7 +110,7 @@ struct BodyweightTile: View {
     /// Green when the month's change moved toward the goal; otherwise the neutral ink the tile
     /// always used — moving away is not painted red, the number says it.
     private var deltaColor: Color {
-        guard let deltaKg, abs(deltaKg) >= BodyweightGoal.flatThresholdKg else { return DGColor.ink4 }
+        guard let deltaKg, abs(deltaKg) >= BodyweightGoal.flatThresholdKg else { return DGColor.ink3 }
         return status?.trend == .toward ? DGColor.success : DGColor.ink3
     }
 
@@ -122,10 +127,14 @@ struct BodyweightTile: View {
     let preferences = Preferences()
     preferences.bodyweightGoalKg = 80
     return VStack(spacing: DGSpace.s3) {
-        BodyweightTile(kg: 82.1, deltaKg: -1.4, onTap: {})
-        BodyweightTile(kg: 80.1, deltaKg: -1.4, onTap: {})
-        BodyweightTile(kg: 80, deltaKg: 0, onTap: {})
-        BodyweightTile(kg: nil, deltaKg: nil, onTap: {})
+        HStack(spacing: 10) {
+            BodyweightTile(kg: 82.1, deltaKg: -1.4, onTap: {})
+            BodyweightTile(kg: 80.1, deltaKg: -1.4, onTap: {})
+        }
+        HStack(spacing: 10) {
+            BodyweightTile(kg: 80, deltaKg: 0, onTap: {})
+            BodyweightTile(kg: nil, deltaKg: nil, onTap: {})
+        }
     }
     .padding()
     .background(AmbientWash())

@@ -39,10 +39,10 @@ struct WeekReviewState: Equatable {
     }
 }
 
-/// The Sunday check-in on Home. "Week review ready" offers the review; tapping opens the coach
-/// chat on a fresh review thread and sends the canned turn. Once the coach has replied the card
-/// shows its first line and "Open". "Not this week" hides it until the next Sunday. Violet,
-/// like everything on Home that sends data off the phone.
+/// The Sunday check-in on Home. "Your week is ready to review" offers the review; tapping the
+/// row opens the coach chat on a fresh review thread and sends the canned turn. Once the coach
+/// has replied the row shows its first line and opens the thread. "Not this week" / "Hide"
+/// live in the row's context menu (and as a VoiceOver action) and hide it until next Sunday.
 struct WeekReviewCard: View {
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
@@ -66,23 +66,47 @@ struct WeekReviewCard: View {
     }
 
     private func card(_ state: WeekReviewState) -> some View {
-        WhyCard(
-            title: state.headline == nil ? "Week review" : "Week review · done",
-            message: message(state),
-            primary: state.threadID == nil ? "Review my week" : "Open",
-            secondary: state.threadID == nil ? "Not this week" : "Hide",
-            onPrimary: { open(state) },
-            onSecondary: dismiss
-        )
+        let dismissTitle = state.threadID == nil ? "Not this week" : "Hide"
+        return Button { open(state) } label: {
+            HStack(spacing: DGSpace.s3) {
+                Image(systemName: "bubble.left.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(DGColor.inkOnCoral)
+                    .frame(width: 34, height: 34)
+                    .background(DGColor.coral, in: Circle())
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title(state))
+                        .font(.system(size: 14.5, weight: .semibold))
+                        .foregroundStyle(DGColor.ink1)
+                        .lineLimit(2)
+                    Text(message(state))
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(DGColor.ink3)
+                        .lineLimit(2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                HomeChevron()
+            }
+            .dgCard(radius: 20, padding: DGSpace.s4)
+        }
+        .buttonStyle(DGPressStyle())
+        .contextMenu { Button(dismissTitle, systemImage: "eye.slash", action: dismiss) }
+        .accessibilityElement(children: .combine)
+        .accessibilityAction(named: dismissTitle, dismiss)
         .accessibilityIdentifier(A11yID.homeWeekReview)
     }
 
-    private func message(_ state: WeekReviewState) -> String {
+    private func title(_ state: WeekReviewState) -> String {
         if let headline = state.headline { return headline }
+        return state.threadID == nil ? "Your week is ready to review" : "Week review in progress"
+    }
+
+    private func message(_ state: WeekReviewState) -> String {
+        if state.headline != nil { return "Week review · open the thread" }
         if state.threadID != nil { return "The coach is still working on this week's review." }
         let sessions = state.status.workoutCount == 1 ? "1 session" : "\(state.status.workoutCount) sessions"
-        return "Week review ready: \(sessions) logged. The coach reads the week, says what moved and "
-            + "what stalled, and proposes one tweak you can apply with a tap."
+        return "Sunday check-in from your coach · \(sessions) logged"
     }
 
     private func refresh() {
