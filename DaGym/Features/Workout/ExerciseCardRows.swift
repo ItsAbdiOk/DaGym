@@ -140,10 +140,9 @@ struct ExerciseThumbnail: View {
             case .vector(let seedID):
                 ExerciseArtView(seedID: seedID, size: size - 8)
             case .photo(let seedID):
-                // 3:2 photo, cropped to the square.
-                ExercisePhotoView(seedID: seedID, width: size * 1.5, exerciseName: exercise.name)
-                    .frame(width: size, height: size)
-                    .clipped()
+                // The downsampled start frame, not `ExercisePhotoView`: that decodes the full
+                // 1.7 MB pair and runs a crossfade per row, which put the Library at ~490 MB.
+                PhotoThumbnail(seedID: seedID, size: size)
             case .none:
                 BodyMapView(
                     side: BodyMapMuscleMapping.thumbnailSide(forPrimary: exercise.primary),
@@ -158,5 +157,24 @@ struct ExerciseThumbnail: View {
         .clipShape(RoundedRectangle(cornerRadius: size * 0.27, style: .continuous))
         // Decorative: the exercise name beside it is the content.
         .accessibilityHidden(true)
+    }
+}
+
+/// A 44 pt square from the exercise photo, decoded straight to thumbnail size through
+/// `MachineThumbnailStore`'s ImageIO path and cached there.
+private struct PhotoThumbnail: View {
+    var seedID: String
+    var size: CGFloat
+    @State private var image: Image?
+
+    var body: some View {
+        ZStack {
+            if let image {
+                image.resizable().scaledToFill()
+            }
+        }
+        .frame(width: size, height: size)
+        .clipped()
+        .task(id: seedID) { image = await MachineThumbnailStore.shared.thumbnail(forSeedID: seedID) }
     }
 }

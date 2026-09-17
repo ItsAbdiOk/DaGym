@@ -24,6 +24,15 @@ set -eu
 cd "$(dirname "$0")/.."
 . scripts/lib/sim.sh
 
+# The app's own memory, in KB — `phys_footprint`, what Xcode's memory gauge and jetsam use.
+# `ps -o rss` counted the shared framework pages too (~300 MB of them on iOS 27), which
+# swamped the number and moved with the simulator, not the app.
+footprint_kb() {
+    footprint -p "$1" 2>/dev/null | awk '/phys_footprint:/ {
+        if ($3 == "GB") print int($2 * 1024 * 1024); else if ($3 == "KB") print int($2); else print int($2 * 1024)
+    }' | head -1
+}
+
 LABEL=$(date +%Y-%m-%d)
 DERIVED_DATA="build/DerivedData-perf"
 SKIP_BUILD=0
@@ -103,7 +112,7 @@ FRESH_MS=$(launch_ms)
 
 sleep 6
 PID=$(cat "$TMP_DIR/pid")
-HOME_IDLE_RSS_KB=$(ps -o rss= -p "$PID" | tr -d ' ')
+HOME_IDLE_RSS_KB=$(footprint_kb "$PID")
 
 echo "▶ warm cold launches (x3)"
 W1=$(launch_ms); W2=$(launch_ms); W3=$(launch_ms)
@@ -123,7 +132,7 @@ sleep 1
 PID=$(xcrun simctl launch "$UDID" "$BUNDLE" -dgScreenshots -dgScreenshotScreen library | awk -F': ' '{print $2}')
 echo "$PID" > "$TMP_DIR/pid"
 sleep 6
-LIBRARY_RSS_KB=$(ps -o rss= -p "$PID" | tr -d ' ')
+LIBRARY_RSS_KB=$(footprint_kb "$PID")
 
 xcrun simctl terminate "$UDID" "$BUNDLE" >/dev/null 2>&1 || true
 

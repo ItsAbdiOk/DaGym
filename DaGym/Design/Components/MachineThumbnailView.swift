@@ -48,16 +48,36 @@ actor MachineThumbnailStore {
     /// Pixels on the long edge. Twice the 44 pt row thumbnail at 3×, rounded.
     static let maxPixelSize = 264
 
+    /// Bounded: exercise rows now use this store too, and a scroll through the whole library
+    /// would otherwise keep every ~280 KB thumbnail. 160 entries is a few screens either side
+    /// of wherever the lifter is, about 45 MB.
+    static let cacheLimit = 160
+
     private var cache: [String: Image] = [:]
+    /// Least-recently-used first.
+    private var order: [String] = []
 
     func thumbnail(forSeedID seedID: String) -> Image? {
-        if let cached = cache[seedID] { return cached }
+        if let cached = cache[seedID] {
+            touch(seedID)
+            return cached
+        }
         guard let urls = ExercisePhotoStore.bundledURLs(forSeedID: seedID),
               let image = Self.downsampled(urls.start, maxPixelSize: Self.maxPixelSize)
         else { return nil }
         let result = Image(uiImage: image)
         cache[seedID] = result
+        touch(seedID)
+        while order.count > Self.cacheLimit, let oldest = order.first {
+            order.removeFirst()
+            cache[oldest] = nil
+        }
         return result
+    }
+
+    private func touch(_ seedID: String) {
+        if let index = order.firstIndex(of: seedID) { order.remove(at: index) }
+        order.append(seedID)
     }
 
     /// ImageIO's thumbnail path decodes straight to the target size instead of decoding the
