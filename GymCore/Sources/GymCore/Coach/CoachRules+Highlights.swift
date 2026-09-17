@@ -12,9 +12,8 @@ extension CoachRules {
         input.recentPRs.compactMap { highlight -> CoachCard? in
             guard isRecent(highlight.record.date, now: now) else { return nil }
             let evidence: [CoachEvidenceItem] = [
-                .init("PR kind", .text(highlight.record.kind.rawValue)),
-                .init("Value", .number(highlight.record.value)),
-                .init("Date", .date(highlight.record.date))
+                .init("Record", .text(highlight.record.kind.displayName)),
+                .init("Set", .date(highlight.record.date))
             ]
             let key = "pr:\(highlight.exerciseName):\(highlight.record.kind.rawValue):"
                 + dateKey(highlight.record.date)

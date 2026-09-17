@@ -48,23 +48,10 @@ extension WorkoutStore {
             kind: kind, value: model.value, weightKg: model.weightKg, reps: model.reps, date: model.date
         )
         return PersonalRecordLine(
-            kindLabel: Self.kindLabel(kind),
+            kindLabel: kind.displayName,
             line: PersonalRecords.formatLine(record, unit: unit, distanceUnit: preferredDistanceUnit),
             date: model.date
         )
-    }
-
-    private static func kindLabel(_ kind: PRKind) -> String {
-        switch kind {
-        case .e1rm: "Estimated 1RM"
-        case .maxWeight: "Heaviest weight"
-        case .maxRepsAtWeight: "Most reps"
-        case .volume: "Volume"
-        case .longestHold: "Longest hold"
-        case .leastAssistance: "Least assistance"
-        case .longestDistance: "Longest distance"
-        case .fastestPace: "Fastest pace"
-        }
     }
 }
 

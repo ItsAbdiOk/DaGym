@@ -100,6 +100,20 @@ public enum PRKind: String, CaseIterable, Codable, Sendable {
     /// Quickest seconds-per-km over a set of at least `PersonalRecords.paceMinimumDistanceMeters`,
     /// so a 200 m sprint can't hold the "fastest pace" over a 10 km run.
     case fastestPace
+
+    /// "Estimated 1RM", "Heaviest weight" — how the Records screen and Insights name a kind.
+    public var displayName: String {
+        switch self {
+        case .e1rm: "Estimated 1RM"
+        case .maxWeight: "Heaviest weight"
+        case .maxRepsAtWeight: "Most reps"
+        case .volume: "Volume"
+        case .longestHold: "Longest hold"
+        case .leastAssistance: "Least assistance"
+        case .longestDistance: "Longest distance"
+        case .fastestPace: "Fastest pace"
+        }
+    }
 }
 
 /// A single earned personal record.
