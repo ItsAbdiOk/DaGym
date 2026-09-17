@@ -10,6 +10,13 @@ import UIKit
 struct ActiveWorkoutView: View {
     @Bindable var session: WorkoutSession
     var onFinish: (WorkoutSummary) -> Void
+    /// The header chevron: drop the cover and keep the session (the shell's resume bar takes
+    /// over). nil where there is nothing to minimise to — a backfill from History, the debug
+    /// harness — and the chevron is not drawn.
+    var onMinimise: (() -> Void)?
+    /// Whether this screen owns the rest-timer Live Activity for the session. The shell binds
+    /// it itself for a minimisable session, since the activity has to outlive the cover.
+    var bindsLiveActivity = true
 
     @Environment(WorkoutStore.self) var store
     @Environment(Preferences.self) var preferences
@@ -83,7 +90,7 @@ struct ActiveWorkoutView: View {
         .overlay(alignment: .bottom) { bottomChrome }
         .dgUndoToast($undoAction)
         .overlay { Color.white.opacity(flashOpacity).ignoresSafeArea().allowsHitTesting(false) }
-        .restLiveActivity(session: session, onSessionMutation: { store.sync(session: session) })
+        .restLiveActivity(session: session, isEnabled: bindsLiveActivity) { store.sync(session: session) }
         .task {
             startedAtLabel = Self.startedAtLabel(for: session)
             inventory = store.activeInventory()

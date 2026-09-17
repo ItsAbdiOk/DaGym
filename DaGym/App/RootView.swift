@@ -4,8 +4,10 @@ import SwiftData
 import SwiftUI
 import os
 
-/// App shell: switches between the three tabs and presents the active
-/// workout (and its summary) full-screen when a session is started.
+/// App shell: switches between the three tabs and presents the active workout (and its
+/// summary) full-screen when a session is started. The workout's chevron minimises it: the
+/// cover drops, the session lives on in `workout`, and a resume strip above the tab bar (the
+/// tab bar's bottom accessory) brings the cover back on every tab.
 struct RootView: View {
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
@@ -14,7 +16,7 @@ struct RootView: View {
     @State private var routine: RoutineInfo?
     @State private var routines: [RoutineInfo] = []
     @State private var nextSessionText: String?
-    @State private var session: WorkoutSession?
+    @State private var workout = WorkoutPresentation()
     @State private var summaryItem: SummaryPresentation?
     @State private var showingBackfill = false
     @State private var showRecovery = false
@@ -34,7 +36,7 @@ struct RootView: View {
             refresh()
             // A Siri "start workout" hand-off above wins over the prompt: nothing to resume
             // while a session is already on screen.
-            if session == nil { resumePrompt = UnfinishedWorkoutPrompt.newest(in: store) }
+            if workout.session == nil { resumePrompt = UnfinishedWorkoutPrompt.newest(in: store) }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { refresh() }
@@ -94,8 +96,30 @@ struct RootView: View {
             "Couldn't Import That Plan", isPresented: planImportErrorBinding,
             actions: {}, message: { Text(planImportError ?? "") }
         )
-        .fullScreenCover(item: $session) { activeSession in
-            ActiveWorkoutView(session: activeSession, onFinish: finish)
+        .fullScreenCover(item: presentedWorkout) { activeSession in
+            ActiveWorkoutView(
+                session: activeSession, onFinish: finish, onMinimise: minimiseWorkout,
+                bindsLiveActivity: false
+            )
+        }
+        // The Live Activity and the once-a-second rest tick belong to the session, not the
+        // cover, so they carry on while it is minimised. Keyed by session so a new workout
+        // after a finished one binds afresh.
+        .background {
+            if let session = workout.session {
+                Color.clear
+                    .restLiveActivity(session: session, onSessionMutation: { store.sync(session: session) })
+                    .id(session.id)
+            }
+        }
+        .task(id: workout.showsResumeBar) {
+            guard workout.showsResumeBar else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled, let session = workout.session else { return }
+                session.tickRest()
+                session.tickTimedHold()
+            }
         }
         .fullScreenCover(item: $summaryItem) { item in
             WorkoutSummaryView(
@@ -155,8 +179,7 @@ struct RootView: View {
     private func resumeUnfinished(_ prompt: UnfinishedWorkoutPrompt) {
         resumePrompt = nil
         guard let resumed = store.resumeSession(for: prompt.id) else { return }
-        session = resumed
-        seedEffortScale()
+        present(resumed)
     }
 
     private func discardUnfinished(_ prompt: UnfinishedWorkoutPrompt) {
@@ -182,19 +205,15 @@ struct RootView: View {
     }
 
     private func startWorkout(_ routine: RoutineInfo) {
+        guard !resumeIfActive() else { return }
         beginWorkout {
-            session = store.startWorkout(
-                routineID: routine.id, calendar: preferences.trainingCalendar
-            )
-            seedEffortScale()
+            present(store.startWorkout(routineID: routine.id, calendar: preferences.trainingCalendar))
         }
     }
 
     private func startFreestyle() {
-        beginWorkout {
-            session = store.startFreestyle()
-            seedEffortScale()
-        }
+        guard !resumeIfActive() else { return }
+        beginWorkout { present(store.startFreestyle()) }
     }
 
     /// When `preferences.weighInBeforeWorkout` is on, shows the (skippable — swipe to dismiss)
@@ -216,26 +235,20 @@ struct RootView: View {
 
     private func startBackfillFreestyle(date: Date, durationMinutes: Int) {
         showingBackfill = false
-        session = store.startBackfill(
+        guard !resumeIfActive() else { return }
+        present(store.startBackfill(
             date: date, durationMinutes: durationMinutes, routineID: nil,
             calendar: preferences.trainingCalendar
-        )
-        seedEffortScale()
+        ))
     }
 
     private func startBackfillRoutine(date: Date, durationMinutes: Int, routineID: UUID) {
         showingBackfill = false
-        session = store.startBackfill(
+        guard !resumeIfActive() else { return }
+        present(store.startBackfill(
             date: date, durationMinutes: durationMinutes, routineID: routineID,
             calendar: preferences.trainingCalendar
-        )
-        seedEffortScale()
-    }
-
-    /// New sessions start on the user's saved effort scale (`Preferences.effortScale` is the
-    /// source of truth); the session keeps its own copy so `EffortPickerSheet`'s binding works.
-    private func seedEffortScale() {
-        session?.effortScale = preferences.effortScale
+        ))
     }
 
     /// Control Center "Rest timer" hookup (`StartRestTimerIntent`/`PendingIntentAction`): the
@@ -246,10 +259,10 @@ struct RootView: View {
     private func startPendingRestTimer() {
         // "Default rest: Off" means no rest timer anywhere, this intent included.
         guard preferences.defaultRestSeconds > 0 else { return }
-        if session == nil {
+        if workout.session == nil {
             startFromScheduledRoutine()
         }
-        guard let activeSession = session,
+        guard let activeSession = workout.session,
               let exerciseIndex = activeSession.onDeckIndex,
               let setIndex = activeSession.exercises[exerciseIndex].sets.firstIndex(where: { !$0.isDone })
         else { return }
@@ -260,9 +273,10 @@ struct RootView: View {
     /// `PendingWorkoutIntentAction`): the intent opened the app, so do what its dialog promised
     /// (`StartWorkoutIntent.dialog`): carry on an unfinished session if there is one, otherwise
     /// start today's scheduled routine, or a freestyle session on a rest day — the same choices
-    /// Home's button offers. Leaves an already-active session alone rather than replacing it.
+    /// Home's button offers. An already-active session is brought back (from minimised) or
+    /// left alone rather than replaced.
     private func startPendingWorkout() {
-        guard session == nil else { return }
+        guard !resumeIfActive() else { return }
         guard let unfinished = UnfinishedWorkoutPrompt.newest(in: store) else {
             if let routine { startWorkout(routine) } else { startFreestyle() }
             return
@@ -289,17 +303,52 @@ struct RootView: View {
               let routineID = UUID(uuidString: idString),
               let matched = store.routines().first(where: { $0.id == routineID })
         else { return }
-        // A calendar event tapped mid-workout must not replace the running session: `startWorkout`
-        // would overwrite `session`, and the old `WorkoutSession`'s unsaved sets would go with it.
-        guard session == nil else { return }
+        // A calendar event tapped mid-workout must not replace the running session; `startWorkout`
+        // resumes it instead, and the old `WorkoutSession`'s unsaved sets stay put.
         startWorkout(matched)
     }
 
     private func finish(_ summary: WorkoutSummary) {
-        let title = session?.title ?? "Workout"
-        session = nil
+        let title = workout.finish()?.title ?? "Workout"
         summaryItem = SummaryPresentation(summary: summary, title: title)
         refreshRoutine()
+    }
+}
+
+// MARK: - Presenting, minimising, resuming
+
+private extension RootView {
+    /// The cover's item: the session while it is up, nil while minimised. A nil written back
+    /// (Discard's `dismiss()`) ends the session; a minimise already made it nil and is left be.
+    var presentedWorkout: Binding<WorkoutSession?> {
+        Binding(
+            get: { workout.presented },
+            set: { if $0 == nil, !workout.isMinimised { workout.finish() } }
+        )
+    }
+
+    /// New sessions start on the user's saved effort scale (`Preferences.effortScale` is the
+    /// source of truth); the session keeps its own copy so `EffortPickerSheet`'s binding works.
+    func present(_ session: WorkoutSession) {
+        session.effortScale = preferences.effortScale
+        workout.present(session)
+    }
+
+    func minimiseWorkout() {
+        withAnimation(DGMotion.standard) { workout.minimise() }
+    }
+
+    func resumeWorkout() {
+        withAnimation(DGMotion.standard) { workout.resume() }
+    }
+
+    /// A start while a workout is minimised brings that one back rather than replacing it —
+    /// Home's Start, Train's rows, Siri and a calendar deep link all go through here. True
+    /// when a session was already alive (and is now on screen again).
+    func resumeIfActive() -> Bool {
+        guard workout.session != nil else { return false }
+        resumeWorkout()
+        return true
     }
 }
 
@@ -375,14 +424,18 @@ private extension RootView {
             } label: { tabLabel(.you) }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
+        .workoutResumeAccessory(
+            session: workout.session, isShown: workout.showsResumeBar, onResume: resumeWorkout
+        )
         .tint(DGColor.coral) // the system bar's selected tint follows the accent theme
         .overlay(alignment: .bottomTrailing) { startFab }
     }
 
     /// The prototype's floating "play" button: one tap starts today's routine (or a freestyle
-    /// session on a rest day) from Today and Train. Hidden on You, where nothing is startable.
+    /// session on a rest day) from Today and Train. Hidden on You, where nothing is startable,
+    /// and while a workout is minimised, when the resume strip is the only way to a session.
     @ViewBuilder private var startFab: some View {
-        if tab != .you {
+        if tab != .you, !workout.showsResumeBar {
             StartFAB(action: { routine == nil ? startFreestyle() : startFromScheduledRoutine() })
                 .padding(.trailing, DGSpace.s5)
                 .padding(.bottom, 74)
@@ -392,9 +445,10 @@ private extension RootView {
 
     /// A tab is "visible" only when it is selected and nothing covers it: the active-workout
     /// cover and the summary sheet both sit above the whole bar, and while they're up every
-    /// `store.changeToken` bump would otherwise re-run five screens' refreshes for nobody.
+    /// `store.changeToken` bump would otherwise re-run five screens' refreshes for nobody. A
+    /// minimised workout covers nothing.
     func isVisible(_ which: DGTab) -> Bool {
-        tab == which && session == nil && summaryItem == nil
+        tab == which && workout.presented == nil && summaryItem == nil
     }
 
     /// `DaGymUITests` taps these identifiers, so they ride on each tab's label.

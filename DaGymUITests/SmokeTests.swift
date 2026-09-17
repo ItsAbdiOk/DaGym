@@ -96,6 +96,35 @@ final class SmokeTests: XCTestCase {
         )
     }
 
+    /// The workout's chevron minimises it: the cover goes, the resume strip sits above the tab
+    /// bar on every tab, and a tap on it brings the same session (and its Finish button) back.
+    func testMinimiseAndResumeWorkout() {
+        let app = launchApp()
+
+        let startButton = app.buttons[A11yID.homeStart]
+        XCTAssertTrue(startButton.waitForExistence(timeout: defaultTimeout), "home.start never appeared")
+        startButton.tap()
+
+        let minimise = app.buttons[A11yID.workoutMinimise]
+        XCTAssertTrue(minimise.waitForExistence(timeout: defaultTimeout), "workout.minimise never appeared")
+        minimise.tap()
+
+        let resumeBar = app.buttons[A11yID.workoutResumeBar]
+        XCTAssertTrue(resumeBar.waitForExistence(timeout: defaultTimeout), "workout.resumeBar never appeared")
+        XCTAssertFalse(app.buttons[A11yID.workoutFinish].exists, "the cover should be down while minimised")
+
+        // The strip follows the lifter across tabs.
+        let trainTab = tabButton(app, id: A11yID.tabTrain, title: "Train")
+        XCTAssertTrue(trainTab.waitForExistence(timeout: defaultTimeout), "tab.train never appeared")
+        trainTab.tap()
+        XCTAssertTrue(resumeBar.waitForExistence(timeout: defaultTimeout), "resume bar missing on Train")
+
+        resumeBar.tap()
+        let finishButton = app.buttons[A11yID.workoutFinish]
+        XCTAssertTrue(finishButton.waitForExistence(timeout: defaultTimeout), "the workout did not come back")
+        XCTAssertFalse(resumeBar.exists, "the resume bar should go once the cover is back")
+    }
+
     /// Library search filters down to a seeded exercise.
     func testLibrarySearchFindsSeededExercise() {
         let app = launchApp()

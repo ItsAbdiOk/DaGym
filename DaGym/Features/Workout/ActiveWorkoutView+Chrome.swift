@@ -1,9 +1,10 @@
 import GymCore
 import SwiftUI
 
-/// The sticky header from the redesign prototype: a round chevron (the workout-options menu),
-/// "Push · Heavy" over "25:00 · Wed 17 Sep", the hold-to-talk mic and the accent "Finish"
-/// pill, then three frosted stat tiles. Scrolling down past a threshold sheds the tiles and
+/// The sticky header from the redesign prototype: a round chevron (minimise — the cover drops
+/// and the session carries on behind the tab bar's resume strip), "Push · Heavy" over
+/// "25:00 · Wed 17 Sep", the "…" workout-options menu, the hold-to-talk mic and the accent
+/// "Finish" pill, then three frosted stat tiles. Scrolling down past a threshold sheds the tiles and
 /// condenses the row (`ChromeCollapseState` owns the threshold + hysteresis math); scrolling
 /// back up restores them.
 extension ActiveWorkoutView {
@@ -18,7 +19,21 @@ extension ActiveWorkoutView {
         withAnimation(DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion)) { chromeCollapse = next }
     }
 
-    /// The chevron's menu: layout and session-level additions that don't belong on any one
+    /// The chevron: minimise, where the shell offers it (`onMinimise`). A backfill or debug
+    /// cover has nowhere to minimise to, so the chevron is simply absent there.
+    @ViewBuilder var minimiseButton: some View {
+        if let onMinimise {
+            Button(action: onMinimise) {
+                WorkoutRoundGlyph(symbol: "chevron.down", size: 32)
+            }
+            .buttonStyle(.dgControl)
+            .accessibilityLabel("Minimise workout")
+            .accessibilityHint("Keeps the workout running behind the tabs")
+            .accessibilityIdentifier(A11yID.workoutMinimise)
+        }
+    }
+
+    /// The "…" menu: layout and session-level additions that don't belong on any one
     /// exercise. The layout picker is a per-session override of `Preferences.workoutLayout`
     /// (the saved default lives in Settings › Workout); the steppers toggle is remembered.
     var headerMenu: some View {
@@ -41,9 +56,10 @@ extension ActiveWorkoutView {
                 activeSheet = .addRoutine
             }
         } label: {
-            WorkoutRoundGlyph(symbol: "chevron.down", size: 32)
+            WorkoutRoundGlyph(symbol: "ellipsis", size: 32)
         }
         .accessibilityLabel("Workout options")
+        .accessibilityIdentifier(A11yID.workoutOptions)
     }
 
     /// Reads the effective layout; writes only the session override.
@@ -77,7 +93,7 @@ extension ActiveWorkoutView {
         // Title on its own line at accessibility sizes; the controls become a second row.
         DGAdaptiveStack(verticalAlignment: .center, spacing: 10) {
             HStack(spacing: 10) {
-                headerMenu
+                minimiseButton
                 titleBlock
             }
             Spacer(minLength: DGSpace.s2)
@@ -109,6 +125,7 @@ extension ActiveWorkoutView {
 
     var headerControls: some View {
         HStack(spacing: DGSpace.s2) {
+            headerMenu
             // Voice logging entry point (plan: DaGym/Features/Voice). The controller is the
             // screen's (`voiceController`), owned once for the whole workout.
             if let voiceController {
@@ -153,10 +170,10 @@ extension ActiveWorkoutView {
         return (String(format: "%.1f", (kg / 100).rounded() / 10), "t")
     }
 
-    /// Single 40pt row: title + elapsed on one line, Finish shrunk beside it.
+    /// Single 40pt row: title + elapsed on one line, "…" and Finish shrunk beside it.
     var condensedNavHeader: some View {
         HStack(spacing: DGSpace.s3) {
-            headerMenu
+            minimiseButton
             Text(session.title)
                 .font(DGFont.title3)
                 .foregroundStyle(DGColor.ink1)
@@ -170,6 +187,7 @@ extension ActiveWorkoutView {
                         .foregroundStyle(DGColor.ink3)
                 }
             }
+            headerMenu
             finishPill
         }
         .padding(.horizontal, DGSpace.s4)

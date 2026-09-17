@@ -30,6 +30,9 @@ enum A11yID {
     static let youInsights = "you.insights"
 
     static let workoutFinish = "workout.finish"
+    static let workoutMinimise = "workout.minimise"
+    static let workoutOptions = "workout.options"
+    static let workoutResumeBar = "workout.resumeBar"
     static let settingsWorkoutLayout = "settings.workout.layout"
 
     /// `index` is the set's position within its exercise (0-based).
