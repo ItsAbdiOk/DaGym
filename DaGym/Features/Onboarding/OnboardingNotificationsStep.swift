@@ -1,38 +1,28 @@
 import SwiftUI
 
-/// "Turn on notifications?" — mockup 06_01's permissions half. Allowing
-/// calls `NotificationPermission.requestIfNeeded()`; skipping asks nothing
-/// (the rest timer will still ask the first time it actually starts).
+/// Step 7, "Turn on notifications?" — Allow calls `NotificationPermission.requestIfNeeded()`;
+/// the top-bar Skip asks nothing (the rest timer will still ask the first time it actually
+/// starts).
 struct OnboardingNotificationsStep: View {
     var onNext: () -> Void
-    var onSkip: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s6) {
-            Text("Turn on\nnotifications?")
-                .font(DGFont.title1)
-                .foregroundStyle(DGColor.ink1)
-                .accessibilityIdentifier(A11yID.onboardingStep("notifications"))
-            Label("Rest timer only, never nagging", systemImage: "bell.fill")
-                .font(DGFont.subhead)
-                .foregroundStyle(DGColor.ink2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .dgCard()
-            Text("Skippable — turn it on later in Settings.")
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink4)
-            Spacer()
-            VStack(spacing: DGSpace.s3) {
-                DGPrimaryButton(title: "Allow", action: enable)
-                    .accessibilityIdentifier(A11yID.onboardingNext)
-                Button("Skip", action: onSkip)
-                    .buttonStyle(.dgControl)
-                    .font(DGFont.condensedLabel(13))
-                    .foregroundStyle(DGColor.ink3)
-                    .accessibilityIdentifier(A11yID.onboardingSkip)
+        OnboardingPage(
+            step: .notifications, name: "notifications", symbol: "bell.fill",
+            title: "Turn on notifications?",
+            message: "Optional. Reminders can be turned on later in Settings.",
+            cta: "Allow", onContinue: enable
+        ) {
+            OnboardingOptionGroup {
+                OnboardingInfoRow(
+                    symbol: "timer", title: "Rest timer", sub: "A ping when your rest is up — never nagging."
+                )
+                OnboardingInfoRow(
+                    symbol: "calendar", title: "Weekly recap",
+                    sub: "Off until you turn reminders on in Settings."
+                )
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func enable() {
@@ -43,8 +33,7 @@ struct OnboardingNotificationsStep: View {
 
 #Preview {
     ZStack {
-        AmbientWash()
-        OnboardingNotificationsStep(onNext: {}, onSkip: {})
-            .padding(DGSpace.s5)
+        DGColor.bgBase.ignoresSafeArea()
+        OnboardingNotificationsStep(onNext: {})
     }
 }

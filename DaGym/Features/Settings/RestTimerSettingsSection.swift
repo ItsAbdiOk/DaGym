@@ -1,26 +1,16 @@
 import GymCore
 import SwiftUI
 
-/// The Settings "REST TIMER" card: default rest, rest-pause rest and the four alert toggles,
-/// bound directly to `Preferences`.
+/// Settings › Rest timer: default rest and rest-pause rest (steppers, so the value row still
+/// edits in place), then the four alert toggles, bound directly to `Preferences`.
 struct RestTimerSettingsSection: View {
     @Environment(Preferences.self) private var preferences
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            rows
-            Text("Default rest applies to every exercise unless you set its own rest timer in"
-                + " Exercise Detail. \"Off\" turns the rest timer off completely — no countdown, no alert.")
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink4)
-        }
-    }
-
-    private var rows: some View {
-        SettingsSection(title: "Rest Timer") {
+        SettingsSection {
             SettingsRow(label: "Default rest") {
                 Stepper(value: binding(\.defaultRestSeconds), in: 0...300, step: 15) {
-                    Text(restTimerLabel).font(DGFont.subhead).foregroundStyle(DGColor.ink3)
+                    Text(restTimerLabel).font(DGFont.subhead).foregroundStyle(DGColor.ink3).monospacedDigit()
                 }
                 .accessibilityLabel("Default rest")
                 .accessibilityValue(restTimerLabel)
@@ -31,33 +21,32 @@ struct RestTimerSettingsSection: View {
                     Text(WorkoutSession.clock(preferences.restPauseSeconds))
                         .font(DGFont.subhead)
                         .foregroundStyle(DGColor.ink3)
+                        .monospacedDigit()
                 }
                 .accessibilityLabel("Rest-pause rest")
                 .accessibilityValue(WorkoutSession.clock(preferences.restPauseSeconds))
             }
+        }
+        SettingsSection(
+            note: "Default rest applies to every exercise unless you set its own rest timer in"
+                + " Exercise Detail. \"Off\" turns the rest timer off completely — no countdown, no alert."
+        ) {
+            SettingsToggleRow(label: "Sound", isOn: binding(\.restSound))
             SettingsDivider()
-            SettingsRow(label: "Sound") {
-                Toggle("Sound", isOn: binding(\.restSound)).tint(DGColor.coral).labelsHidden()
-            }
+            SettingsToggleRow(label: "Play on silent", isOn: binding(\.playRestSoundOnSilent))
             SettingsDivider()
-            SettingsRow(label: "Play on silent") {
-                Toggle("Play on silent", isOn: binding(\.playRestSoundOnSilent))
-                    .tint(DGColor.coral).labelsHidden()
-            }
+            SettingsToggleRow(label: "Haptics", isOn: binding(\.restHaptics))
             SettingsDivider()
-            SettingsRow(label: "Haptics") {
-                Toggle("Haptics", isOn: binding(\.restHaptics)).tint(DGColor.coral).labelsHidden()
-            }
-            SettingsDivider()
-            SettingsRow(label: "Screen flash") {
-                Toggle("Screen flash", isOn: binding(\.restScreenFlash)).tint(DGColor.coral).labelsHidden()
-            }
+            SettingsToggleRow(label: "Screen flash", isOn: binding(\.restScreenFlash))
         }
     }
 
     /// "Off" at 0 seconds (features #20); otherwise the usual `m:ss` clock.
-    private var restTimerLabel: String {
-        preferences.defaultRestSeconds == 0 ? "Off" : WorkoutSession.clock(preferences.defaultRestSeconds)
+    private var restTimerLabel: String { Self.clock(preferences.defaultRestSeconds) }
+
+    /// The index row shows the same label, so it lives here rather than in both places.
+    static func clock(_ seconds: Int) -> String {
+        seconds == 0 ? "Off" : WorkoutSession.clock(seconds)
     }
 
     private func binding<T>(_ keyPath: ReferenceWritableKeyPath<Preferences, T>) -> Binding<T> {
@@ -66,10 +55,8 @@ struct RestTimerSettingsSection: View {
 }
 
 #Preview {
-    ScrollView {
-        RestTimerSettingsSection()
-            .padding(DGSpace.s4)
+    NavigationStack {
+        SettingsPage(title: "Rest timer") { RestTimerSettingsSection() }
     }
     .environment(Preferences())
-    .background(AmbientWash())
 }

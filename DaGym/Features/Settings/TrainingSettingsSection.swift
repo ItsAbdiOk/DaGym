@@ -1,8 +1,7 @@
 import GymCore
 import SwiftUI
 
-/// The Settings "TRAINING" card: goal, weekly goal, week start, weigh-in prompt and the gym
-/// check-in card row.
+/// Settings › Training: goal, weekly goal, week start, weigh-in prompt and the gym card row.
 struct TrainingSettingsSection: View {
     @Environment(Preferences.self) private var preferences
     @Environment(WorkoutStore.self) private var store
@@ -15,37 +14,54 @@ struct TrainingSettingsSection: View {
     private static let notificationScheduler = TrainingNotificationScheduler()
 
     var body: some View {
-        SettingsSection(title: "Training") {
-            TrainingGoalRow(onApply: {
-                preferences.applyTrainingGoalDefaults()
-                Self.notificationScheduler.rescheduleAll(store: store, preferences: preferences)
-            })
+        SettingsSection(note: goalNote) {
+            SettingsRow(label: "Goal") {
+                SettingsSegment(
+                    label: "Goal", selection: goalBinding,
+                    options: Preferences.TrainingGoal.allCases.map { ($0, $0.shortTitle) }
+                )
+            }
             SettingsDivider()
             SettingsRow(label: "Weekly goal") {
                 Stepper(value: weeklyGoalBinding, in: 1...7) {
-                    Text("\(preferences.weeklyGoal)").font(DGFont.subhead).foregroundStyle(DGColor.ink3)
+                    Text("\(preferences.weeklyGoal) sessions")
+                        .font(DGFont.subhead)
+                        .foregroundStyle(DGColor.ink3)
+                        .monospacedDigit()
                 }
                 .accessibilityLabel("Weekly goal")
                 .accessibilityValue("\(preferences.weeklyGoal) workouts")
             }
             SettingsDivider()
             SettingsRow(label: "Week starts") {
-                Picker("Week starts", selection: weekStartsMondayBinding) {
-                    Text("MON").tag(true)
-                    Text("SUN").tag(false)
-                }
-                .pickerStyle(.segmented)
-                .tint(DGColor.coral)
-                .frame(width: 120)
+                SettingsSegment(
+                    label: "Week starts", selection: weekStartsMondayBinding,
+                    options: [(true, "Mon"), (false, "Sun")]
+                )
             }
             SettingsDivider()
-            SettingsRow(label: "Weigh in before workouts") {
-                Toggle("Weigh in before workouts", isOn: binding(\.weighInBeforeWorkout))
-                    .tint(DGColor.coral).labelsHidden()
-            }
-            SettingsDivider()
-            CheckInCardButton()
+            SettingsToggleRow(label: "Weigh in before workouts", isOn: binding(\.weighInBeforeWorkout))
         }
+        CheckInCardButton()
+    }
+
+    /// The goal's own one-liner plus what changing it re-applies — the two numbers the goal
+    /// actually drives, so the answer never reads as a stored string nobody uses.
+    private var goalNote: String {
+        "\(preferences.trainingGoal.detail) Your goal sets default rest and the weekly session target."
+    }
+
+    /// Changing the goal re-applies its rest length and weekly session count (what the note
+    /// promises) and reschedules the notifications that embed the weekly number.
+    private var goalBinding: Binding<Preferences.TrainingGoal> {
+        Binding(
+            get: { preferences.trainingGoal },
+            set: {
+                preferences.trainingGoal = $0
+                preferences.applyTrainingGoalDefaults()
+                Self.notificationScheduler.rescheduleAll(store: store, preferences: preferences)
+            }
+        )
     }
 
     /// "This week" moving changes which days the goal-at-risk and recap notifications belong to,
@@ -76,14 +92,23 @@ struct TrainingSettingsSection: View {
     }
 }
 
+extension Preferences.TrainingGoal {
+    /// The segment label: "General fitness" is too long for a three-way pill.
+    var shortTitle: String {
+        switch self {
+        case .strength: "Strength"
+        case .muscle: "Muscle"
+        case .general: "General"
+        }
+    }
+}
+
 #Preview {
     if let store = PreviewStore.make() {
-        ScrollView {
-            TrainingSettingsSection()
-                .padding(DGSpace.s4)
+        NavigationStack {
+            SettingsPage(title: "Training") { TrainingSettingsSection() }
         }
         .environment(Preferences())
         .environment(store)
-        .background(AmbientWash())
     }
 }

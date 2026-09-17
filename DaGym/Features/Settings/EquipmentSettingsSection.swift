@@ -1,10 +1,10 @@
 import GymCore
 import SwiftUI
 
-/// The Settings "EQUIPMENT" section: pick which profile is active, and open
-/// `EquipmentProfileView` to edit or add one. Library filtering by profile
-/// and routine equipment warnings (plan.md §6.1) are a follow-up — this only
-/// stores and edits the profiles.
+/// Settings › Equipment profiles (also the You hub's "Equipment profiles" row, via
+/// `EquipmentProfilesScreen`): pick which profile is active, add one, and open
+/// `EquipmentProfileView` to edit. A second group summarises the active profile — bar,
+/// collars, plates, equipment, machines — each row opening the same editor.
 struct EquipmentSettingsSection: View {
     @Environment(WorkoutStore.self) private var store
     @Environment(Preferences.self) private var preferences
@@ -15,19 +15,10 @@ struct EquipmentSettingsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DGSpace.s3) {
-            header
-            VStack(spacing: 0) {
-                ForEach(Array(profiles.enumerated()), id: \.element.id) { index, profile in
-                    profileRow(profile)
-                    if index < profiles.count - 1 {
-                        Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
-                    }
-                }
+            profilesGroup
+            if let active = profiles.first(where: \.isActive) {
+                activeSummary(active)
             }
-            .dgCard(padding: 0)
-            Text("The library shows the active profile’s equipment; routines that need more get a badge.")
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink4)
         }
         .task { refresh() }
         .onChange(of: store.changeToken) { refresh() }
@@ -41,25 +32,31 @@ struct EquipmentSettingsSection: View {
         }
     }
 
-    private var header: some View {
-        HStack {
-            Text("Equipment").dgLabel()
-            Spacer()
-            Button {
-                isNewProfile = true
-                editingProfile = EquipmentProfileInfo(
-                    id: UUID(), name: "New Profile", isActive: false,
-                    barKg: preferences.weightUnit.defaultBar.weightKg,
-                    availableEquipment: [], plateStock: [], collarsKg: 0
-                )
-            } label: {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(DGColor.coral)
+    private var profilesGroup: some View {
+        SettingsSection(
+            title: "Profiles",
+            note: "The library shows the active profile’s equipment; routines that need more get a badge."
+        ) {
+            ForEach(profiles) { profile in
+                profileRow(profile)
+                SettingsDivider()
             }
-            .buttonStyle(.dgControl)
-            .accessibilityLabel("Add equipment profile")
+            SettingsLinkRow(label: "Add profile", action: addProfile)
         }
+    }
+
+    private func addProfile() {
+        isNewProfile = true
+        editingProfile = EquipmentProfileInfo(
+            id: UUID(), name: "New Profile", isActive: false,
+            barKg: preferences.weightUnit.defaultBar.weightKg,
+            availableEquipment: [], plateStock: [], collarsKg: 0
+        )
+    }
+
+    private func edit(_ profile: EquipmentProfileInfo) {
+        isNewProfile = false
+        editingProfile = profile
     }
 
     private func profileRow(_ profile: EquipmentProfileInfo) -> some View {
@@ -74,21 +71,63 @@ struct EquipmentSettingsSection: View {
                 profile.isActive ? "\(profile.name), active profile" : "Make \(profile.name) active"
             )
             .accessibilityAddTraits(profile.isActive ? .isSelected : [])
-            Text(profile.name).font(DGFont.body).foregroundStyle(DGColor.ink1)
+            Text(profile.name).font(DGFont.subhead).foregroundStyle(DGColor.ink1)
             Spacer()
-            Button {
-                isNewProfile = false
-                editingProfile = profile
-            } label: {
-                Image(systemName: "chevron.right").accessibilityHidden(true)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(DGColor.ink4)
+            Button { edit(profile) } label: {
+                HStack(spacing: DGSpace.s2) {
+                    if profile.isActive {
+                        Text("Active").font(DGFont.subhead).foregroundStyle(DGColor.ink3)
+                    }
+                    SettingsChevron()
+                }
             }
             .buttonStyle(.dgControl)
             .accessibilityLabel("Edit \(profile.name)")
         }
-        .padding(.horizontal, DGSpace.s5)
-        .frame(minHeight: 52)
+        .padding(.horizontal, 15)
+        .frame(minHeight: 46)
+    }
+
+    /// The active profile at a glance; every row opens the editor, since the values are edited
+    /// there and not inline.
+    private func activeSummary(_ profile: EquipmentProfileInfo) -> some View {
+        SettingsSection(
+            title: profile.name,
+            note: "Profiles drive plate maths, swap suggestions, library filtering and what the coach "
+                + "may propose."
+        ) {
+            SettingsLinkRow(label: "Bar weight", value: weight(profile.barKg)) { edit(profile) }
+            SettingsDivider()
+            SettingsLinkRow(label: "Collars", value: weight(profile.collarsKg)) { edit(profile) }
+            SettingsDivider()
+            SettingsLinkRow(label: "Plate inventory", value: Self.plateLabel(profile.plateStock)) {
+                edit(profile)
+            }
+            SettingsDivider()
+            SettingsLinkRow(
+                label: "Available equipment", value: "\(profile.availableEquipment.count) types"
+            ) {
+                edit(profile)
+            }
+            SettingsDivider()
+            SettingsLinkRow(label: "Machines", value: Self.machinesLabel(profile)) { edit(profile) }
+        }
+    }
+
+    private func weight(_ kg: Double) -> String {
+        "\(preferences.formatWeight(kg: kg)) \(preferences.unitSymbol)"
+    }
+
+    /// "8 sizes" — one row of stock per plate weight, however many of each.
+    private static func plateLabel(_ stock: [PlateStock]) -> String {
+        let sizes = stock.filter { $0.count >= 1 }.count
+        return sizes == 1 ? "1 size" : "\(sizes) sizes"
+    }
+
+    private static func machinesLabel(_ profile: EquipmentProfileInfo) -> String {
+        guard profile.restrictsMachines else { return "Any" }
+        let count = profile.availableMachines.count
+        return count == 1 ? "1 station" : "\(count) stations"
     }
 
     private func refresh() {
@@ -100,13 +139,11 @@ struct EquipmentSettingsSection: View {
     if let store = PreviewStore.make() {
         EquipmentSeeder.seedIfNeeded(store: store)
         return AnyView(
-            ScrollView {
-                EquipmentSettingsSection()
-                    .padding(DGSpace.s4)
+            NavigationStack {
+                SettingsPage(title: "Equipment profiles") { EquipmentSettingsSection() }
             }
             .environment(store)
             .environment(Preferences())
-            .background(AmbientWash())
         )
     }
     return AnyView(EmptyView())

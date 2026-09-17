@@ -69,51 +69,40 @@ struct RemindersSettingsSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            Text("Reminders").dgLabel()
-            VStack(spacing: 0) {
-                ReminderRow(label: "Streak reminders") {
-                    Toggle("Streak reminders", isOn: streakBinding)
-                        .tint(DGColor.coral).labelsHidden()
+        SettingsSection(
+            note: "A Saturday nudge when the weekly goal is at risk, a Sunday recap, and a reminder"
+                + " on each day you've scheduled a routine."
+        ) {
+            SettingsToggleRow(label: "Streak reminders", sub: "Saturday", isOn: streakBinding)
+            SettingsDivider()
+            SettingsToggleRow(label: "Weekly recap", sub: "Sunday", isOn: recapBinding)
+            SettingsDivider()
+            SettingsRow(label: "Reminder time") {
+                Stepper(value: hourBinding, in: 0...23) {
+                    Text(hourLabel).font(DGFont.subhead).foregroundStyle(DGColor.ink3).monospacedDigit()
                 }
+                .accessibilityLabel("Reminder time")
+                .accessibilityValue(hourLabel)
+            }
+            SettingsDivider()
+            SettingsToggleRow(label: "Workout day reminder", isOn: workoutDayEnabledBinding)
+            if preferences.workoutDayReminderEnabled {
                 SettingsDivider()
-                ReminderRow(label: "Weekly recap") {
-                    Toggle("Weekly recap", isOn: recapBinding)
-                        .tint(DGColor.coral).labelsHidden()
-                }
-                SettingsDivider()
-                ReminderRow(label: "Reminder time") {
-                    Stepper(value: hourBinding, in: 0...23) {
-                        Text(hourLabel).font(DGFont.subhead).foregroundStyle(DGColor.ink3)
+                SettingsRow(label: "Workout day time") {
+                    Stepper(value: workoutDayHourBinding, in: 0...23) {
+                        Text(workoutDayHourLabel)
+                            .font(DGFont.subhead)
+                            .foregroundStyle(DGColor.ink3)
+                            .monospacedDigit()
                     }
-                    .accessibilityLabel("Reminder time")
-                    .accessibilityValue(hourLabel)
-                }
-                SettingsDivider()
-                ReminderRow(label: "Workout day reminder") {
-                    Toggle("Workout day reminder", isOn: workoutDayEnabledBinding)
-                        .tint(DGColor.coral).labelsHidden()
-                }
-                if preferences.workoutDayReminderEnabled {
-                    SettingsDivider()
-                    ReminderRow(label: "Workout day time") {
-                        Stepper(value: workoutDayHourBinding, in: 0...23) {
-                            Text(workoutDayHourLabel).font(DGFont.subhead).foregroundStyle(DGColor.ink3)
-                        }
-                        .accessibilityLabel("Workout day time")
-                        .accessibilityValue(workoutDayHourLabel)
-                    }
-                }
-                if showsDeniedRow {
-                    SettingsDivider()
-                    deniedRow
+                    .accessibilityLabel("Workout day time")
+                    .accessibilityValue(workoutDayHourLabel)
                 }
             }
-            .dgCard(padding: 0)
-            Text("A Saturday nudge when the weekly goal is at risk, a Sunday recap, and a reminder"
-                + " on each day you've scheduled a routine.")
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink4)
+            if showsDeniedRow {
+                SettingsDivider()
+                deniedRow
+            }
         }
         .task { await permission.refresh() }
     }
@@ -136,7 +125,7 @@ struct RemindersSettingsSection: View {
                     .foregroundStyle(DGColor.coral)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Notifications are off in iOS Settings")
-                        .font(DGFont.body)
+                        .font(DGFont.subhead)
                         .foregroundStyle(DGColor.ink1)
                         .multilineTextAlignment(.leading)
                     Text("These reminders can't be delivered until you turn them back on.")
@@ -145,13 +134,11 @@ struct RemindersSettingsSection: View {
                         .multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: DGSpace.s2)
-                Image(systemName: "chevron.right").accessibilityHidden(true)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(DGColor.ink4)
+                SettingsChevron()
             }
-            .padding(.horizontal, DGSpace.s5)
+            .padding(.horizontal, 15)
             .padding(.vertical, DGSpace.s3)
-            .frame(minHeight: 52)
+            .frame(minHeight: 46)
         }
         .buttonStyle(.dgRow)
     }
@@ -222,7 +209,8 @@ struct RemindersSettingsSection: View {
     private var hourLabel: String { Self.hourLabel(preferences.reminderHour) }
     private var workoutDayHourLabel: String { Self.hourLabel(preferences.workoutDayReminderHour) }
 
-    private static func hourLabel(_ hour: Int) -> String {
+    /// The index row shows the reminder hour the same way, so this is not private.
+    static func hourLabel(_ hour: Int) -> String {
         var components = DateComponents()
         components.hour = hour
         components.minute = 0
@@ -231,33 +219,14 @@ struct RemindersSettingsSection: View {
     }
 }
 
-/// One "label … trailing control" row, matching `SettingsView`'s row chrome without reusing its
-/// file-private `SettingsRow` (see `DataSettingsSection`'s `DataRow` for the same convention).
-private struct ReminderRow<Trailing: View>: View {
-    var label: String
-    @ViewBuilder var trailing: Trailing
-
-    var body: some View {
-        DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
-            Text(label).font(DGFont.body).foregroundStyle(DGColor.ink1)
-            Spacer()
-            trailing
-        }
-        .padding(.horizontal, DGSpace.s5)
-        .frame(minHeight: 52)
-    }
-}
-
 #Preview {
     if let store = PreviewStore.make() {
         return AnyView(
-            ScrollView {
-                RemindersSettingsSection()
-                    .padding(DGSpace.s4)
+            NavigationStack {
+                SettingsPage(title: "Reminders") { RemindersSettingsSection() }
             }
             .environment(Preferences())
             .environment(store)
-            .background(AmbientWash())
         )
     }
     return AnyView(EmptyView())

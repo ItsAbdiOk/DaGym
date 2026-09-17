@@ -222,16 +222,6 @@ private struct YouRow: View {
 /// profiles" row).
 struct EquipmentProfilesScreen: View {
     var body: some View {
-        ZStack {
-            AmbientWash()
-            ScrollView {
-                EquipmentSettingsSection()
-                    .padding(.horizontal, DGSpace.s4)
-                    .padding(.top, DGSpace.s3)
-                    .padding(.bottom, DGSpace.s6)
-            }
-        }
-        .navigationTitle("Equipment")
-        .navigationBarTitleDisplayMode(.inline)
+        SettingsPage(title: "Equipment profiles") { EquipmentSettingsSection() }
     }
 }

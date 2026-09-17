@@ -2,9 +2,11 @@ import GymCore
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The Settings "IMPORT HISTORY" section: pick a Strong/Hevy/FitNotes CSV export via
-/// `.fileImporter`, preview what it would add, then confirm to merge (plan.md §6.8: "Import
-/// history from other apps... show a preview + problems before confirming").
+/// Settings › Data & backup › "Import from another app": one row per source. Strong, Hevy and
+/// FitNotes CSV exports all go through the same `.fileImporter` (the format is detected from
+/// the header), Hevy can also fetch over its API, and Apple Health hands off to
+/// `HealthImportRow`. Every path previews what it would add, then confirms to merge (plan.md
+/// §6.8: "Import history from other apps... show a preview + problems before confirming").
 struct ImportSettingsSection: View {
     @Environment(WorkoutStore.self) private var store
 
@@ -14,6 +16,7 @@ struct ImportSettingsSection: View {
     @State private var errorMessage: String?
     @State private var confirmationMessage: String?
     @State private var showingHevyKeySheet = false
+    @State private var showingHevyChoice = false
     /// The in-flight unit re-parse; a new pick cancels it so a slow LB parse can't land after a
     /// faster KG one and import every weight 2.2× off.
     @State private var reparseTask: Task<Void, Never>?
@@ -26,20 +29,33 @@ struct ImportSettingsSection: View {
     @State private var importTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s3) {
-            Text("Import History").dgLabel()
-            VStack(spacing: 0) {
-                importRow
-                Divider().padding(.leading, 52)
-                hevyRow
+        VStack(alignment: .leading, spacing: DGSpace.s2) {
+            SettingsSection(title: "Import from another app") {
+                SettingsLinkRow(label: "Strong · CSV", isBusy: isBusy) { showingImporter = true }
+                SettingsDivider()
+                SettingsLinkRow(label: "Hevy · CSV or API key", sub: hevySub, isBusy: isBusy) {
+                    showingHevyChoice = true
+                }
+                SettingsDivider()
+                SettingsLinkRow(label: "FitNotes · CSV", isBusy: isBusy) { showingImporter = true }
+                SettingsDivider()
+                HealthImportRow()
             }
-            .dgCard(padding: 0)
             footnote
         }
         .fileImporter(
             isPresented: $showingImporter, allowedContentTypes: [.commaSeparatedText, .plainText]
         ) { result in
             handleImportPick(result)
+        }
+        .confirmationDialog("Import from Hevy", isPresented: $showingHevyChoice, titleVisibility: .visible) {
+            Button("Choose a CSV export") { showingImporter = true }
+            if hevyAPIKey.isEmpty {
+                Button("Connect with a Hevy API key") { showingHevyKeySheet = true }
+            } else {
+                Button("Fetch from Hevy") { Task { await loadHevyImport() } }
+                Button("Change or remove API key") { showingHevyKeySheet = true }
+            }
         }
         .sheet(item: $pendingImport) { pending in
             ImportCSVPreviewSheet(
@@ -58,70 +74,8 @@ struct ImportSettingsSection: View {
         .task { hevyAPIKey = KeychainStore.string(account: HevyAPIClient.keychainAccount) ?? "" }
     }
 
-    private var importRow: some View {
-        Button { showingImporter = true } label: {
-            HStack(spacing: DGSpace.s3) {
-                Image(systemName: "square.and.arrow.down.on.square")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(DGColor.coral)
-                    .frame(width: 24)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Import from Strong, Hevy or FitNotes")
-                        .font(DGFont.body)
-                        .foregroundStyle(DGColor.ink1)
-                    Text("Bring in workout history from a CSV export")
-                        .font(DGFont.footnote)
-                        .foregroundStyle(DGColor.ink4)
-                }
-                Spacer()
-                if isBusy {
-                    ProgressView().tint(DGColor.ink3)
-                } else {
-                    Image(systemName: "chevron.right").accessibilityHidden(true)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(DGColor.ink4)
-                }
-            }
-            .padding(.horizontal, DGSpace.s5)
-            .frame(minHeight: 56)
-        }
-        .buttonStyle(.dgRow)
-        .disabled(isBusy)
-    }
-
-    private var hevyRow: some View {
-        Button(action: hevyRowTapped) {
-            HStack(spacing: DGSpace.s3) {
-                Image(systemName: "arrow.down.circle")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(DGColor.coral)
-                    .frame(width: 24)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(hevyAPIKey.isEmpty ? "Import from Hevy (API)" : "Import from Hevy")
-                        .font(DGFont.body)
-                        .foregroundStyle(DGColor.ink1)
-                    Text(
-                        hevyAPIKey.isEmpty
-                            ? "Connect with your Hevy Pro API key"
-                            : "Fetch your full workout history"
-                    )
-                    .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.ink4)
-                }
-                Spacer()
-                if isBusy {
-                    ProgressView().tint(DGColor.ink3)
-                } else {
-                    Image(systemName: "chevron.right").accessibilityHidden(true)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(DGColor.ink4)
-                }
-            }
-            .padding(.horizontal, DGSpace.s5)
-            .frame(minHeight: 56)
-        }
-        .buttonStyle(.dgRow)
-        .disabled(isBusy)
+    private var hevySub: String? {
+        hevyAPIKey.isEmpty ? nil : "API key saved"
     }
 
     @ViewBuilder
@@ -129,11 +83,9 @@ struct ImportSettingsSection: View {
         if let importProgress {
             ImportProgressRow(title: "Importing", progress: importProgress) { importTask?.cancel() }
         } else if let confirmationMessage {
-            Text(confirmationMessage).font(DGFont.footnote).foregroundStyle(DGColor.success)
+            SettingsNote(text: confirmationMessage, tint: DGColor.success)
         } else {
-            Text("Unmatched exercises are added as custom exercises. Nothing is dropped.")
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink4)
+            SettingsNote(text: "Unmatched exercises are added as custom exercises. Nothing is dropped.")
         }
     }
 
@@ -238,14 +190,6 @@ struct ImportSettingsSection: View {
 
     // MARK: - Hevy API import
 
-    private func hevyRowTapped() {
-        if hevyAPIKey.isEmpty {
-            showingHevyKeySheet = true
-        } else {
-            Task { await loadHevyImport() }
-        }
-    }
-
     private func saveHevyKey(_ key: String) {
         hevyAPIKey = key
         KeychainStore.set(key, account: HevyAPIClient.keychainAccount)
@@ -297,11 +241,10 @@ struct PendingCSVImport: Identifiable {
 
 #Preview {
     if let store = PreviewStore.make() {
-        ScrollView {
-            ImportSettingsSection()
-                .padding(DGSpace.s4)
+        NavigationStack {
+            SettingsPage(title: "Data & backup") { ImportSettingsSection() }
         }
         .environment(store)
-        .background(AmbientWash())
+        .environment(Preferences())
     }
 }

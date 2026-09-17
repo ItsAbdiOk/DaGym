@@ -1,47 +1,39 @@
 import GymCore
 import SwiftUI
 
-/// "How do you measure things?" — mockup 06_00 "15b" (units half). Sets
-/// `preferences.weightUnit` immediately on tap.
+/// Step 1, "Units": metric or imperial. Sets `preferences.weightUnit` and `distanceUnit`
+/// together, immediately on tap.
 struct OnboardingUnitsStep: View {
     var onNext: () -> Void
     @Environment(Preferences.self) private var preferences
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s6) {
-            Text("How do you\nmeasure things?")
-                .font(DGFont.title1)
-                .foregroundStyle(DGColor.ink1)
-                .accessibilityIdentifier(A11yID.onboardingStep("units"))
-            VStack(alignment: .leading, spacing: DGSpace.s2) {
-                Text("Units").dgLabel()
-                HStack(spacing: DGSpace.s2) {
-                    unitChip(.kg, title: "Kilograms")
-                    unitChip(.lb, title: "Pounds")
-                }
+        OnboardingPage(
+            step: .units, name: "units", symbol: "scalemass.fill", title: "Units",
+            message: "Used for logging, plate maths and every chart.", cta: "Continue", onContinue: onNext
+        ) {
+            OnboardingOptionGroup {
+                OnboardingOptionRow(
+                    title: "Kilograms", sub: "kg · km — metric", isSelected: preferences.weightUnit == .kg
+                ) { pick(.kg, .km) }
+                OnboardingOptionRow(
+                    title: "Pounds", sub: "lb · mi — imperial", isSelected: preferences.weightUnit == .lb
+                ) { pick(.lb, .mi) }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .dgCard()
-            Spacer()
-            DGPrimaryButton(title: "Continue", action: onNext)
-                .accessibilityIdentifier(A11yID.onboardingNext)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func unitChip(_ unit: WeightUnit, title: String) -> some View {
-        DGChip(title: title, selected: preferences.weightUnit == unit) {
-            preferences.weightUnit = unit
-            Haptics.step()
-        }
+    private func pick(_ weight: WeightUnit, _ distance: DistanceUnit) {
+        preferences.weightUnit = weight
+        preferences.distanceUnit = distance
+        Haptics.step()
     }
 }
 
 #Preview {
     ZStack {
-        AmbientWash()
+        DGColor.bgBase.ignoresSafeArea()
         OnboardingUnitsStep(onNext: {})
             .environment(Preferences())
-            .padding(DGSpace.s5)
     }
 }

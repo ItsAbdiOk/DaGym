@@ -90,7 +90,7 @@ struct CoachChatScreen: View {
         }
         .dgUndoToast($undoAction)
         .dgNoticeToast($toast)
-        .sheet(isPresented: $showingSettings, onDismiss: refreshHeader) { SettingsView() }
+        .sheet(isPresented: $showingSettings, onDismiss: refreshHeader) { SettingsView(standalone: true) }
         .task { openLaunch() }
         .refreshOnStoreChange(refreshHeader)
         .onDisappear { engine?.cancel() }

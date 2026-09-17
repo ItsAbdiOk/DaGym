@@ -56,7 +56,7 @@ struct CoachChatSettingsCard: View {
             CoachChatSettingsDivider()
             whatIsSent
         }
-        .dgCard(padding: 0)
+        .dgCard(radius: 16, padding: 0)
         .sheet(isPresented: $showingKeySheet) {
             OpenRouterKeySheet(hasKey: hasKey, onSave: saveKey, onRemove: removeKey)
         }
@@ -100,7 +100,7 @@ struct CoachChatSettingsCard: View {
     private var consentRow: some View {
         DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Sending your data").font(DGFont.body).foregroundStyle(DGColor.ink1)
+                Text("Sending your data").font(DGFont.subhead).foregroundStyle(DGColor.ink1)
                 Text(preferences.coachChatConsentGiven ? "Agreed" : "Not yet agreed")
                     .font(DGFont.footnote)
                     .foregroundStyle(preferences.coachChatConsentGiven ? DGColor.success : DGColor.ink3)
@@ -116,22 +116,22 @@ struct CoachChatSettingsCard: View {
                     .dgLabel(DGColor.coralText)
             }
         }
-        .padding(.horizontal, DGSpace.s5)
-        .frame(minHeight: 52)
+        .padding(.horizontal, 15)
+        .frame(minHeight: 46)
     }
 
     @ViewBuilder
     private var whatIsSent: some View {
         Button { showingWhatIsSent.toggle() } label: {
             HStack {
-                Text("What's sent").font(DGFont.body).foregroundStyle(DGColor.ink1)
+                Text("What's sent").font(DGFont.subhead).foregroundStyle(DGColor.ink1)
                 Spacer()
                 Image(systemName: showingWhatIsSent ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(DGColor.ink4)
             }
-            .padding(.horizontal, DGSpace.s5)
-            .frame(minHeight: 52)
+            .padding(.horizontal, 15)
+            .frame(minHeight: 46)
         }
         .buttonStyle(.dgControl)
         .accessibilityLabel(showingWhatIsSent ? "Hide what's sent" : "Show what's sent")
@@ -170,38 +170,22 @@ struct CoachChatSettingsCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, DGSpace.s1)
             }
-            .padding(.horizontal, DGSpace.s5)
+            .padding(.horizontal, 15)
             .padding(.bottom, DGSpace.s4)
         }
     }
 
     private func navigationRow(label: String, value: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            DGAdaptiveStack(verticalAlignment: .center, spacing: DGSpace.s2) {
-                Text(label).font(DGFont.body).foregroundStyle(DGColor.ink1)
-                Spacer()
-                HStack(spacing: DGSpace.s2) {
-                    Text(value).font(DGFont.subhead).foregroundStyle(DGColor.ink3).lineLimit(1)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(DGColor.ink4)
-                        .accessibilityHidden(true)
-                }
-            }
-            .padding(.horizontal, DGSpace.s5)
-            .frame(minHeight: 52)
-        }
-        .buttonStyle(.dgControl)
-        .accessibilityLabel("\(label): \(value)")
+        SettingsLinkRow(label: label, value: value, action: action)
     }
 
     private func caption(_ text: String) -> some View {
         Text(text)
-            .font(DGFont.subhead)
+            .font(DGFont.footnote)
             .foregroundStyle(DGColor.ink3)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, DGSpace.s5)
+            .padding(.horizontal, 15)
             .padding(.vertical, DGSpace.s3)
     }
 
@@ -221,15 +205,12 @@ struct CoachChatSettingsCard: View {
 }
 
 struct CoachChatSettingsDivider: View {
-    var body: some View {
-        Divider().overlay(DGColor.hairline).padding(.leading, DGSpace.s5)
-    }
+    var body: some View { SettingsDivider() }
 }
 
 #Preview {
-    ScrollView {
-        CoachChatSettingsCard().padding(DGSpace.s4)
+    NavigationStack {
+        SettingsPage(title: "Coach") { CoachChatSettingsCard() }
     }
     .environment(Preferences())
-    .background(AmbientWash())
 }

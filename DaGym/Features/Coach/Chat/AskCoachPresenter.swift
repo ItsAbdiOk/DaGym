@@ -30,7 +30,7 @@ struct AskCoachPresenter: ViewModifier {
                 }
             }
             .fullScreenCover(isPresented: $showingChat) { CoachChatView() }
-            .sheet(isPresented: $showingSettings) { SettingsView() }
+            .sheet(isPresented: $showingSettings) { SettingsView(standalone: true) }
     }
 }
 

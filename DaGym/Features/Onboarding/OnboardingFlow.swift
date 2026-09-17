@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// First-launch onboarding (plan §6.9): a fixed sequence of short glass-card
-/// steps over `AmbientWash`, shown before `RootView` while
-/// `preferences.hasCompletedOnboarding` is `false` (see `DaGymApp.swift`).
-/// Every step persists its answer immediately — `Preferences` and
-/// `WorkoutStore` writes happen as the user taps, not batched at the end —
-/// and the current step is saved too, so a killed app resumes where it was
-/// rather than losing progress. UI-test launches always start at Welcome.
+/// First-launch onboarding (plan §6.9): a fixed sequence of full-screen steps on the plain
+/// stone page — Back and Skip in the top bar, an accent glyph, kicker, title and a white group
+/// of options, then page dots and one full-width call to action. Shown before `RootView`
+/// while `preferences.hasCompletedOnboarding` is `false` (see `DaGymApp.swift`).
+/// Every step persists its answer immediately — `Preferences` and `WorkoutStore` writes
+/// happen as the user taps, not batched at the end — and the current step is saved too, so a
+/// killed app resumes where it was rather than losing progress. UI-test launches always start
+/// at Welcome.
 struct OnboardingFlow: View {
     var onComplete: () -> Void
 
@@ -21,15 +22,11 @@ struct OnboardingFlow: View {
 
     var body: some View {
         ZStack {
-            AmbientWash()
-            VStack(spacing: DGSpace.s6) {
-                header
+            DGColor.bgBase.ignoresSafeArea()
+            VStack(spacing: 0) {
+                topBar
                 stepContent
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, DGSpace.s5)
-            .padding(.top, DGSpace.s8)
-            .padding(.bottom, DGSpace.s5)
         }
         .animation(DGMotion.aware(DGMotion.standard, reduceMotion: reduceMotion), value: step)
         .onAppear(perform: restoreStep)
@@ -49,9 +46,9 @@ struct OnboardingFlow: View {
     }
 
     /// Welcome's "Explore with sample data" — seeds the Push/Pull/Legs trio and eight weeks of
-    /// history on it, then skips straight to the tab bar, same as "Skip and start lifting". The seed
-    /// is a few hundred SwiftData writes on the main actor; the yield lets the busy state
-    /// paint first so the tap doesn't look ignored.
+    /// history on it, then skips straight to the tab bar, same as "Skip setup". The seed is a
+    /// few hundred SwiftData writes on the main actor; the yield lets the busy state paint
+    /// first so the tap doesn't look ignored.
     private func exploreSampleData() {
         guard !isSeeding else { return }
         isSeeding = true
@@ -80,48 +77,52 @@ struct OnboardingFlow: View {
         case .equipment:
             OnboardingEquipmentStep(onNext: advance)
         case .bodyweight:
-            OnboardingBodyweightStep(onNext: advance, onSkip: advance)
+            OnboardingBodyweightStep(onNext: advance)
         case .health:
-            OnboardingHealthStep(onNext: advance, onSkip: advance)
+            OnboardingHealthStep(onNext: advance)
         case .notifications:
-            OnboardingNotificationsStep(onNext: advance, onSkip: advance)
+            OnboardingNotificationsStep(onNext: advance)
         case .done:
             OnboardingDoneStep(onFinish: complete)
         }
     }
 
-    @ViewBuilder
-    private var header: some View {
-        if step != .welcome {
-            HStack(spacing: DGSpace.s4) {
+    /// "‹ Back" on every step after Welcome; "Skip" everywhere but the final screen. Skip on
+    /// Welcome ends onboarding with defaults (`onboardingSkipAll`); on a question it accepts the
+    /// current answer and moves on; on an optional step it skips that step (`onboardingSkip`).
+    private var topBar: some View {
+        HStack {
+            if step != .welcome {
                 Button(action: back) {
-                    Image(systemName: "chevron.left").accessibilityHidden(true)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(DGColor.ink2)
-                        .frame(width: 36, height: 36)
-                        .dgGlass(.thin, in: Circle())
+                    HStack(spacing: 2) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 17, weight: .semibold))
+                        Text("Back").font(DGFont.body)
+                    }
+                    .foregroundStyle(DGColor.coralText)
                 }
                 .buttonStyle(.dgControl)
                 .accessibilityLabel("Back")
-                progressDots
-                Color.clear.frame(width: 36, height: 36)
+            }
+            Spacer()
+            if step != .done {
+                Button("Skip") { step == .welcome ? complete() : advance() }
+                    .buttonStyle(.dgControl)
+                    .font(DGFont.body)
+                    .foregroundStyle(DGColor.coralText)
+                    .accessibilityIdentifier(skipIdentifier)
+                    .disabled(isSeeding)
             }
         }
+        .padding(.horizontal, DGSpace.s4)
+        .frame(height: 44)
     }
 
-    private var progressDots: some View {
-        HStack(spacing: DGSpace.s2) {
-            ForEach(OnboardingStep.progressSteps, id: \.self) { candidate in
-                Capsule()
-                    .fill(candidate.rawValue <= step.rawValue ? DGColor.coral : DGColor.surface3)
-                    .frame(height: 4)
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.progressLabel(step: step))
+    private var skipIdentifier: String {
+        step == .welcome ? A11yID.onboardingSkipAll : A11yID.onboardingSkip
     }
 
-    /// "Step 2 of 7" for the dots.
+    /// "Step 2 of 7" for the dots and the kicker.
     static func progressLabel(step: OnboardingStep) -> String {
         let steps = OnboardingStep.progressSteps
         let index = (steps.firstIndex(of: step) ?? 0) + 1
@@ -143,14 +144,22 @@ struct OnboardingFlow: View {
 }
 
 /// The nine onboarding screens, in order. `welcome` and `done` are bookends
-/// (no question, no progress dot); `progressSteps` is the "5 questions" the
-/// mockup's progress bar counts (plus the two permission asks).
+/// (no question, no progress count); `progressSteps` is what the "Step N of 7" kicker counts.
 enum OnboardingStep: Int, CaseIterable, Hashable {
     case welcome, units, goal, schedule, equipment, bodyweight, health, notifications, done
 
     static let progressSteps: [OnboardingStep] = [
         .units, .goal, .schedule, .equipment, .bodyweight, .health, .notifications
     ]
+
+    /// The small bold line above the title.
+    var kicker: String {
+        switch self {
+        case .welcome: "Welcome to DaGym"
+        case .done: "All set"
+        default: OnboardingFlow.progressLabel(step: self)
+        }
+    }
 }
 
 #Preview {
