@@ -114,7 +114,11 @@ extension WorkoutStore {
         model.repRangeHigh = repRangeHigh
         model.progressionRuleValue = rule?.incrementRejectingNonPositive
         if let symbolName { model.symbolName = symbolName }
-        if let tint { model.tint = tint }
+        if let tint {
+            model.tint = tint
+        } else if id == nil {
+            model.tint = RoutineTint.suggested(for: name).rawValue
+        }
         model.updatedAt = Date()
         replaceExercises(exercises, on: model)
         save()
