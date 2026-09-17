@@ -2,8 +2,8 @@ import GymCore
 import SwiftUI
 import Synchronization
 
-/// The read-only display pieces of `ExerciseDetailView`'s body — hero art, title, stat tiles and
-/// the 1RM row — split out from the main file to stay under the type-body-length cap.
+/// The read-only display pieces of `ExerciseDetailView`'s body — the illustration card and the
+/// stat tiles — split out from the main file to stay under the type-body-length cap.
 extension ExerciseDetailView {
     /// The seed keeps instructions as one string with the numbering inline; the parser lives in
     /// GymCore so the splitting rules are testable without a view. Parsed once per exercise:
@@ -21,64 +21,30 @@ extension ExerciseDetailView {
 
     private static let instructionCache = Mutex<[String: [ExerciseInstructionStep]]>([:])
 
-    var oneRepMaxRow: some View {
-        Button {
-            showingCalculator = true
-        } label: {
-            HStack {
-                Image(systemName: "function")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(DGColor.prGoldText)
-                Text("1RM Calculator")
-                    .font(DGFont.body)
-                    .foregroundStyle(DGColor.ink1)
-                Spacer()
-                Image(systemName: "chevron.right").accessibilityHidden(true)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(DGColor.ink4)
-            }
-            .padding(.horizontal, DGSpace.s5)
-            .frame(minHeight: DGTap.min)
-            .dgCard(padding: 0)
-        }
-        .buttonStyle(.dgRow)
-    }
-
-    var topRow: some View {
-        HStack {
-            Button {
-                dismiss()
-            } label: {
-                HStack(spacing: DGSpace.s1) {
-                    Image(systemName: "chevron.left").accessibilityHidden(true)
-                        .font(.system(size: 13, weight: .semibold))
-                    Text("Library").dgLabel()
-                }
+    /// The illustration card (the prototype's 150 pt slot): the illustrated 3-frame vector art
+    /// where we have it, otherwise the two-frame photographs, otherwise the body-map pair lit
+    /// on the muscles worked — so every exercise gets a picture and the layout never jumps.
+    var heroCard: some View {
+        VStack(spacing: DGSpace.s3) {
+            heroMedia
+            Text(muscleAndEquipmentLine)
+                .font(DGFont.footnote)
                 .foregroundStyle(DGColor.ink3)
-            }
-            .buttonStyle(.dgControl)
-            Spacer()
-            Button(action: toggleFavorite) {
-                Image(systemName: exercise.isFavorite ? "star.fill" : "star")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(DGColor.prGoldText)
-                    .frame(width: 36, height: 36)
-                    .dgGlass(.regular, in: Circle())
-            }
-            .buttonStyle(.dgControl)
-            .accessibilityLabel(exercise.isFavorite ? "Remove from favourites" : "Add to favourites")
+                .multilineTextAlignment(.center)
         }
+        .frame(maxWidth: .infinity)
+        .dgCard(radius: 20, padding: DGSpace.s4)
     }
 
-    /// The hero, in order of preference: the illustrated 3-frame vector art where we have it,
-    /// otherwise the two-frame photographs, otherwise nothing at all — no placeholder and no
-    /// reserved space, so exercises with neither keep today's layout exactly.
     @ViewBuilder
-    var heroArt: some View {
+    private var heroMedia: some View {
         switch ExerciseHeroMedia.choice(for: exercise.seedID) {
         case .vector(let seedID): vectorHero(seedID: seedID)
         case .photo(let seedID): photoHero(seedID: seedID)
-        case .none: EmptyView()
+        case .none:
+            BodyMapPair(intensity: exercise.hitMap, height: 140)
+                .frame(maxWidth: .infinity)
+                .accessibilityLabel("Muscles worked by \(exercise.name)")
         }
     }
 
@@ -87,10 +53,10 @@ extension ExerciseDetailView {
     /// captioned as though they carried the same terms.
     private func vectorHero(seedID: String) -> some View {
         VStack(spacing: DGSpace.s2) {
-            ExerciseArtView(seedID: seedID, size: 240, animated: true)
+            ExerciseArtView(seedID: seedID, size: 160, animated: true)
                 .accessibilityLabel("Illustration demonstrating \(exercise.name)")
             Text("Illustration: Bryl Lim, derived from Everkinetic · CC BY-SA 4.0")
-                .font(DGFont.footnote)
+                .font(Font.system(.caption2))
                 .foregroundStyle(DGColor.ink4)
         }
         .frame(maxWidth: .infinity)
@@ -103,20 +69,10 @@ extension ExerciseDetailView {
             .frame(maxWidth: .infinity)
     }
 
-    var titleBlock: some View {
-        VStack(alignment: .leading, spacing: DGSpace.s1) {
-            HStack(alignment: .top) {
-                Text(exercise.name)
-                    .font(DGFont.title1)
-                    .foregroundStyle(DGColor.ink1)
-                    .lineLimit(2)
-                Spacer()
-                BodyMapPair(intensity: exercise.hitMap, height: 56)
-            }
-            Text(equipmentLine)
-                .font(DGFont.footnote)
-                .foregroundStyle(DGColor.ink3)
-        }
+    /// "Chest · triceps · barbell · olympic bar · 2.5 kg increment" — the old title block's
+    /// subtitle, now the caption under the picture since the name moved to the nav bar.
+    var muscleAndEquipmentLine: String {
+        "\(exercise.muscleLine) · \(equipmentLine)"
     }
 
     /// "barbell · olympic bar · 2.5 kg increment"; a bodyweight move has no bar and no
@@ -131,36 +87,51 @@ extension ExerciseDetailView {
         return parts.joined(separator: " · ")
     }
 
+    /// Three white tiles: best e1RM · best set · sessions.
     var statTiles: some View {
-        DGAdaptiveStack(spacing: DGSpace.s3, threshold: .accessibility3) {
-            goldStat
-            StatTile(value: exercise.bestSet ?? "—", label: "Best Set")
-                .dgCard(radius: 14, padding: 0)
-            StatTile(value: "\(exercise.sessions)", label: "Sessions")
-                .dgCard(radius: 14, padding: 0)
+        DGAdaptiveStack(spacing: DGSpace.s2, threshold: .accessibility3) {
+            DetailStatTile(value: bestE1RMLabel, label: "Best e1RM")
+            DetailStatTile(value: exercise.bestSet ?? "—", label: "Best set")
+            DetailStatTile(value: "\(exercise.sessions)", label: "Sessions")
         }
     }
+}
 
-    var goldStat: some View {
-        StatTile(
-            value: exercise.bestE1RM.map { preferences.formatWeight(kg: $0) } ?? "—",
-            label: "Best E1RM", tint: DGColor.prGoldText
-        )
-        .dgCard(
-            radius: 14, fill: DGColor.prGold.opacity(0.10), stroke: DGColor.prGold.opacity(0.35), padding: 0
-        )
+/// One of the detail screen's stat tiles: an 18 pt bold tabular figure over an 11 pt label.
+struct DetailStatTile: View {
+    var value: String
+    var label: String
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(value)
+                .font(Font.system(.headline, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(DGColor.ink1)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(label)
+                .font(Font.system(.caption2, weight: .medium))
+                .foregroundStyle(DGColor.ink3)
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .padding(.horizontal, DGSpace.s3)
+        .dgCard(radius: 16, padding: 0)
+        .accessibilityElement(children: .combine)
     }
 }
 
 /// Which visual an exercise's hero shows. Split out from the `@ViewBuilder` so the precedence
-/// rule — illustrated vector art beats photographs, and neither means *no* hero and no reserved
-/// space — is one value a test can assert on rather than a branch buried in a view body.
+/// rule — illustrated vector art beats photographs, and neither means the body map stands in —
+/// is one value a test can assert on rather than a branch buried in a view body.
 enum ExerciseHeroMedia: Equatable {
     /// We have hand-drawn 3-frame art: CC BY-SA 4.0, and credited on screen.
     case vector(String)
     /// No art, but two public-domain photographs: no credit line.
     case photo(String)
-    /// Nothing to show. The hero renders nothing at all and takes up no height.
+    /// Neither: the hero falls back to the body-map pair.
     case none
 
     static func choice(for seedID: String?) -> ExerciseHeroMedia {

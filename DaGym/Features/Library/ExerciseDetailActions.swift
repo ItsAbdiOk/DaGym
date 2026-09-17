@@ -333,31 +333,20 @@ enum BarOption: String, CaseIterable, Identifiable {
     }
 }
 
-/// One editable "Label … Value ⌄" row inside the settings card (shared with `EditExerciseSheet`).
+/// One editable "Label … Value ⌄" row inside a row group (shared with `EditExerciseSheet`).
+/// `hairline` draws the row's own rule underneath for groups that don't place `Divider`s.
 struct MenuSettingsRow<Items: View>: View {
     var label: String
     var value: String
+    var hairline = false
     @ViewBuilder var items: Items
 
     var body: some View {
         Menu {
             items
         } label: {
-            HStack {
-                Text(label)
-                    .font(DGFont.body)
-                    .foregroundStyle(DGColor.ink1)
-                Spacer()
-                Text(value)
-                    .font(DGFont.subhead)
-                    .foregroundStyle(DGColor.ink3)
-                Image(systemName: "chevron.up.chevron.down").accessibilityHidden(true)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(DGColor.ink4)
-            }
-            .padding(.vertical, DGSpace.s3)
-            .padding(.horizontal, DGSpace.s5)
+            DetailRowLabel(label: label, value: value, isLast: !hairline, chevron: "chevron.up.chevron.down")
         }
-        .buttonStyle(.dgRow)
+        .buttonStyle(DGPressStyle())
     }
 }

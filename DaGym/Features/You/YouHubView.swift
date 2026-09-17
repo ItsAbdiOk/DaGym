@@ -156,7 +156,7 @@ enum YouDestination: Hashable {
         case .settings: SettingsView()
         case .library: LibraryView()
         case .equipment: EquipmentProfilesScreen()
-        case .gymCard: GymCardSheet()
+        case .gymCard: GymCardSheet(isPushed: true)
         case .insights: InsightsScreen()
         }
     }

@@ -76,19 +76,21 @@ struct ExercisePickerSheet: View {
         }
     }
 
+    /// The same white row group as the library, each row a pick.
     private var rows: some View {
         ScrollView {
-            LazyVStack(spacing: DGSpace.s3) {
-                ForEach(exercises) { exercise in
+            LazyVStack(spacing: 0) {
+                ForEach(Array(exercises.enumerated()), id: \.element.id) { offset, exercise in
                     Button {
                         onPick(exercise)
                         dismiss()
                     } label: {
-                        ExercisePickerRow(exercise: exercise)
+                        LibraryRow(exercise: exercise, isLast: offset == exercises.count - 1)
                     }
-                    .buttonStyle(.dgCard)
+                    .buttonStyle(DGPressStyle())
                 }
             }
+            .dgCard(radius: 14, padding: 0)
             .padding(.bottom, DGSpace.s6)
         }
     }
@@ -119,52 +121,13 @@ enum ExercisePickerFilter {
     }
 }
 
-/// Compact copy of `LibraryView`'s row, sized for the picker sheet.
-private struct ExercisePickerRow: View {
-    var exercise: ExerciseInfo
-
-    var body: some View {
-        HStack(spacing: DGSpace.s3) {
-            BodyMapView(
-                side: BodyMapMuscleMapping.thumbnailSide(forPrimary: exercise.primary),
-                intensity: exercise.hitMap
-            )
-                .padding(6)
-                .frame(width: 44, height: 44)
-                .background(DGColor.surface2, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(exercise.name)
-                    .font(DGFont.title3)
-                    .foregroundStyle(DGColor.ink1)
-                    .lineLimit(1)
-                Text(exercise.muscleLine)
-                    .font(DGFont.footnote)
-                    .foregroundStyle(DGColor.ink3)
-                    .lineLimit(1)
-            }
-            Spacer()
-            if exercise.isFavorite {
-                Image(systemName: "star.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(DGColor.prGoldText)
-                    .accessibilityHidden(true)
-            }
-        }
-        .frame(minHeight: 72)
-        .dgCard(radius: 14, padding: 12)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(exercise.isFavorite ? "\(exercise.name), favourite" : exercise.name)
-        .accessibilityValue(exercise.muscleLine)
-    }
-}
-
 #Preview {
     if let container = try? ModelContainer.dagym(inMemory: true) {
         Color.clear
             .sheet(isPresented: .constant(true)) {
                 ExercisePickerSheet(onPick: { _ in })
                     .environment(WorkoutStore(context: container.mainContext))
+                    .environment(Preferences())
             }
     } else {
         Text("Preview unavailable")
