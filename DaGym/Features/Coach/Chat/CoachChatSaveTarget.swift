@@ -97,6 +97,35 @@ enum CoachChatSaveTargets {
     }
 }
 
+/// `forReply` per bubble, worked out the first time its context menu opens and reused until the
+/// message's text changes (a reply still streaming), so the library scan never runs on render.
+/// A plain class rather than `@Observable`: filling it from inside a menu must not invalidate
+/// the screen. One per open thread; `reset` when the library it scans is re-read.
+@MainActor
+final class CoachChatSaveTargetCache {
+    private struct Entry {
+        var textHash: Int
+        var targets: [CoachChatSaveTarget]
+    }
+
+    private var entries: [UUID: Entry] = [:]
+    /// Test hook: how many scans have run.
+    private(set) var scanCount = 0
+
+    func targets(for message: CoachChatMessage, library: [SubstitutionCandidate]) -> [CoachChatSaveTarget] {
+        let textHash = message.text.hashValue
+        if let entry = entries[message.id], entry.textHash == textHash { return entry.targets }
+        let targets = CoachChatSaveTargets.forReply(message.text, library: library)
+        entries[message.id] = Entry(textHash: textHash, targets: targets)
+        scanCount += 1
+        return targets
+    }
+
+    func reset() {
+        entries.removeAll()
+    }
+}
+
 /// Keeps the words where the menu item said: an "always" note on the exercise (a repeat save
 /// of the same text is one note), or a coach memory fact filed under Other with the thread as
 /// its source. False when nothing was kept (no memory file, or the write failed).

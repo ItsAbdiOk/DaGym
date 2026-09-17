@@ -13,8 +13,9 @@ struct CoachChatMessageRow: View {
     var canFold = false
     @Binding var isExpanded: Bool
     var onCopy: () -> Void = {}
-    /// Where the words can be kept besides the clipboard; the screen works these out per bubble.
-    var saveTargets: [CoachChatSaveTarget] = []
+    /// Where the words can be kept besides the clipboard; asked only when the menu opens, since
+    /// the screen scans the library to answer.
+    var saveTargets: () -> [CoachChatSaveTarget] = { [] }
     var onSave: (CoachChatSaveTarget) -> Void = { _ in }
 
     var body: some View {
@@ -67,7 +68,7 @@ struct CoachReviewRow: View {
     var canFold = false
     @Binding var isExpanded: Bool
     var onCopy: () -> Void = {}
-    var saveTargets: [CoachChatSaveTarget] = []
+    var saveTargets: () -> [CoachChatSaveTarget] = { [] }
     var onSave: (CoachChatSaveTarget) -> Void = { _ in }
 
     var body: some View {
@@ -96,7 +97,7 @@ struct CoachReviewRow: View {
         .frame(minHeight: 28)
         .contextMenu {
             if !text.isEmpty {
-                CoachChatSaveMenu(targets: saveTargets, onCopy: onCopy, onSave: onSave)
+                CoachChatSaveMenu(targets: saveTargets(), onCopy: onCopy, onSave: onSave)
             }
         }
         .accessibilityElement(children: .contain)
@@ -155,7 +156,7 @@ struct CoachAssistantBubble: View {
     var canFold = false
     @Binding var isExpanded: Bool
     var onCopy: () -> Void = {}
-    var saveTargets: [CoachChatSaveTarget] = []
+    var saveTargets: () -> [CoachChatSaveTarget] = { [] }
     var onSave: (CoachChatSaveTarget) -> Void = { _ in }
 
     var body: some View {
@@ -181,7 +182,7 @@ struct CoachAssistantBubble: View {
             .dgCard(padding: 0)
             .contextMenu {
                 if !text.isEmpty {
-                    CoachChatSaveMenu(targets: saveTargets, onCopy: onCopy, onSave: onSave)
+                    CoachChatSaveMenu(targets: saveTargets(), onCopy: onCopy, onSave: onSave)
                 }
             }
             Spacer(minLength: DGSpace.s8)

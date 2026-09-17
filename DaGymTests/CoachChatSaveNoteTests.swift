@@ -202,4 +202,35 @@ struct CoachChatSaveNoteTests {
         let silent: [CoachChatMessage] = [.user("Go", at: day), .draft(index: 0, summary: "Upper", at: day)]
         #expect(CoachChatTranscript.reasoning(forDraftAt: 0, in: silent) == nil)
     }
+
+    @Test("the save-target cache scans once per message, again when its text changes, and forgets on reset")
+    func targetCacheKeys() throws {
+        let fixture = try CoachChatToolFixture.make()
+        let library = fixture.store.substitutionCandidates()
+        let cache = CoachChatSaveTargetCache()
+        var reply = CoachChatMessage.assistant("Keep the Bench Press strict.", at: day)
+        let first = cache.targets(for: reply, library: library)
+        #expect(first.map(\.menuLabel) == ["Save as note for Bench Press", "Remember this"])
+        #expect(cache.targets(for: reply, library: library) == first)
+        #expect(cache.scanCount == 1)
+
+        // The same bubble while its reply is still streaming: new text, new scan.
+        reply.text += " Then Dumbbell Row."
+        #expect(cache.targets(for: reply, library: library).map(\.menuLabel) == [
+            "Save as note for Bench Press", "Save as note for Dumbbell Row", "Remember this"
+        ])
+        #expect(cache.scanCount == 2)
+        #expect(cache.targets(for: reply, library: library).count == 3)
+        #expect(cache.scanCount == 2)
+
+        // A different message with the same words is its own entry.
+        let other = CoachChatMessage.assistant(reply.text, at: day)
+        #expect(cache.targets(for: other, library: library).count == 3)
+        #expect(cache.scanCount == 3)
+
+        // Reset (the library was re-read) drops everything.
+        cache.reset()
+        #expect(cache.targets(for: reply, library: []).map(\.menuLabel) == ["Remember this"])
+        #expect(cache.scanCount == 4)
+    }
 }
