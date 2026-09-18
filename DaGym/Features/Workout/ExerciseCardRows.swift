@@ -128,8 +128,9 @@ private struct ExerciseProgressLabel: View {
 }
 
 /// The exercise's picture in the row and card corners: the illustrated art where we have it,
-/// the public-domain photo next, and the body-map thumbnail for everything else — so the slot
-/// is never an empty dashed box.
+/// the photo next, and the body-map thumbnail for everything else — so the slot is never an
+/// empty dashed box. `ExerciseHeroMedia.choice(for:)` already follows media aliases, so a
+/// same-movement exercise borrows its twin's picture here too.
 struct ExerciseThumbnail: View {
     var exercise: ExerciseInfo
     var size: CGFloat = 44

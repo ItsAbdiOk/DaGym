@@ -49,11 +49,35 @@ Instruction text, muscle/equipment metadata and some exercise entries from the
 
 ## free-exercise-db — Unlicense
 
-**Files:** the seeded exercise data under `DaGym/Resources/Seed/`
+**Files:** the seeded exercise data under `DaGym/Resources/Seed/`, and the start/end
+photograph pairs under `DaGym/Resources/ExercisePhotos/` that are *not* listed in
+`DaGym/Resources/ATTRIBUTION-ExercisePhotos.txt`
 
-Exercise names, muscles and equipment metadata adapted from
-**yuhonas/free-exercise-db** (https://github.com/yuhonas/free-exercise-db),
-released under the **Unlicense** (public-domain dedication).
+Exercise names, muscles and equipment metadata, and the start/end position photographs,
+adapted from **yuhonas/free-exercise-db** (https://github.com/yuhonas/free-exercise-db),
+released under the **Unlicense** (public-domain dedication). Photographs are re-encoded to
+HEIC and downscaled.
+
+## wger.de exercise images — CC BY-SA 3.0 / 4.0
+
+**Files:** the files under `DaGym/Resources/ExercisePhotos/` listed with source "wger.de" in
+`DaGym/Resources/ATTRIBUTION-ExercisePhotos.txt`; manifest in
+`DaGym/Resources/Seed/exercise-photo-credits.json`
+
+Drawings and photographs uploaded to https://wger.de by its contributors (including
+Everkinetic line drawings), each **CC BY-SA 3.0** or **CC BY-SA 4.0** as recorded by wger and
+credited per file (author, licence, source page, original image URL). Flattened onto white,
+downscaled to ≤ 850 px and re-encoded to HEIC; no other change. Imported by
+`scripts/import-exercise-photos-extra.py`.
+
+## Wikimedia Commons photographs — public domain / CC0 / CC BY / CC BY-SA
+
+**Files:** the files under `DaGym/Resources/ExercisePhotos/` listed with source
+"Wikimedia Commons" in `DaGym/Resources/ATTRIBUTION-ExercisePhotos.txt`
+
+A handful of photographs of movements no other source covered, each public domain, CC0,
+CC BY 2.0/3.0/4.0 or CC BY-SA 2.0/3.0/4.0 as marked on its Commons file page and credited per
+file. Downscaled and re-encoded; no other change.
 
 ## Barlow / Barlow Condensed — SIL Open Font License 1.1
 

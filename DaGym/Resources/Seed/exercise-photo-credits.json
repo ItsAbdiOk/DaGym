@@ -1,0 +1,837 @@
+{
+  "Ankle_Roll": {
+    "source": "wger",
+    "author": "Davidgj32",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/979e3433-4db8-4f37-a5e0-f43c86756690/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1864/5970cdd8-0123-4eba-a921-2157fb6adacf.png"
+    ]
+  },
+  "Band_Terminal_Knee_extension": {
+    "source": "wger",
+    "author": "Knickers1833",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/3096b34e-1781-4f99-8187-d9acac8e712b/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/2494/02f1ae86-d374-4b5a-b314-a76c487ea1e9.png"
+    ]
+  },
+  "Banded_Ankle_Mobility": {
+    "source": "wger",
+    "author": "Davidgj32",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/fcdc26c0-a20d-4b93-a629-2a3a15eae426/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1865/c2c9848e-5094-4ed9-bd81-0831b6551483.png"
+    ]
+  },
+  "Bench_Press_Narrow_Grip": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/3db63138-a047-4a4d-b616-1a0b7dfca105/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/88/Narrow-grip-bench-press-1.png",
+      "https://wger.de/media/exercise-images/88/Narrow-grip-bench-press-2.png"
+    ]
+  },
+  "Benchpress_Dumbbells": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/28321cf3-70e6-48a4-ade1-d11382180cb3/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/97/Dumbbell-bench-press-1.png",
+      "https://wger.de/media/exercise-images/97/Dumbbell-bench-press-2.png"
+    ]
+  },
+  "Bent_Over_Rowing": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/4af6dbd9-8991-484b-9810-68f117c21edf/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/109/Barbell-rear-delt-row-1.png",
+      "https://wger.de/media/exercise-images/109/Barbell-rear-delt-row-2.png"
+    ]
+  },
+  "Bent_Over_Rowing_Reverse": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/2f0ddf9a-f520-4c55-8883-f0d4a789f481/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/110/Reverse-grip-bent-over-rows-1.png",
+      "https://wger.de/media/exercise-images/110/Reverse-grip-bent-over-rows-2.png"
+    ]
+  },
+  "Biceps_Curl_With_Cable": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/bcb7020c-8678-496d-8f4d-aad0e233a5bd/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/129/Standing-biceps-curl-1.png",
+      "https://wger.de/media/exercise-images/129/Standing-biceps-curl-2.png"
+    ]
+  },
+  "Biceps_Curls_With_Barbell": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/7b99a081-6b1a-4aa5-b86a-5a935d083a35/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/74/Bicep-curls-1.png",
+      "https://wger.de/media/exercise-images/74/Bicep-curls-2.png"
+    ]
+  },
+  "Biceps_Curls_With_Dumbbell": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/1ae6a28d-10e7-4ecf-af4f-905f8193e2c6/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/81/Biceps-curl-1.png",
+      "https://wger.de/media/exercise-images/81/Biceps-curl-2.png"
+    ]
+  },
+  "Biceps_with_TRX": {
+    "source": "wger",
+    "author": "cynomops",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/596b9d2d-0f01-41a0-97e1-1839ffdb824d/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/958/947ac249-475d-44ed-bed3-8dc433374f59.png"
+    ]
+  },
+  "Boxing": {
+    "source": "commons",
+    "author": "U.S. Marine Corps (official photograph)",
+    "licence": "Public domain",
+    "licenceURL": "https://creativecommons.org/publicdomain/mark/1.0/",
+    "sourceURL": "https://commons.wikimedia.org/wiki/File:USMC-100301-M-2700C-001.jpg",
+    "frames": [
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f8/USMC-100301-M-2700C-001.jpg/960px-USMC-100301-M-2700C-001.jpg"
+    ]
+  },
+  "Cable_Cross_over": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/b16e3e5d-8401-4d2b-919c-15b536f9ec5e/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/71/Cable-crossover-1.png",
+      "https://wger.de/media/exercise-images/71/Cable-crossover-2.png"
+    ]
+  },
+  "Cable_glute_extension": {
+    "source": "wger",
+    "author": "Franpol",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/19a9f67b-60f5-4367-9134-b805f3e73956/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1131/3bcf3024-2dcc-4995-9694-55aa2c2e4a9a.png"
+    ]
+  },
+  "Calf_Press_Using_Leg_Press_Machine": {
+    "source": "wger",
+    "author": "wger.de",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/0d79f259-3b28-4258-8a08-cffec062a710/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/146/8b284904-d072-4381-a256-4c81d8fd9c1f.png"
+    ]
+  },
+  "Cat_Cow": {
+    "source": "commons",
+    "author": "Mary O'Neill",
+    "licence": "Public domain",
+    "licenceURL": "https://creativecommons.org/publicdomain/mark/1.0/",
+    "sourceURL": "https://commons.wikimedia.org/wiki/File:Yoga_at_Your_Park_-_Bitilasana.jpg",
+    "frames": [
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/be/Yoga_at_Your_Park_-_Bitilasana.jpg/960px-Yoga_at_Your_Park_-_Bitilasana.jpg"
+    ]
+  },
+  "Close_grip_Lat_Pull_Down": {
+    "source": "wger",
+    "author": "Franpol",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/63fbb8e5-6ebc-4def-8844-3e65e097213b/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/158/0d51a0f2-622f-434b-beb8-1a003c54712a.png"
+    ]
+  },
+  "Close_grip_supinated_lat_pulldown": {
+    "source": "wger",
+    "author": "Franpol",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/4eb41bfb-cbeb-4683-b9c6-902ee7e028e0/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1127/4942b7c0-6bda-4983-88e5-86547c3d445e.png"
+    ]
+  },
+  "Cobra_Stretch": {
+    "source": "commons",
+    "author": "Kennguru",
+    "licence": "CC BY 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by/3.0",
+    "sourceURL": "https://commons.wikimedia.org/wiki/File:Bhujangasana_Yoga-Asana_Nina-Mel.jpg",
+    "frames": [
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ae/Bhujangasana_Yoga-Asana_Nina-Mel.jpg/960px-Bhujangasana_Yoga-Asana_Nina-Mel.jpg"
+    ]
+  },
+  "Dips_Between_Two_Benches": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/7c8eb1ac-2d7e-4ca7-919a-1848ba38e0f4/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/83/Bench-dips-1.png",
+      "https://wger.de/media/exercise-images/83/Bench-dips-2.png"
+    ]
+  },
+  "Face_pulls_with_yellow_green_band": {
+    "source": "wger",
+    "author": "54str",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/7bf4e131-d4a3-44c0-8fca-9e10002492e7/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1732/d13b9adb-968e-4f73-95e6-b16690bcf616.jpg"
+    ]
+  },
+  "Foam_Roller_Gluteus": {
+    "source": "commons",
+    "author": "Roger Mommaerts",
+    "licence": "CC BY-SA 2.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceURL": "https://commons.wikimedia.org/wiki/File:Foam_rolling.jpg",
+    "frames": [
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/17/Foam_rolling.jpg/960px-Foam_rolling.jpg"
+    ]
+  },
+  "Front_Raises": {
+    "source": "wger",
+    "author": "philip",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/9c35594c-bbcc-4656-bdcb-376814c90e96/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/256/b7def5bc-2352-499b-b9e5-fff741003831.png"
+    ]
+  },
+  "Front_Squats": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/d677de4c-5bd9-412a-91f1-857116a666a2/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/191/Front-squat-1-857x1024.png"
+    ]
+  },
+  "Hammercurls_on_Cable": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/04365177-e078-489b-983a-8ac61b7346f1/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/138/Hammer-curls-with-rope-1.png",
+      "https://wger.de/media/exercise-images/138/Hammer-curls-with-rope-2.png"
+    ]
+  },
+  "Handstand": {
+    "source": "commons",
+    "author": "Earl Mcgehee",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0",
+    "sourceURL": "https://commons.wikimedia.org/wiki/File:Handstand_(119653409).jpeg",
+    "frames": [
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/09/Handstand_%28119653409%29.jpeg/960px-Handstand_%28119653409%29.jpeg"
+    ]
+  },
+  "Head_tilts": {
+    "source": "wger",
+    "author": "wger.de",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/36eaf240-db34-4d83-bba9-94d0e989c9e2/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1018/5bbd3879-b6fc-4aaa-9e8e-33ae9a688112.png"
+    ]
+  },
+  "Hindu_Pushups": {
+    "source": "commons",
+    "author": "Unknown (uploaded to Wikimedia Commons as CC0)",
+    "licence": "CC0",
+    "licenceURL": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "sourceURL": "https://commons.wikimedia.org/wiki/File:Dand,_Dund,_Hindu_push-up.png",
+    "frames": [
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e6/Dand%2C_Dund%2C_Hindu_push-up.png/960px-Dand%2C_Dund%2C_Hindu_push-up.png"
+    ]
+  },
+  "Hip_Circles": {
+    "source": "wger",
+    "author": "Davidgj32",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/477e2c23-880b-472f-b8e2-6c9423c82fac/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1862/93d993f8-1d8c-4e21-99c6-08b2fe424a17.png"
+    ]
+  },
+  "Hip_Crossover": {
+    "source": "wger",
+    "author": "Davidgj32",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/c8571691-f970-4486-9009-fafb77cf01b8/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1863/5f29959d-0fd1-46d2-98b7-0c2cb5d9ee13.png"
+    ]
+  },
+  "Hip_Flexor_Stretch": {
+    "source": "wger",
+    "author": "Davidgj32",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/0cf08c73-6af3-4852-97a5-1dff53531971/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1867/767631e5-10d2-46b8-b03f-cc298f96963b.png"
+    ]
+  },
+  "Hip_hinge": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/77a56810-d050-4083-9501-d648f773376a/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1392/a02c9c7d-f42d-43e0-9946-1b99b014daee.png"
+    ]
+  },
+  "Hyperextensions": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/37f6bd56-815a-4975-99af-05e749fae4b2/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/128/Hyperextensions-1.png",
+      "https://wger.de/media/exercise-images/128/Hyperextensions-2.png"
+    ]
+  },
+  "Incline_Bench_Press_Dumbbell": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/57e17672-52b9-43cf-8d0d-4b3f06a0c0d0/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/16/Incline-press-1.png",
+      "https://wger.de/media/exercise-images/16/Incline-press-2.png"
+    ]
+  },
+  "Incline_Bench_Reverse_Fly": {
+    "source": "wger",
+    "author": "cshep442",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/70c99a4e-3340-4993-a7f1-2d2709dada1a/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/828/2e959dab-f39b-4c7c-9063-eb43064ab5eb.png"
+    ]
+  },
+  "Incline_Crunches": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/7de7b8a8-313d-465f-bb22-8527ae45110a/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/56/Decline-crunch-1.png",
+      "https://wger.de/media/exercise-images/56/Decline-crunch-2.png"
+    ]
+  },
+  "Incline_bench_pulldown": {
+    "source": "wger",
+    "author": "Franpol",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/4e941b0d-4b2f-4393-89cf-6a5e9b69252e/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1138/6c35fd79-ef35-4cf3-abf5-9c969457b8d4.PNG"
+    ]
+  },
+  "Knee_to_Chest_Stretch": {
+    "source": "wger",
+    "author": "Davidgj32",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/492e90a5-1ecb-4a06-8e9d-26a00042560e/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1452/85a6b9de-4eec-445b-8ebb-f1950b076aba.png"
+    ]
+  },
+  "L_sit": {
+    "source": "commons",
+    "author": "Tommy Gilligan/West Point Public Affairs",
+    "licence": "Public domain",
+    "licenceURL": "https://creativecommons.org/publicdomain/mark/1.0/",
+    "sourceURL": "https://commons.wikimedia.org/wiki/File:West_Point_male_gymnast_L-sit.jpg",
+    "frames": [
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/96/West_Point_male_gymnast_L-sit.jpg/960px-West_Point_male_gymnast_L-sit.jpg"
+    ]
+  },
+  "Lateral_Push_Off": {
+    "source": "wger",
+    "author": "cleen",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/45e44940-d4a0-4c66-8cbb-7afe785d5610/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1325/d8372291-6725-452a-9711-6321c061e354.jpg"
+    ]
+  },
+  "Lateral_Raises": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/63375f5b-2d81-471c-bea4-fc3d207e96cb/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/148/lateral-dumbbell-raises-large-1.png",
+      "https://wger.de/media/exercise-images/148/lateral-dumbbell-raises-large-2.png"
+    ]
+  },
+  "Leg_Curls_laying": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/3bc8b411-a28d-4e1c-a6d1-769e18fe9881/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/154/lying-leg-curl-machine-large-1.png",
+      "https://wger.de/media/exercise-images/154/lying-leg-curl-machine-large-2.png"
+    ]
+  },
+  "Leg_Presses_narrow": {
+    "source": "wger",
+    "author": "Franpol",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/5f0b757c-0d6a-430b-9d5e-3bfba202878e/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/373/60e2aa21-1910-40d3-9fed-babfee06dd48.png"
+    ]
+  },
+  "Long_Pulley_low_Row": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/a7e6c20a-6ddc-4401-9935-ace2d02e3995/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/143/Cable-seated-rows-1.png",
+      "https://wger.de/media/exercise-images/143/Cable-seated-rows-2.png"
+    ]
+  },
+  "Lunge_with_Twist_Stretch": {
+    "source": "wger",
+    "author": "Davidgj32",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/558b3385-f1a2-47d2-8473-e1be2c7726aa/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1868/446e7065-215d-4a91-9da7-9416101442bb.png"
+    ]
+  },
+  "Lying_Figure_Four_Stretch": {
+    "source": "wger",
+    "author": "Davidgj32",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/76b6e798-e484-4606-aa64-8421aea51e88/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1869/c49187bd-9f90-4a7a-b25e-1d50e857a104.png"
+    ]
+  },
+  "Lying_Hamstring_Stretch_with_Band": {
+    "source": "wger",
+    "author": "Davidgj32",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/b5529305-04a2-4ca2-af6a-4a67d3e4aca4/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1870/7465bbcf-3b86-42a6-8d2f-12a3d1f60a15.png"
+    ]
+  },
+  "Modified_pulldown": {
+    "source": "wger",
+    "author": "Rottekongen",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/5851e2b1-3a80-42ff-91da-530e6b143a34/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1635/b8c34e3a-7474-41ea-99e3-8d7fdb1e12d6.png"
+    ]
+  },
+  "Negative_Crunches": {
+    "source": "wger",
+    "author": "wger.de",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/cbc5fbc9-9bca-4766-941d-4b6903d4a521/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/93/Decline-crunch-1.png",
+      "https://wger.de/media/exercise-images/93/Decline-crunch-2.png"
+    ]
+  },
+  "Neutral_grip_chest_pulldown": {
+    "source": "wger",
+    "author": "Franpol",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/eaa7927e-6ea0-4fd5-bbcd-525fe90a184b/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1136/5778a8e9-c606-4843-89c8-9d9469eeb6e4.PNG"
+    ]
+  },
+  "Neutral_grip_pull_ups_or_TRX_rows": {
+    "source": "wger",
+    "author": "54str",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/15fda45b-108b-4b28-bfe5-d0e55a0914bf/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1738/0529acdf-ede8-42a2-a3e5-8d0c57b7a0e1.jpg"
+    ]
+  },
+  "Pigeon_Stretch": {
+    "source": "wger",
+    "author": "Davidgj32",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/91adc5c9-bdeb-4ed8-b261-b7fcd3157330/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1872/df982df1-512a-4eb9-acd9-68cc1c265df6.png"
+    ]
+  },
+  "Planche_Lean_Hold": {
+    "source": "commons",
+    "author": "Jonathanfv",
+    "licence": "CC BY 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by/3.0",
+    "sourceURL": "https://commons.wikimedia.org/wiki/File:Planche.jpg",
+    "frames": [
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/ba/Planche.jpg/960px-Planche.jpg"
+    ]
+  },
+  "Plantarflexion_Stretch_with_Band": {
+    "source": "wger",
+    "author": "erikocobra",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/f397656d-6f26-47c6-9e4c-221687f3f2fa/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1275/0652d306-93eb-42f0-b564-7c3261ea809a.png"
+    ]
+  },
+  "Preacher_Curls": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/dd52fb99-9426-4a78-b446-20a8e3e4ec47/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/193/Preacher-curl-3-1.png",
+      "https://wger.de/media/exercise-images/193/Preacher-curl-3-2.png"
+    ]
+  },
+  "Quadriped_Arm_and_Leg_Raise": {
+    "source": "wger",
+    "author": "utkb",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/80c167b9-3749-48a1-8686-fc2163a1e7fb/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/957/0fd94587-6021-4763-856e-7227f5fcba2a.png"
+    ]
+  },
+  "Rack_Deadlift": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/a6c2a970-a621-4e03-be1d-4a29118b1687/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/161/Dead-lifts-1.png",
+      "https://wger.de/media/exercise-images/161/Dead-lifts-2.png"
+    ]
+  },
+  "Rear_Delt_Raises": {
+    "source": "wger",
+    "author": "cshep442",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/3f93459a-d06e-465c-85db-2137da759440/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/487/ad724e5c-b1ed-49e8-9279-a17545b0dd0b.png"
+    ]
+  },
+  "Reverse_Plank": {
+    "source": "commons",
+    "author": "lululemon athletica",
+    "licence": "CC BY 2.0",
+    "licenceURL": "https://creativecommons.org/licenses/by/2.0",
+    "sourceURL": "https://commons.wikimedia.org/wiki/File:Putvottanasana_-_Upward_Plank_Pose_1_-_Diagonal_View.jpg",
+    "frames": [
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e2/Putvottanasana_-_Upward_Plank_Pose_1_-_Diagonal_View.jpg/960px-Putvottanasana_-_Upward_Plank_Pose_1_-_Diagonal_View.jpg"
+    ]
+  },
+  "Rowing_T_bar": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/32c129f7-cc28-4ebc-8465-e4fa62e220b1/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/106/T-bar-row-1.png",
+      "https://wger.de/media/exercise-images/106/T-bar-row-2.png"
+    ]
+  },
+  "Runners_Lunge_Stretch": {
+    "source": "wger",
+    "author": "Davidgj32",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/92cd0459-5cd1-46a0-934d-e7cff8d4ccda/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1874/66fca8a5-41e8-42d1-8776-5e46a4902650.png"
+    ]
+  },
+  "Shoulder_Press_Dumbbells": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/87affa4b-395b-437c-9581-2bd20ea5aa7c/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/123/dumbbell-shoulder-press-large-1.png",
+      "https://wger.de/media/exercise-images/123/dumbbell-shoulder-press-large-2.png"
+    ]
+  },
+  "Shrugs_Barbells": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/270e108d-3cd2-45a9-807b-c357317eb15c/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/150/Barbell-shrugs-1.png",
+      "https://wger.de/media/exercise-images/150/Barbell-shrugs-2.png"
+    ]
+  },
+  "Shrugs_Dumbbells": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/72a945ec-3a7f-424b-9a05-1616ef7dce91/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/151/Dumbbell-shrugs-1.png",
+      "https://wger.de/media/exercise-images/151/Dumbbell-shrugs-2.png"
+    ]
+  },
+  "Side_Crunch": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/2f8ee51b-f493-47f7-8b2a-1da16c128f73/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/176/Cross-body-crunch-1.png",
+      "https://wger.de/media/exercise-images/176/Cross-body-crunch-2.png"
+    ]
+  },
+  "Side_bend": {
+    "source": "wger",
+    "author": "wger.de",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/d36fdd3c-9a35-4643-a3fd-57db78c866d6/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1188/43e714e4-b736-4f3a-8ab4-97821fdff86a.jpg"
+    ]
+  },
+  "Side_stretch": {
+    "source": "wger",
+    "author": "Davidgj32",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/e3f424e1-4c9f-4892-8df2-230624680439/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1861/0ffe4e99-71ad-47fb-b98c-1f243faa0499.png"
+    ]
+  },
+  "Single_arm_row": {
+    "source": "wger",
+    "author": "Rottekongen",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/81dd44b3-67b3-4198-9e57-c2a80b3c4102/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1637/a1fbe83a-a3e5-49f6-a2c2-5d5b533c2be8.png"
+    ]
+  },
+  "Skullcrusher_SZ_bar": {
+    "source": "wger",
+    "author": "Everkinetic",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceURL": "https://wger.de/en/exercise/95a7e546-e8f8-4521-a76b-983d94161b25/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/84/Lying-close-grip-triceps-press-to-chin-1.png",
+      "https://wger.de/media/exercise-images/84/Lying-close-grip-triceps-press-to-chin-2.png"
+    ]
+  },
+  "Sphinx": {
+    "source": "commons",
+    "author": "Christy Collins, photographer",
+    "licence": "CC BY-SA 3.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/3.0",
+    "sourceURL": "https://commons.wikimedia.org/wiki/File:IMG_0549_2_Sphinx.jpg",
+    "frames": [
+      "https://upload.wikimedia.org/wikipedia/commons/9/9b/IMG_0549_2_Sphinx.jpg"
+    ]
+  },
+  "Standing_IT_Band_Stretch": {
+    "source": "wger",
+    "author": "Davidgj32",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/f4bb000a-c855-4497-95e0-abc1b71725e7/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1875/e1128391-4b73-43a9-ab27-657d8bb43083.png"
+    ]
+  },
+  "Supported_Calf_Stretch": {
+    "source": "wger",
+    "author": "Davidgj32",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/b81f4e3c-64e2-4fbd-9198-d422f6f2151f/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1876/ca7b3fe7-5908-4ec2-9d85-7fa1b80bb105.png"
+    ]
+  },
+  "TRX_Rows": {
+    "source": "wger",
+    "author": "clafal",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/e2599e86-d8b0-434e-8a48-aa3c2df7e790/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/959/53a5e008-bc31-4ee0-9463-69a858c2ec18.png"
+    ]
+  },
+  "Talons_fesses": {
+    "source": "wger",
+    "author": "painDpice",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/42657bd4-bf4e-4429-8e6a-2f5f585aa22a/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1285/1ab8005d-41e4-4505-9a7d-5277d59bb3cd.jpg"
+    ]
+  },
+  "Tricep_Pushdown_on_Cable": {
+    "source": "wger",
+    "author": "wger.de",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/ea63d85c-8579-4dda-b99f-c4c8930f9af6/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/805/7a437824-e2cc-46e1-804a-674f0ea31d25.png"
+    ]
+  },
+  "Turkish_Get_Up": {
+    "source": "commons",
+    "author": "robertwilson009",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceURL": "https://commons.wikimedia.org/wiki/File:Turkish_Get_Up.jpg",
+    "frames": [
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a2/Turkish_Get_Up.jpg/960px-Turkish_Get_Up.jpg"
+    ]
+  },
+  "Upright_Row_w_Dumbbells": {
+    "source": "wger",
+    "author": "cshep442",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/01976085-6701-45ea-b152-5c46ba60550d/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/694/119e6823-6960-4341-a9e1-aaf78d7fb57c.png"
+    ]
+  },
+  "Wall_balls": {
+    "source": "wger",
+    "author": "philip",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/f20ab712-f953-4705-8710-9681392ddd07/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/1100/ab203e0c-8220-4537-987c-871eb259d687.jpg"
+    ]
+  },
+  "bicycle_crunches": {
+    "source": "commons",
+    "author": "Tim Cigelske from Whitefish Bay, USA",
+    "licence": "CC BY-SA 2.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceURL": "https://commons.wikimedia.org/wiki/File:Bicycle_crunch_with_back_support.jpg",
+    "frames": [
+      "https://upload.wikimedia.org/wikipedia/commons/1/15/Bicycle_crunch_with_back_support.jpg"
+    ]
+  },
+  "box_jumps": {
+    "source": "commons",
+    "author": "ROSE PHYSICAL THERAPY GROUP (photos · photo sets)",
+    "licence": "CC BY 2.0",
+    "licenceURL": "https://creativecommons.org/licenses/by/2.0",
+    "sourceURL": "https://commons.wikimedia.org/wiki/File:District_Crossfit_Class_Warfare-50.jpg",
+    "frames": [
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/35/District_Crossfit_Class_Warfare-50.jpg/960px-District_Crossfit_Class_Warfare-50.jpg"
+    ]
+  },
+  "one_handed_kettlebell_curls": {
+    "source": "wger",
+    "author": "wger.de",
+    "licence": "CC BY-SA 4.0",
+    "licenceURL": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceURL": "https://wger.de/en/exercise/d7d4fc16-08cd-4568-87e7-d9e4e2f77393/view/",
+    "frames": [
+      "https://wger.de/media/exercise-images/975/41d9267a-99bc-4e94-b1c4-0e39fe7a968f.png"
+    ]
+  }
+}

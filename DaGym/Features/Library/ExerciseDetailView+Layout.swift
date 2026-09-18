@@ -74,11 +74,20 @@ extension ExerciseDetailView {
         .frame(maxWidth: .infinity)
     }
 
-    /// Public-domain photographs (free-exercise-db, Unlicense): no caption, because none is owed
-    /// and a credit line here would be read as the licence note above it.
+    /// Photographs. The free-exercise-db pairs are public domain and get no caption, because
+    /// none is owed and a credit line would be read as the licence note above it; the CC BY /
+    /// CC BY-SA images from wger and Wikimedia Commons carry the line their licence asks for.
+    /// `seedID` is already alias-resolved, so the credit follows the picture that is shown.
     private func photoHero(seedID: String) -> some View {
-        ExercisePhotoView(seedID: seedID, width: 240, animated: true, exerciseName: exercise.name)
-            .frame(maxWidth: .infinity)
+        VStack(spacing: DGSpace.s2) {
+            ExercisePhotoView(seedID: seedID, width: 240, animated: true, exerciseName: exercise.name)
+            if let caption = ExercisePhotoCredits.credit(for: seedID)?.captionLine {
+                Text(caption)
+                    .font(Font.system(.caption2))
+                    .foregroundStyle(DGColor.ink4)
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     /// "Chest · triceps · barbell · olympic bar · 2.5 kg increment" — the old title block's
@@ -151,18 +160,23 @@ struct DetailStatTile: View {
 /// Which visual an exercise's hero shows. Split out from the `@ViewBuilder` so the precedence
 /// rule — illustrated vector art beats photographs, and neither means the body map stands in —
 /// is one value a test can assert on rather than a branch buried in a view body.
+///
+/// The associated seedID is the one whose media to load: for an aliased exercise
+/// (`ExerciseMediaAliases`) that is the alias target, so the same-movement exercise's art or
+/// photographs — and their credit line — are what appears.
 enum ExerciseHeroMedia: Equatable {
     /// We have hand-drawn 3-frame art: CC BY-SA 4.0, and credited on screen.
     case vector(String)
-    /// No art, but two public-domain photographs: no credit line.
+    /// No art, but photographs: public domain (no credit line) or CC-licensed (credited).
     case photo(String)
     /// Neither: the hero falls back to the body-map pair.
     case none
 
     static func choice(for seedID: String?) -> ExerciseHeroMedia {
         guard let seedID else { return .none }
-        if ExerciseArtCatalog.frames(for: seedID) != nil { return .vector(seedID) }
-        if ExercisePhotoCatalog.hasPhotos(for: seedID) { return .photo(seedID) }
+        let resolved = ExerciseMediaAliases.resolve(seedID)
+        if ExerciseArtCatalog.frames(for: resolved) != nil { return .vector(resolved) }
+        if ExercisePhotoCatalog.hasPhotos(for: resolved) { return .photo(resolved) }
         return .none
     }
 }

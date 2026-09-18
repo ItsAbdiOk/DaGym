@@ -2,12 +2,14 @@ import SwiftUI
 import UIKit
 
 /// Photographs of an exercise's start and end position (free-exercise-db, Unlicense / public
-/// domain — see `DaGym/Resources/Acknowledgements.md`), shipped as plain HEIC files in the
-/// bundle's `ExercisePhotos` folder and loaded by path via `ExercisePhotoStore`.
+/// domain) or a single frame from wger / Wikimedia Commons (CC BY-SA and friends, credited by
+/// `ExercisePhotoCredits` — see `DaGym/Resources/ATTRIBUTION-ExercisePhotos.txt`), shipped as plain
+/// HEIC files in the bundle's `ExercisePhotos` folder and loaded by path via `ExercisePhotoStore`.
 ///
 /// This is the second-choice hero: `ExerciseArtView`'s illustrated vector art wins where we have
 /// it, and `ExerciseDetailView+Layout`'s `heroArt` picks between them. Shows the start position at
 /// rest; `animated` cross-fades start → end → start on a loop so the movement reads as one rep.
+/// A single-frame exercise has no end position and simply sits still.
 ///
 /// With `accessibilityReduceMotion` on there is no loop and no cross-fade at all: both frames are
 /// shown side by side, captioned Start and End, so the movement is still legible as a before/after
@@ -42,7 +44,10 @@ struct ExercisePhotoView: View {
     @ViewBuilder
     private var content: some View {
         if let photos {
-            if animated, reduceMotion {
+            if photos.end == nil {
+                frame(photos.start)
+                    .frame(width: width, height: width / Self.aspectRatio)
+            } else if animated, reduceMotion {
                 sideBySide(photos)
             } else {
                 crossfade(photos)
@@ -61,7 +66,9 @@ struct ExercisePhotoView: View {
     private func crossfade(_ photos: ExercisePhotoPair) -> some View {
         ZStack {
             frame(photos.start).opacity(showingEnd ? 0 : 1)
-            frame(photos.end).opacity(showingEnd ? 1 : 0)
+            if let end = photos.end {
+                frame(end).opacity(showingEnd ? 1 : 0)
+            }
         }
         .frame(width: width, height: width / Self.aspectRatio)
     }
@@ -71,7 +78,9 @@ struct ExercisePhotoView: View {
         let half = (width - DGSpace.s2) / 2
         return HStack(spacing: DGSpace.s2) {
             captioned(frame(photos.start), caption: "Start", width: half)
-            captioned(frame(photos.end), caption: "End", width: half)
+            if let end = photos.end {
+                captioned(frame(end), caption: "End", width: half)
+            }
         }
         .frame(width: width)
     }
@@ -129,19 +138,20 @@ struct ExercisePhotoView: View {
     /// Describes the movement, not the files. VoiceOver users get the same information a sighted
     /// user gets from watching the two positions alternate.
     private var accessibilityLabel: String {
-        guard let seedID, ExercisePhotoCatalog.hasPhotos(for: seedID) else {
+        guard let seedID, let names = ExercisePhotoCatalog.photoNames(for: seedID) else {
             return "Exercise photographs unavailable"
         }
         let name = exerciseName.map { " of \($0)" } ?? ""
+        if names.end == nil { return "Photograph\(name) showing the movement" }
         return "Photographs\(name) showing the start position and the end position of the movement"
     }
 }
 
-/// One exercise's two loaded frames. `Image` rather than `UIImage` so the value can cross the
-/// actor boundary and be handed straight to SwiftUI.
+/// One exercise's loaded frames — the end position is `nil` for a single-frame exercise. `Image`
+/// rather than `UIImage` so the value can cross the actor boundary and be handed straight to SwiftUI.
 struct ExercisePhotoPair: Sendable {
     var start: Image
-    var end: Image
+    var end: Image?
 }
 
 /// Loads the bundled exercise photographs off the main actor and keeps a deliberately small LRU
@@ -171,9 +181,13 @@ actor ExercisePhotoStore {
         }
         guard
             let names = ExercisePhotoCatalog.photoNames(for: seedID),
-            let start = await Self.loadImage(named: names.start),
-            let end = await Self.loadImage(named: names.end)
+            let start = await Self.loadImage(named: names.start)
         else { return nil }
+        var end: Image?
+        if let endName = names.end {
+            guard let loaded = await Self.loadImage(named: endName) else { return nil }
+            end = loaded
+        }
         let pair = ExercisePhotoPair(start: start, end: end)
         cache[seedID] = pair
         touch(seedID)
@@ -181,14 +195,16 @@ actor ExercisePhotoStore {
         return pair
     }
 
-    /// Whether both of `seedID`'s photo files are actually present in the bundle. Used by tests;
+    /// Whether `seedID`'s photo files are actually present in the bundle — both of them for a
+    /// pair, the start frame for a single-frame exercise. Used by tests and the thumbnail store;
     /// callers should just ask for `photos(forSeedID:)`.
-    nonisolated static func bundledURLs(forSeedID seedID: String) -> (start: URL, end: URL)? {
+    nonisolated static func bundledURLs(forSeedID seedID: String) -> (start: URL, end: URL?)? {
         guard
             let names = ExercisePhotoCatalog.photoNames(for: seedID),
-            let start = url(named: names.start),
-            let end = url(named: names.end)
+            let start = url(named: names.start)
         else { return nil }
+        guard let endName = names.end else { return (start, nil) }
+        guard let end = url(named: endName) else { return nil }
         return (start, end)
     }
 

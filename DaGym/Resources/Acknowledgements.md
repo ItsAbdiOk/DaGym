@@ -27,6 +27,31 @@ Everkinetic (https://github.com/everkinetic/data), licensed under **CC-BY-SA 4.0
 
 > Illustration by Everkinetic (https://github.com/everkinetic/data), CC-BY-SA 4.0.
 
+## Exercise photographs from other open sources
+
+A few dozen exercises show a photograph or drawing that does not come from free-exercise-db.
+Each one is listed, with its author, licence and source page, in
+`DaGym/Resources/ATTRIBUTION-ExercisePhotos.txt` (bundled with the app) and credited under the
+picture on the Exercise Detail screen when its licence asks for that.
+
+**wger.de exercise images** — drawings and photographs uploaded to
+[wger.de](https://wger.de) by its contributors (Everkinetic line drawings among them), each
+licensed **CC BY-SA 3.0** or **CC BY-SA 4.0** by its uploader. Flattened onto white, downscaled
+and re-encoded to HEIC; no other change.
+
+> Exercise images from wger.de contributors, CC BY-SA 3.0 / 4.0 — author named per image.
+
+**Wikimedia Commons** — a handful of photographs of movements no other source covered, each
+public domain, **CC0**, **CC BY 2.0 / 3.0 / 4.0** or **CC BY-SA 2.0 / 3.0 / 4.0** as marked on
+its Commons file page. Downscaled and re-encoded; no other change.
+
+> Photographs via Wikimedia Commons — author and licence named per image.
+
+Some exercises that have no picture of their own show the picture of another seeded exercise
+that is the same movement (a two-handed kettlebell swing shows the kettlebell swing). That
+mapping is `DaGym/Resources/Seed/exercise-media-aliases.json`; the credit shown always belongs
+to the picture on screen.
+
 ## Exercise illustrations
 
 **Bryl Lim** — the animated 3-frame exercise illustrations shown throughout the app are by
@@ -97,8 +122,8 @@ the **SIL Open Font License 1.1**. Full licence text: https://openfontlicense.or
 
 ## Licence notes
 
-CC-BY-SA, the Unlicense, the MIT terms above and the SIL Open Font License apply to the data,
-artwork, vendored code and fonts listed here — not to DaGym's own source code, which is
+CC-BY-SA, CC-BY, CC0, the Unlicense, the MIT terms above and the SIL Open Font License apply to
+the data, artwork, photographs, vendored code and fonts listed here — not to DaGym's own source code, which is
 MIT-licensed. DaGym is a collection that includes the CC BY-SA artwork; it is not an adaptation
 of it, so bundling that artwork does not place the app's own code under CC BY-SA.
 

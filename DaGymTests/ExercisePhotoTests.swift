@@ -15,6 +15,8 @@ struct ExercisePhotoTests {
     private static let bothSeedID = "Barbell_Deadlift"
     /// Illustrated art, no photograph.
     private static let vectorOnlySeedID = "Abdominal_Crunch"
+    /// One frame from wger (Everkinetic drawing), no end position — no cross-fade.
+    private static let singleFrameSeedID = "Front_Squats"
 
     @Test("a known seedID resolves to two photo files that exist in the bundle")
     func knownSeedIDResolvesToBundledFiles() throws {
@@ -23,13 +25,27 @@ struct ExercisePhotoTests {
         #expect(names.end == "\(Self.photoOnlySeedID)-1")
 
         let urls = try #require(ExercisePhotoStore.bundledURLs(forSeedID: Self.photoOnlySeedID))
-        for url in [urls.start, urls.end] {
+        let end = try #require(urls.end)
+        for url in [urls.start, end] {
             let size = try #require(
                 try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int
             )
             #expect(size > 0, "empty photo shipped at \(url.lastPathComponent)")
         }
-        #expect(urls.start != urls.end)
+        #expect(urls.start != end)
+    }
+
+    @Test("a single-frame exercise resolves to a start frame only, and still decodes")
+    func singleFrameResolvesWithoutAnEnd() async throws {
+        let names = try #require(ExercisePhotoCatalog.photoNames(for: Self.singleFrameSeedID))
+        #expect(names.start == "\(Self.singleFrameSeedID)-0")
+        #expect(names.end == nil)
+        #expect(ExercisePhotoCatalog.singleFrameSeedIDs.contains(Self.singleFrameSeedID))
+
+        let urls = try #require(ExercisePhotoStore.bundledURLs(forSeedID: Self.singleFrameSeedID))
+        #expect(urls.end == nil)
+        let pair = try #require(await ExercisePhotoStore.shared.photos(forSeedID: Self.singleFrameSeedID))
+        #expect(pair.end == nil)
     }
 
     @Test("the bundled photos actually decode into a pair of images")
@@ -76,9 +92,11 @@ struct ExercisePhotoTests {
             .sorted()
 
         // A catalogue entry with no file is a hero that silently renders a grey placeholder for
-        // ever. Regenerate both with scripts/import-exercise-photos.sh.
+        // ever. Regenerate both with scripts/import-exercise-photos.sh or
+        // scripts/import-exercise-photos-extra.py.
         #expect(missing.isEmpty, "catalogued exercises with no bundled photos: \(missing)")
-        #expect(ExercisePhotoCatalog.seedIDs.count > 600)
+        #expect(ExercisePhotoCatalog.seedIDs.count > 700)
+        #expect(ExercisePhotoCatalog.singleFrameSeedIDs.isSubset(of: ExercisePhotoCatalog.seedIDs))
     }
 
     @Test("seeded exercises with a photo carry their seedID through to ExerciseInfo")
