@@ -1,0 +1,12 @@
+Generated exercise line-art (DaGym/Resources/ExerciseFrames)
+
+Files named <seedID>-0.heic, <seedID>-1.heic and <seedID>-2.heic are the start, middle and
+end position of the seeded exercise with that id (DaGym/Resources/Seed/exercises.json), for
+218 exercises that have neither the Bryl Lim illustrations nor a photograph. They were
+generated for DaGym on 18 September 2026 with Gemini 3.1 Flash Image (via OpenRouter),
+prompted in the style of the flat grayscale line drawings the app already ships, reviewed
+frame by frame before being accepted, and converted to 640 px grayscale HEIC by
+scripts/import-exercise-frames.py. No third-party image is contained in them. The output
+belongs to the DaGym project and is released under the same MIT licence as the app (see the
+root LICENSE); it is captioned on screen as generated so it is never mistaken for the
+credited illustrations.

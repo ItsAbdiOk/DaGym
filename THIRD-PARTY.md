@@ -79,6 +79,15 @@ A handful of photographs of movements no other source covered, each public domai
 CC BY 2.0/3.0/4.0 or CC BY-SA 2.0/3.0/4.0 as marked on its Commons file page and credited per
 file. Downscaled and re-encoded; no other change.
 
+## Generated exercise line-art — MIT (DaGym's own)
+
+**Files:** `DaGym/Resources/ExerciseFrames/**`,
+`DaGym/Resources/ATTRIBUTION-ExerciseFrames.txt`
+
+Not third-party: three-frame line-art for 218 exercises generated for DaGym (Gemini 3.1
+Flash Image via OpenRouter, September 2026), owned by the project and covered by the root
+MIT `LICENSE`. Listed here so the origin of every image folder is recorded in one place.
+
 ## Barlow / Barlow Condensed — SIL Open Font License 1.1
 
 **Files:** `DaGym/Resources/Fonts/**` (licence text at `DaGym/Resources/Fonts/OFL.txt`)

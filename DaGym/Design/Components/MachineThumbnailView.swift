@@ -57,17 +57,31 @@ actor MachineThumbnailStore {
     /// Least-recently-used first.
     private var order: [String] = []
 
+    /// The start frame of `seedID`'s bundled photograph at thumbnail size.
     func thumbnail(forSeedID seedID: String) -> Image? {
-        if let cached = cache[seedID] {
-            touch(seedID)
+        guard let urls = ExercisePhotoStore.bundledURLs(forSeedID: seedID) else { return nil }
+        return thumbnail(at: urls.start)
+    }
+
+    /// The middle frame of `seedID`'s generated line-art at thumbnail size — the position that
+    /// best tells the movement apart in a 44 pt square.
+    func frameThumbnail(forSeedID seedID: String) -> Image? {
+        guard let urls = ExerciseFrameStore.bundledURLs(forSeedID: seedID) else { return nil }
+        return thumbnail(at: urls[urls.count / 2])
+    }
+
+    /// One cache for both kinds, keyed by file path so a photo and a frame set for the same
+    /// seedID (which never happens, but would otherwise collide) stay distinct.
+    private func thumbnail(at url: URL) -> Image? {
+        let key = url.path
+        if let cached = cache[key] {
+            touch(key)
             return cached
         }
-        guard let urls = ExercisePhotoStore.bundledURLs(forSeedID: seedID),
-              let image = Self.downsampled(urls.start, maxPixelSize: Self.maxPixelSize)
-        else { return nil }
+        guard let image = Self.downsampled(url, maxPixelSize: Self.maxPixelSize) else { return nil }
         let result = Image(uiImage: image)
-        cache[seedID] = result
-        touch(seedID)
+        cache[key] = result
+        touch(key)
         while order.count > Self.cacheLimit, let oldest = order.first {
             order.removeFirst()
             cache[oldest] = nil
@@ -75,9 +89,9 @@ actor MachineThumbnailStore {
         return result
     }
 
-    private func touch(_ seedID: String) {
-        if let index = order.firstIndex(of: seedID) { order.remove(at: index) }
-        order.append(seedID)
+    private func touch(_ key: String) {
+        if let index = order.firstIndex(of: key) { order.remove(at: index) }
+        order.append(key)
     }
 
     /// ImageIO's thumbnail path decodes straight to the target size instead of decoding the

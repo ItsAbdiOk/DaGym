@@ -128,7 +128,8 @@ private struct ExerciseProgressLabel: View {
 }
 
 /// The exercise's picture in the row and card corners: the illustrated art where we have it,
-/// the photo next, and the body-map thumbnail for everything else — so the slot is never an
+/// the generated line-art next, the photo after that, and the body-map thumbnail for
+/// everything else — so the slot is never an
 /// empty dashed box. `ExerciseHeroMedia.choice(for:)` already follows media aliases, so a
 /// same-movement exercise borrows its twin's picture here too.
 struct ExerciseThumbnail: View {
@@ -140,10 +141,14 @@ struct ExerciseThumbnail: View {
             switch ExerciseHeroMedia.choice(for: exercise.seedID) {
             case .vector(let seedID):
                 ExerciseArtView(seedID: seedID, size: size - 8)
+            case .frames(let seedID):
+                // The downsampled middle frame on paper, through the same ImageIO path.
+                PhotoThumbnail(seedID: seedID, size: size, kind: .frames)
+                    .background(Color.white)
             case .photo(let seedID):
                 // The downsampled start frame, not `ExercisePhotoView`: that decodes the full
                 // 1.7 MB pair and runs a crossfade per row, which put the Library at ~490 MB.
-                PhotoThumbnail(seedID: seedID, size: size)
+                PhotoThumbnail(seedID: seedID, size: size, kind: .photo)
             case .none:
                 BodyMapView(
                     side: BodyMapMuscleMapping.thumbnailSide(forPrimary: exercise.primary),
@@ -161,11 +166,15 @@ struct ExerciseThumbnail: View {
     }
 }
 
-/// A 44 pt square from the exercise photo, decoded straight to thumbnail size through
-/// `MachineThumbnailStore`'s ImageIO path and cached there.
+/// A 44 pt square from the exercise photo (start frame) or the generated line-art (middle
+/// frame), decoded straight to thumbnail size through `MachineThumbnailStore`'s ImageIO path
+/// and cached there.
 private struct PhotoThumbnail: View {
+    enum Kind { case photo, frames }
+
     var seedID: String
     var size: CGFloat
+    var kind: Kind
     @State private var image: Image?
 
     var body: some View {
@@ -176,6 +185,13 @@ private struct PhotoThumbnail: View {
         }
         .frame(width: size, height: size)
         .clipped()
-        .task(id: seedID) { image = await MachineThumbnailStore.shared.thumbnail(forSeedID: seedID) }
+        .task(id: seedID) { image = await load() }
+    }
+
+    private func load() async -> Image? {
+        switch kind {
+        case .photo: await MachineThumbnailStore.shared.thumbnail(forSeedID: seedID)
+        case .frames: await MachineThumbnailStore.shared.frameThumbnail(forSeedID: seedID)
+        }
     }
 }

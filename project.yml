@@ -48,7 +48,12 @@ targets:
         # several scales, which is how 516 SVGs once turned a 28 KB Assets.car into 52 MB.
         excludes:
           - Resources/ExercisePhotos
+          - Resources/ExerciseFrames
       - path: DaGym/Resources/ExercisePhotos
+        type: folder
+      # Same treatment for the generated 3-frame line-art (654 small HEICs, loaded by path via
+      # DaGym/Design/Components/ExerciseFramesView.swift).
+      - path: DaGym/Resources/ExerciseFrames
         type: folder
     # Apple Wallet pass signing identity (Pass Type ID cert + key + WWDR intermediate; see
     # DaGym/Services/Wallet/WalletPassSigner.swift). Gitignored; Xcode Cloud writes it from the

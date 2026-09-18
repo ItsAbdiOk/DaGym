@@ -47,6 +47,14 @@ its Commons file page. Downscaled and re-encoded; no other change.
 
 > Photographs via Wikimedia Commons — author and licence named per image.
 
+## Generated exercise line-art
+
+218 exercises with neither an illustration nor a photograph show three-frame line-art that
+was generated for DaGym (Gemini 3.1 Flash Image via OpenRouter, September 2026), in the
+style of the drawings above, reviewed frame by frame and captioned on screen as generated.
+It belongs to the project and is released under DaGym's own MIT licence; see
+`DaGym/Resources/ATTRIBUTION-ExerciseFrames.txt`.
+
 Some exercises that have no picture of their own show the picture of another seeded exercise
 that is the same movement (a two-handed kettlebell swing shows the kettlebell swing). That
 mapping is `DaGym/Resources/Seed/exercise-media-aliases.json`; the credit shown always belongs

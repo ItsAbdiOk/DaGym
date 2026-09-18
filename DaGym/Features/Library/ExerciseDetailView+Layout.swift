@@ -22,7 +22,8 @@ extension ExerciseDetailView {
     private static let instructionCache = Mutex<[String: [ExerciseInstructionStep]]>([:])
 
     /// The illustration card (the prototype's 150 pt slot): the illustrated 3-frame vector art
-    /// where we have it, otherwise the two-frame photographs, otherwise the body-map pair lit
+    /// where we have it, otherwise the generated 3-frame line-art, otherwise the two-frame
+    /// photographs, otherwise the body-map pair lit
     /// on the muscles worked — so every exercise gets a picture and the layout never jumps.
     var heroCard: some View {
         VStack(spacing: DGSpace.s3) {
@@ -52,6 +53,7 @@ extension ExerciseDetailView {
     private var heroMedia: some View {
         switch ExerciseHeroMedia.choice(for: exercise.seedID) {
         case .vector(let seedID): vectorHero(seedID: seedID)
+        case .frames(let seedID): framesHero(seedID: seedID)
         case .photo(let seedID): photoHero(seedID: seedID)
         case .none:
             BodyMapPair(intensity: exercise.hitMap, height: 140)
@@ -68,6 +70,18 @@ extension ExerciseDetailView {
             ExerciseArtView(seedID: seedID, size: 160, animated: true)
                 .accessibilityLabel("Illustration demonstrating \(exercise.name)")
             Text("Illustration: Bryl Lim, derived from Everkinetic · CC BY-SA 4.0")
+                .font(Font.system(.caption2))
+                .foregroundStyle(DGColor.ink4)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// Generated line-art, owned by the project (no licence tag to carry): the caption says
+    /// plainly that a model drew it, so nobody mistakes it for the credited illustrations above.
+    private func framesHero(seedID: String) -> some View {
+        VStack(spacing: DGSpace.s2) {
+            ExerciseFramesView(seedID: seedID, size: 160, animated: true, exerciseName: exercise.name)
+            Text("Illustration: generated for DaGym")
                 .font(Font.system(.caption2))
                 .foregroundStyle(DGColor.ink4)
         }
@@ -158,8 +172,9 @@ struct DetailStatTile: View {
 }
 
 /// Which visual an exercise's hero shows. Split out from the `@ViewBuilder` so the precedence
-/// rule — illustrated vector art beats photographs, and neither means the body map stands in —
-/// is one value a test can assert on rather than a branch buried in a view body.
+/// rule — illustrated vector art beats generated line-art beats photographs, and none of them
+/// means the body map stands in — is one value a test can assert on rather than a branch
+/// buried in a view body.
 ///
 /// The associated seedID is the one whose media to load: for an aliased exercise
 /// (`ExerciseMediaAliases`) that is the alias target, so the same-movement exercise's art or
@@ -167,6 +182,9 @@ struct DetailStatTile: View {
 enum ExerciseHeroMedia: Equatable {
     /// We have hand-drawn 3-frame art: CC BY-SA 4.0, and credited on screen.
     case vector(String)
+    /// Generated 3-frame line-art (`ExerciseFrameCatalog`): owned by the project, captioned as
+    /// generated. Only covers exercises that have neither drawn art nor photographs.
+    case frames(String)
     /// No art, but photographs: public domain (no credit line) or CC-licensed (credited).
     case photo(String)
     /// Neither: the hero falls back to the body-map pair.
@@ -176,6 +194,7 @@ enum ExerciseHeroMedia: Equatable {
         guard let seedID else { return .none }
         let resolved = ExerciseMediaAliases.resolve(seedID)
         if ExerciseArtCatalog.frames(for: resolved) != nil { return .vector(resolved) }
+        if ExerciseFrameCatalog.hasFrames(for: resolved) { return .frames(resolved) }
         if ExercisePhotoCatalog.hasPhotos(for: resolved) { return .photo(resolved) }
         return .none
     }

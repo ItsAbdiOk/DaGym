@@ -54,8 +54,10 @@ struct ExerciseMediaTests {
         #expect(ExerciseHeroMedia.choice(for: "Deadlifts") == .vector("Barbell_Deadlift"))
         // Barbell_Hack_Squats → Barbell_Hack_Squat, which has photographs only.
         #expect(ExerciseHeroMedia.choice(for: "Barbell_Hack_Squats") == .photo("Barbell_Hack_Squat"))
+        // Hollow_Hold has neither art nor photographs, so the generated frames carry it.
+        #expect(ExerciseHeroMedia.choice(for: "Hollow_Hold") == .frames("Hollow_Hold"))
         // An unaliased exercise with nothing still falls back to the body map.
-        #expect(ExerciseHeroMedia.choice(for: "Hollow_Hold") == .none)
+        #expect(ExerciseHeroMedia.choice(for: "External_Rotation_Stretch") == .none)
     }
 
     @Test("every credited photograph is bundled, licence-clean, and captioned only when owed")
@@ -83,7 +85,19 @@ struct ExerciseMediaTests {
         #expect(frontSquat?.captionLine == "Photo: Everkinetic · CC BY-SA 3.0")
     }
 
+    /// With the generated frames in, every seeded exercise but three has a picture of its own
+    /// or borrows one; the three left are pinned so a regression in any catalogue shows here.
+    @Test("1,463 of 1,466 seeded exercises reach a picture through art, frames, photos or an alias")
+    func coverage() throws {
+        let seedIDs = try ExerciseSeeder.loadSeed().exercises.map(\.id)
+        let uncovered = seedIDs.filter { ExerciseHeroMedia.choice(for: $0) == .none }.sorted()
+        #expect(seedIDs.count == 1466)
+        #expect(uncovered == ["External_Rotation_Stretch", "Shrimp_Squad", "Tibialis_raises"])
+    }
+
     private static func hasOwnMedia(_ seedID: String) -> Bool {
-        ExerciseArtCatalog.frames(for: seedID) != nil || ExercisePhotoCatalog.hasPhotos(for: seedID)
+        ExerciseArtCatalog.frames(for: seedID) != nil
+            || ExerciseFrameCatalog.hasFrames(for: seedID)
+            || ExercisePhotoCatalog.hasPhotos(for: seedID)
     }
 }
